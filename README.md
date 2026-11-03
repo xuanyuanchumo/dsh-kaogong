@@ -1,4 +1,4 @@
-# dsh-kaogong — 考公备考一键式学习平台 · v1.9.0
+# dsh-kaogong — 考公备考一键式学习平台 · v1.9.1
 
 > 整合 15 个考公开源仓库 → **DSH 宿主内原生界面**：左栏「考公学习」全屏面板 + 右侧 Sidebar 并排标签（引导页亦有入口）。
 > 完全离线可用（零模型依赖、零 npm 依赖）；**AI 为可选增强**：5 个工具中 `kaogong_ai_essay_review` 可把「离线基线分 + 方法论」交模型做深度点评。
@@ -127,12 +127,15 @@ data/                     # progress/<slug>-<hash8>.json · runtime.json · life
 
 ```bash
 npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并单 combo（零错误）
-node smoke.test.mjs  # 164 断言 E2E（信标/adopt/隔离/图谱算法族/遥测/崩溃安全/SRS闭环/
-                     # 同源路由/UI契约/图算法确定性 + 省份维度运行时断言 R-P-01..03/R-N-01）
+node smoke.test.mjs  # 174 断言 E2E（信标/adopt/隔离/图谱算法族/遥测/崩溃安全/SRS闭环/
+                     # 同源路由/UI契约/图算法确定性 + 省份维度运行时断言 R-P-01..03/R-N-01
+                     # + cycle-14 材料逐份折叠/申论草稿暂存/索引分块预热守卫）
 node render.test.mjs # 35 断言真实 React 18 + 真实 client.js 集成渲染（含专题枢纽六分区/
                      # 省份 chips/白盒流动图/图谱升级包断言与键盘命令行为验证）
 node "D:/Projects/TraeProjects/dsh-anic/assets/skill/scripts/band-detector.mjs" .   # 复杂度预算（Status: OK）
 ```
+
+**cycle-14 性能与体验（v1.9.1）**：① 给定材料**逐份折叠**——真题卷详情与申论材料区均支持「材料 N」标题单独折叠/展开（含字数提示）+「全部展开/收起」总开关；申论题目跳转关联材料时折叠态自动展开。② 申论**草稿本地暂存**（localStorage 按 paperId:no 键，误关/切题不丢，提交自动清除）。③ 真题卷索引**分块预热**（`prewarmPaperIndex`，服务启动后台 setImmediate 分批构建，冷启动不再冻结事件循环；快照命中即毫秒级；同步请求路径兜底 + 代际令牌防双路争抢——教训⑦）。
 
 **bundler 构建链（cycle-13 T-025）**：源码 `src/client/*.ts` 为 11 个真 ESM 模块，tsc 产出
 `dist/client/*.js` 后由 `scripts/bundle-client.mjs` 按 **DFS 拓扑序**合并回宿主要求的**单文件

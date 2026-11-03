@@ -1,6 +1,6 @@
 {
   "name": "dsh-kaogong",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "考公备考整合插件 — 15开源仓库 · 离线可视化 · 双入口(左沉浸+右并排) · SRS错题本 · 白盒可观测",
   "type": "module",
   "main": "dist/host/index.js",

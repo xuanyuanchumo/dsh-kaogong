@@ -41,25 +41,15 @@ function isDir(p) { try { return statSync(p).isDirectory() } catch { return fals
 /** 构建真题卷索引：递归遍历 gwy-zhenti；磁盘快照缓存（1683 卷约 30s→首建一次，之后 ~10ms） */
 const INDEX_FILE = () => join(process.cwd(), 'data', '.paper-index.json')
 
-export function buildPaperIndex(repoRoot, force = false) {
-  const now = Date.now()
-  if (!force && paperIndex.data && now - paperIndex.ts < INDEX_TTL) return paperIndex.data
+/* ── cycle-14 性能改造：把「扫盘 → 逐文件解析 → 聚合」拆成三段可复用助手 ──
+ * 动机（教训⑤根修）：同步 buildPaperIndex 首建会阻塞事件循环 ~10-16s，
+ * keep-alive 连接被 Node http 掐断（ECONNRESET）、UI 首开真题卷卡死。
+ * 方案：prewarmPaperIndex 在服务启动后**分块**预热（每批 setImmediate 让路事件循环），
+ * 请求到达时几乎总命中热缓存；若请求抢先到达，同步路径仍在（行为回退不变）。 */
 
-  // 磁盘快照：优先复用（避免每次进程重启都扫 1683 个文件）
-  if (!force) {
-    try {
-      const snap = JSON.parse(readFileSync(INDEX_FILE(), 'utf-8'))
-      // cycle-13：schemaVersion !== 2 一律视为旧版快照（无省份维度）→ 丢弃重建
-      if (snap && snap.schemaVersion === 2 && snap.total > 0 && Array.isArray(snap.papers)) {
-        paperIndex = { ts: now, data: snap }
-        return snap
-      }
-    } catch { /* 无快照则现场构建 */ }
-  }
-
-  const root = join(repoRoot, PAPER_REPO)
-  const papers: any[] = []
-
+/** 第一段：只收集候选 .md 路径（readdir 级别，毫秒级）；排序保证确定性（跨机器同序） */
+function collectPaperFiles(root) {
+  const files: any[] = []
   function walk(dir, depth) {
     if (depth > 5) return
     for (const entry of safeReaddir(dir)) {
@@ -67,40 +57,50 @@ export function buildPaperIndex(repoRoot, force = false) {
       const full = join(dir, entry)
       if (isDir(full)) { walk(full, depth + 1); continue }
       if (!entry.endsWith('.md')) continue
-      // 只认「科目-卷型.md」形态（排除 README/RECEIPT/ARCHIVE 等说明文件）
       const stem = basename(entry, '.md')
       if (!/^(申论|行测)-/.test(stem)) continue
-      const head = safeRead(full, 2500)
-      if (!head) continue
-      const meta = parseFrontmatter(head)
-      const ov = parseOverview(head)
-      const dash = stem.indexOf('-')
-      const subject = meta.科目 || stem.slice(0, dash)
-      const paperType = meta.卷型 || stem.slice(dash + 1)
-      const rel = relative(root, full).replace(/\\/g, '/')
-      const parts = rel.split('/')
-      // cycle-13 省份维度：省考/<省份>/<年份>/<科目>-<卷型>.md → parts[1]；
-      // 国考/<年份>/… → 「全国」；其余顶层目录（公安招警/公检法等特殊名）直接作省份。
-      const province = parts[0] === '省考' ? (parts[1] || '') : (parts[0] === '国考' ? '全国' : (parts[0] || ''))
-      papers.push({
-        id: rel.replace(/\.md$/, ''),
-        exam: meta.考试 || parts[0] || '',
-        region: meta.地区 || parts[0] || '',
-        province,
-        year: +(meta.年份 || parts[1]) || null,
-        subject,
-        paperType: paperType || (parts.length > 3 ? parts[2] : ''),
-        questionCount: ov.questionCount,
-        imageCount: ov.imageCount,
-        verified: (meta.校验状态 || '').includes('正式入库'),
-        source: meta.来源 || '',
-        relPath: rel,
-      })
+      files.push(full)
     }
   }
   walk(root, 0)
+  // 码点排序：walk 原序依赖 OS readdir（不保证跨机一致）；排序后 sync/分块两路径同序（确定性纪律）
+  files.sort()
+  return files
+}
 
-  // 聚合维度：按科目、按考试、按年份
+/** 第二段：单文件 → 索引记录（只读头部 2500 字 + frontmatter/overview 解析，纯函数） */
+function buildPaperRecord(root, full) {
+  const head = safeRead(full, 2500)
+  if (!head) return null
+  const meta = parseFrontmatter(head)
+  const ov = parseOverview(head)
+  const stem = basename(full, '.md')
+  const dash = stem.indexOf('-')
+  const subject = meta.科目 || stem.slice(0, dash)
+  const paperType = meta.卷型 || stem.slice(dash + 1)
+  const rel = relative(root, full).replace(/\\/g, '/')
+  const parts = rel.split('/')
+  // cycle-13 省份维度：省考/<省份>/<年份>/<科目>-<卷型>.md → parts[1]；
+  // 国考/<年份>/… → 「全国」；其余顶层目录（公安招警/公检法等特殊名）直接作省份。
+  const province = parts[0] === '省考' ? (parts[1] || '') : (parts[0] === '国考' ? '全国' : (parts[0] || ''))
+  return {
+    id: rel.replace(/\.md$/, ''),
+    exam: meta.考试 || parts[0] || '',
+    region: meta.地区 || parts[0] || '',
+    province,
+    year: +(meta.年份 || parts[1]) || null,
+    subject,
+    paperType: paperType || (parts.length > 3 ? parts[2] : ''),
+    questionCount: ov.questionCount,
+    imageCount: ov.imageCount,
+    verified: (meta.校验状态 || '').includes('正式入库'),
+    source: meta.来源 || '',
+    relPath: rel,
+  }
+}
+
+/** 第三段：聚合维度（按科目/省份）+ 快照落盘 + 写进程缓存。sync/分块两路径共用同一实现。 */
+function aggregateIndex(now, papers) {
   const bySubject: any = {}
   for (const p of papers) (bySubject[p.subject] = bySubject[p.subject] || []).push(p)
   const subjects = entries(bySubject).map(([subject, list]) => ({
@@ -140,6 +140,76 @@ export function buildPaperIndex(repoRoot, force = false) {
   } catch { /* ignore */ }
   paperIndex = { ts: now, data }
   return data
+}
+
+export function buildPaperIndex(repoRoot, force = false) {
+  const now = Date.now()
+  // 代际令牌：同步重建一经启动即作废进行中的分块预热（否则两路并发扫盘互相争抢，首查反而变慢——cycle-14 实测 31.5s 教训）
+  prewarmRun++
+  if (!force && paperIndex.data && now - paperIndex.ts < INDEX_TTL) return paperIndex.data
+
+  // 磁盘快照：优先复用（避免每次进程重启都扫 1683 个文件）
+  if (!force) {
+    try {
+      const snap = JSON.parse(readFileSync(INDEX_FILE(), 'utf-8'))
+      // cycle-13：schemaVersion !== 2 一律视为旧版快照（无省份维度）→ 丢弃重建
+      if (snap && snap.schemaVersion === 2 && snap.total > 0 && Array.isArray(snap.papers)) {
+        paperIndex = { ts: now, data: snap }
+        return snap
+      }
+    } catch { /* 无快照则现场构建 */ }
+  }
+
+  const root = join(repoRoot, PAPER_REPO)
+  // 同步路径（行为保底）：与分块预热共用 collect/build/aggregate 三助手，输出逐字段一致
+  const papers = collectPaperFiles(root)
+    .map(full => buildPaperRecord(root, full))
+    .filter(Boolean)
+  return aggregateIndex(now, papers)
+}
+
+/* ── 分块预热（cycle-14）：服务启动后后台把索引热进内存，消除首请求 ~10-16s 冻结 ── */
+let prewarmStarted = false
+let prewarmRun = 0   // 代际令牌：同步 buildPaperIndex 启动时自增 → 在途预热批次检测到换代即退出
+export function prewarmPaperIndex(repoRoot) {
+  if (prewarmStarted) return
+  prewarmStarted = true
+  const chunkMs = 600   // 启动后让路：先让 listen/attach/UI 首屏就绪
+  const BATCH = 40      // 每批解析 40 个文件头（~250ms 内），批间 setImmediate 让路事件循环
+  setTimeout(() => {
+    const myRun = ++prewarmRun
+    try {
+      const now = Date.now()
+      // ① 进程缓存仍新鲜 → 无事可做
+      if (paperIndex.data && now - paperIndex.ts < INDEX_TTL) return
+      // ② 快照可复用 → 一次 readFileSync（~ms）即热
+      try {
+        const snap = JSON.parse(readFileSync(INDEX_FILE(), 'utf-8'))
+        if (snap && snap.schemaVersion === 2 && snap.total > 0 && Array.isArray(snap.papers)) {
+          paperIndex = { ts: now, data: snap }
+          return
+        }
+      } catch { /* 无快照 → 走分块构建 */ }
+      // ③ 分块构建：收集（毫秒级）→ 每批 BATCH 个 setImmediate 让路 → 聚合落盘
+      const root = join(repoRoot, PAPER_REPO)
+      const files = collectPaperFiles(root)
+      let i = 0
+      const papers: any[] = []
+      const step = () => {
+        if (myRun !== prewarmRun) return   // 同步重建已接管（请求抢先到达）→ 本预热作废，不与其争抢
+        try {
+          const end = Math.min(i + BATCH, files.length)
+          for (; i < end; i++) {
+            const rec = buildPaperRecord(root, files[i])
+            if (rec) papers.push(rec)
+          }
+        } catch (e) { return } // 单批异常：放弃本次预热（请求时同步路径兜底）
+        if (i < files.length) { setImmediate(step); return }
+        try { aggregateIndex(Date.now(), papers) } catch { /* 聚合失败不影响请求路径 */ }
+      }
+      setImmediate(step)
+    } catch { /* 预热是尽力而为：任何异常静默放弃，请求时同步路径兜底 */ }
+  }, chunkMs)
 }
 
 /** 取单套卷详情：材料 + 题目（含参考答案） */

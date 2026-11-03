@@ -70,3 +70,6 @@
 - **④ nav 锚点测试必须跟导航重构同步**：W2a 把「刷题/图形推理/深度题库/申论」收敛进专题枢纽分区后，render.test 里 3 处按旧一级导航锚定的断言直接 throw（找到按钮即失败）。**教训：改导航结构必须同一波次改 render 锚点——组件内 tab 用 `data-kg-hub-tab` 属性锚定（非路由），经枢纽触达的视图断言要走「点导航 → 点分区 tab」两步。**
 - **⑤（测试基建）smoke 快照门测试的 keep-alive 竞态**：同步重建 1683 套卷索引会阻塞事件循环 ~10s，超过 Node http 默认 keepAliveTimeout(5s)，其后的 fetch 复用已被服务端关闭的连接 → `ECONNRESET` 裸崩。**规矩：长阻塞操作放在 HTTP 断言之后、且其后不再有 fetch；动 `data/.paper-index.json` 必须测前备份、finally 还原。**
 - **⑥（测试基建）eval-runner 并行预热 test∥build 的裸 ESM 窗口**：anic eval-runner 会把 test/lint/build 作为并行 detached 子进程跑（Amdahl 加速），build 的 tsc 步先把 `dist/client/client.js` 重写为裸 ESM、bundler 合并前若被 smoke 读取 → 静态守卫假红（ErrorBoundary/图谱文本全在未合并模块里，实测 163/164）。**双层防线已固化**：① bundler 产物**原子写**（tmp+rename，读者只见完整文件）；② smoke 开头 **0a combo 完整性自愈**——判据用「行首 `import `」（裸 ESM 必有、合并 combo 必无；**不能用 combo 头文本判据，entry 源码本身就含 `window.__ModuleLoader__.load({`**），检出即现场重跑 bundler。规矩：凡读合并产物的测试，开头都要做产物形态自检而非假设上游时序。
+
+## cycle-14 事故与教训（v1.9.1）
+- **⑦（性能）索引分块预热必须带代际令牌**：`prewarmPaperIndex` 分块构建期间若请求抢先触发同步 `buildPaperIndex`，两路并发扫盘互相争抢 → 首查实测 31.5s（比纯同步基线还差）。**修法：`prewarmRun` 代际令牌——同步路径一经启动即自增，预热批次检测到换代立即退出**。同时记住：预热是「尽力而为」，请求路径永远有同步兜底；smoke harness 必须传 `prewarm:false`（否则预热把缓存热好，R-P-03 的快照耗时断言失真）。本机实测冷同步重建 ~30s（1683 文件 × Windows Defender 实时扫描开销），快照命中后二查 10ms。

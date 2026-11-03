@@ -101,13 +101,14 @@ globalThis.fetch = async (url) => {
     stages: [
       { stage: 'load', desc: '模块导入', state: 'done' },
       { stage: 'apply', desc: 'apply(ctx)', state: 'done' },
-      { stage: 'server-start', desc: 'HTTP 绑定', state: 'done', at: '2026-11-03T00:00:00Z' },
+      // cycle-14 复盘遗留：事件时间戳改相对当前时刻（写死日期会随时间滑出泳道 14 天窗口，演示价值衰减）
+      { stage: 'server-start', desc: 'HTTP 绑定', state: 'done', at: new Date(Date.now() - 3600e3).toISOString() },
       { stage: 'tools-register', desc: '工具注册', state: 'done' },
-      { stage: 'runtime-publish', desc: '信标写入', state: 'done', at: '2026-11-03T00:00:01Z' },
-      { stage: 'serve', desc: '稳态服务', state: 'current', at: '2026-11-03T00:00:02Z' },
+      { stage: 'runtime-publish', desc: '信标写入', state: 'done', at: new Date(Date.now() - 1800e3).toISOString() },
+      { stage: 'serve', desc: '稳态服务', state: 'current', at: new Date().toISOString() },
       { stage: 'cleanup', desc: '卸载清理', state: 'pending' },
     ],
-    events: [{ ts: '2026-11-03T00:00:00Z', event: 'server-listen', port: 8400 }],
+    events: [{ ts: new Date(Date.now() - 3600e3).toISOString(), event: 'server-listen', port: 8400 }],
     current: 'serve',
   }) }
   if (u.includes('/api/workspaces')) return { json: async () => ({ workspaces: [{ ns: 'default-abc12345', day: 1, answered: 10, correct: 6, rate: 60 }, { ns: 'PROJ_X-deadbeef', day: 3, answered: 4, correct: 1, rate: 25 }] }) }

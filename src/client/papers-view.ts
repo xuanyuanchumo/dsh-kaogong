@@ -176,6 +176,12 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
       const [list, setList] = React.useState(null)
       const [openId, setOpenId] = React.useState(null)
       const [detail, setDetail] = React.useState(null)
+      // cycle-14：材料逐份折叠（用户诉求：给定材料除全局折叠外，支持材料 1/2/3/4 单独折叠展开）。
+      // 键=材料段号，值=true 表示该份折叠；换卷时重置为全展开。
+      const [collapsedMats, setCollapsedMats] = React.useState({})
+      const toggleMat = (no) => setCollapsedMats(m => ({ ...m, [no]: !m[no] }))
+      const mats = (detail && detail.materials) || []
+      const allCollapsed = mats.length > 0 && mats.every(m => collapsedMats[m.no])
 
       React.useEffect(() => {
         let cancelled = false
@@ -185,8 +191,10 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
       }, [filters, api])
 
       React.useEffect(() => {
-        if (!openId || detail) return
+        if (!openId) return
         let cancelled = false
+        setCollapsedMats({})   // cycle-14：换卷重置材料折叠态（新卷默认全展开）
+        setDetail(null)
         api('/paper?id=' + encodeURIComponent(openId)).then(d => { if (!cancelled) setDetail(d) }).catch(() => { if (!cancelled) setDetail({ error: '加载失败' }) })
         return () => { cancelled = true }
       }, [openId, detail, api])
@@ -201,10 +209,32 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
             detail.paperType ? h('span', { style: KV_TAG }, detail.paperType) : null,
             h('span', { style: { fontSize: 11.5, color: '#64748b' } }, ((detail.materials || []).length) + ' 材料 · ' + ((detail.questions || []).length) + ' 题')),
           detail.error ? h('div', { style: { color: '#ef4444' } }, detail.error) : null,
+          // cycle-14：给定材料逐份折叠——每份材料头部可点击折叠/展开（含字数提示），另有「全部展开/收起」总开关
           (detail.materials || []).length > 0 ? h(Card, { title: '📄 给定材料' },
-            detail.materials.map(m => h('div', { key: m.no, style: { marginBottom: 14 } },
-              h('div', { style: { fontWeight: 700, fontSize: 12, color: '#6366f1', marginBottom: 4 } }, '材料 ' + m.no),
-              h(RichText, { text: m.text, maxHeight: 240 })))) : null,
+            h('div', { style: { display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' } },
+              h('button', {
+                style: KV_BTN,
+                onClick: () => setCollapsedMats(() => {
+                  const next = {}
+                  for (const m of mats) next[m.no] = !allCollapsed
+                  return next
+                }),
+              }, allCollapsed ? '▼ 展开全部材料（' + mats.length + ' 份）' : '▲ 收起全部材料'),
+              h('span', { style: { fontSize: 11, color: '#94a3b8' } }, '点击「材料 N」标题可单独折叠/展开该份材料')),
+            detail.materials.map(m => {
+              const wordCount = String(m.text || '').replace(/\s/g, '').length
+              const isCollapsed = !!collapsedMats[m.no]
+              return h('div', { key: m.no, style: { marginBottom: 14, paddingBottom: isCollapsed ? 0 : 10, borderBottom: '1px dashed rgba(148,163,184,.18)' } },
+                h('div', {
+                  style: { fontWeight: 700, fontSize: 12, color: '#6366f1', marginBottom: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' },
+                  onClick: () => toggleMat(m.no),
+                  title: isCollapsed ? '展开材料 ' + m.no : '折叠材料 ' + m.no,
+                },
+                  h('span', { style: { display: 'inline-block', transition: 'transform .2s', transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' } }, '▸'),
+                  h('span', null, '材料 ' + m.no),
+                  h('span', { style: { fontWeight: 400, fontSize: 10.5, color: '#94a3b8' } }, '约 ' + wordCount + ' 字' + (isCollapsed ? ' · 已折叠' : ''))),
+                !isCollapsed ? h(RichText, { text: m.text, maxHeight: 240 }) : null)
+            })) : null,
           h(Card, { title: '📝 题目与参考答案' },
             (detail.questions || []).map(q => h('div', { key: q.no, style: { borderBottom: '1px solid rgba(148,163,184,.18)', paddingBottom: 12, marginBottom: 12 } },
               h('div', { style: { display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' } },
@@ -513,16 +543,24 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
       const [busy, setBusy] = React.useState(false)
       const [paperDetail, setPaperDetail] = React.useState(null)   // v1.7：材料区
       const [showMaterials, setShowMaterials] = React.useState(true)
-      // T-021：材料-题目联动（点关联段号 → 滚动并高亮）
+      // cycle-14 体验：申论草稿本地暂存（localStorage，按 paperId:no 键）——误关/切题不丢作答
+      const essayDraftKey = (q: any) => 'kg-essay-draft:' + (q && (q.id || (q.paperId + ':' + q.no)) || 'unknown')
+      const readDraft = (q: any) => { try { return localStorage.getItem(essayDraftKey(q)) || '' } catch { return '' } }
+      const writeDraft = (q: any, v: any) => { try { v ? localStorage.setItem(essayDraftKey(q), v) : localStorage.removeItem(essayDraftKey(q)) } catch { /* 隐私模式等场景静默 */ } }
+      // cycle-14：材料逐份折叠（用户诉求：全局折叠保留之外，材料 1/2/3/4 可单独折叠展开）
+      const [collapsedMats, setCollapsedMats] = React.useState({})
+      const toggleMat = (no) => setCollapsedMats(m => ({ ...m, [no]: !m[no] }))
+      // T-021：材料-题目联动（点关联段号 → 滚动并高亮；若目标材料处于折叠态先自动展开）
       const [hlNo, setHlNo] = React.useState(0)
       const matRefs = React.useRef({})
       const jumpToMaterial = (no: number) => {
         setShowMaterials(true)
+        setCollapsedMats(m => (m[no] ? { ...m, [no]: false } : m))   // 折叠中的关联材料自动展开，否则滚过去看不到正文
         setHlNo(no)
         setTimeout(() => {
           const el = matRefs.current[no]
           if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }, 120)
+        }, 160)
       }
       /** 把「材料 1、材料 3」解析成段号数组 */
       const parseMatNos = (txt: string): number[] => {
@@ -548,6 +586,8 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
             body: JSON.stringify({ paperId: cur.paperId, no: cur.no, answer, requirement: cur.requirement }),
           })
           setResult({ ...r, isArticle })
+          // cycle-14：提交评分成功 → 清掉该题草稿（评分结果页已留存内容，重答从零开始）
+          if (!r || !r.error) { try { localStorage.removeItem(essayDraftKey(cur)) } catch { /* 隐私模式等场景静默 */ } }
         } finally { setBusy(false) }
       }
 
@@ -556,8 +596,8 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
         const color = pct >= 75 ? '#10b981' : pct >= 50 ? '#6366f1' : '#f59e0b'
         return h('div', {},
           h('div', { style: { display: 'flex', gap: 8, marginBottom: 12 } },
-            h('button', { style: KV_BTN, onClick: () => { setResult(null); setAnswer('') } }, '← 重新作答'),
-            h('button', { style: KV_BTN, onClick: () => { setCur(null); setResult(null); setAnswer('') } }, '换一题')),
+            h('button', { style: KV_BTN, onClick: () => { setResult(null); setAnswer(''); if (cur) writeDraft(cur, '') } }, '← 重新作答'),
+            h('button', { style: KV_BTN, onClick: () => { if (cur) writeDraft(cur, ''); setCur(null); setResult(null); setAnswer('') } }, '换一题')),
           h(Card, { title: '📊 评分结果' },
             h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 } },
               h('span', { style: { fontSize: 40, fontWeight: 800, color } }, result.score),
@@ -598,37 +638,61 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
                     onClick: () => jumpToMaterial(n),
                   }, '材料 ' + n))
                 : h('span', null, cur.relatedMaterials)) : null),
-          // v1.7 给定材料阅读区（可折叠；考场必须先读材料）
+          // v1.7 给定材料阅读区（可折叠；考场必须先读材料）；cycle-14：逐份折叠——材料 N 标题可点击单独折叠/展开
           h(Card, { title: '📄 给定材料' + (paperDetail && paperDetail.materials ? '（' + paperDetail.materials.length + ' 段）' : '') },
-            h('div', { style: { display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' } },
+            h('div', { style: { display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' } },
               h('button', { style: KV_BTN, onClick: () => setShowMaterials(v => !v) }, showMaterials ? '▲ 收起材料' : '▼ 展开材料（' + ((paperDetail && paperDetail.materials) || []).length + ' 段）'),
-              paperDetail && paperDetail.materials && paperDetail.materials.length > 0 ? h('span', { style: { fontSize: 11, color: '#64748b' } }, '阅读材料后在下方向作答区作答') : null),
+              showMaterials && paperDetail && paperDetail.materials && paperDetail.materials.length > 0 ? (() => {
+                const mats = paperDetail.materials
+                const allCollapsed = mats.every(mm => collapsedMats[mm.no])
+                return h('button', {
+                  style: KV_BTN,
+                  onClick: () => setCollapsedMats(() => {
+                    const next = {}
+                    for (const mm of mats) next[mm.no] = !allCollapsed
+                    return next
+                  }),
+                }, allCollapsed ? '▼ 全部展开' : '▲ 全部收起')
+              })() : null,
+              paperDetail && paperDetail.materials && paperDetail.materials.length > 0 ? h('span', { style: { fontSize: 11, color: '#94a3b8' } }, '点击「材料 N」标题可单独折叠 · 阅读材料后在下方作答区作答') : null),
             !paperDetail ? h('div', { style: { fontSize: 12, color: '#64748b' } }, '加载材料…') : null,
             paperDetail && (!paperDetail.materials || paperDetail.materials.length === 0) ? h('div', { style: { fontSize: 12, color: '#f59e0b' } }, '该卷未附带材料（部分年份采集稿缺材料）') : null,
-            showMaterials && paperDetail && (paperDetail.materials || []).map(mm => h('div', {
-              key: mm.no,
-              ref: (el: any) => { matRefs.current[mm.no] = el },
-              style: {
-                marginBottom: 14, paddingBottom: 12, paddingTop: hlNo === mm.no ? 8 : 0,
-                paddingLeft: hlNo === mm.no ? 10 : 0,
-                borderBottom: '1px dashed rgba(148,163,184,.2)',
-                borderLeft: hlNo === mm.no ? '3px solid #6366f1' : '3px solid transparent',
-                background: hlNo === mm.no ? 'rgba(99,102,241,.06)' : 'transparent',
-                borderRadius: hlNo === mm.no ? 8 : 0,
-                transition: 'all .25s',
+            showMaterials && paperDetail && (paperDetail.materials || []).map(mm => {
+              const isCollapsed = !!collapsedMats[mm.no]
+              const wordCount = String(mm.text || '').replace(/\s/g, '').length
+              return h('div', {
+                key: mm.no,
+                ref: (el: any) => { matRefs.current[mm.no] = el },
+                style: {
+                  marginBottom: 14, paddingBottom: isCollapsed ? 6 : 12, paddingTop: hlNo === mm.no ? 8 : 0,
+                  paddingLeft: hlNo === mm.no ? 10 : 0,
+                  borderBottom: '1px dashed rgba(148,163,184,.2)',
+                  borderLeft: hlNo === mm.no ? '3px solid #6366f1' : '3px solid transparent',
+                  background: hlNo === mm.no ? 'rgba(99,102,241,.06)' : 'transparent',
+                  borderRadius: hlNo === mm.no ? 8 : 0,
+                  transition: 'all .25s',
+                },
               },
-            },
-              h('div', { style: { fontWeight: 700, fontSize: 11.5, color: '#6366f1', marginBottom: 5 } }, '材料 ' + mm.no),
-              h(RichText, { text: mm.text, maxHeight: 300, fontSize: 12.5 })))),
+                h('div', {
+                  style: { fontWeight: 700, fontSize: 11.5, color: '#6366f1', marginBottom: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' },
+                  onClick: () => toggleMat(mm.no),
+                  title: isCollapsed ? '展开材料 ' + mm.no : '折叠材料 ' + mm.no,
+                },
+                  h('span', { style: { display: 'inline-block', transition: 'transform .2s', transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' } }, '▸'),
+                  h('span', null, '材料 ' + mm.no),
+                  h('span', { style: { fontWeight: 400, fontSize: 10.5, color: '#94a3b8' } }, '约 ' + wordCount + ' 字' + (isCollapsed ? ' · 已折叠' : ''))),
+                !isCollapsed ? h(RichText, { text: mm.text, maxHeight: 300, fontSize: 12.5 }) : null)
+            })),
           h(Card, { title: '✍️ 你的作答（离线评分，无需模型）' },
             h('textarea', {
-              value: answer, onChange: e => setAnswer(e.target.value),
+              value: answer, onChange: e => { setAnswer(e.target.value); writeDraft(cur, e.target.value) },
               placeholder: '在此作答…建议分条（一、二、三 或 1. 2. 3.），要点覆盖权重最高（50%）',
               style: { width: '100%', minHeight: 200, padding: 12, borderRadius: 10, border: '1.5px solid rgba(148,163,184,.35)', fontSize: 13, lineHeight: 1.75, fontFamily: 'inherit', resize: 'vertical', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)', boxSizing: 'border-box' },
             }),
-            h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' } },
               h('button', { style: { ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '8px 20px', fontSize: 13, fontWeight: 700 }, disabled: busy || !answer.trim(), onClick: submit }, busy ? '评分中…' : '提交评分'),
-              h('span', { style: { fontSize: 11.5, color: '#64748b' } }, answer.replace(/\s/g, '').length + ' 字'))))
+              h('span', { style: { fontSize: 11.5, color: '#64748b' } }, answer.replace(/\s/g, '').length + ' 字'),
+              h('span', { style: { fontSize: 10.5, color: '#94a3b8' }, title: '作答内容已自动暂存在本机浏览器，误关页面或切换题目不会丢失' }, '💾 草稿已本地暂存，误关不丢'))))
       }
 
       return h('div', {},
@@ -644,7 +708,7 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
             key: i,
             style: { padding: '9px 11px', borderRadius: 9, marginBottom: 5, background: 'rgba(148,163,184,.06)', cursor: 'pointer', fontSize: 12.5, lineHeight: 1.65 },
             onClick: () => {
-            setCur(q); setAnswer(''); setResult(null); setPaperDetail(null); setShowMaterials(true)
+            setCur(q); setAnswer(readDraft(q)); setResult(null); setPaperDetail(null); setShowMaterials(true); setCollapsedMats({})
             api('/paper?id=' + encodeURIComponent(q.paperId)).then(d => setPaperDetail(d)).catch(() => setPaperDetail({ materials: [] }))
           },
           },

@@ -69,7 +69,7 @@ const P = async (u, body) => { const r = await fetch(u, { method: 'POST', header
 
 // ── 1. 启动（独立测试端口段 8495+，与宿主生产 8400 段完全隔离；不写真相信标）──
 const TP = +(process.env.KG_PORT || 8495)
-const { server, port, adopted } = await startServer(TP, { publishRuntime: false })
+const { server, port, adopted } = await startServer(TP, { publishRuntime: false, prewarm: false })
 check('server 启动返回 port', typeof port === 'number', `got ${port}`)
 const B = `http://127.0.0.1:${port}`
 
@@ -79,7 +79,7 @@ check('status.app 信标字段', st.app === 'dsh-kaogong', JSON.stringify(st).sl
 check('status 含 pid/uptime/port', st.pid > 0 && st.uptimeSec >= 0 && st.port === port)
 
 // ── 3. adopt 复用（二次启动不应崩、不应新绑端口）──
-const second = await startServer(TP, { publishRuntime: false })
+const second = await startServer(TP, { publishRuntime: false, prewarm: false })
 check('二次启动 adopt 同端口', second.port === port && second.adopted === true, JSON.stringify(second).slice(0, 60))
 
 // ── 4. 工作区隔离 ──
@@ -575,7 +575,7 @@ foreign.on('error', () => {}) // 探针自身也不允许裸抛
 let safetyOK = false, safetyDetail = ''
 try {
   await new Promise((res2, rej2) => { foreign.once('error', rej2); foreign.listen(TPORT, '127.0.0.1', res2) })
-  const third = await startServer(TPORT, { publishRuntime: false }) // 应跳过被 foreign(非本应用)占用的 8490
+  const third = await startServer(TPORT, { publishRuntime: false, prewarm: false }) // 应跳过被 foreign(非本应用)占用的 8490
   safetyOK = third.port !== TPORT || third.adopted
   safetyDetail = `bound=${third.port} adopted=${third.adopted}`
   if (third.server) third.server.close()
@@ -638,6 +638,29 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   const httpSrc = fs.readFileSync(new URL('./dist/server/http.js', import.meta.url), 'utf8')
   check('独立端口 clientError 兜底', httpSrc.includes("server.on('clientError'"))
   check('独立端口回调整体 try 包裹', /createServer\(\(req, res\) => \{\s*(?:\/\/[^\n]*\n\s*)*try \{/.test(httpSrc))
+}
+
+// ── cycle-14 材料逐份折叠 + 申论草稿暂存 + 索引预热（Lead 源码级静态守卫）──
+{
+  const fs = await import('node:fs')
+  const readSrc = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf-8')
+  const papersView = readSrc('./src/client/papers-view.ts')
+  const paperData = readSrc('./src/adapters/paperData.ts')
+  const httpSrc = readSrc('./src/server/http.ts')
+  // ① 材料逐份折叠：两处渲染点（真题卷详情 + 申论区）都有 collapsedMats 状态与「全部展开」总开关
+  check('材料逐份折叠·双视图状态（collapsedMats×2）', (papersView.match(/collapsedMats/g) || []).length >= 6 && (papersView.match(/toggleMat/g) || []).length >= 4)
+  check('材料逐份折叠·全部展开/收起总开关', papersView.includes("'▼ 全部展开'") && papersView.includes("'▲ 全部收起'") && papersView.includes("'▼ 展开全部材料"))
+  check('材料逐份折叠·字数提示与折叠标记', papersView.includes("约 ' + wordCount + ' 字") && papersView.includes('· 已折叠'))
+  // ② T-021 联动自动展开：关联材料跳转时折叠中的材料先展开（否则滚过去看不到正文）
+  check('材料联动跳转自动展开（jumpToMaterial）', /jumpToMaterial[\s\S]{0,220}setCollapsedMats\(m => \(m\[no\] \? \{ \.\.\.m, \[no\]: false \} : m\)\)/.test(papersView))
+  // ③ 申论草稿本地暂存：键前缀 + 读/写/清 三态 + 提交成功清除 + UI 提示
+  check('申论草稿·localStorage 暂存三态', papersView.includes("'kg-essay-draft:'") && /const readDraft = /.test(papersView) && /const writeDraft = /.test(papersView))
+  check('申论草稿·选题主文装载草稿且提交清除', /setAnswer\(readDraft\(q\)\)/.test(papersView) && /localStorage\.removeItem\(essayDraftKey\(cur\)\)/.test(papersView) && papersView.includes('草稿已本地暂存'))
+  // ④ 索引分块预热：paperData 有 prewarmPaperIndex + setImmediate 分批；http.ts 启动接线；smoke harness 关闭预热（防 R-P-03 互踩）
+  check('索引预热·分块构建不阻塞事件循环', /export function prewarmPaperIndex/.test(paperData) && /setImmediate\(step\)/.test(paperData) && /const BATCH = 40/.test(paperData))
+  check('索引预热·服务启动接线且测试可关', httpSrc.includes('prewarmPaperIndex(REPO_ROOT)') && /prewarm = options\.prewarm !== false/.test(httpSrc))
+  const smokeSelf = fs.readFileSync(new URL('./smoke.test.mjs', import.meta.url), 'utf-8')
+  check('索引预热·smoke harness 显式关闭', (smokeSelf.match(/prewarm: false/g) || []).length >= 3)
 }
 
 // ── 清理测试命名空间产物（避免污染真实进度事实）──

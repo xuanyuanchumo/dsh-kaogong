@@ -21,6 +21,7 @@ import {
   topoLayers, shortestPath, neighborhood, reverseReach, layeredLayout,
 } from '../shared/manifest.js'
 import { REPOS, XINGCE_MODULES, safeReadFile, exists, safeReadDir, getRandomQuestions, repoStats } from '../adapters/repoData.js'
+import { prewarmPaperIndex } from '../adapters/paperData.js'
 import { makeWsStore } from './ws.js'
 import { makeSrsApi, srsHooks } from './srs.js'
 import { makeDataApi, makeStudyPlan } from './dataApi.js'
@@ -442,6 +443,7 @@ function writeRuntime(info) {
  */
 export async function startServer(preferredPort = 8400, options: any = {}) {
   const publishRuntime = options.publishRuntime !== false
+  const prewarm = options.prewarm !== false
   const ports = Array.from({ length: 5 }, (_, i) => preferredPort + i)
   for (const port of ports) {
     const beacon = await probePort(port)
@@ -451,6 +453,9 @@ export async function startServer(preferredPort = 8400, options: any = {}) {
       await tryListen(server, port)
       if (publishRuntime) writeRuntime({ port, pid: process.pid })
       logLifecycle(publishRuntime ? 'server-listen' : 'server-listen-probe', { port })
+      // cycle-14 性能：启动后后台分块预热真题卷索引（快照命中即毫秒级；无快照分块构建不阻塞事件循环）。
+      // smoke 传 prewarm:false 关闭——避免预热与 R-P-03 快照实验互踩（预热会把缓存热好，耗时断言失真）。
+      if (prewarm) prewarmPaperIndex(REPO_ROOT)
       return { server, port, adopted: false }
     } catch (e) {
       if (e.code === 'EADDRINUSE') continue

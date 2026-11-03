@@ -372,9 +372,28 @@
       "stdout": "=== HITL Audit (Fix-First Strategy) ===\n\n[PASS] H1: No security-sensitive operations detected\n[PASS] H2: No destructive operations detected\n[PASS] H3: All gates green, audit log present\n[PASS] H4: Gate evidence sufficient, no conflicts\n\nAll HITL audits PASSED.\n",
       "stderr": "",
       "durationMs": 1668
+    },
+    {
+      "flowId": "init-cycle-2026-11-03T15:25:07.141Z-19",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-03T15:25:07.141Z",
+      "cycle": "cycle-13",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-03T15:25:07.141Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T15:25:07.416Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-14 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-14\n",
+      "stderr": "",
+      "durationMs": 259
     }
   ],
-  "counter": 18,
+  "counter": 19,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,
