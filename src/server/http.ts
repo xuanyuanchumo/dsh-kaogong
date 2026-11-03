@@ -15,7 +15,11 @@ import { createServer } from 'node:http'
 import { writeFileSync, appendFileSync, mkdirSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { CAPABILITIES, buildGraph, graphMetrics, healthScore } from '../shared/manifest.js'
+import {
+  CAPABILITIES, NODE_META, EDGE_META, buildGraph, graphMetrics, healthScore,
+  degreeAnalysis, labelPropagation, clusteringCoefficient, brandesBetweenness,
+  topoLayers, shortestPath, neighborhood, reverseReach, layeredLayout,
+} from '../shared/manifest.js'
 import { REPOS, XINGCE_MODULES, safeReadFile, exists, safeReadDir, getRandomQuestions, repoStats } from '../adapters/repoData.js'
 import { makeWsStore } from './ws.js'
 import { makeSrsApi, srsHooks } from './srs.js'
@@ -95,7 +99,43 @@ function telemetrySnapshot() {
       series: t.lat,
     }
   }
-  const totalReq = Object.values(eps).reduce((s: number, e: any) => s + e.count, 0)
+  const totalReq: number = (Object.values(eps) as any[]).reduce((s: number, e: any) => s + e.count, 0)
+  const totalErr: number = (Object.values(eps) as any[]).reduce((s: number, e: any) => s + e.errors, 0)
+
+  // ── v1.8 追加：全局延迟直方图（各端点最新环形样本合并，有序统计）──
+  const allLat: number[] = []
+  for (const t of Object.values(telemetry.endpoints) as EpStat[]) allLat.push(...t.lat)
+  allLat.sort((a, b) => a - b)
+  const histogram = {
+    p50: percentile(allLat, 50), p90: percentile(allLat, 90),
+    p95: percentile(allLat, 95), p99: percentile(allLat, 99),
+    max: allLat.length ? allLat[allLat.length - 1] : 0,
+  }
+
+  // ── v1.8 追加：慢端点排行（p95 降序 → count 降序 → path 字典序，稳定可复现）──
+  const topSlow = entries(eps)
+    .filter(([path]) => !path.includes('-img')) // 二进制流不计入慢端点排名
+    .map(([path, e]: [string, any]) => ({ path, p95: e.p95, count: e.count }))
+    .sort((a, b) => b.p95 - a.p95 || b.count - a.count || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+    .slice(0, 10)
+
+  // ── v1.8 追加：告警（契约阈值 p95>200 warn / >500 error / errRate>1% warn）──
+  const alerts: any[] = []
+  for (const [path, e] of entries(eps) as Array<[string, any]>) {
+    if (e.p95 > 500) alerts.push({ level: 'error', msg: `${path} p95 ${e.p95}ms 超过 500ms` })
+    else if (e.p95 > 200) alerts.push({ level: 'warn', msg: `${path} p95 ${e.p95}ms 超过 200ms` })
+    if (e.count > 0 && e.errors / e.count > 0.01) {
+      alerts.push({ level: 'warn', msg: `${path} 错误率 ${(e.errors / e.count * 100).toFixed(1)}% 超过 1%` })
+    }
+  }
+  if (totalReq > 0 && totalErr / totalReq > 0.01) {
+    alerts.push({ level: 'warn', msg: `全局错误率 ${(totalErr / totalReq * 100).toFixed(1)}% 超过 1%` })
+  }
+  // 稳定排序：error 在前，同级按消息字典序（避免 telemetry 插入序导致抖动）
+  alerts.sort((a, b) => (a.level === b.level
+    ? (a.msg < b.msg ? -1 : a.msg > b.msg ? 1 : 0)
+    : (a.level === 'error' ? -1 : 1)))
+
   return {
     uptimeSec: Math.round((now - BOOT_TS) / 1000),
     qpsWindow: +(inWindow / (telemetry.window / 1000)).toFixed(3),
@@ -104,7 +144,72 @@ function telemetrySnapshot() {
     activeEndpoints: Object.keys(eps).length,
     declaredEndpoints: CAPABILITIES.endpoints.length,
     coverage: +(Object.keys(eps).length / CAPABILITIES.endpoints.length).toFixed(3),
+    histogram,
+    topSlow,
+    alerts,
   }
+}
+
+// ══ v1.8 生命周期状态机（data/lifecycle.jsonl 最近事件 + CAPABILITIES.lifecycle 合成）══
+/**
+ * 读取生命周期环形日志（最多 limit 条，按文件顺序 = 时间升序）。
+ * 单行损坏（半行写入/进程被杀）只丢该行，绝不影响端点可用性。
+ */
+function readLifecycleEvents(limit = 50) {
+  try {
+    const raw = safeReadFile(LIFECYCLE_FILE, 900000) || ''
+    const list: any[] = []
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue
+      try { list.push(JSON.parse(line)) } catch { /* 单行损坏：跳过 */ }
+    }
+    return list.slice(-limit)
+  } catch { return [] }
+}
+
+/** 阶段 → 可判定其完成的生命周期事件名（一个阶段允许多种事件来源） */
+const STAGE_EVENTS: Record<string, string[]> = {
+  load: ['load', 'plugin-load'],
+  apply: ['apply', 'plugin-apply'],
+  'server-start': ['server-listen', 'server-listen-probe', 'server-adopt'],
+  'tools-register': ['tools-register', 'tool-register'],
+  'runtime-publish': ['runtime-publish', 'server-listen'],
+  serve: ['serve', 'server-adopt'],
+  cleanup: ['cleanup', 'plugin-cleanup'],
+}
+
+/**
+ * 合成生命周期视图：{stages, events, current}。
+ * - stage 状态：最近一个已发生的阶段为 current，其前 done、其后 pending；
+ * - at 取该阶段**最近一次**事件时间戳；
+ * - events 最近 50 条，按时间**倒序**（最新在前，面板时间线直接渲染）。
+ */
+function lifecycleSnapshot() {
+  const events = readLifecycleEvents(50)
+  const at: Record<string, string> = {}
+  for (const ev of events) {
+    const name = ev && ev.event
+    if (!name || !ev.ts) continue
+    for (const [stage, names] of entries(STAGE_EVENTS) as Array<[string, string[]]>) {
+      if (names.indexOf(name) >= 0) at[stage] = ev.ts // 文件升序 → 最后写入者即最近一次
+    }
+  }
+  const stages: any[] = CAPABILITIES.lifecycle.map((s: any) => {
+    const item: any = { stage: s.stage, desc: s.desc, state: 'pending' }
+    if (at[s.stage]) item.at = at[s.stage]
+    return item
+  })
+  let currentIdx = -1
+  stages.forEach((s, i) => { if (at[s.stage]) currentIdx = i })
+  if (currentIdx < 0) {
+    // 无任何日志（首次启动前）：以加载阶段为当前态，避免出现「全是 pending」
+    if (stages.length) stages[0].state = 'current'
+    return { stages, events: events.slice().reverse(), current: stages.length ? stages[0].stage : null }
+  }
+  stages.forEach((s, i) => {
+    s.state = i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'pending'
+  })
+  return { stages, events: events.slice().reverse(), current: stages[currentIdx].stage }
 }
 
 // ══ 图谱快照（5s TTL 缓存；节点/边/指标/健康度）══
@@ -126,6 +231,16 @@ function graphSnapshot(wsRaw) {
   const metrics = graphMetrics(ge.nodes, ge.edges)
   const tel = telemetrySnapshot()
   const p = loadProgress(wsRaw)
+  // ── v1.8 追加：分析层（纯函数、确定性；每次缓存未命中重算，5s TTL）──
+  const deg = degreeAnalysis(ge.nodes, ge.edges)
+  const analytics = {
+    degree: deg.degree,
+    degreeStats: deg.stats,
+    communities: labelPropagation(ge.nodes, ge.edges),
+    clustering: clusteringCoefficient(ge.nodes, ge.edges),
+    betweenness: brandesBetweenness(ge.nodes, ge.edges),
+    layers: topoLayers(ge.nodes, ge.edges),
+  }
   const data = {
     generatedAt: new Date().toISOString(),
     nodes: ge.nodes, edges: ge.edges,
@@ -134,9 +249,59 @@ function graphSnapshot(wsRaw) {
     health: healthScore({ metrics, telemetry: tel, banks }),
     progress: { day: p.day, answered: p.answered, byModule: Object.keys(p.byModule || {}).length },
     banks: { ready: banks.ready, total: banks.total },
+    // v1.8 追加字段（既有字段一个不动，仅追加，旧 UI 不受影响）
+    nodeMeta: NODE_META,
+    edgeMeta: EDGE_META,
+    analytics,
+    layout: layeredLayout(ge.nodes, ge.edges),
   }
   graphCache = { ts: now, data }
   return data
+}
+
+// ══ v1.8 图查询端点（邻域/最短路/影响面）══
+/**
+ * 复用 /api/graph 的 5s 缓存（不重复 buildGraph），在快照上做纯函数查询。
+ * 崩溃安全：未知/缺失节点返回 {error} 且 HTTP 200；任何异常都收敛为 {error}，
+ * 绝不向路由层冒泡（路由层 catch 会退化成 500）。
+ */
+function graphQuery(path, params, wsRaw) {
+  try {
+    const g = graphSnapshot(wsRaw)
+    const nodes = g.nodes || []
+    const edges = g.edges || []
+    const known = new Set(nodes.map((n: any) => n.id))
+
+    if (path === '/api/graph/neighborhood') {
+      const node = params.get('node') || ''
+      const depth = Math.max(1, Math.min(3, parseInt(params.get('depth') || '1', 10) || 1))
+      if (!node || !known.has(node)) {
+        return { error: `未知节点: ${node || '(空)'}`, center: node, depth, nodes: [], edges: [], stats: { nodes: 0, edges: 0 } }
+      }
+      const r: any = neighborhood(nodes, edges, node, depth)
+      return { ...r, stats: { nodes: r.nodes.length, edges: r.edges.length } }
+    }
+
+    if (path === '/api/graph/path') {
+      const from = params.get('from') || ''
+      const to = params.get('to') || ''
+      if (!from || !to) return { error: '缺少 from/to 参数', found: false, path: [], length: 0 }
+      if (!known.has(from) || !known.has(to)) {
+        const bad = !known.has(from) ? from : to
+        return { error: `未知节点: ${bad}`, found: false, path: [], length: 0 }
+      }
+      return shortestPath(nodes, edges, from, to)
+    }
+
+    // /api/graph/impact
+    const node = params.get('node') || ''
+    if (!node || !known.has(node)) {
+      return { error: `未知节点: ${node || '(空)'}`, node, dependents: [], count: 0 }
+    }
+    return reverseReach(nodes, edges, node)
+  } catch (e: any) {
+    return { error: `图查询失败: ${e && e.message ? e.message : String(e)}` }
+  }
 }
 
 // ══ UI 装配（index.html + app.css 服务端内联，保持单响应零依赖）══
@@ -216,11 +381,33 @@ function coreApi(path, params, post, method, wsRaw, port) {
     return { ...p, ws: wsKey(wsRaw), rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
   }
   if (path === '/api/graph') return graphSnapshot(wsRaw)
+  // v1.8 图查询三端点（未知节点 → {error} 且 200，不让异常冒泡）
+  if (path === '/api/graph/neighborhood' || path === '/api/graph/path' || path === '/api/graph/impact') {
+    return graphQuery(path, params, wsRaw)
+  }
+  if (path === '/api/lifecycle') return lifecycleSnapshot()
   if (path === '/api/telemetry') return telemetrySnapshot()
   if (path === '/api/capabilities') {
     const tel = telemetrySnapshot()
     const consumed = new Set(Object.keys(tel.endpoints))
-    return { ...CAPABILITIES, runtime: { consumedEndpoints: [...consumed], coverage: tel.coverage, uptimeSec: tel.uptimeSec }, orphans: CAPABILITIES.endpoints.filter(e => !consumed.has(e.path)).map(e => e.path) }
+    const declared = new Set(CAPABILITIES.endpoints.map(e => e.path))
+    // 静态对账：以「不含运行时数据的纯声明图」求入度，孤儿=声明了却无人指向
+    const staticGraph = buildGraph({})
+    const sm = graphMetrics(staticGraph.nodes, staticGraph.edges)
+    const reconciliation = {
+      orphanEndpoints: sm.orphans.filter((id: string) => id.startsWith('endpoint:')).map((id: string) => id.slice(9)),
+      orphanViews: sm.orphans.filter((id: string) => id.startsWith('view:')).map((id: string) => id.slice(5)),
+      // 运行态对账：声明了但从未被触达 / 被触达但未声明（能力矩阵漂移信号）
+      unconsumedEndpoints: CAPABILITIES.endpoints.filter(e => !consumed.has(e.path)).map(e => e.path),
+      missingProducers: [...consumed].filter(p => !declared.has(p)).sort(),
+    }
+    return {
+      ...CAPABILITIES,
+      runtime: { consumedEndpoints: [...consumed], coverage: tel.coverage, uptimeSec: tel.uptimeSec },
+      orphans: CAPABILITIES.endpoints.filter(e => !consumed.has(e.path)).map(e => e.path),
+      reconciliation,
+      lifecycle: lifecycleSnapshot(),
+    }
   }
   if (path === '/api/workspaces') return { workspaces: listWorkspaces() }
   return { error: `Unknown API: ${path}` }
@@ -290,7 +477,10 @@ export function attachWebRoute(webServer, mountPath = '/kaogong') {
     const finish = (status, type, body) => {
       res.writeHead(status, { 'Content-Type': type })
       res.end(body)
-      recordRequest(mountPath + rel, Date.now() - t0, status >= 400)
+      // 遥测路径口径（v1.8.0 修复）：统一记「相对挂载点的逻辑路径」（/api/graph），
+      // 与 CAPABILITIES.endpoints 声明口径一致。此前记 mountPath+rel（/kaogong/api/graph）
+      // → 能力对账永远匹配不上 → 全部端点被判「未声明」，白盒面板失去意义（假阳性）。
+      recordRequest(rel, Date.now() - t0, status >= 400)
     }
     res.setHeader('Cache-Control', 'no-store')
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }

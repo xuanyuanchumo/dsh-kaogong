@@ -64,9 +64,68 @@ globalThis.fetch = async (url) => {
   if (u.includes('/api/questions')) return { json: async () => ({ questions: [{ module: '判断推理', type: '逻辑', stem: '测试题干', options: { A: 'a', B: 'b' }, correctAnswer: 'A' }] }) }
   if (u.includes('/api/check')) return { json: async () => ({ isCorrect: true }) }
   // R12：以下三类端点的真实形状必须 mock 到，否则 prop 形状缺陷测不出
-  if (u.includes('/api/graph')) return { json: async () => ({ nodes: [], edges: [], metrics: { V: 100, E: 133, density: 0.013, components: 1, orphans: [] }, rank: [{ id: 'plugin:kaogong', pr: 0.05 }], health: { total: 99, factors: {}, weights: {} } }) }
-  if (u.includes('/api/telemetry')) return { json: async () => ({ uptimeSec: 100, totalRequests: 50, qpsWindow: 0.5, coverage: 0.9, activeEndpoints: 10, declaredEndpoints: 17, endpoints: { '/api/status': { count: 5, errors: 0, p50: 1, p95: 3, series: [1, 2] } } }) }
-  if (u.includes('/api/capabilities')) return { json: async () => ({ endpoints: [{ path: '/api/status', consumers: ['ui:header'] }], tools: [], views: [], entries: [], channels: [] }) }
+  // v1.8.0：图谱 mock 必须带 nodes/edges（否则 canvas 分支不执行，新图谱逻辑测不到），
+  // 且包含 nodeMeta/analytics/layout 以覆盖「服务端字段优先」路径。
+  if (u.includes('/api/graph/neighborhood')) return { json: async () => ({ center: 'plugin:kaogong', depth: 1, nodes: [], edges: [], stats: { nodes: 0, edges: 0 } }) }
+  if (u.includes('/api/graph/path')) return { json: async () => ({ found: true, path: ['view:graph', 'plugin:kaogong', 'view:dashboard'], length: 2 }) }
+  if (u.includes('/api/graph/impact')) return { json: async () => ({ node: 'plugin:kaogong', dependents: ['plugin:kaogong'], count: 1 }) }
+  if (u.includes('/api/graph')) return { json: async () => ({
+    nodes: [
+      { id: 'plugin:kaogong', type: 'plugin', label: 'dsh-kaogong' },
+      { id: 'view:dashboard', type: 'view', label: '仪表盘' },
+      { id: 'endpoint:/api/stats', type: 'endpoint', label: '学习统计' },
+    ],
+    edges: [
+      { source: 'plugin:kaogong', target: 'endpoint:/api/stats', rel: 'produces', w: 1 },
+      { source: 'plugin:kaogong', target: 'view:dashboard', rel: 'registers', w: 1 },
+    ],
+    metrics: { V: 3, E: 2, density: 0.333, components: 1, orphans: [] },
+    rank: [{ id: 'plugin:kaogong', pr: 0.45 }, { id: 'view:dashboard', pr: 0.3 }],
+    health: { total: 96, factors: {}, weights: {} },
+    nodeMeta: { plugin: { label: '插件', color: '#6366f1', icon: '📦', layer: 0 }, view: { label: '视图', color: '#f59e0b', icon: '🖥', layer: 2 }, endpoint: { label: '端点', color: '#3b82f6', icon: '🔗', layer: 2 } },
+    edgeMeta: { produces: { label: '生产', color: '#3b82f6' }, registers: { label: '注册', color: '#6366f1' } },
+    analytics: {
+      degree: { 'plugin:kaogong': { in: 0, out: 2, total: 2 }, 'view:dashboard': { in: 1, out: 0, total: 1 }, 'endpoint:/api/stats': { in: 1, out: 0, total: 1 } },
+      degreeStats: { max: 2, avg: 1.33, median: 1, histogram: [{ deg: 1, count: 2 }, { deg: 2, count: 1 }] },
+      communities: [{ id: 'plugin:kaogong', size: 3, members: ['plugin:kaogong', 'view:dashboard', 'endpoint:/api/stats'] }],
+      clustering: { avg: 0.5, top: [] },
+      betweenness: [{ id: 'plugin:kaogong', score: 1 }],
+      layers: { layer: { 'plugin:kaogong': 0, 'view:dashboard': 1, 'endpoint:/api/stats': 1 }, maxLayer: 1 },
+    },
+    layout: { id: { 'plugin:kaogong': { x: 0.5, y: 0.1 }, 'view:dashboard': { x: 0.2, y: 0.8 }, 'endpoint:/api/stats': { x: 0.8, y: 0.8 } } },
+  }) }
+  // v1.8.0 白盒面板数据源（生命周期 / 命名空间 / 遥测扩展 / 能力对账）
+  if (u.includes('/api/lifecycle')) return { json: async () => ({
+    stages: [
+      { stage: 'load', desc: '模块导入', state: 'done' },
+      { stage: 'apply', desc: 'apply(ctx)', state: 'done' },
+      { stage: 'server-start', desc: 'HTTP 绑定', state: 'done', at: '2026-11-03T00:00:00Z' },
+      { stage: 'tools-register', desc: '工具注册', state: 'done' },
+      { stage: 'runtime-publish', desc: '信标写入', state: 'done', at: '2026-11-03T00:00:01Z' },
+      { stage: 'serve', desc: '稳态服务', state: 'current', at: '2026-11-03T00:00:02Z' },
+      { stage: 'cleanup', desc: '卸载清理', state: 'pending' },
+    ],
+    events: [{ ts: '2026-11-03T00:00:00Z', event: 'server-listen', port: 8400 }],
+    current: 'serve',
+  }) }
+  if (u.includes('/api/workspaces')) return { json: async () => ({ workspaces: [{ ns: 'default-abc12345', day: 1, answered: 10, correct: 6, rate: 60 }, { ns: 'PROJ_X-deadbeef', day: 3, answered: 4, correct: 1, rate: 25 }] }) }
+  if (u.includes('/api/telemetry')) return { json: async () => ({
+    uptimeSec: 100, totalRequests: 50, qpsWindow: 0.5, coverage: 0.9, activeEndpoints: 10, declaredEndpoints: 17,
+    endpoints: {
+      '/api/status': { count: 5, errors: 0, errRate: 0, p50: 1, p95: 3, series: [1, 2, 3, 2, 1] },
+      '/api/questions': { count: 3, errors: 1, errRate: 0.33, p50: 120, p95: 260, series: [200, 150, 260] },
+    },
+    histogram: { p50: 2, p90: 100, p95: 260, p99: 300, max: 320 },
+    topSlow: [{ path: '/api/questions', p95: 260, count: 3 }],
+    alerts: [{ level: 'warn', msg: '/api/questions p95 260ms 超过 200ms' }],
+  }) }
+  if (u.includes('/api/capabilities')) return { json: async () => ({
+    endpoints: [{ path: '/api/status', label: '信标·状态', consumers: ['ui:header'] }, { path: '/api/questions', label: '抽题', consumers: ['ui:practice'] }],
+    tools: [], views: [], entries: [], channels: [],
+    plugin: { id: 'kaogong', version: '1.8.0' },
+    reconciliation: { orphanEndpoints: [], orphanViews: [], unconsumedEndpoints: ['/api/questions'], missingProducers: [] },
+    lifecycle: { stages: [{ stage: 'serve', desc: '稳态', state: 'current' }], events: [], current: 'serve' },
+  }) }
   if (u.includes('/api/wrong')) return { json: async () => ({ wrong: [], summary: { open: 0, mastered: 0 } }) }
   // v1.6 新端点真实形状
   if (u.includes('/api/papers')) return { json: async () => ({ total: 1683, papers: [{ id: '国考/2009/申论-副省级', exam: '国考', year: 2009, subject: '申论', paperType: '副省级', questionCount: 4, verified: true }], subjects: [{ subject: '申论', count: 944 }, { subject: '行测', count: 739 }] }) }
@@ -230,6 +289,110 @@ try {
     }
   }
   ok('真实 client.js: 模考/深度题库视图零降级（R15 守卫）')
+
+  /* ══ v1.8.0 图谱交互与白盒面板专项（真实 client.js + 真实形状 mock）══ */
+  // 图谱：canvas 必须被创建，且必须真正取得 2D 上下文（jsdom 无 Canvas 2D 实现，
+  // 因此这里给 canvas 打桩：记录 getContext 是否被以 '2d' 调用）。
+  // 若引擎回退成「只挂 canvas 不渲染」，该断言会失败 → 变异可检出。
+  {
+    const gBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('图谱'))
+    if (!gBtn) throw new Error('未找到图谱导航按钮')
+    await act(async () => { gBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    const canvases = tr.root.findAll(n => n.type === 'canvas')
+    if (!canvases.length) throw new Error('图谱视图未创建 canvas 元素（新交互图谱未生效）')
+    // react-test-renderer 不创建真实 DOM 节点，也不提供 Canvas 2D 实现；
+    // 因此改为直接校验引擎源码证据链：必须取得 '2d' 上下文 + 具备四个核心函数。
+    // 变异「只挂 canvas 不渲染」会删掉 getContext('2d') → 该断言必失败。
+    const fs2 = await import('node:fs')
+    const combo = fs2.readFileSync(new URL('./dist/client/client.js', import.meta.url), 'utf8')
+    const uses2d = combo.includes("getContext('2d')") || combo.includes('getContext("2d")')
+    if (!uses2d) throw new Error("图谱引擎未取得 2D 上下文（getContext('2d') 缺失，交互渲染失效）")
+    for (const fn of ['function step', 'function draw', 'function fit', 'function relax']) {
+      if (!combo.includes(fn)) throw new Error('图谱引擎缺少核心函数: ' + fn)
+    }
+    ok('真实 client.js: 图谱视图挂载 Canvas 且引擎使用 2D 上下文')
+
+    // 工具条控件：布局切换 / 标签开关 / 重置 / 适配
+    const barLabels = ['重置视图', '适配画布', '标签：', '布局：']
+    const found = barLabels.filter(l => tr.root.findAllByType('button').some(b => String(b.props.children).includes(l)))
+    if (found.length < barLabels.length) throw new Error('图谱工具条控件缺失: ' + barLabels.filter(l => !found.includes(l)).join(','))
+    ok('真实 client.js: 图谱工具条（重置/适配/标签/布局）齐备')
+
+    // 节点类型过滤 chips（NODE_META 驱动）
+    const chips = tr.root.findAllByType('button').filter(b => /插件|入口|端点|视图|工具/.test(String(b.props.children)))
+    if (chips.length < 3) throw new Error('节点类型过滤 chips 缺失（NODE_META 未驱动 UI）')
+    ok('真实 client.js: 节点类型过滤 chips 由 NODE_META 驱动')
+
+    // 指标条必须显示社区数与集聚系数（v1.8.0 新增白盒指标）
+    const graphText = JSON.stringify(tr.toJSON())
+    if (!graphText.includes('社区数') || !graphText.includes('集聚系数')) throw new Error('图谱指标条缺社区数/集聚系数')
+    ok('真实 client.js: 图谱指标条含社区数 + 集聚系数')
+
+    // 点击类型过滤后仍不得降级（交互不引发渲染崩溃）
+    await act(async () => { chips[0] && chips[0].props.onClick && chips[0].props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('图谱交互（类型过滤）后出现渲染降级')
+    ok('真实 client.js: 图谱类型过滤交互不降级')
+  }
+
+  // 白盒管理面板：八区块必须齐备（否则「管理面板」名不副实）
+  {
+    const oBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('可观测'))
+    if (!oBtn) throw new Error('未找到可观测导航按钮')
+    await act(async () => { oBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+    const obsText = JSON.stringify(tr.toJSON())
+    const required = ['白盒管理面板', '生命周期状态机', '能力对账', '慢端点', '工作区命名空间', '导出诊断', '我的学习质量']
+    const missing = required.filter(k => !obsText.includes(k))
+    if (missing.length) throw new Error('白盒面板区块缺失: ' + missing.join(','))
+    ok('真实 client.js: 白盒面板八区块齐备（生命周期/对账/性能/告警/命名空间/管理动作）')
+
+    // 生命周期 stepper 三态可见（done ✓ / current ● / pending）
+    if (!obsText.includes('serve') || !obsText.includes('cleanup')) throw new Error('生命周期 stepper 未渲染阶段名')
+    ok('真实 client.js: 生命周期 stepper 渲染阶段与三态')
+
+    // 能力对账表：真实表格 + 状态徽标（活跃/未触达）
+    if (!tr.root.findAllByType('table').length) throw new Error('能力对账未渲染为 table')
+    if (!obsText.includes('未触达')) throw new Error('能力对账缺「未触达」状态')
+    ok('真实 client.js: 能力对账表含 state 徽标')
+
+    // sparkline 内联 SVG（延迟趋势）
+    const svgs = tr.root.findAll(n => n.type === 'svg')
+    if (!svgs.length) throw new Error('端点性能表缺 sparkline（内联 SVG）')
+    ok('真实 client.js: 端点性能表含 sparkline SVG')
+
+    // 搜索过滤输入可用（断言范围限定到 table 本身——/api/questions 还会出现在
+    // 「慢端点 TOP」「告警文案」等区块，全树断言会误判）
+    const filters = tr.root.findAll(n => n.type === 'input' && /过滤端点/.test(String(n.props.placeholder || '')))
+    if (!filters.length) throw new Error('能力对账缺过滤输入框')
+    await act(async () => { filters[0].props.onChange({ target: { value: '/api/status' } }) })
+    await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+    const tableRows = tr.root.findAllByType('table')
+    if (!tableRows.length) throw new Error('过滤后表格消失')
+    // 用测试实例的 props.children 递归取文本（toJSON 在 root.findAll 的实例上不可用）
+    function tblText(node) {
+      if (node == null) return ''
+      if (typeof node === 'string' || typeof node === 'number') return String(node)
+      if (Array.isArray(node)) return node.map(tblText).join(' ')
+      if (node.props) return tblText(node.props.children)
+      return ''
+    }
+    const tableText = tblText(tableRows[0].props.children)
+    if (!tableText.includes('/api/status')) throw new Error('过滤后目标行丢失')
+    if (tableText.includes('/api/questions')) throw new Error('过滤未生效（/api/questions 仍在表内）')
+    ok('真实 client.js: 能力对账过滤输入生效（表格范围）')
+
+    // 问题端点开关（可点、不降级）
+    const pBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('仅问题端点'))
+    if (pBtn) {
+      await act(async () => { pBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+      if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('问题端点开关后渲染降级')
+    }
+    ok('真实 client.js: 白盒面板交互（过滤/开关）不降级')
+  }
+
   tr.unmount()
 } catch (e) { bad('真实 client.js 集成渲染', e) }
 

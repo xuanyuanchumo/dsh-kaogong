@@ -2,7 +2,7 @@
   "skill": "ai-native-iteration-cycle",
   "version": "2.6.1",
   "fileCount": 69,
-  "generatedAt": "2026-11-02T09:29:02.433Z",
+  "generatedAt": "2026-11-03T09:11:58.422Z",
   "files": [
     {
       "path": "assets/config/config.example.yml",
@@ -206,8 +206,8 @@
     },
     {
       "path": "scripts/auto-fix-loop.mjs",
-      "size": 26828,
-      "sha256": "641ed652357ee18207667cac5349cec6fd0a991ccfb6e1170f9314d87e88ebe3"
+      "size": 26920,
+      "sha256": "619cecb76be4182aadbb6f15f0a63b8bc206175412acda04f4f95d5fa9b80e82"
     },
     {
       "path": "scripts/band-detector.mjs",
@@ -216,18 +216,18 @@
     },
     {
       "path": "scripts/eval-runner.mjs",
-      "size": 55459,
-      "sha256": "1757b2dfc136d360f67bff876220eae7f793d168a7477c823ecfbe91e8077005"
+      "size": 56912,
+      "sha256": "daf4b2af730a0037c1bf2c4f826b9aea11de65355a2cdbf206ad470658289917"
     },
     {
       "path": "scripts/fact-base-verify.mjs",
-      "size": 3021,
-      "sha256": "ba3f9bbe1233827b04d4aed54d80ef5ce8749d84eb438c71a7a7ad32426949fb"
+      "size": 3040,
+      "sha256": "f7c44b79da6c7b5aaea6bfc9fa9856f9d6e78a12a405da939bfe19bd5f219f90"
     },
     {
       "path": "scripts/gate-check.mjs",
-      "size": 21452,
-      "sha256": "cb877f8a23c70ac20addbdb84396db5be07ba3b0a58b7271d27cdd6a197fe704"
+      "size": 22159,
+      "sha256": "bfaa28c0f9debf799ff0d8b1a8af33b12760145cfdeeea129f4966302b95e8a9"
     },
     {
       "path": "scripts/gate-ledger.mjs",
@@ -236,8 +236,8 @@
     },
     {
       "path": "scripts/hitl-audit.mjs",
-      "size": 15501,
-      "sha256": "4eac112b284890795ef2e76406df52e22cf029e8805ee89012c6067c36e253ad"
+      "size": 15558,
+      "sha256": "3cf9c3110c9aebcf7d8af3b254b471d4761609a89bc1c2ec246482ac9c3ad4d1"
     },
     {
       "path": "scripts/init-cycle.mjs",
@@ -246,8 +246,8 @@
     },
     {
       "path": "scripts/init-workflow.mjs",
-      "size": 3740,
-      "sha256": "84d2b88d7f8ec3ff2bdf7334f1e2e25b32ea12cc6b08bc6f485b0c2c4066beb2"
+      "size": 3774,
+      "sha256": "31d85f0ffb352a9a66ac98a3ce2eb05b4c291c5db5bad87407500b472e9799f7"
     },
     {
       "path": "scripts/lib/args.mjs",
@@ -271,8 +271,8 @@
     },
     {
       "path": "scripts/lib/cycle.mjs",
-      "size": 1408,
-      "sha256": "80e1284a3b8bf1cc50d9364e8d81a1bbfa938402b53583488c627e736ff76ce9"
+      "size": 1915,
+      "sha256": "3eb35a78002db6d95914c59cba2433ef3626ced76c147c6ab72dc0f7ffb3db36"
     },
     {
       "path": "scripts/lib/dimensions.mjs",
@@ -321,18 +321,18 @@
     },
     {
       "path": "scripts/multi-agent-gate.mjs",
-      "size": 29731,
-      "sha256": "88454254b33857b329ee28510ce9811b8e547bd6a43729fbcd982d2be50c6cdf"
+      "size": 29865,
+      "sha256": "926ec9bef5d9d8378b31c08984ee6d5ea818740ab0c4c7f5dba4e1efdbe25cc1"
     },
     {
       "path": "scripts/org-status.mjs",
-      "size": 38182,
-      "sha256": "ee2b30981119340f0c0e6a850b32ba0c3453e7ee1dfe73dbe8957d55c2669a77"
+      "size": 38272,
+      "sha256": "534aff0a8e4d87ea5845e1d07c334741cc64382b0d0ed7c1abfae3b0f2d0b2e0"
     },
     {
       "path": "scripts/plan-sync-check.mjs",
-      "size": 6957,
-      "sha256": "4d32512bd88cf4a5dd8abf1313c709aa5a3301067b07d41cc9e41d631f5d16c5"
+      "size": 7196,
+      "sha256": "806b4d1da0f68cad31cc472ebca1f483fd0e7787fcf1f8195c5129c5ea769113"
     },
     {
       "path": "scripts/quick-validate.mjs",

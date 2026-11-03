@@ -512,7 +512,88 @@
       "timestamp": "2026-11-03T05:29:05.696Z",
       "previousHash": "6c5f136a5bfc8cb5651698bec7bb09819aab640c75c433567c6e2957b263cdf3",
       "hash": "9771a2ce91e5da02aa338d6220f256eb74d7e1875fd25dc4c368f1b2766c500c"
+    },
+    {
+      "gate": "G0",
+      "gateName": "评估收敛门",
+      "result": "FAIL",
+      "detail": "Evaluation report found in cycle-12 (8 dimension rows) [Q1:ABSENT,Q5:ABSENT]",
+      "timestamp": "2026-11-03T09:12:10.095Z",
+      "previousHash": "9771a2ce91e5da02aa338d6220f256eb74d7e1875fd25dc4c368f1b2766c500c",
+      "hash": "9d7172afb93dec9927f4ebaafd0df08cf406aa822776c0bbaf756d59080c08a2"
+    },
+    {
+      "gate": "G1",
+      "gateName": "任务收敛门",
+      "result": "FAIL",
+      "detail": "12 of 13 tasks not completed §cycle-12",
+      "timestamp": "2026-11-03T09:12:10.108Z",
+      "previousHash": "9d7172afb93dec9927f4ebaafd0df08cf406aa822776c0bbaf756d59080c08a2",
+      "hash": "09597d17e6597e725826cb5463c40d34b31aa513bd4fef28afa5c7de21164e65"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "FAIL",
+      "detail": "No test reports §cycle-12",
+      "timestamp": "2026-11-03T09:12:10.118Z",
+      "previousHash": "09597d17e6597e725826cb5463c40d34b31aa513bd4fef28afa5c7de21164e65",
+      "hash": "302013df13b770042d573bae4ee14219998f14321bea4a4b75071e990c1a3a31"
+    },
+    {
+      "gate": "G3",
+      "gateName": "构建收敛门",
+      "result": "FAIL",
+      "detail": "Build passed: npx tsc §cycle-12 [dist=absent] [Q3:ABSENT,Q4:ABSENT]",
+      "timestamp": "2026-11-03T09:12:13.096Z",
+      "previousHash": "302013df13b770042d573bae4ee14219998f14321bea4a4b75071e990c1a3a31",
+      "hash": "ae0826ecc15c0133e1cd66b7e3d913af488516b334b7919846cb9a20c99a0c97"
+    },
+    {
+      "gate": "G0",
+      "gateName": "评估收敛门",
+      "result": "PASS",
+      "detail": "Evaluation report found in cycle-12 (16 dimension rows) [Q1:PASS,Q5:PASS]",
+      "timestamp": "2026-11-03T09:19:29.634Z",
+      "previousHash": "ae0826ecc15c0133e1cd66b7e3d913af488516b334b7919846cb9a20c99a0c97",
+      "hash": "22aa9936308a606311423218460ad7fa77cf6d4df5012705d28e73958f035e71"
+    },
+    {
+      "gate": "G1",
+      "gateName": "任务收敛门",
+      "result": "FAIL",
+      "detail": "All 14 tasks completed §cycle-12 [Q7:FAIL]",
+      "timestamp": "2026-11-03T09:19:29.647Z",
+      "previousHash": "22aa9936308a606311423218460ad7fa77cf6d4df5012705d28e73958f035e71",
+      "hash": "838c7ebd571e4a55ca36f4a93a1241f7d0c479e03372e326f9ee1f7aa65319ce"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "FAIL",
+      "detail": "Test report summary not recognized: 测试报告-cycle12.md has no 通过/失败 rows (expected the §2 汇总 table) §cycle-12",
+      "timestamp": "2026-11-03T09:19:29.658Z",
+      "previousHash": "838c7ebd571e4a55ca36f4a93a1241f7d0c479e03372e326f9ee1f7aa65319ce",
+      "hash": "d162bf2ed6b9cd78b50ebcb4548bcf7cfc6c7b66231417316e93d3679e178978"
+    },
+    {
+      "gate": "G3",
+      "gateName": "构建收敛门",
+      "result": "PASS",
+      "detail": "Build passed: npx tsc §cycle-12 [dist=absent] [Q3:PASS,Q4:PASS]",
+      "timestamp": "2026-11-03T09:19:32.559Z",
+      "previousHash": "d162bf2ed6b9cd78b50ebcb4548bcf7cfc6c7b66231417316e93d3679e178978",
+      "hash": "610eb4d6c2bf7d9b870c5bfa5a3f398a19a5be7309021b6e5141354b1159f8b4"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "PASS",
+      "detail": "Zero failures, zero errors (测试报告-cycle12.md) §cycle-12 [Q2:PASS]",
+      "timestamp": "2026-11-03T09:20:17.674Z",
+      "previousHash": "610eb4d6c2bf7d9b870c5bfa5a3f398a19a5be7309021b6e5141354b1159f8b4",
+      "hash": "83be24fd95d45026ca8d0187c86517ddc40c5504d321f0891fe9cef10d8e8a7a"
     }
   ],
-  "chainHead": "9771a2ce91e5da02aa338d6220f256eb74d7e1875fd25dc4c368f1b2766c500c"
+  "chainHead": "83be24fd95d45026ca8d0187c86517ddc40c5504d321f0891fe9cef10d8e8a7a"
 }

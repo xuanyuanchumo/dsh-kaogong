@@ -26,3 +26,5 @@
 | T-022 | ~~TypeScript 迁移~~ | 技术选型 | **cycle-9 已清偿**：15 个 .ts + types.ts 契约；tsc 镜像编译 dist；类型错误 131→0；noEmitOnError 阻断；dist 新鲜度门；宿主实测可加载 | TS 仅 devDependency，运行时零依赖不变 | cycle-9 ✅ |
 | T-023 | ~~图形推理专项（gk-tuxing）~~ | 功能缺口 | **cycle-11 完整版已清偿**：354 题 / 13 类规律 / 354 图 / 原创思路+分析+陷阱；新增独立视图「🔷 图形推理」+ 4 端点 | 仅交互式图形动画未迁移（锦上添花） | cycle-11 ✅ |
 | T-024 | 会话内练题（conversation.input.left） | ~~体验升级~~ | **cycle-11 已清偿**：输入栏「📚 练题」控件 + 上弹面板（抽题/判分/解析/统计）；try/catch 全包裹 | 选最轻 slot，不接管会话流 | cycle-11 ✅ |
+| T-025 | **client.ts 单文件复杂度 677（预算 180，超 3.76 倍）** | 架构债 | 475 分支 / 101 函数 / 3363 行；band-detector OVER_BUDGET；根因是 combo 格式要求单文件内嵌全部视图（`require` 仅解析已注册模块，禁本地 import） | **两条候选路径**：(a) 拆为多 combo 文件并在 `__ModuleLoader__` 逐条注册（已验证 loader 支持 registered-factory 解析，需改 `dsh.client` 声明与 bundle 生成）；(b) 迁移到 tsc 多文件 + 代码生成单文件 combo 产物。**评估下一循环专项**（影响 5 个视图 400+ 行，需完整回归） | cycle-12 |
+| T-026 | 图谱力学参数与原实现标定方式脆弱（魔数 LINK/REP/向心） | 可维护债 | **cycle-12 部分清偿**：改 FR 模型 `k=sqrt(area/V)` + 度数加权理想边长 + 离线预收敛 `relax(140)` + `fit` 适配；参数不再依赖节点数魔数 | 剩余：力模拟缺 octree 空间索引（V>600 走抽样近似，精度有损） | cycle-12 ✅部分 |

@@ -1,0 +1,40 @@
+Warning: React has detected a change in the order of Hooks called by V14Parent. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+1. useState                   useState
+2. undefined                  useState
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    at V14Parent (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:24:22)
+The above error occurred in the <V14Parent> component:
+
+    at V14Parent (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:24:22)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+✅ 模式层: v1.4 条件直调如预期抛错（Rendered more hooks than during the previous rende）
+✅ 模式层: v1.5 组件挂载同序列零崩溃
+✅ combo 格式: __ModuleLoader__.load 注册 + factory 返回 {inject,apply}
+kaogong 双入口已注册 (left=panel, right=tab, 宿主原生面板优先)
+✅ 真实 client.js: apply() 注册 main/tab 席位
+✅ 真实 client.js: 主面板渲染（同源通道 + 仪表盘）
+✅ 真实 client.js: 刷题视图渲染模块选择面板
+✅ 真实 client.js: 选模块→抽题渲染题干
+✅ 真实 client.js: 作答→提交→就地判分+解析（v1.7 刷题修复验证）
+✅ 真实 client.js: 7 连视图切换压力（含图谱 prop 形状，零降级）
+✅ 真实 client.js: v1.6 新视图（真题卷/专题/申论）零降级
+✅ 真实 client.js: 模考/深度题库视图零降级（R15 守卫）
+✅ 真实 client.js: 图谱视图挂载 Canvas 且引擎使用 2D 上下文
+✅ 真实 client.js: 图谱工具条（重置/适配/标签/布局）齐备
+✅ 真实 client.js: 节点类型过滤 chips 由 NODE_META 驱动
+✅ 真实 client.js: 图谱指标条含社区数 + 集聚系数
+✅ 真实 client.js: 图谱类型过滤交互不降级
+✅ 真实 client.js: 白盒面板八区块齐备（生命周期/对账/性能/告警/命名空间/管理动作）
+✅ 真实 client.js: 生命周期 stepper 渲染阶段与三态
+✅ 真实 client.js: 能力对账表含 state 徽标
+✅ 真实 client.js: 端点性能表含 sparkline SVG
+✅ 真实 client.js: 能力对账过滤输入生效（表格范围）
+✅ 真实 client.js: 白盒面板交互（过滤/开关）不降级
+
+═══ 渲染回归: 22 通过 / 0 失败 ═══

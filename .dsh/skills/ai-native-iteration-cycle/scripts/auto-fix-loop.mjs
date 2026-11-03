@@ -58,6 +58,7 @@ function runCommand(cmd, projectDir, timeoutMs) {
   try {
     const output = execSync(cmd, {
       cwd: projectDir, timeout: timeoutMs, stdio: 'pipe', encoding: 'utf-8',
+      windowsHide: true, // cycle-99b：auto-fix 循环每次修复命令不弹 cmd 窗口
     });
     return { success: true, output, timedOut: false, timeoutMs, durationMs: Date.now() - started };
   } catch (e) {

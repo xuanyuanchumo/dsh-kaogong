@@ -1,0 +1,148 @@
+✅ 构建产物新鲜(dist >= src)
+(node:20436) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✅ server 启动返回 port
+✅ status.app 信标字段
+✅ status 含 pid/uptime/port
+✅ 二次启动 adopt 同端口
+✅ 抽题成功
+✅ PROJ_A 记录作答
+✅ PROJ_B 未污染
+✅ 计划 4 阶段
+✅ 计划 30 天
+✅ 天含标题与任务
+✅ 知识检索命中
+✅ 方法论目录 10 主题
+✅ 行测方法论内容
+✅ 图谱节点>30
+✅ 图谱边>30
+✅ 图指标含密度/分量/PR
+✅ 图谱含双入口节点
+✅ 健康度 0-100
+✅ 遥测记录请求数
+✅ 遥测 p50/p95 存在
+✅ 端点覆盖统计
+✅ 能力矩阵 5 工具
+✅ 能力矩阵端点≥14
+✅ 双入口声明（左沉浸+右并排）
+✅ 双通道声明（同源优先）
+✅ 命名空间清单含 PROJ_A
+✅ 答错自动入错题本(box=1)
+✅ SRS 回炉优先未掌握错题
+✅ 回炉答对升箱(promoted)
+✅ 连对2次+箱≥3 → 掌握
+✅ 错题可移除
+✅ 统计端点结构(days/streak/mastery/wrong)
+✅ 行测题含配图引用
+✅ 配图 URL 已改写为服务端点
+✅ 配图可真实加载(二进制)
+✅ 模考开始返回整卷(不泄露答案)
+✅ 模考交卷计分正确(全对=100%)
+✅ 模考返回模块得分分布
+✅ 大作文返回字数分档
+✅ 大作文识别结构要素
+✅ 大作文评分有区分度
+✅ 专题树分频道(行测/申论)
+✅ 行测专题含模块+细分题型
+✅ 申论专题含五类题型
+✅ 行测有练习入口(含刷题/深度/模考)
+✅ 申论练习入口并入专题
+✅ 专题 entry 指向练习视图
+✅ 图推题库就绪(354题)
+✅ 图推13类规律
+✅ 图推按规律抽题
+✅ 图推配图可加载(二进制)
+✅ 图推单题含原创思路
+✅ 深度题库就绪(27506题)
+✅ 五维标注覆盖(知识点100%)
+✅ 深度抽题含解题链标注
+✅ 知识点检索可用
+✅ 真题卷索引可用(>1000套)
+✅ 科目聚合含申论与行测
+✅ 单卷详情含题目
+✅ 申论卷含给定材料
+✅ 题目含参考答案
+✅ 专题聚合(科目+申论题型)
+✅ 申论按题型聚合
+✅ 申论离线评分返回四维
+✅ 评分有区分度(优秀>敷衍)
+✅ 评分给出批改建议
+✅ 评分识别采分点
+✅ 申论记录入进度
+✅ NODE_META 覆盖全部节点类型
+✅ EDGE_META 覆盖全部边类型
+✅ 度分析：入度之和 == 边数
+✅ 度分析：出度之和 == 边数
+✅ 度分析：直方图计数之和 == |V|
+✅ 标签传播：社区成员数 == |V|
+✅ 标签传播：成员无重复
+✅ 标签传播：社区按规模降序
+✅ 集聚系数 ∈ [0,1]
+✅ 介数中心性非负且降序
+✅ 拓扑分层：覆盖全部节点
+✅ 拓扑分层：层号非负
+✅ 最短路 found 态返回 path
+✅ 最短路路径首尾正确
+✅ 最短路未找到返回 found=false
+✅ 邻域 depth=1 含中心节点
+✅ 邻域 depth 单调（2跳 ⊇ 1跳）
+✅ 反向可达含自身（自反性）
+✅ 反向可达 count == dependents.length
+✅ 分层布局覆盖全部节点
+✅ 分层布局坐标归一化 0..1
+✅ 分层布局确定性（两次同输出）
+✅ 标签传播确定性（两次同输出）
+✅ graph 保留既有字段（兼容）
+✅ graph 新增 nodeMeta/edgeMeta
+✅ graph 新增 analytics 六项
+✅ graph 新增 layout
+✅ neighborhood 返回 nodes/edges/stats
+✅ neighborhood 未知节点降级为 error（HTTP 200）
+✅ path 端点返回 found/path/length
+✅ path 未知节点降级
+✅ impact 端点返回 dependents/count
+✅ impact dependents 全部存在于图中
+✅ lifecycle 返回 stages/events/current
+✅ lifecycle 阶段三态合法
+✅ lifecycle 恰有一个 current 阶段
+✅ telemetry 保留既有字段（兼容）
+✅ telemetry 新增 histogram 三项
+✅ telemetry 新增 topSlow/alerts
+✅ telemetry alerts 分级合法
+✅ 端点 p95 >= p50（顺序统计单调）
+✅ capabilities 保留既有字段（兼容）
+✅ capabilities 新增 reconciliation
+✅ capabilities 新增 lifecycle 状态机
+✅ 运行态端点路径口径与 manifest 一致
+✅ 图谱用 Canvas 2D 渲染
+✅ 图谱 ResizeObserver 自适应
+✅ 图谱 DPR 感知
+✅ 图谱有标签去重叠（包围盒冲突跳过）
+✅ 图谱 FR 力模型（k²/d 斥力 + d²/k 引力）
+✅ 图谱有预收敛布局
+✅ 图谱消费路径分析端点
+✅ 图谱搜索定位（focusNode）
+✅ 可观测面板消费 lifecycle 端点
+✅ 可观测面板消费 workspaces 端点
+✅ 可观测面板有 sparkline（内联 SVG）
+✅ 可观测面板有诊断导出
+✅ 可观测面板保留学习质量（不回归）
+✅ 外部占用时不裸抛 EADDRINUSE
+✅ attachWebRoute 注册 prefix 路由
+✅ attachWebRoute 返回 disposer
+✅ 路由 handler 为函数
+✅ disposer 可注销
+✅ UI el() 含 null 守卫 (p||{})
+✅ UI 无裸 Object.entries(p)
+✅ UI 内联脚本语法合法
+✅ client 无组件函数直调（R9 条件hook守卫）
+✅ client 子视图经组件挂载（h/createElement）
+✅ client 有错误边界
+✅ client 为 combo 格式（非裸 ESM）
+✅ combo factory 返回 {inject, apply}
+✅ peerDependencies 声明 dsh 范围
+✅ engines.dsh 声明
+✅ 独立端口 clientError 兜底
+✅ 独立端口回调整体 try 包裹
+
+═══ 结果: 144/144 通过 ═══

@@ -268,6 +268,160 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
 }
 
 
+// ── v1.8.0 图分析算法族不变量（纯函数，直接对 dist 断言；确定性可复现）──
+{
+  const { buildGraph, degreeAnalysis, labelPropagation, clusteringCoefficient,
+          brandesBetweenness, topoLayers, shortestPath, neighborhood, reverseReach,
+          layeredLayout, NODE_META, EDGE_META } = await import('./dist/shared/manifest.js')
+  const g = buildGraph({})
+  const V = g.nodes.length, E = g.edges.length
+
+  // 元数据单一事实源
+  check('NODE_META 覆盖全部节点类型',
+    g.nodes.every(n => NODE_META[n.type] && NODE_META[n.type].color),
+    '缺失: ' + [...new Set(g.nodes.map(n => n.type))].filter(t => !NODE_META[t]).join(','))
+  check('EDGE_META 覆盖全部边类型',
+    g.edges.every(e => EDGE_META[e.rel]),
+    '缺失: ' + [...new Set(g.edges.map(e => e.rel))].filter(r => !EDGE_META[r]).join(','))
+
+  // 度分析
+  const deg = degreeAnalysis(g.nodes, g.edges)
+  const sumIn = Object.values(deg.degree).reduce((s, d) => s + d.in, 0)
+  const sumOut = Object.values(deg.degree).reduce((s, d) => s + d.out, 0)
+  check('度分析：入度之和 == 边数', sumIn === E, `Σin=${sumIn} E=${E}`)
+  check('度分析：出度之和 == 边数', sumOut === E, `Σout=${sumOut} E=${E}`)
+  check('度分析：直方图计数之和 == |V|',
+    deg.stats.histogram.reduce((s, h) => s + h.count, 0) === V,
+    `Σ=${deg.stats.histogram.reduce((s, h) => s + h.count, 0)} V=${V}`)
+
+  // 社区（标签传播）：成员并集 == 全部节点
+  const comms = labelPropagation(g.nodes, g.edges)
+  const commMembers = comms.flatMap(c => c.members)
+  check('标签传播：社区成员数 == |V|', commMembers.length === V, `got ${commMembers.length}`)
+  check('标签传播：成员无重复', new Set(commMembers).size === V)
+  check('标签传播：社区按规模降序', comms.every((c, i) => i === 0 || comms[i - 1].size >= c.size))
+
+  // 集聚系数 γ ∈ [0,1]
+  const cl = clusteringCoefficient(g.nodes, g.edges)
+  check('集聚系数 ∈ [0,1]', cl.avg >= 0 && cl.avg <= 1, String(cl.avg))
+
+  // 介数中心性：非负、降序
+  const bc = brandesBetweenness(g.nodes, g.edges)
+  check('介数中心性非负且降序',
+    bc.every(b => b.score >= 0) && bc.every((b, i) => i === 0 || bc[i - 1].score >= b.score))
+
+  // 拓扑分层：覆盖全部节点、层号非负
+  const tl = topoLayers(g.nodes, g.edges)
+  check('拓扑分层：覆盖全部节点', Object.keys(tl.layer).length === V, `${Object.keys(tl.layer).length}/${V}`)
+  check('拓扑分层：层号非负', Object.values(tl.layer).every(v => v >= 0))
+
+  // 最短路：找到 + 未找到两态
+  const spFound = shortestPath(g.nodes, g.edges, 'lifecycle:load', 'lifecycle:serve')
+  check('最短路 found 态返回 path', spFound.found === true && Array.isArray(spFound.path) && spFound.path.length >= 2, JSON.stringify(spFound).slice(0, 80))
+  check('最短路路径首尾正确', spFound.path[0] === 'lifecycle:load' && spFound.path[spFound.path.length - 1] === 'lifecycle:serve')
+  const spMiss = shortestPath(g.nodes, g.edges, 'plugin:kaogong', 'no-such-node')
+  check('最短路未找到返回 found=false', spMiss.found === false && spMiss.path.length === 0)
+
+  // k 跳邻域：depth 单调（2 跳 ⊇ 1 跳）
+  const nd1 = neighborhood(g.nodes, g.edges, 'plugin:kaogong', 1)
+  const nd2 = neighborhood(g.nodes, g.edges, 'plugin:kaogong', 2)
+  check('邻域 depth=1 含中心节点', nd1.nodes.some(n => n.id === 'plugin:kaogong'))
+  check('邻域 depth 单调（2跳 ⊇ 1跳）',
+    nd2.nodes.length >= nd1.nodes.length && nd1.nodes.every(n => nd2.nodes.some(m => m.id === n.id)),
+    `d1=${nd1.nodes.length} d2=${nd2.nodes.length}`)
+
+  // 反向可达：自反性（节点必含自身）
+  const rr = reverseReach(g.nodes, g.edges, 'endpoint:/api/questions')
+  check('反向可达含自身（自反性）', rr.dependents.includes('endpoint:/api/questions'), JSON.stringify(rr).slice(0, 80))
+  check('反向可达 count == dependents.length', rr.count === rr.dependents.length)
+
+  // 分层布局：全部节点有坐标、归一化 0..1
+  const lay = layeredLayout(g.nodes, g.edges)
+  check('分层布局覆盖全部节点', Object.keys(lay.id).length === V, `${Object.keys(lay.id).length}/${V}`)
+  const inRange = Object.values(lay.id).every(p => p.x >= -0.001 && p.x <= 1.001 && p.y >= -0.001 && p.y <= 1.001)
+  check('分层布局坐标归一化 0..1', inRange)
+
+  // 确定性：同输入两次输出深相等（可复现的图布局是白盒可信的前提）
+  const a1 = JSON.stringify(layeredLayout(g.nodes, g.edges))
+  const a2 = JSON.stringify(layeredLayout(g.nodes, g.edges))
+  check('分层布局确定性（两次同输出）', a1 === a2)
+  const c1 = JSON.stringify(labelPropagation(g.nodes, g.edges))
+  const c2 = JSON.stringify(labelPropagation(g.nodes, g.edges))
+  check('标签传播确定性（两次同输出）', c1 === c2)
+}
+
+// ── v1.8.0 新端点契约（形状 + 降级 + 兼容）──
+{
+  const graph = await J(`${B}/api/graph?ws=PROJ_A`)
+  check('graph 保留既有字段（兼容）',
+    Array.isArray(graph.nodes) && Array.isArray(graph.edges) && graph.metrics && Array.isArray(graph.rank) && graph.health)
+  check('graph 新增 nodeMeta/edgeMeta', !!(graph.nodeMeta && graph.edgeMeta))
+  check('graph 新增 analytics 六项',
+    graph.analytics && graph.analytics.degree && graph.analytics.communities &&
+    graph.analytics.clustering && graph.analytics.betweenness && graph.analytics.layers && graph.analytics.degreeStats)
+  check('graph 新增 layout', graph.layout && typeof graph.layout.id === 'object')
+
+  const nd = await J(`${B}/api/graph/neighborhood?node=${encodeURIComponent('plugin:kaogong')}&depth=2&ws=PROJ_A`)
+  check('neighborhood 返回 nodes/edges/stats', Array.isArray(nd.nodes) && Array.isArray(nd.edges) && nd.stats && nd.stats.nodes === nd.nodes.length)
+  const ndBad = await J(`${B}/api/graph/neighborhood?node=__nope__&ws=PROJ_A`)
+  check('neighborhood 未知节点降级为 error（HTTP 200）', !!(ndBad.error && Array.isArray(ndBad.nodes)))
+
+  const pth = await J(`${B}/api/graph/path?from=${encodeURIComponent('view:dashboard')}&to=${encodeURIComponent('endpoint:/api/stats')}&ws=PROJ_A`)
+  check('path 端点返回 found/path/length', pth.found === true && pth.path.length >= 2 && pth.length === pth.path.length - 1)
+  const pthBad = await J(`${B}/api/graph/path?from=__x__&to=__y__&ws=PROJ_A`)
+  check('path 未知节点降级', pthBad.found === false && !!pthBad.error)
+
+  const imp = await J(`${B}/api/graph/impact?node=${encodeURIComponent('endpoint:/api/questions')}&ws=PROJ_A`)
+  check('impact 端点返回 dependents/count', Array.isArray(imp.dependents) && imp.count === imp.dependents.length)
+  const ids = new Set(graph.nodes.map(n => n.id))
+  check('impact dependents 全部存在于图中', imp.dependents.every(d => ids.has(d)))
+
+  const life = await J(`${B}/api/lifecycle`)
+  check('lifecycle 返回 stages/events/current', Array.isArray(life.stages) && life.stages.length >= 6 && Array.isArray(life.events))
+  check('lifecycle 阶段三态合法', life.stages.every(s => ['done', 'current', 'pending'].includes(s.state)))
+  check('lifecycle 恰有一个 current 阶段', life.stages.filter(s => s.state === 'current').length === 1,
+    'current 数: ' + life.stages.filter(s => s.state === 'current').length)
+
+  const tel = await J(`${B}/api/telemetry?ws=PROJ_A`)
+  check('telemetry 保留既有字段（兼容）',
+    typeof tel.uptimeSec === 'number' && typeof tel.totalRequests === 'number' && !!tel.endpoints && typeof tel.coverage === 'number')
+  check('telemetry 新增 histogram 三项',
+    tel.histogram && typeof tel.histogram.p50 === 'number' && typeof tel.histogram.p95 === 'number' && typeof tel.histogram.max === 'number')
+  check('telemetry 新增 topSlow/alerts', Array.isArray(tel.topSlow) && Array.isArray(tel.alerts))
+  check('telemetry alerts 分级合法', tel.alerts.every(a => ['info', 'warn', 'error'].includes(a.level)))
+  const eps = Object.values(tel.endpoints)
+  check('端点 p95 >= p50（顺序统计单调）', eps.every(e => (e.p95 || 0) >= (e.p50 || 0)))
+
+  const caps = await J(`${B}/api/capabilities`)
+  check('capabilities 保留既有字段（兼容）', Array.isArray(caps.endpoints) && Array.isArray(caps.views) && Array.isArray(caps.tools))
+  check('capabilities 新增 reconciliation', !!(caps.reconciliation && Array.isArray(caps.reconciliation.orphanEndpoints) && Array.isArray(caps.reconciliation.unconsumedEndpoints)))
+  check('capabilities 新增 lifecycle 状态机', !!(caps.lifecycle && Array.isArray(caps.lifecycle.stages) && caps.lifecycle.stages.length >= 6))
+
+  // 遥测路径口径必须与 manifest 声明口径一致（否则能力对账全假阳性）
+  const declaredPaths = new Set(caps.endpoints.map(e => e.path))
+  const runtimeForeign = Object.keys(tel.endpoints).filter(p => !declaredPaths.has(p) && p.startsWith('/api/'))
+  check('运行态端点路径口径与 manifest 一致', runtimeForeign.length === 0,
+    '未匹配: ' + runtimeForeign.slice(0, 4).join(','))
+}
+
+// ── v1.8.0 前端静态守卫（新交互能力的形态约束）──
+{
+  const client = fs.readFileSync(new URL('./dist/client/client.js', import.meta.url), 'utf8')
+  check('图谱用 Canvas 2D 渲染', client.includes("getContext('2d')") || client.includes('getContext("2d")'))
+  check('图谱 ResizeObserver 自适应', client.includes('ResizeObserver'))
+  check('图谱 DPR 感知', client.includes('devicePixelRatio'))
+  check('图谱有标签去重叠（包围盒冲突跳过）', /labelBoxes/.test(client) && /clash/.test(client))
+  check('图谱 FR 力模型（k²/d 斥力 + d²/k 引力）', /K \* K/.test(client) && /kij/.test(client))
+  check('图谱有预收敛布局', /function relax/.test(client))
+  check('图谱消费路径分析端点', client.includes('/graph/path'))
+  check('图谱搜索定位（focusNode）', /focusNode/.test(client))
+  check('可观测面板消费 lifecycle 端点', client.includes('/lifecycle'))
+  check('可观测面板消费 workspaces 端点', client.includes('/workspaces'))
+  check('可观测面板有 sparkline（内联 SVG）', /Sparkline/.test(client) && /polyline/.test(client))
+  check('可观测面板有诊断导出', /Blob/.test(client) && /diagnostics-/.test(client))
+  check('可观测面板保留学习质量（不回归）', client.includes('申论均分率'))
+}
+
 // ── 12. 崩溃安全：外部非本应用占用 → 自动换端口而非裸抛 EADDRINUSE ──
 // 使用专用高位测试端口区，避免干扰宿主实例（8400 可能已被宿主 adopt/持有）
 if (server) server.close()

@@ -132,7 +132,7 @@ function runTestCommand(projectDir, configContent, smokeCmdOverride) {
     // 缓冲区溢出而非测试红）。ENOBUFS ≠ 测试失败：如实按「无法评估」处理。
     // 超时同理与失败区分：e.signal === 'SIGTERM' 且 e.killed = true 是超时形态
     //（execSync 超时 kill 进程），真实测试失败 e.status 是数字退出码。
-    const output = execSync(testCmd, { cwd: projectDir, timeout: resolveTimeout('test', { configMs: timeoutFromConfig(configContent, 'test') }), stdio: 'pipe', maxBuffer: 16 * 1024 * 1024 });
+    const output = execSync(testCmd, { cwd: projectDir, timeout: resolveTimeout('test', { configMs: timeoutFromConfig(configContent, 'test') }), stdio: 'pipe', maxBuffer: 16 * 1024 * 1024, windowsHide: true });
     return { pass: true, output: output.toString().trim() };
   } catch (e) {
     if (e.code === 'ENOBUFS') {
@@ -166,7 +166,7 @@ function runLintCommand(projectDir, configContent) {
     return { pass: false, output: 'lint_cmd not configured in .cycles/config.yml' };
   }
   try {
-    const output = execSync(lintCmd, { cwd: projectDir, timeout: resolveTimeout('lint', { configMs: timeoutFromConfig(configContent, 'lint') }), stdio: 'pipe', maxBuffer: 8 * 1024 * 1024 });
+    const output = execSync(lintCmd, { cwd: projectDir, timeout: resolveTimeout('lint', { configMs: timeoutFromConfig(configContent, 'lint') }), stdio: 'pipe', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
     return { pass: true, output: output.toString().trim() };
   } catch (e) {
     if (e.code === 'ENOBUFS') {
@@ -185,7 +185,7 @@ function runBuildCommand(projectDir, configContent) {
     return { pass: false, output: 'build_cmd not configured in .cycles/config.yml' };
   }
   try {
-    execSync(buildCmd, { cwd: projectDir, timeout: resolveTimeout('build', { configMs: timeoutFromConfig(configContent, 'build') }), stdio: 'pipe', maxBuffer: 8 * 1024 * 1024 });
+    execSync(buildCmd, { cwd: projectDir, timeout: resolveTimeout('build', { configMs: timeoutFromConfig(configContent, 'build') }), stdio: 'pipe', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
     return { pass: true, output: 'Build passed' };
   } catch (e) {
     if (e.code === 'ENOBUFS') {
@@ -283,6 +283,7 @@ function runAuditJson(cmd, projectDir) {
   try {
     return execSync(cmd, {
       cwd: projectDir, timeout: timeoutFor('audit'), stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf-8',
+      windowsHide: true, // cycle-99b：audit 子进程不弹窗
     });
   } catch (e) {
     const out = typeof e.stdout === 'string' ? e.stdout : '';
@@ -478,9 +479,22 @@ function checkErrorHandling(projectDir) {
   return { pass: true, detail: `${hits.length} error handling patterns found` };
 }
 
+/**
+ * cycle 目录的绝对路径（活跃区优先；活跃区没有则回退归档区）。
+ * cycle-101：getLatestCycleDir 已支持归档回退，但它只返回**名字**——
+ * 两个区的同名目录需要按存在性解析真实位置，否则归档后会拼出不存在的路径。
+ */
+function cycleDirPath(projectDir, cycleDir) {
+  const active = join(projectDir, '.cycles', 'cycles', cycleDir);
+  if (existsSync(active)) return active;
+  const archived = join(projectDir, '.cycles', 'archive', cycleDir);
+  if (existsSync(archived)) return archived;
+  return active; // 两处都不存在时返回活跃区路径（由调用方的 existsSync 判缺失）
+}
+
 function checkDeliveryChecklist(projectDir, cycleDir) {
   if (!cycleDir) return { pass: false, detail: 'No cycle directory' };
-  const checklistPath = join(projectDir, '.cycles', 'cycles', cycleDir, '交付清单.md');
+  const checklistPath = join(cycleDirPath(projectDir, cycleDir), '交付清单.md');
   if (!existsSync(checklistPath)) return { pass: false, detail: 'No delivery checklist' };
   const content = readFileSync(checklistPath, 'utf-8');
   const requiredItems = ['Release 构建产物', '最终测试报告', '非功能验证报告', '验证签名', '文档更新记录', '环境配置说明', '数据清理记录', '审计日志'];
@@ -493,7 +507,7 @@ function checkDeliveryChecklist(projectDir, cycleDir) {
 
 function checkTestReports(projectDir, cycleDir) {
   if (!cycleDir) return { pass: false, detail: 'No cycle directory' };
-  const testReportsDir = join(projectDir, '.cycles', 'cycles', cycleDir, 'test-reports');
+  const testReportsDir = join(cycleDirPath(projectDir, cycleDir), 'test-reports');
   if (!existsSync(testReportsDir)) return { pass: false, detail: 'No test reports directory' };
   const reports = readdirSync(testReportsDir).filter(e => e.endsWith('.md'));
   if (reports.length === 0) return { pass: false, detail: 'No test reports' };
@@ -675,7 +689,13 @@ const CFG_FINGERPRINT_KEY = (() => {
     return createHash('sha256').update(CFG_FINGERPRINT).digest('hex').slice(0, 16);
   } catch { return CFG_FINGERPRINT.slice(0, 16); }
 })();
-const merkleRoot = cmdNeeded.length > 0 ? calculateDirMerkleRoot(join(projectDir, 'src')) : null;
+// cycle-99 缓存键正确性根修：Merkle 根原来只扫 `src/`——tests/ 的期望修正、
+// 测试新增/删除都不进键，导致「改了测试但缓存仍 hit」的假绿（本轮实测：
+// sessionWorkspaceClaim.test.ts 期望修正后连续两次命中旧结果）。改为 src+tests
+// 双根合成（顺序固定 ⇒ 确定性；单根不存在时退化为另一根）。
+const merkleRoot = cmdNeeded.length > 0
+  ? calculateDirMerkleRoot(join(projectDir, 'src')) + ':' + calculateDirMerkleRoot(join(projectDir, 'tests'))
+  : null;
 // 复合缓存键：源码指纹在前（主导变更检测读数），配置指纹在后（等值校验）。
 // 两侧任一变化 → 键不等 → miss（诚实回退）。
 const COMPOSITE_KEY = merkleRoot === null ? null : `${merkleRoot}:${CFG_FINGERPRINT_KEY}`;
@@ -975,7 +995,9 @@ for (const dim of dimsToRun) {
 
 // 修 N-8a（v1.8.0）：部分维度运行不再整文件覆盖 项目评估报告.md——
 // 未运行的维度从既有报告继承其结果行，已运行的维度以本次为准（后写者赢）。
-const reportPath = cycleDir ? join(projectDir, '.cycles', 'cycles', cycleDir, '项目评估报告.md') : null;
+// cycle-101：报告落回 cycle 的**真实位置**（活跃区优先，归档区回退）——
+// 归档后仍写回 archive/cycle-N/，而不是写进不存在的活跃目录（ENOENT 实测）。
+const reportPath = cycleDir ? join(cycleDirPath(projectDir, cycleDir), '项目评估报告.md') : null;
 const isPartialRun = dimsToRun.length < Object.keys(DIMENSIONS).length;
 const mergedResults = { ...results };
 const mergedDims = [...dimsToRun];

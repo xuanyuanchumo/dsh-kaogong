@@ -4,7 +4,7 @@
 
 ## Commands
 - Build/类型门: `npm run build`（**tsc**：类型错误阻断 + 产出 `dist/`）。**改完 .ts 必须 build，宿主编织的是 dist**
-- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**81 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端）+ `node render.test.mjs`（**11 断言**，真实 React 18 + 真实 client.js 集成渲染，含变异验证与新视图遍历）
+- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**144 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端）+ `node render.test.mjs`（**22 断言**，真实 React 18 + 真实 client.js 集成渲染，含变异验证与新视图遍历）
 - **沙箱验证（禁主力直测）**: `node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`（token 行取 URL；插件崩只崩沙箱）
 - 热更新重载: `plugin_manager set_plugin include:kaogong enabled=false → true`（fiber 重挂载）
 - 安装/重装: `plugin_manager remove_bundle dsh-kaogong → install_bundle <绝对路径>`
@@ -21,6 +21,14 @@
 - **v1.7 扩展**：解析核心拆到 `adapters/paperParse.js`（行测/申论双形态 `parseQuestion` + `guessXingceType` 六模块推断）；配图走 `/api/paper-img`（基准目录是 `dirname(paperId)`，不是 paperId 自身）；模考三端点（start 不下发答案防作弊 / submit 服务端比对 / history）；大作文 `gradeEssayArticle`（字数五档+结构要素+论证标志）。
 - **深度题库（v1.7 整合 GongkaoNaoku）**：`adapters/naoku.js` 合并 147MB 分片→`data/.naoku.db`，`node:sqlite` 只读（**必须动态 import**，顶层 import 会让旧 Node 整插件加载失败）→ **27506 题五维标注**（kadian/reasoning/fastest/pitfalls/mother）。SQL 勿用双引号空串（SQLite 视为标识符），用 `LENGTH(x) > 0`。
 
+## v1.8 图谱与白盒面板契约（cycle-12）
+- **图分析算法族**（`manifest.ts`）：`NODE_META`/`EDGE_META` 是图语义色板与层级的**单一事实源**（server 输出 → client 渲染 → SPA 共用），新增节点/边类型必须在此登记，否则 UI 落到灰色 fallback。
+  九个算法全部**确定性**（初始化用 id 散列，不用 `Math.random`；遍历顺序固定）——同输入两次输出必须深相等，smoke 有断言。
+- **端点口径一致**（致命细节）：`/api/graph`、`/api/telemetry`、`/api/capabilities` 三者的「端点路径」必须统一为**相对挂载点的逻辑路径**（`/api/graph`）。曾因遥测记 `mountPath+rel`（`/kaogong/api/graph`）导致能力对账 100% 失配、全部端点误判「未声明」——白盒面板失去意义的**假阳性事故**。
+- **前端图谱**（`client.ts` · NativeGraphView）：Canvas 2D + DPR + ResizeObserver；物理为 **Fruchterman-Reingold**（`k=sqrt(area/V)`，斥力 `k²/d`、引力 `d²/k`，理想边长按两端度数加权重）；**离线预收敛 `relax(140)` + `fit()`** 后停止在线 rAF（首次打开即稳定，且省电）；`userAdjusted` 标记保证用户手动缩放后 resize 不改视图；**标签去重叠**用包围盒贪心占位（`labelBoxes`）。
+- **白盒管理面板**（`NativeObsView`）：八区块（管理动作 / 告警 / 学习质量 / 运行态 / 生命周期 stepper / 能力对账×性能表 / 慢端点 / 命名空间）。所有接口字段视为可选，缺失即卡片级降级（绝不 `role="alert"`）；表默认 p95 降序；sparkline 用内联 SVG（零依赖无 hook）。
+- **视图重入修复**：`setView` 命中同一视图时自增 `tick` 强制重取——此前无条件 `setData(null)` 而 view 未变，effect 不重跑 → 永久 spinner（用户感知「图谱打不开」）。
+
 ## Verifying your work
 - 报告完成前必须跑 build + smoke 并粘贴输出（`24/24 通过` 是最低证据）。
 - 崩溃安全是硬性回归项：外部进程占用端口时 `startServer` 必须换端口或受控 reject，绝不裸抛。
@@ -31,6 +39,10 @@
 - 仅绑定 127.0.0.1；UI 只读仓库内容，唯一写路径是判分/进度。
 
 ## Things the agent gets wrong（历史事故簿）
+- **[v1.8 事故·白盒假阳性] 遥测路径口径与 manifest 不一致**：同源通道把 `mountPath+rel`（`/kaogong/api/graph`）记进遥测，而 `CAPABILITIES.endpoints` 声明的是 `/api/graph` → 能力对账永远匹配不上，43 个端点全被标「未声明」。**教训：凡「声明 vs 运行态」对账，两侧口径必须由同一常量派生，并以 smoke 断言固化**（现已有 `运行态端点路径口径与 manifest 一致`）。
+- **[v1.8 事故·图谱不可读] 力学参数与原实现失衡**：原 `LINK=90 / REP=9000 / 向心 0.004` 在 V≈140 时弹簧与向心压过斥力 → 全图塌缩成中心一团、141 个标签 100% 重叠。**教训：力导向图的参数必须按节点数标定（用 `k=sqrt(area/V)` 而非魔数），且布局完成后必须 `fit()` 适配视口**（首帧 wrap 尺寸为 0 时按兜底值算的 fit 会在真实尺寸到达后重算）。
+- **[v1.8 事故·永久 spinner] 重复点击同一导航项**：`setView` 无条件 `setData(null)`，但父 effect 依赖 `[channel, view, api, tick]`；重复点同一 tab 时 `view` 未变 → effect 不重跑 → data 永远 null → 卡在 spinner。**教训：任何「清空数据 + 依赖驱动重取」组合，必须有一个显式刷新令牌参与依赖**（本处 `tick`）。
+
 - **[cycle-0 事故] `server.listen()` 的 EADDRINUSE 是异步 'error' 事件，`try/catch` 捕不到 → 未处理异常击杀 DSH 宿主进程。**任何 listen/bind 必须 Promise 化回传。（宿主崩溃代价极高，禁止回退。）
 - UI 直接对 `/api/*` 手写契约曾大规模漂移（`q.answer` vs `q.correctAnswer`、`limit` vs `count`、POST check 传 id vs 传整题）。新增/改动端点**必须先改 manifest 声明，再 server 实现，最后 UI 消费**，并以 smoke 断言固化。
 - guide/注册字段传字符串而契约要求函数 → 客户端渲染期抛错。照抄 sidebar-right 子系统文档的 shape，不臆测。
