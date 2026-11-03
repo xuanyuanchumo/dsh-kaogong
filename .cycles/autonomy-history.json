@@ -1,0 +1,62 @@
+[
+  {
+    "from": "L4",
+    "to": "L3",
+    "at": "2026-11-02T09:01:41.906Z",
+    "actor": "anic_autonomy_upgrade",
+    "reason": "cycle-1 全门禁 PASS（G0-G3+Quality，16/16 维度），意图 accepted，测试 24/24，架构分层+adapter 模式达标，事故簿固化崩溃安全回归——具备一档提级证据",
+    "authorization": "system",
+    "evidence": {
+      "trust": {
+        "avg": 27,
+        "gates": {
+          "G0": 33,
+          "G1": 25,
+          "G2": 25,
+          "G3": 25
+        }
+      },
+      "breakers": [],
+      "gates": {
+        "G0": "PASS",
+        "G1": "PASS",
+        "G2": "PASS",
+        "G3": "PASS"
+      },
+      "recommendedBand": "L3"
+    },
+    "atCycle": 1
+  },
+  {
+    "from": "L3",
+    "to": "L4",
+    "at": "2026-11-02T09:01:52.754Z",
+    "actor": "anic_autonomy_upgrade",
+    "reason": "人类指令显式授权：「以dsh-anic的 L4 全自主模式结合dsh-plugin-dev-kb插件驱动 dsh-kaogong插件进行自举循环迭代升级」(2026-11-02)。证据链：cycle-1 全门禁 PASS、smoke 24/24、16/16 维度、崩溃安全回归固化、隔离验证通过、账本哈希完整",
+    "authorization": "human",
+    "evidence": {
+      "trust": {
+        "avg": 27,
+        "gates": {
+          "G0": 33,
+          "G1": 25,
+          "G2": 25,
+          "G3": 25
+        }
+      },
+      "breakers": [],
+      "gates": {
+        "G0": "PASS",
+        "G1": "PASS",
+        "G2": "PASS",
+        "G3": "PASS"
+      },
+      "recommendedBand": "L2"
+    },
+    "trustExemption": {
+      "avg": 27,
+      "threshold": 85
+    },
+    "atCycle": 1
+  }
+]

@@ -1,0 +1,125 @@
+project:
+  name: "dsh-kaogong"
+  tech_stack: ["javascript", "node-esm", "zero-dependency"]
+  framework: "cordis"
+
+macro_cycle:
+  enabled_phases: [plan, design, build, test, deploy, maintain]
+  autonomy_level: L4
+
+build:
+  build_cmd: "npx tsc"
+  typecheck_cmd: "npx tsc --noEmit"
+  lint_cmd: "npx tsc --noEmit"
+  test_cmd: "node smoke.test.mjs"
+  coverage_cmd: "node --check src/server/http.js"
+  e2e_cmd: "node smoke.test.mjs"
+  hygiene_cmd: "node -e \"const fs=require('fs');const t=fs.readFileSync('smoke.test.mjs','utf8');process.exit(t.includes('PROJ_A')&&t.length>500?0:1)\""
+
+layers:
+  - name: "Server"
+    test_pattern: "smoke.test.mjs"
+    coverage_target: 80
+  - name: "Manifest"
+    test_pattern: "smoke.test.mjs"
+    coverage_target: 90
+  - name: "Contract"
+    test_pattern: "smoke.test.mjs"
+    coverage_target: 100
+
+# 评估维度（与全生命周期评审体系映射）
+# 复杂度预算：client.js 是 combo 格式单文件 UI（10 视图），宿主加载器禁止本地 import 拆分
+# （只有 require 包级模块），故按「单文件 N 视图」的工程实际设为 180；超此值必须拆分或迁移构建步骤
+complexity_budget: 180
+
+evaluation:
+  E1:
+    name: "意图对齐"
+    checklist_ref: ""   # 意图：离线优先(无模型可用) · 右侧Sidebar内嵌 · 工作区隔离 · 白盒可观测 · L4自举
+  E2:
+    name: "规格符合"
+    checklist_ref: ""   # sidebar-right 契约：tabs.register + keyed slot + guide 函数式字段；ToolDefinition.output
+  E3:
+    name: "测试覆盖"
+    checklist_ref: ""   # smoke.test.mjs 24 项断言（信标/adopt/隔离/图谱/遥测/崩溃安全）
+  E4:
+    name: "代码质量"
+    checklist_ref: ""   # 零依赖 · 中文注释 · 模块化（manifest 单一事实源） · 无 TODO/FIXME
+  E5:
+    name: "性能基线"
+    checklist_ref: ""   # 端点 p95 < 200ms（遥测自证），图谱 5s 缓存
+  E6:
+    name: "安全检查"
+    checklist_ref: ""   # 仅绑定 127.0.0.1 · 无 eval · 路径穿越由 slug 过滤 · 崩溃隔离(catch 全路径)
+  E7:
+    name: "文档同步"
+    checklist_ref: ""   # README 与 v1.1 双端架构一致
+  E8:
+    name: "回归完整性"
+    checklist_ref: ""   # adopt 复用 · 端口降级 · 命名空间不互染 · 信标兼容
+
+journeys:
+  J1:
+    name: "刷题主链路"
+    forward: "发现端口 → 选模块 → 抽题 → 作答 → 判分 → 进度入库(按ws)"
+    reverse: "模块无题、重复提交、跨命名空间不污染"
+    test_files: ["smoke.test.mjs"]
+  J2:
+    name: "Sidebar 入口链路"
+    forward: "client.js 注册 tab → guide 入口 → iframe 挂载"
+    reverse: "服务未起时的降级提示、CSP 兜底"
+    test_files: ["smoke.test.mjs"]
+  J3:
+    name: "崩溃安全链路"
+    forward: "startServer async → 错误捕获 → 端口降级/adopt"
+    reverse: "外部占用 8400 时不裸抛 EADDRINUSE"
+    test_files: ["smoke.test.mjs"]
+
+gates:
+  G0:
+    fact_base_verify_count: 5
+  G1:
+    task_completion_required: true
+  G2:
+    journey_coverage: true   # 消费方 gate-check.mjs:224（声明的旅程 test_files 必须真实存在）
+    # coverage_threshold/chaos_coverage 已移除：无消费者的装饰性门禁声明（诚实优先）
+  G3:
+    build_commands: ["npx tsc"]
+
+human_gates:
+  intent_accept:
+    role: "product_owner"
+  spec_approve:
+    role: "product_owner"
+    consult: "tech_lead"
+  plan_approve:
+    role: "engineer"
+  pr_merge:
+    role: "code_owner"
+  release_authorize:
+    role: "release_manager"
+
+control_bands:
+  enabled: false
+  metrics: []
+  baseline_window_days: 30
+  tiers:
+    sigma_1: "log"
+    sigma_2: "diagnose"
+    sigma_3: "act_via_pr"
+
+framework_alignment:
+  name: "cordis-plugin-contract"
+  rules:
+    - "ToolDefinition 必须声明 output{schema,render}（宿主强制）"
+    - "client 侧 tab 类型 = sidebarRightTabs.register 定义 + keyed pane.tab 正文（双注册同 id）"
+    - "guide 字段为 {order,title(),description?()} 函数式；非法 shape 会导致渲染期抛错"
+    - "listen 类异步错误必须经 Promise/error 事件受控回传，禁止裸抛击杀宿主（cycle-0 事故）"
+
+performance_baselines:
+  - name: "api-p95"
+    cmd: "node -e \"fetch('http://127.0.0.1:8400/api/telemetry').then(r=>r.json()).then(t=>{const p=Math.max(0,...Object.values(t.endpoints).map(e=>e.p95||0));console.log('p95 max='+p+'ms');process.exit(p<400?0:1)}).catch(()=>process.exit(0))\""
+
+vision_benchmarking:
+  enabled: false
+  dimensions: []

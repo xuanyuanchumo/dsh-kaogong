@@ -1,0 +1,170 @@
+[
+  {
+    "timestamp": "2026-11-02T09:01:19.454Z",
+    "totalScore": 303,
+    "avgScore": 60.6,
+    "fileCount": 5,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-02T09:03:03.510Z",
+    "totalScore": 303,
+    "avgScore": 60.6,
+    "fileCount": 5,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-02T09:03:13.996Z",
+    "totalScore": 303,
+    "avgScore": 60.6,
+    "fileCount": 5,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-02T09:26:54.265Z",
+    "totalScore": 315,
+    "avgScore": 63,
+    "fileCount": 5,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-02T15:01:07.256Z",
+    "totalScore": 352,
+    "avgScore": 70.4,
+    "fileCount": 5,
+    "overBudgetCount": 1
+  },
+  {
+    "timestamp": "2026-11-02T15:02:29.377Z",
+    "totalScore": 352,
+    "avgScore": 70.4,
+    "fileCount": 5,
+    "overBudgetCount": 1
+  },
+  {
+    "timestamp": "2026-11-02T15:02:42.030Z",
+    "totalScore": 352,
+    "avgScore": 70.4,
+    "fileCount": 5,
+    "overBudgetCount": 1
+  },
+  {
+    "timestamp": "2026-11-02T15:05:32.730Z",
+    "totalScore": 386,
+    "avgScore": 48.25,
+    "fileCount": 8,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-02T15:07:28.475Z",
+    "totalScore": 386,
+    "avgScore": 48.25,
+    "fileCount": 8,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-02T15:41:57.938Z",
+    "totalScore": 440,
+    "avgScore": 55,
+    "fileCount": 8,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-02T16:45:10.050Z",
+    "totalScore": 450,
+    "avgScore": 56.25,
+    "fileCount": 8,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T01:33:25.053Z",
+    "totalScore": 447,
+    "avgScore": 55.875,
+    "fileCount": 8,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T02:22:34.676Z",
+    "totalScore": 593,
+    "avgScore": 59.3,
+    "fileCount": 10,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T02:55:17.694Z",
+    "totalScore": 824,
+    "avgScore": 68.66666666666667,
+    "fileCount": 12,
+    "overBudgetCount": 2
+  },
+  {
+    "timestamp": "2026-11-03T02:55:25.827Z",
+    "totalScore": 824,
+    "avgScore": 68.66666666666667,
+    "fileCount": 12,
+    "overBudgetCount": 2
+  },
+  {
+    "timestamp": "2026-11-03T02:56:05.165Z",
+    "totalScore": 818,
+    "avgScore": 62.92307692307692,
+    "fileCount": 13,
+    "overBudgetCount": 1
+  },
+  {
+    "timestamp": "2026-11-03T02:56:25.306Z",
+    "totalScore": 824,
+    "avgScore": 63.38461538461539,
+    "fileCount": 13,
+    "overBudgetCount": 1
+  },
+  {
+    "timestamp": "2026-11-03T02:56:30.480Z",
+    "totalScore": 824,
+    "avgScore": 63.38461538461539,
+    "fileCount": 13,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T02:57:22.003Z",
+    "totalScore": 841,
+    "avgScore": 64.6923076923077,
+    "fileCount": 13,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T04:24:30.864Z",
+    "totalScore": 881,
+    "avgScore": 58.733333333333334,
+    "fileCount": 15,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T05:03:42.293Z",
+    "totalScore": 883,
+    "avgScore": 55.1875,
+    "fileCount": 16,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T05:04:23.312Z",
+    "totalScore": 883,
+    "avgScore": 55.1875,
+    "fileCount": 16,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T05:17:14.643Z",
+    "totalScore": 904,
+    "avgScore": 56.5,
+    "fileCount": 16,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-03T05:28:58.879Z",
+    "totalScore": 973,
+    "avgScore": 54.05555555555556,
+    "fileCount": 18,
+    "overBudgetCount": 0
+  }
+]

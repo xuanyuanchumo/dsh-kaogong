@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>考公学习平台</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+<!--
+  dsh-kaogong UI v1.3 — 零依赖单文件 SPA（CSS 由服务端内联 app.css）
+  新增：错题本(SRS五箱调度) / 仪表盘SVG图表(趋势线·能力雷达·30日热力) / 键盘流 / toast / 骨架屏 / 单题计时器 / 连击streak
+-->
+<style>/*__APP_CSS__*/</style>
+</head>
+<body>
+<div class="nav">
+  <div class="brand">📚 考公学习</div>
+  <div class="tabs" id="tabs"></div>
+  <div class="nav-right">
+    <span class="ws-tag" id="ws-tag" title="当前工作区隔离命名空间">…</span>
+    <span class="beacon down" id="beacon"></span>
+    <span id="beacon-txt">连接中</span>
+    <button class="icon-btn" id="theme-btn" title="切换主题">🌗</button>
+  </div>
+</div>
+<div class="content" id="app"></div>
+<div class="toast" id="toasts" aria-live="polite"></div>
+
+<script>
+const PARAMS = new URLSearchParams(location.search)
+const WS = PARAMS.get('ws') || 'default'
+let BASE = null
+async function api(p, opts) {
+  const sep = p.includes('?') ? '&' : '?'
+  const res = await fetch(BASE + p + sep + 'ws=' + encodeURIComponent(WS), opts)
+  return res.json()
+}
+async function discover() {
+  // 同源优先：UI 由宿主路由 /kaogong/ 提供时，API 直接走同源（零 CORS、无端口依赖）
+  if (location.pathname.startsWith('/kaogong')) {
+    try {
+      const r = await fetch(`/kaogong/api/status?ws=${encodeURIComponent(WS)}`, { signal: AbortSignal.timeout(1200) })
+      const j = await r.json()
+      if (j && j.app === 'dsh-kaogong') { BASE = '/kaogong'; return j }
+    } catch {}
+  }
+  for (const port of [8400, 8401, 8402, 8403, 8404]) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/api/status?ws=${encodeURIComponent(WS)}`, { signal: AbortSignal.timeout(900) })
+      const j = await r.json()
+      if (j && j.app === 'dsh-kaogong') { BASE = `http://127.0.0.1:${port}`; return j }
+    } catch {}
+  }
+  return null
+}
+;(function initTheme(){
+  const urlTheme = PARAMS.get('theme')
+  const saved = localStorage.getItem('kg-theme')
+  document.documentElement.dataset.theme = (urlTheme==='dark'||urlTheme==='light') ? urlTheme : (saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark':'light'))
+  document.getElementById('theme-btn').onclick = () => {
+    const n = document.documentElement.dataset.theme==='dark'?'light':'dark'
+    document.documentElement.dataset.theme = n; localStorage.setItem('kg-theme', n)
+    if (cur==='graph'||cur==='obs') render()
+  }
+})()
+function el(t,p={},...ch){const e=document.createElement(t)
+  for(const[k,v]of Object.entries(p||{})){
+    if(k==='class')e.className=v;else if(k==='style')e.style.cssText=v;else if(k==='html')e.innerHTML=v
+    else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else e.setAttribute(k,v)}
+  ch.flat(9).forEach(c=>c!=null&&c!==false&&e.appendChild(typeof c==='object'?c:document.createTextNode(String(c))))
+  return e}
+function kv(l,v){return el('div',{class:'kvi'},l,el('b',null,v))}
+function kv0(l,v){return el('div',{class:'card stat'},el('div',{class:'v',style:'font-size:19px'},String(v)),el('div',{class:'l'},l))}
+function toast(msg, type='info', ms=2600){
+  const box=document.getElementById('toasts')
+  const t=el('div',{class:type},msg)
+  box.appendChild(t)
+  setTimeout(()=>{t.style.transition='opacity .3s,transform .3s';t.style.opacity='0';t.style.transform='translateY(8px)';setTimeout(()=>t.remove(),320)},ms)
+}
+function skel(n=3){return el('div',{class:'card'},Array.from({length:n},(_,i)=>el('div',{class:'skel '+(i===0?'mid':'big')})))}
+
+/* ═══ SVG 图表（零依赖）═══ */
+function svgmk(tag,at){const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(at))n.setAttribute(k,v);return n}
+function svgLine(days){
+  if(!days||days.length<2) return el('div',{style:'font-size:12px;color:var(--muted);padding:18px 0;text-align:center'},'数据不足 2 天，先坚持刷题吧')
+  const W=460,H=120,P=24,max=Math.max(...days.map(d=>d.answered),5)
+  const x=i=>P+i*(W-2*P)/(days.length-1), yA=v=>H-P-(v/max)*(H-2*P), yR=v=>H-P-(v/100)*(H-2*P)
+  const svg=svgmk('svg',{viewBox:`0 0 ${W} ${H}`})
+  svg.appendChild(svgmk('line',{x1:P,y1:H-P,x2:W-P,y2:H-P,class:'chart-grid'}))
+  svg.appendChild(svgmk('polyline',{points:days.map((d,i)=>`${x(i)},${yA(d.answered)}`).join(' '),class:'chart-line',stroke:'#6366f1'}))
+  svg.appendChild(svgmk('polyline',{points:days.map((d,i)=>`${x(i)},${yR(d.rate)}`).join(' '),class:'chart-line',stroke:'#10b981','stroke-dasharray':'4 3'}))
+  days.forEach((d,i)=>{svg.appendChild(svgmk('circle',{cx:x(i),cy:yA(d.answered),r:2.6,fill:'#6366f1'}));svg.appendChild(svgmk('circle',{cx:x(i),cy:yR(d.rate),r:2.6,fill:'#10b981'}))})
+  const lx=svgmk('text',{x:P,y:12,class:'chart-label'});lx.textContent='● 答题数(左) 　● 正确率%(右)　'+days[0].date.slice(5)+' → '+days[days.length-1].date.slice(5)
+  svg.appendChild(lx)
+  return el('div',{class:'chartcard'},svg)
+}
+function svgRadar(mastery){
+  const mods=Object.keys(mastery||{})
+  if(mods.length<3) return el('div',{style:'font-size:12px;color:var(--muted);padding:18px 0;text-align:center'},'至少 3 个模块有作答后展示能力雷达')
+  const C=110,R=78,N=mods.length
+  const svg=svgmk('svg',{viewBox:'0 0 220 220'})
+  const pt=(i,r)=>{const a=Math.PI*2*i/N-Math.PI/2;return[C+r*Math.cos(a),C+r*Math.sin(a)]}
+  for(const ring of[0.33,0.66,1])svg.appendChild(svgmk('polygon',{points:mods.map((_,i)=>pt(i,R*ring).join(',')).join(' '),fill:'none',class:'chart-grid'}))
+  svg.appendChild(svgmk('polygon',{points:mods.map((m,i)=>pt(i,R*(mastery[m].mastery/100)).join(',')).join(' '),fill:'rgba(99,102,241,.22)',stroke:'#6366f1','stroke-width':2}))
+  mods.forEach((m,i)=>{const[tx,ty]=pt(i,R+20);const t=svgmk('text',{x:tx,y:ty,'text-anchor':'middle',class:'chart-label'});t.textContent=m.slice(0,4)+'·'+mastery[m].mastery;t.style.fontSize='9px';svg.appendChild(t)})
+  return el('div',{class:'chartcard'},svg)
+}
+function svgHeat(days){
+  const map={};(days||[]).forEach(d=>map[d.date]=d)
+  const cells=[];const now=new Date()
+  for(let i=29;i>=0;i--){const dt=new Date(now.getTime()-i*86400000)
+    const k=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,10)
+    cells.push(map[k]||{date:k,answered:0,rate:0})}
+  const color=c=>!c.answered?'var(--border)':c.rate>=80?'#10b981':c.rate>=50?'#6366f1':'#f59e0b'
+  const grid=el('div',{style:'display:grid;grid-template-columns:repeat(10,1fr);gap:5px'})
+  cells.forEach(c=>grid.appendChild(el('div',{title:`${c.date} ${c.answered}题 ${c.answered?c.rate+'%':''}`,style:`aspect-ratio:1;border-radius:6px;background:${color(c)};transition:transform .15s`,onmouseenter:e=>e.target.style.transform='scale(1.18)',onmouseleave:e=>e.target.style.transform=''})))
+  return el('div',{},grid,el('div',{style:'font-size:10.5px;color:var(--muted);margin-top:8px'},'近 30 天学习热力（绿≥80% · 紫≥50% · 橙<50% · 灰=未学）'))
+}
+
+/* ═══ 导航与路由 ═══ */
+const VIEWS=[['dashboard','📊 仪表盘'],['practice','✏️ 刷题'],['wrongbook','📕 错题本'],['plan','📅 计划'],['search','🔍 检索'],['method','📖 方法论'],['graph','🕸️ 图谱'],['obs','📡 可观测']]
+let cur=localStorage.getItem('kg-view')||'dashboard';if(!VIEWS.some(v=>v[0]===cur))cur='dashboard'
+const tabsEl=document.getElementById('tabs')
+VIEWS.forEach(([id,label])=>{const b=el('button',{class:'tab'+(id===cur?' on':''),onclick:()=>go(id)},label);b.dataset.v=id;tabsEl.appendChild(b)})
+function go(id){cur=id;localStorage.setItem('kg-view',id);tabsEl.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===id));render()}
+let TEARDOWN=null,obsTimer=null
+function teardown(){if(TEARDOWN){try{TEARDOWN()}catch{}TEARDOWN=null}}
+
+const app=document.getElementById('app')
+async function render(){
+  clearTimeout(obsTimer);teardown()
+  if(!BASE){const st=await discover();paintBeacon(st)}
+  app.innerHTML=''
+  if(!BASE){app.appendChild(el('div',{class:'empty'},el('div',{class:'spin'}),'正在连接本地服务…',el('div',{style:'font-size:11px;margin-top:8px;opacity:.7'},'请确认 DSH 已加载 dsh-kaogong 插件')));return}
+  const wrap=el('div',{class:'view-anim'});app.appendChild(wrap)
+  try{
+    if(cur==='dashboard')await vDashboard(wrap);
+    else if(cur==='practice')await vPractice(wrap);
+    else if(cur==='wrongbook')await vWrongbook(wrap);
+    else if(cur==='plan')await vPlan(wrap);
+    else if(cur==='search')vSearch(wrap);
+    else if(cur==='method')await vMethod(wrap);
+    else if(cur==='graph')await vGraph(wrap);
+    else if(cur==='obs'){await vObs(wrap);obsTimer=setTimeout(()=>{if(cur==='obs')render()},5000)}
+  }catch(e){
+    wrap.innerHTML='';wrap.appendChild(el('div',{class:'empty'},el('div',{class:'i'},'⚠️'),'加载失败: '+e.message,el('button',{class:'btn o',style:'margin-top:12px',onclick:render},'重试')))
+  }
+}
+function paintBeacon(st){
+  document.getElementById('beacon').className='beacon'+(st?'':' down')
+  document.getElementById('beacon-txt').textContent=st?(BASE==='/kaogong'?'🏠 宿主同源':`:${st.port} 就绪`):'离线'
+  document.getElementById('ws-tag').textContent='📁 '+String(WS).split(/[\\/]/).pop()
+  document.getElementById('ws-tag').title=WS
+}
+
+/* ═══ 仪表盘 ═══ */
+async function vDashboard(wrap){
+  wrap.appendChild(skel(2))
+  const [st,stats]=await Promise.all([api('/api/status'),api('/api/stats')])
+  wrap.innerHTML=''
+  const rate=stats.rate,rc=rate>=80?'c-ok':rate>=60?'c-blue':rate>=40?'c-warn':'c-bad'
+  wrap.appendChild(el('div',{class:'grid g4'},
+    el('div',{class:'card stat c-blue'},el('div',{class:'v'},`${st.repos.ready}/${st.repos.total}`),el('div',{class:'l'},'资源仓库')),
+    el('div',{class:'card stat c-ok'},el('div',{class:'v'},stats.answered),el('div',{class:'l'},'累计答题')),
+    el('div',{class:'card stat '+rc},el('div',{class:'v'},rate+'%'),el('div',{class:'l'},'总体正确率')),
+    el('div',{class:'card stat c-warn'},el('div',{class:'v'},'D'+(stats.day||1)),el('div',{class:'l'},'计划进度日'))))
+  const cards=el('div',{class:'grid g2'})
+  cards.appendChild(el('div',{class:'card'},el('div',{class:'ct'},'📈 近 14 日趋势',stats.streak>1?el('span',{class:'streak-badge',style:'margin-left:auto'},'🔥 连续 '+stats.streak+' 天'):null),svgLine(stats.days)))
+  cards.appendChild(el('div',{class:'card'},el('div',{class:'ct'},'🎯 模块能力雷达（正确率×置信）'),svgRadar(stats.mastery)))
+  wrap.appendChild(cards)
+  wrap.appendChild(el('div',{class:'card'},el('div',{class:'ct'},'🗓️ 学习热力',el('span',{style:'margin-left:auto;font-size:11.5px;color:var(--muted)'},`📕 待消灭 ${stats.wrong.open} · 已掌握 ${stats.wrong.mastered}`)),svgHeat(stats.days)))
+  wrap.appendChild(el('div',{class:'card'},el('div',{class:'ct'},'🚀 快速开始'),
+    el('div',{style:'display:flex;gap:8px;flex-wrap:wrap'},
+      el('button',{class:'btn p',onclick:()=>{PS.srs=true;PS.module='综合';PS.all=[];PS.qi=0;PS.q=null;go('practice')}},'🧠 智能刷题(SRS)'),
+      el('button',{class:'btn o',onclick:()=>go('wrongbook')},'📕 错题回炉'+(stats.wrong.open?` (${stats.wrong.open})`:'')),
+      el('button',{class:'btn o',onclick:()=>go('plan')},'📅 查看计划'),
+      el('button',{class:'btn o',onclick:()=>go('search')},'🔍 知识检索'))))
+}
+
+/* ═══ 刷题（SRS + 计时 + 键盘流 + 连击）═══ */
+const PS={module:null,all:[],qi:0,q:null,sel:null,answered:false,srs:true,streak:0,t0:0}
+async function vPractice(wrap){
+  if(!PS.module){
+    const{modules}=await api('/api/modules')
+    const c=el('div',{class:'card'},el('div',{class:'ct'},'选择练习模式'),el('div',{class:'grid g4'}))
+    c.lastChild.appendChild(el('div',{class:'modcard',style:'border-color:var(--primary);background:var(--chip)',onclick:()=>{PS.srs=true;PS.module='综合';PS.all=[];PS.qi=0;PS.q=null;loadQ().then(render)}},
+      el('div',{class:'n'},'🧠 智能 SRS'),el('div',{class:'m'},'错题回炉优先 + 弱点加权')))
+    c.lastChild.appendChild(el('div',{class:'modcard',style:'border-style:dashed',onclick:()=>{PS.srs=false;PS.module='综合';PS.all=[];PS.qi=0;PS.q=null;loadQ().then(render)}},
+      el('div',{class:'n'},'🎲 纯随机'),el('div',{class:'m'},'六模块均匀抽')))
+    Object.entries(modules).forEach(([name,info])=>c.lastChild.appendChild(el('div',{class:'modcard',onclick:()=>{PS.srs=true;PS.module=name;PS.all=[];PS.qi=0;PS.q=null;loadQ().then(render)}},
+      el('div',{class:'n'},name),el('div',{class:'m'},`${info.fileCount} 套真题`))))
+    c.appendChild(el('div',{style:'font-size:11px;color:var(--muted);margin-top:10px'},'快捷键：<span class="kbd">A</span>~<span class="kbd">D</span> 选择 · <span class="kbd">Enter</span> 提交 · <span class="kbd">N</span> 下一题'))
+    wrap.appendChild(c);return
+  }
+  if(!PS.q)await loadQ()
+  const q=PS.q
+  if(!q){wrap.appendChild(el('div',{class:'empty'},el('div',{class:'i'},'📭'),'暂无可解析题目',el('button',{class:'btn o',style:'margin-top:12px',onclick:()=>{PS.module=null;render()}},'返回')));return}
+  PS.t0=Date.now()
+  const head=el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap'},
+    el('button',{class:'btn o',onclick:()=>{PS.module=null;PS.q=null;render()}},'← 模式'),
+    el('span',{class:'tag'},q.module),el('span',{class:'tag'},q.type),
+    q.fromWrongBook?el('span',{class:'srsonly'},'📕 回炉 · 箱'+q.box+' · 错'+q.wrongCount+'次'):null,
+    q.year?el('span',{class:'tag'},q.year+'年'):null,
+    el('span',{class:'timer-pill',id:'ptimer'},'00:00'),
+    PS.streak>=3?el('span',{class:'streak-badge'},'🔥×'+PS.streak):null,
+    el('span',{style:'margin-left:auto;font-size:11px;color:var(--muted)'},`${PS.qi}/${PS.all.length}`))
+  const c=el('div',{class:'card'},head,el('div',{class:'qstem'},q.stem))
+  Object.entries(q.options||{}).forEach(([L,text])=>{
+    let cls='opt'
+    if(PS.answered){if(L===q.correctAnswer)cls+=' hit';else if(L===PS.sel)cls+=' err'}
+    else if(L===PS.sel)cls+=' sel'
+    c.appendChild(el('div',{class:cls,onclick:()=>{if(!PS.answered){PS.sel=L;render()}}},el('div',{class:'lb'},L),el('div',{style:'flex:1'},text)))})
+  if(!PS.answered&&PS.sel)c.appendChild(el('div',{style:'margin-top:12px'},el('button',{class:'btn p',onclick:submit},'提交答案 (Enter)')))
+  if(PS.answered){
+    const ok=PS.sel===q.correctAnswer
+    c.appendChild(el('div',{class:'analysis'},el('div',{style:`font-weight:800;margin-bottom:8px;color:${ok?'var(--ok)':'var(--bad)'}`},ok?'✅ 回答正确':`❌ 错误 · 正确答案 ${q.correctAnswer}`),q.analysis||'（该题无官方解析）'))
+    c.appendChild(el('div',{style:'margin-top:12px;display:flex;gap:8px'},
+      el('button',{class:'btn p',onclick:next},'下一题 (N)'),
+      el('button',{class:'btn o',onclick:()=>{PS.sel=null;PS.answered=false;render()}},'重答'),
+      el('button',{class:'btn o',onclick:()=>{PS.module=null;PS.q=null;render()}},'换模式')))
+  }
+  wrap.appendChild(c)
+  const timer=setInterval(()=>{const t=document.getElementById('ptimer');if(!t){clearInterval(timer);return}
+    const s=Math.floor((Date.now()-PS.t0)/1000);t.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')
+    t.className='timer-pill'+(s>120?' hot':'')},500)
+  const keys=e=>{
+    if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return
+    const k=e.key.toUpperCase()
+    if(!PS.answered&&'ABCD'.includes(k)&&q.options&&k in q.options){PS.sel=k;render()}
+    else if(e.key==='Enter'&&PS.sel&&!PS.answered)submit()
+    else if(k==='N'&&PS.answered)next()
+  }
+  document.addEventListener('keydown',keys)
+  TEARDOWN=()=>{document.removeEventListener('keydown',keys);clearInterval(timer)}
+}
+async function loadQ(){
+  if(PS.qi>=PS.all.length){
+    const m=PS.module==='综合'?'all':PS.module
+    const data=PS.srs?await api('/api/questions?module='+encodeURIComponent(m)+'&count=6&sort=srs'):await api('/api/questions?module='+encodeURIComponent(m)+'&count=6')
+    PS.all=data.questions||[];PS.qi=0
+    if(PS.srs&&data.mode==='weighted'&&m==='all')toast('🧠 SRS 弱点加权 → '+data.weightedModule,'info',1800)
+  }
+  PS.q=PS.all[PS.qi++]||null
+}
+async function submit(){
+  const r=await api('/api/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:PS.q,answer:PS.sel,label:String(WS).split(/[\\/]/).pop()})})
+  PS.answered=true
+  if(r.isCorrect){PS.streak++
+    if(r.wrongEvent&&r.wrongEvent.type==='mastered')toast('🎉 错题已掌握（连对'+r.wrongEvent.consecutive+'次·箱'+r.wrongEvent.box+'）','ok',3200)
+    else if(r.wrongEvent&&r.wrongEvent.type==='promoted')toast('⬆ 回炉成功，升箱至 '+r.wrongEvent.box+'/5','ok',2000)}
+  else{PS.streak=0;toast('📕 已收入错题本（降箱重练）','warn',2400)}
+  render()
+}
+function next(){PS.q=null;PS.sel=null;PS.answered=false;render()}
+
+/* ═══ 错题本 ═══ */
+async function vWrongbook(wrap){
+  wrap.appendChild(skel(2))
+  const{wrong,summary}=await api('/api/wrong')
+  wrap.innerHTML=''
+  wrap.appendChild(el('div',{class:'grid g4'},
+    kv0('🔥 待消灭',summary.open),kv0('✅ 已掌握',summary.mastered),
+    el('div',{class:'card stat'},el('div',{class:'v',style:'font-size:14px;line-height:1.5'},'SRS 五箱'),el('div',{class:'l'},'答错降箱·答对升箱·箱≥3连对2=掌握')),
+    el('div',{class:'card stat'},el('div',{class:'v',style:'font-size:15px'},'✏️'),el('div',{class:'l'},'回炉入口'),el('button',{class:'btn p',style:'margin-top:6px;padding:5px 12px;font-size:11.5px',onclick:()=>{PS.srs=true;PS.module='综合';PS.all=[];PS.qi=0;PS.q=null;go('practice')}},'智能刷题'))))
+  if(!wrong.length){wrap.appendChild(el('div',{class:'empty'},el('div',{class:'i'},'🎉'),'错题本空空如也 — 保持！'));return}
+  const c=el('div',{class:'card'},el('div',{class:'ct'},'📕 错题清单（未掌握优先 · 最久未复习先出）'))
+  wrong.forEach(w=>{
+    const dots=el('span',{class:'boxdots',title:'SRS 箱位 '+w.box+'/5'},Array.from({length:5},(_,i)=>el('i',{class:i<w.box?(w.mastered?'mst':'on'):''})))
+    c.appendChild(el('div',{class:'wcard'+(w.mastered?' done':'')},
+      el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap'},
+        el('span',{class:'tag'},w.module),el('span',{class:'tag'},'错'+w.wrongCount+'次'),dots,
+        el('span',{style:'font-size:10.5px;color:var(--muted)'},new Date(w.lastAt).toLocaleDateString()),
+        w.mastered?el('span',{class:'tag',style:'background:rgba(16,185,129,.15);color:var(--ok)'},'已掌握'):null,
+        el('button',{class:'btn o',style:'margin-left:auto;padding:3px 10px;font-size:11px',onclick:async()=>{await api('/api/wrong/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sig:w.sig})});toast('已移除','info',1500);render()}},'✕')),
+      el('div',{style:'font-size:12.5px;line-height:1.65;max-height:66px;overflow:hidden;cursor:pointer',title:'点击展开/折叠',onclick:e=>e.target.style.maxHeight=e.target.style.maxHeight==='none'?'66px':'none'},w.stem)))})
+  wrap.appendChild(c)
+}
+
+/* ═══ 学习计划 ═══ */
+async function vPlan(wrap){
+  const[plan,pg]=await Promise.all([api('/api/plan'),api('/api/progress')])
+  const curDay=pg.day||1
+  if(!plan.phases||!plan.phases.length){wrap.appendChild(el('div',{class:'empty'},el('div',{class:'i'},'📄'),plan.plan||'无计划数据'));return}
+  const ov=el('div',{class:'card'},el('div',{class:'ct'},'🗓️ 30天四阶段'))
+  plan.phases.forEach(ph=>{
+    const pct=Math.max(0,Math.min(1,(curDay-ph.startDay)/(ph.endDay-ph.startDay+1)))
+    ov.appendChild(el('div',{style:'margin-bottom:10px'},
+      el('div',{style:'display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px'},
+        el('span',{style:'font-weight:700'},ph.name,el('span',{style:'color:var(--muted);font-weight:400'},` D${ph.startDay}-${ph.endDay}`)),
+        el('span',{style:'color:var(--muted)'},Math.round(pct*100)+'%')),
+      el('div',{class:'bar'},el('i',{class:pct>=1?'f-ok':'f-blue',style:`width:${pct*100}%`}))))})
+  wrap.appendChild(ov)
+  plan.phases.forEach(ph=>{
+    const days=plan.days.filter(d=>d.phase===ph.name);if(!days.length)return
+    const c=el('div',{class:'card'},el('div',{class:'ct'},ph.name))
+    days.forEach(d=>{
+      const isCur=d.day===curDay
+      const row=el('div',{class:'pday'+(isCur?' cur':'')},el('div',{class:'pnum'},'D'+d.day),el('div',{style:'flex:1'},el('div',{class:'t'},d.title)))
+      let body=null
+      row.onclick=()=>{
+        if(body){body.style.display=body.style.display==='none'?'block':'none';return}
+        body=el('div',{class:'pbody',style:'display:none'},(d.tasks||[]).map(t=>el('div',null,'• '+t)))
+        row.after(body);body.style.display='block'}
+      c.appendChild(row)})
+    wrap.appendChild(c)})
+  const foot=el('div',{class:'card'},el('div',{class:'ct'},'⚙️ 切换当前进度日'),
+    el('div',{style:'display:flex;gap:8px;align-items:center;flex-wrap:wrap'},
+      el('input',{type:'range',min:1,max:30,value:curDay,style:'flex:1;min-width:150px',id:'dayslider'}),
+      el('span',{id:'daylabel',style:'font-weight:800;width:34px'},'D'+curDay),
+      el('button',{class:'btn p',onclick:async()=>{const v=+document.getElementById('dayslider').value;await api('/api/progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({day:v})});toast('已切换到 D'+v,'ok',1500);render()}},'保存')))
+  foot.querySelector('#dayslider').oninput=e=>document.getElementById('daylabel').textContent='D'+e.target.value
+  wrap.appendChild(foot)
+}
+
+/* ═══ 知识检索 ═══ */
+async function vSearch(wrap){
+  const banks=await api('/api/banks')
+  const card=el('div',{class:'card'},el('div',{class:'ct'},'🔍 跨仓库知识检索（本地全文）'),el('input',{class:'sin',placeholder:'输入关键词回车，如：增长率 / 申论范文 / 上岸策略 …',id:'sin'}))
+  const sel=el('select',{class:'sin',style:'margin-top:8px'});card.appendChild(sel)
+  sel.appendChild(el('option',{value:''},'默认三库（sakib / kaogong-skill / developer2gwy）'))
+  Object.entries(banks.banks).filter(([,v])=>v.exists).forEach(([k,v])=>sel.appendChild(el('option',{value:k},k+' — '+v.desc.slice(0,24))))
+  wrap.appendChild(card)
+  const out=el('div');wrap.appendChild(out)
+  const inp=card.querySelector('#sin')
+  inp.addEventListener('keydown',async e=>{
+    if(e.key!=='Enter'||!inp.value.trim())return
+    out.innerHTML='';out.appendChild(el('div',{class:'empty'},el('div',{class:'spin'}),'搜索中…'))
+    const{results}=await api('/api/search?q='+encodeURIComponent(inp.value.trim())+(sel.value?'&repo='+encodeURIComponent(sel.value):''))
+    out.innerHTML=''
+    if(!results.length){out.appendChild(el('div',{class:'empty'},el('div',{class:'i'},'🔍'),'未找到相关内容'));return}
+    out.appendChild(el('div',{style:'font-size:12px;color:var(--muted);margin-bottom:10px'},results.length+' 条命中'))
+    results.forEach(r=>out.appendChild(el('div',{class:'sres'},el('div',{class:'f'},'📄 '+r.file),el('div',{class:'sn'},r.snippet))))})
+  inp.focus()
+}
+
+/* ═══ 方法论 ═══ */
+async function vMethod(wrap){
+  const{topics}=await api('/api/methods')
+  const pick=el('div',{class:'card'},el('div',{class:'ct'},'📖 方法论主题'),el('div',{class:'grid g4'}))
+  topics.forEach(t=>pick.lastChild.appendChild(el('div',{class:'modcard',style:t.exists?'':'opacity:.45',onclick:()=>openM(t.id)},el('div',{class:'n'},t.label),el('div',{class:'m'},t.file+(t.exists?'':' 缺失')))))
+  wrap.appendChild(pick)
+  wrap.appendChild(el('div',{id:'mbody'}))
+  openM('行测')
+}
+async function openM(topic){
+  const b=document.getElementById('mbody');if(!b)return
+  b.innerHTML='';b.appendChild(el('div',{class:'card'},el('div',{class:'ct'},'📖 '+topic),el('div',{class:'spin'})))
+  const d=await api('/api/method?topic='+encodeURIComponent(topic))
+  b.innerHTML=''
+  b.appendChild(el('div',{class:'card'},el('div',{class:'ct'},'📖 '+(d.topic||topic)+' · '+(d.file||'')),
+    el('div',{style:'font-size:13px;line-height:1.8;white-space:pre-wrap;max-height:56vh;overflow-y:auto'},d.content||d.error||'无内容')))
+}
+
+/* ═══ 知识图谱（力导向 Canvas）═══ */
+const TYPE_COLOR={plugin:'#6366f1',lifecycle:'#94a3b8',view:'#0ea5e9',endpoint:'#8b5cf6',tool:'#f59e0b',domain:'#10b981',repo:'#22c55e',module:'#14b8a6',method:'#a3e635',phase:'#f97316',day:'#fbbf24',entry:'#ec4899'}
+let G=null,GV={x:0,y:0,k:1},GRUN=true,drag=null,pan=null,hover=null
+async function vGraph(wrap0){
+  const wrap=el('div',{id:'graphwrap'})
+  const cv=el('canvas',{id:'graph'})
+  const legend=el('div',{class:'g-legend'},['plugin','view','endpoint','tool','domain','repo','module','method','lifecycle','entry'].map(t=>el('div',{class:'g-leg'},el('i',{style:'background:'+(TYPE_COLOR[t]||'#888')}),t)))
+  const ctrl=el('div',{class:'g-ctrl'},
+    el('button',{class:'btn o',style:'padding:5px 10px;font-size:11px',onclick:()=>{GV={x:0,y:0,k:1}}},'⛶'),
+    el('button',{class:'btn o',style:'padding:5px 10px;font-size:11px',onclick:()=>{if(G)G.nodes.forEach(n=>{n.fx=null;n.fy=null});GRUN=true}},'解冻'),
+    el('button',{class:'btn o',style:'padding:5px 10px;font-size:11px',onclick:()=>{GRUN=!GRUN}},'⏯'))
+  const detail=el('div',{class:'g-detail',id:'g-detail'})
+  wrap.append(cv,legend,ctrl,detail);wrap0.appendChild(wrap)
+  const sk=skel(1);wrap0.appendChild(sk)
+  const meta=el('div',{class:'card'},el('div',{class:'ct'},'🧮 图论指标 + 健康度（白盒）'))
+  G=await api('/api/graph')
+  sk.remove();wrap0.appendChild(meta)
+  const w0=cv.clientWidth||800,h0=cv.clientHeight||500
+  G.nodes.forEach((n,i)=>{
+    if(n.type==='plugin'){n.x=w0/2;n.y=h0/2}else{const a=i*2.39996,r=70+(i%13)*24;n.x=w0/2+r*Math.cos(a);n.y=h0/2+r*Math.sin(a)}
+    n.vx=0;n.vy=0;n.fx=null;n.fy=null
+    n.r=n.type==='plugin'?20:n.type==='domain'||n.type==='view'?12:n.type==='repo'||n.type==='module'||n.type==='endpoint'?9:6})
+  const pr={};(G.rank||[]).forEach(r=>pr[r.id]=r.pr);G.nodes.forEach(n=>n.prS=pr[n.id]||0)
+  const idx={};G.nodes.forEach(n=>idx[n.id]=n)
+  G.edges=G.edges.map(e=>({...e,s:idx[e.source],t:idx[e.target]})).filter(e=>e.s&&e.t)
+  const M=G.metrics,H=G.health
+  meta.appendChild(el('div',{class:'kv'},kv('节点|V|',M.V),kv('边|E|',M.E),kv('密度ρ',M.density),kv('连通分量',M.components),kv('孤儿',M.orphans.length),kv('健康度',H.total)))
+  ;[['连通性',H.factors.connectivity,H.weights.connectivity],['请求活跃',Math.min(1,H.factors.requestActivity/50),H.weights.activity],['延迟达标',H.factors.latencyP95Ok,H.weights.latency],['低错误率',1-H.factors.errorRate,H.weights.errors],['数据就绪',H.factors.dataReady,H.weights.data]].forEach(([l,v,wt])=>{
+    meta.appendChild(el('div',{class:'hbar'},el('span',{style:'width:72px'},l),el('div',{class:'bar'},el('i',{class:v>.7?'f-ok':v>.4?'f-warn':'f-bad',style:`width:${Math.round(v*100)}%`})),el('span',{style:'width:38px;text-align:right'},Math.round(v*100)+'%'),el('span',{style:'width:40px;text-align:right;opacity:.6'},'w'+wt)))})
+  if(M.orphans.length)meta.appendChild(el('div',{style:'font-size:11.5px;color:var(--warn);margin-top:6px'},'⚠ 孤儿端点：'+M.orphans.join(', ')))
+  const dpr=devicePixelRatio||1
+  function size(){cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr}
+  size();addEventListener('resize',size)
+  const ctx=cv.getContext('2d')
+  const toWorld=(mx,my)=>[(mx-GV.x)/GV.k,(my-GV.y)/GV.k]
+  function tick(){
+    if(G&&GRUN){const N=G.nodes,E=G.edges
+      for(let i=0;i<N.length;i++)for(let j=i+1;j<N.length;j++){const a=N[i],b=N[j];let dx=b.x-a.x,dy=b.y-a.y,d2=dx*dx+dy*dy||1
+        if(d2>90000)continue;const f=2600/d2,d=Math.sqrt(d2);dx/=d;dy/=d
+        a.vx-=dx*f;a.vy-=dy*f;b.vx+=dx*f;b.vy+=dy*f}
+      E.forEach(e=>{const dx=e.t.x-e.s.x,dy=e.t.y-e.s.y,d=Math.sqrt(dx*dx+dy*dy)||1
+        const L=e.rel==='next'?52:e.rel==='contains'?72:112,f=(d-L)*0.018
+        e.s.vx+=dx/d*f;e.s.vy+=dy/d*f;e.t.vx-=dx/d*f;e.t.vy-=dy/d*f})
+      const cx=cv.clientWidth/2,cy=cv.clientHeight/2
+      N.forEach(n=>{if(n.fx!=null){n.x=n.fx;n.y=n.fy;n.vx=0;n.vy=0;return}
+        n.vx+=(cx-n.x)*0.0008;n.vy+=(cy-n.y)*0.0008;n.vx*=0.86;n.vy*=0.86
+        n.x+=Math.max(-14,Math.min(14,n.vx));n.y+=Math.max(-14,Math.min(14,n.vy))})}
+    draw();rafId=requestAnimationFrame(tick)}
+  function draw(){if(!G)return
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cv.width,cv.height)
+    ctx.setTransform(dpr*GV.k,0,0,dpr*GV.k,dpr*GV.x,dpr*GV.y)
+    const dark=document.documentElement.dataset.theme==='dark'
+    G.edges.forEach(e=>{ctx.strokeStyle=e.rel==='next'?'rgba(148,163,184,.5)':e.rel==='contains'?(dark?'rgba(71,85,105,.55)':'rgba(203,213,225,.9)'):'rgba(99,102,241,.34)'
+      ctx.lineWidth=(e.rel==='contains'?1.1:1)/GV.k
+      if(['consumes','consumed-by','feeds','hosts'].includes(e.rel))ctx.setLineDash([4,3]);else ctx.setLineDash([])
+      ctx.beginPath();ctx.moveTo(e.s.x,e.s.y);ctx.lineTo(e.t.x,e.t.y);ctx.stroke()})
+    ctx.setLineDash([])
+    G.nodes.forEach(n=>{ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,7);ctx.fillStyle=TYPE_COLOR[n.type]||'#888';ctx.globalAlpha=n===hover?1:.88;ctx.fill();ctx.globalAlpha=1
+      if(n===hover||n.type==='plugin'){ctx.strokeStyle=dark?'#fff':'#334155';ctx.lineWidth=1.6/GV.k;ctx.stroke()}})
+    ctx.fillStyle=dark?'#cbd5e1':'#334155'
+    G.nodes.forEach(n=>{const imp=n.type==='plugin'||n.type==='view'||n.type==='domain'||n.type==='entry'||n===hover||n.prS>0.02
+      if(GV.k>0.55||imp){ctx.font=`${Math.max(9,11/GV.k)}px -apple-system,"Microsoft YaHei"`;ctx.fillText(n.label,n.x+n.r+3/GV.k,n.y+3/GV.k)}})}
+  function pick(mx,my){const[wx,wy]=toWorld(mx,my);let b=null,bd=1e9
+    G.nodes.forEach(n=>{const d=(n.x-wx)**2+(n.y-wy)**2;if(d<(n.r+6)**2/GV.k&&d<bd){bd=d;b=n}});return b}
+  cv.onmousedown=e=>{const n=pick(e.offsetX,e.offsetY);if(n){drag=n;n.fx=n.x;n.fy=n.y}else pan={x:e.offsetX-GV.x,y:e.offsetY-GV.y}}
+  cv.onmousemove=e=>{if(drag){const[wx,wy]=toWorld(e.offsetX,e.offsetY);drag.fx=wx;drag.fy=wy}else if(pan){GV.x=e.offsetX-pan.x;GV.y=e.offsetY-pan.y}else{hover=pick(e.offsetX,e.offsetY);cv.style.cursor=hover?'pointer':'grab'}}
+  window.onmouseup=()=>{if(drag){drag.fx=null;drag.fy=null;drag=null}pan=null}
+  cv.onwheel=e=>{e.preventDefault();const s=e.deltaY<0?1.12:0.89,nk=Math.max(.3,Math.min(3,GV.k*s));GV.x=e.offsetX-(e.offsetX-GV.x)*(nk/GV.k);GV.y=e.offsetY-(e.offsetY-GV.y)*(nk/GV.k);GV.k=nk}
+  cv.onclick=e=>{const n=pick(e.offsetX,e.offsetY),d=document.getElementById('g-detail');if(!n){d.classList.remove('open');return}
+    const inE=G.edges.filter(x=>x.t===n).length,outE=G.edges.filter(x=>x.s===n).length
+    d.innerHTML=''
+    d.append(el('div',{class:'dt'},el('i',{style:`width:10px;height:10px;border-radius:50%;background:${TYPE_COLOR[n.type]||'#888'};display:inline-block`}),n.label,el('span',{class:'tag'},n.type),el('button',{class:'close',onclick:ev=>{ev.stopPropagation();d.classList.remove('open')}},'✕')),
+      el('div',{style:'color:var(--muted)'},`入度${inE} · 出度${outE} · PageRank ${(n.prS||0).toFixed(4)}`+(n.desc?' · '+n.desc:'')+(n.files?' · '+n.files+'套':'')+(n.exists!==undefined?' · '+(n.exists?'✅就绪':'❌缺失'):'')+(n.title?' · '+n.title:'')))
+    d.classList.add('open')}
+  let rafId=requestAnimationFrame(tick)
+  TEARDOWN=()=>{cancelAnimationFrame(rafId);removeEventListener('resize',size)}
+}
+
+/* ═══ 可观测 ═══ */
+async function vObs(wrap){
+  const[tel,caps,wss,st]=await Promise.all([api('/api/telemetry'),api('/api/capabilities'),api('/api/workspaces'),api('/api/status')])
+  wrap.appendChild(el('div',{class:'grid g4'},kv0('运行时长',tel.uptimeSec+'s'),kv0('总请求',tel.totalRequests),kv0('QPS(60s)',tel.qpsWindow),kv0('端点覆盖',(tel.coverage*100).toFixed(0)+'%'),kv0('活跃/声明',tel.activeEndpoints+'/'+tel.declaredEndpoints),kv0('服务PID',st.pid||'?')))
+  const life=el('div',{class:'card'},el('div',{class:'ct'},'♻️ 插件生命周期状态机'))
+  const stages=['load','apply','server-start','tools-register','runtime-publish','serve']
+  const reached={load:1,apply:1,'server-start':1,'tools-register':(caps.tools||[]).length?1:0,'runtime-publish':1,serve:tel.activeEndpoints>0?1:0}
+  stages.forEach(s=>life.appendChild(el('span',{class:'st'+(reached[s]?' live':'')},s+(reached[s]?' ✓':''))))
+  wrap.appendChild(life)
+  const tb=el('table',{class:'tel'});tb.appendChild(el('tr',{},el('th',null,'端点'),el('th',null,'次数'),el('th',null,'错误'),el('th',null,'p50'),el('th',null,'p95'),el('th',null,'延迟分布')))
+  const eps=Object.entries(tel.endpoints).sort((a,b)=>b[1].count-a[1].count)
+  eps.forEach(([p,d])=>tb.appendChild(el('tr',{},el('td',{style:'font-family:monospace'},p),el('td',null,d.count),el('td',{style:'color:'+(d.errors?'var(--bad)':'var(--muted)')},d.errors),el('td',null,d.p50+'ms'),el('td',null,d.p95+'ms'),el('td',{},spark(d.series)))))
+  const tc=el('div',{class:'card'},el('div',{class:'ct'},'📡 端点遥测（5s 自动刷新）'),tb)
+  if(!eps.length)tc.appendChild(el('div',{style:'font-size:12px;color:var(--muted);margin-top:8px'},'尚无遥测样本'))
+  wrap.appendChild(tc)
+  const cap=el('div',{class:'card'},el('div',{class:'ct'},'🧩 能力矩阵（注册→生产→消费）'))
+  const consumed=new Set(Object.keys(tel.endpoints))
+  ;(caps.endpoints||[]).forEach(e=>cap.appendChild(el('div',{class:'nsrow'},el('span',{style:'font-family:monospace;font-size:11px;flex:1'},e.path),el('span',{style:'color:var(--muted);font-size:11px'},(e.consumers||[]).length+' 消费者'),el('span',{class:'tag',style:'background:'+(consumed.has(e.path)?'rgba(16,185,129,.15)':'var(--bg)')+';color:'+(consumed.has(e.path)?'var(--ok)':'var(--muted)')},consumed.has(e.path)?'活跃':'未触达'))))
+  if(caps.orphans&&caps.orphans.length)cap.appendChild(el('div',{style:'font-size:11.5px;color:var(--warn);margin-top:8px'},'⚠ 孤儿端点：'+caps.orphans.join(' ')))
+  wrap.appendChild(cap)
+  const ns=el('div',{class:'card'},el('div',{class:'ct'},'🗂️ 工作区隔离命名空间'),el('div',{style:'font-size:11.5px;color:var(--muted);margin-bottom:10px'},'当前：'+WS))
+  ;(wss.workspaces||[]).forEach(w=>ns.appendChild(el('div',{class:'nsrow'},el('span',{style:'flex:1;font-family:monospace;font-size:11px',title:w.ns},String(w.label||w.ns).slice(0,26)),el('span',null,'D'+w.day),el('span',{style:'color:var(--muted)'},w.answered+'题'),el('div',{class:'bar'},el('i',{class:w.rate>=80?'f-ok':w.rate>=60?'f-blue':'f-warn',style:`width:${w.rate}%`})),el('span',{style:'width:34px;text-align:right'},w.rate+'%'))))
+  wrap.appendChild(ns)
+}
+function spark(series){const w=90,h=18,dpr=devicePixelRatio||1,c=document.createElement('canvas');c.width=w*dpr;c.height=h*dpr;c.style.cssText=`width:${w}px;height:${h}px;vertical-align:middle`
+  const x=c.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0)
+  if(!series||series.length<2)return c
+  const max=Math.max(...series,1);x.strokeStyle='#6366f1';x.lineWidth=1;x.beginPath()
+  series.forEach((v,i)=>{const px=i/(series.length-1)*w,py=h-(v/max)*(h-2)-1;i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke();return c}
+
+;(async()=>{const st=await discover();paintBeacon(st)
+  setInterval(async()=>{if(!BASE){const s=await discover();paintBeacon(s);if(s)render()}},4000)
+  render()})()
+</script>
+</body>
+</html>

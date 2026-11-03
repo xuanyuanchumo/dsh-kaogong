@@ -1,0 +1,353 @@
+{
+  "skill": "ai-native-iteration-cycle",
+  "version": "2.6.1",
+  "fileCount": 69,
+  "generatedAt": "2026-11-02T09:29:02.433Z",
+  "files": [
+    {
+      "path": "assets/config/config.example.yml",
+      "size": 2363,
+      "sha256": "6642ac0acfb00fb2fbb07843bf733d11498dfe7c1cc5b5628e152af91669fcce"
+    },
+    {
+      "path": "assets/config/hook-settings.example.json",
+      "size": 992,
+      "sha256": "3f808dcb9b141f939013d5d6789d314ffac4d9c3bc3263517141e8074ab1675c"
+    },
+    {
+      "path": "assets/config/managed-settings.example.json",
+      "size": 767,
+      "sha256": "6626089e7a2fd240d4c51d412fa5ffcaea48995992555d213694a945b306688d"
+    },
+    {
+      "path": "assets/config/workflow-graph.example.yaml",
+      "size": 7205,
+      "sha256": "1caecc4086a603f05e58cb4b8bbd51ec452d963beb9f10560756ff6a67520c8c"
+    },
+    {
+      "path": "assets/hooks/plan-sync-check.sh",
+      "size": 1367,
+      "sha256": "be5c12882ed392702f5d16f8a9986dad464ce9c32649114d001a705a069e26de"
+    },
+    {
+      "path": "assets/hooks/production-gate.sh",
+      "size": 2749,
+      "sha256": "5131f546480358eff2734b66712ba3a62fea6551f9840b772eeb3b22366390ad"
+    },
+    {
+      "path": "assets/hooks/test-protection.sh",
+      "size": 1585,
+      "sha256": "29bb84fef70c90a3ea9479e20b1628d45fce57041564f1a8073612b70fd6217b"
+    },
+    {
+      "path": "assets/templates/audit-log.md",
+      "size": 832,
+      "sha256": "7cd8c7f3dffe162cf6865f1254afea4efaafcd614c4c9ba20ad50d60530aa81a"
+    },
+    {
+      "path": "assets/templates/cycle-plan.md",
+      "size": 1009,
+      "sha256": "c64034be09095d0f9063de9e413f66181b3cb9437bfcbdb514a2c0f763318324"
+    },
+    {
+      "path": "assets/templates/delivery-checklist.md",
+      "size": 822,
+      "sha256": "6d836a5c9500f0c4c61d86c032be67866e6ae362f2924c7d075a855aff1ea414"
+    },
+    {
+      "path": "assets/templates/eval-report.md",
+      "size": 1094,
+      "sha256": "a93e70a55ae822efa1bae02252402e04feb67e982d54a920992f94982dec93df"
+    },
+    {
+      "path": "assets/templates/incident.md",
+      "size": 391,
+      "sha256": "c6bf9cd0649a40bcfb99d81c72b39923096fd521d935b8036401613c8c1621fd"
+    },
+    {
+      "path": "assets/templates/intent.md",
+      "size": 343,
+      "sha256": "48d5ab1611cab0d2c99dfa7d29901d703bb3f40fd9af20fe98b09ac889f8499e"
+    },
+    {
+      "path": "assets/templates/non-functional-report.md",
+      "size": 754,
+      "sha256": "d40e62ff2bd4f92e79c025b8c783487c4069c821437cf0003df945d36083943e"
+    },
+    {
+      "path": "assets/templates/page-state.md",
+      "size": 569,
+      "sha256": "4243d96cd75808cd54f77ca71d557a02ba932e10acf07cdaa78c9459ca1bb8a9"
+    },
+    {
+      "path": "assets/templates/plan.md",
+      "size": 341,
+      "sha256": "cba07d172f82991aa709bc2b86d80ef44e833cc67f0682652379bff1497e7c1e"
+    },
+    {
+      "path": "assets/templates/PULL_REQUEST_TEMPLATE.md",
+      "size": 1639,
+      "sha256": "46c1ff19e18f6b701c11da5aefded36d4ce4f55aea1ba149acbaa4c29b2795bf"
+    },
+    {
+      "path": "assets/templates/retrospective.md",
+      "size": 616,
+      "sha256": "3929bb620bb441c7a77f9dbfb93702784d131fc5002fc41a5645b14f4f7deec9"
+    },
+    {
+      "path": "assets/templates/review.md",
+      "size": 611,
+      "sha256": "483781526e59761fd8063f62fa801349df34a5a0501b1dd09ec6b207bfbc2d48"
+    },
+    {
+      "path": "assets/templates/spec.md",
+      "size": 653,
+      "sha256": "b6aab8d70a1d43a5595b65c83656bea2a6ee15ce21c381bbcb2a307d50f7c88c"
+    },
+    {
+      "path": "assets/templates/task-list.md",
+      "size": 1748,
+      "sha256": "aab1391feb3b665e0e7d945ace55943c2c46a6f304231a8498b5fffb7aac7779"
+    },
+    {
+      "path": "assets/templates/test-report.md",
+      "size": 1124,
+      "sha256": "c8f922a5cd40ab7b89a9bc08100231016224a3ba5a78cddc9d3ce339e93b6036"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "size": 26041,
+      "sha256": "a78572656fad6af5e3881e05bd74c582065c8db5c425d18af793ae02a7fed2e2"
+    },
+    {
+      "path": "evals/evals.json",
+      "size": 8542,
+      "sha256": "b6704b87a985cef5dc6b57ddc5ae1600eb0ca1e62e7f9bda637a1a66bbc1f99b"
+    },
+    {
+      "path": "README.md",
+      "size": 10787,
+      "sha256": "f39787120b04f8c792b00150bcb98dd3b9dc4f43e61e4d25bdf2b1e51c6efba5"
+    },
+    {
+      "path": "references/adoption.md",
+      "size": 5087,
+      "sha256": "86efbc2000971182ed54a02b9b896ab27722a9dbb9c13e5f0f612d2e6bb2cf58"
+    },
+    {
+      "path": "references/auto-cycle.md",
+      "size": 14561,
+      "sha256": "c2467c1fd5c70b55dd24feb38c8431c93edcda3ba98e2abf079737cd011b145c"
+    },
+    {
+      "path": "references/autonomy.md",
+      "size": 8903,
+      "sha256": "367d89917720676325330b7fb7ca9e452d878b3423020f62ee96a3b7549115c8"
+    },
+    {
+      "path": "references/evaluation.md",
+      "size": 13367,
+      "sha256": "ee72037cb930ec7be46a151212415b046c478655d4d6a436e968c4a994878330"
+    },
+    {
+      "path": "references/gates.md",
+      "size": 6527,
+      "sha256": "d7eed945f90f5f1ec9f9ef3cf740ce9ea74343fafe71e8498a3f1c2ed1e1b185"
+    },
+    {
+      "path": "references/graph.md",
+      "size": 4524,
+      "sha256": "dc116789730675391c641a6851356e01ea7d0c2df5b94f480d69d9310581be20"
+    },
+    {
+      "path": "references/multi-agent-gate.md",
+      "size": 10114,
+      "sha256": "16e2d787d0ef37c0d0c2b8b62e4269c7a39df0365536450fadfc92ffeb58bba8"
+    },
+    {
+      "path": "references/playbook.md",
+      "size": 19494,
+      "sha256": "17e78089569284b4fcbbb70d03fae6ed50801de9bab2e8eedd3f91cce3d65374"
+    },
+    {
+      "path": "references/principles.md",
+      "size": 8153,
+      "sha256": "7e3370ad748797b218f3cf57fd70121e529cfdf3617de245ca528928115c21db"
+    },
+    {
+      "path": "references/project-config.md",
+      "size": 5458,
+      "sha256": "566cf7ab6df55097a9555248de34a6b09dcd0c594e768c798a607b5c88c4d2b7"
+    },
+    {
+      "path": "references/quality-review.md",
+      "size": 13984,
+      "sha256": "c6632a4e9a859640a18e78954dd1e649ff74d501b016a284bc14b0a10dea479b"
+    },
+    {
+      "path": "references/scripts-reference.md",
+      "size": 30978,
+      "sha256": "9354e44f0f6efe9867b10813daa8d2b6445f376c02d3fafdaadc10e0946dbb71"
+    },
+    {
+      "path": "references/state-transition.md",
+      "size": 21654,
+      "sha256": "fde29efb5b42653dcbad79e4bd93d717bc24bcbb79858bef5532e163c20afa09"
+    },
+    {
+      "path": "references/troubleshooting.md",
+      "size": 5516,
+      "sha256": "5fa21beebd1fa4628f8dd75f87650d4020496d6ea8f5e3a66e9d41bde6a6c6e0"
+    },
+    {
+      "path": "scripts/archive-cycle.mjs",
+      "size": 5392,
+      "sha256": "d0e766dc5fa2ef75f169deff17efac84eeeeef2df4b6aba1b9bd5282a25b80fb"
+    },
+    {
+      "path": "scripts/auto-fix-loop.mjs",
+      "size": 26828,
+      "sha256": "641ed652357ee18207667cac5349cec6fd0a991ccfb6e1170f9314d87e88ebe3"
+    },
+    {
+      "path": "scripts/band-detector.mjs",
+      "size": 16056,
+      "sha256": "6481f091df796275af2710756a2a58e5515404f691eb9bc77a5ffddc7d46e4da"
+    },
+    {
+      "path": "scripts/eval-runner.mjs",
+      "size": 55459,
+      "sha256": "1757b2dfc136d360f67bff876220eae7f793d168a7477c823ecfbe91e8077005"
+    },
+    {
+      "path": "scripts/fact-base-verify.mjs",
+      "size": 3021,
+      "sha256": "ba3f9bbe1233827b04d4aed54d80ef5ce8749d84eb438c71a7a7ad32426949fb"
+    },
+    {
+      "path": "scripts/gate-check.mjs",
+      "size": 21452,
+      "sha256": "cb877f8a23c70ac20addbdb84396db5be07ba3b0a58b7271d27cdd6a197fe704"
+    },
+    {
+      "path": "scripts/gate-ledger.mjs",
+      "size": 5396,
+      "sha256": "8da67526f7f425c250fe8c07f1d5b4dd5612cf4576589432dcf6d45f3543b9a2"
+    },
+    {
+      "path": "scripts/hitl-audit.mjs",
+      "size": 15501,
+      "sha256": "4eac112b284890795ef2e76406df52e22cf029e8805ee89012c6067c36e253ad"
+    },
+    {
+      "path": "scripts/init-cycle.mjs",
+      "size": 5602,
+      "sha256": "003532a73a5e8331e165965749179183f90d69dfaabb233dbed6ded3f20d3f8a"
+    },
+    {
+      "path": "scripts/init-workflow.mjs",
+      "size": 3740,
+      "sha256": "84d2b88d7f8ec3ff2bdf7334f1e2e25b32ea12cc6b08bc6f485b0c2c4066beb2"
+    },
+    {
+      "path": "scripts/lib/args.mjs",
+      "size": 3748,
+      "sha256": "c5f58ad2a3fcda2f4d17b5a4323053ece7b73440d5c65f9eb9d7bb32ef995fd2"
+    },
+    {
+      "path": "scripts/lib/auto-fix-strategy.mjs",
+      "size": 12832,
+      "sha256": "fa33ae1b5eaa215feefb5ac1860044595e5cd737de678273dbc12b355ac8911c"
+    },
+    {
+      "path": "scripts/lib/budget.mjs",
+      "size": 9096,
+      "sha256": "c14d926d0f7c0f589f70701ba2b44457d99330793e47f878efd58e9dd1eaa5f4"
+    },
+    {
+      "path": "scripts/lib/config.mjs",
+      "size": 2956,
+      "sha256": "7f734149688b16f0dcedbb246934582edcca3b7c1e683ad8cf637ed4144ba343"
+    },
+    {
+      "path": "scripts/lib/cycle.mjs",
+      "size": 1408,
+      "sha256": "80e1284a3b8bf1cc50d9364e8d81a1bbfa938402b53583488c627e736ff76ce9"
+    },
+    {
+      "path": "scripts/lib/dimensions.mjs",
+      "size": 3342,
+      "sha256": "df5e22da6ed7e3b4979931c66182a241f866ee8dd7651d913661bf0ccd5441b5"
+    },
+    {
+      "path": "scripts/lib/fs-parallel.mjs",
+      "size": 1115,
+      "sha256": "96592ddc2cd9594e0214574474b933599dd92c09a34cd81b6d3b2c2dc017230c"
+    },
+    {
+      "path": "scripts/lib/fs-safe.mjs",
+      "size": 995,
+      "sha256": "7cb5c25df06a9a1d11821aad647cc16de1090c674b04032e50c5c075e6f3824d"
+    },
+    {
+      "path": "scripts/lib/importGraph.mjs",
+      "size": 8026,
+      "sha256": "d4f6f91d76bcb054620901cf555d746fedf9f66b045f9e00b2b706e1678f0f6a"
+    },
+    {
+      "path": "scripts/lib/ledger.mjs",
+      "size": 8204,
+      "sha256": "47bebf675da626e77994ebccd6d5b3c108b30a763cf790aaad7aaa9fb7bc6085"
+    },
+    {
+      "path": "scripts/lib/merkle-hash.mjs",
+      "size": 9046,
+      "sha256": "f062184e7d6468b45f0cadde4c126e4acc4441a06cd31ef34ab100a745c78736"
+    },
+    {
+      "path": "scripts/lib/tasks.mjs",
+      "size": 3000,
+      "sha256": "29f748301345c727439545d4a65a55148b234763267a9c95d6223aac3952bcfc"
+    },
+    {
+      "path": "scripts/lib/testImpact.mjs",
+      "size": 7394,
+      "sha256": "4c76977411baf8555b90a6a6329c517c5f5eb11f6471ded082f088500e0bf8b7"
+    },
+    {
+      "path": "scripts/mcp-server.mjs",
+      "size": 20194,
+      "sha256": "dd84ba454a6998c90968241e053d186691ac737b8e291d2079980ceb22e8616a"
+    },
+    {
+      "path": "scripts/multi-agent-gate.mjs",
+      "size": 29731,
+      "sha256": "88454254b33857b329ee28510ce9811b8e547bd6a43729fbcd982d2be50c6cdf"
+    },
+    {
+      "path": "scripts/org-status.mjs",
+      "size": 38182,
+      "sha256": "ee2b30981119340f0c0e6a850b32ba0c3453e7ee1dfe73dbe8957d55c2669a77"
+    },
+    {
+      "path": "scripts/plan-sync-check.mjs",
+      "size": 6957,
+      "sha256": "4d32512bd88cf4a5dd8abf1313c709aa5a3301067b07d41cc9e41d631f5d16c5"
+    },
+    {
+      "path": "scripts/quick-validate.mjs",
+      "size": 20433,
+      "sha256": "925212cdfd74c59739bd1d734bdcb4103c89ce8a5f26e99d1ad9707df4b4a524"
+    },
+    {
+      "path": "scripts/workflow-state.mjs",
+      "size": 15840,
+      "sha256": "ae22d5f459b6688811c959a62096df83adf155836e0349cccac16aec8083f484"
+    },
+    {
+      "path": "SKILL.md",
+      "size": 22809,
+      "sha256": "fdfbf679480dea13a20083d57d25e9541cfa6070983e821bfdd3041e2fc0b0ad"
+    }
+  ]
+}

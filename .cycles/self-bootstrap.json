@@ -1,0 +1,16 @@
+{
+  "status": "CONVERGED",
+  "round": 1,
+  "maxRounds": 2,
+  "lastEvalScore": 1,
+  "lastGateVerdict": "PASS",
+  "history": [
+    {
+      "round": 1,
+      "evalScore": 1,
+      "gateVerdict": "PASS",
+      "fixApplied": null,
+      "timestamp": "2026-11-02T09:03:14.401Z"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "day": 1,
+  "answered": 0,
+  "correct": 0,
+  "wrong": 0,
+  "history": [],
+  "byModule": {},
+  "examRecords": [
+    {
+      "ts": 1793673716144,
+      "paperId": "国考/2008/行测-统考",
+      "subject": "行测",
+      "year": 2008,
+      "answered": 140,
+      "correct": 0,
+      "rate": 0,
+      "scored": 0,
+      "totalScore": 0,
+      "elapsedSec": 3600
+    }
+  ]
+}

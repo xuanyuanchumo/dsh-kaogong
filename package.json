@@ -1,0 +1,71 @@
+{
+  "name": "dsh-kaogong",
+  "version": "1.7.5",
+  "description": "考公备考整合插件 — 15开源仓库 · 离线可视化 · 双入口(左沉浸+右并排) · SRS错题本 · 白盒可观测",
+  "type": "module",
+  "main": "dist/host/index.js",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.4.0-0"
+  },
+  "engines": {
+    "node": ">=22.19",
+    "dsh": ">=0.2.0-rc.2 <0.4.0-0"
+  },
+  "exports": {
+    ".": "./dist/host/index.js",
+    "./client": "./dist/client/client.js",
+    "./server": "./dist/server/http.js",
+    "./shared": "./dist/shared/manifest.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src/shared/types.ts",
+    "locale",
+    "docs",
+    "README.md",
+    "CLAUDE.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.1-rc.5": "compatible"
+      }
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepack": "tsc",
+    "test": "tsc && node smoke.test.mjs",
+    "test:render": "tsc && node render.test.mjs",
+    "test:all": "tsc && node smoke.test.mjs && node render.test.mjs",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "kaogong",
+    "考公",
+    "公务员",
+    "行测",
+    "申论",
+    "exam",
+    "civil-service"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}

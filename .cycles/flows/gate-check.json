@@ -1,0 +1,152 @@
+{
+  "flowId": "gate-check",
+  "current": "PASSED",
+  "history": [
+    {
+      "trigger": "run",
+      "from": "IDLE",
+      "to": "RUNNING",
+      "at": "2026-11-02T09:01:26.996Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-02T09:01:26.996Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-02T09:27:40.941Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-02T09:27:40.941Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-02T15:07:42.495Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-02T15:07:42.495Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-02T15:42:08.491Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-02T15:42:08.492Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-02T16:45:20.637Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-02T16:45:20.637Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-03T01:33:28.990Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-03T01:33:28.990Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-03T02:22:38.396Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-03T02:22:38.396Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-03T02:57:26.193Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-03T02:57:26.193Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-03T04:24:35.604Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-03T04:24:35.604Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-03T05:04:30.084Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-03T05:04:30.084Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-03T05:17:22.389Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-03T05:17:22.389Z"
+    },
+    {
+      "trigger": "run",
+      "from": "PASSED",
+      "to": "RUNNING",
+      "at": "2026-11-03T05:29:05.709Z"
+    },
+    {
+      "trigger": "all-pass",
+      "from": "RUNNING",
+      "to": "PASSED",
+      "at": "2026-11-03T05:29:05.709Z"
+    }
+  ],
+  "updatedAt": "2026-11-03T05:29:05.709Z",
+  "ledgerHead": null
+}

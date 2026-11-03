@@ -1,0 +1,197 @@
+{
+  "day": 1,
+  "answered": 14,
+  "correct": 6,
+  "wrong": 8,
+  "history": [
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "B",
+      "correctAnswer": "C",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "D",
+      "correctAnswer": "C",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "D",
+      "correctAnswer": "C",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "D",
+      "correctAnswer": "C",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "C",
+      "correctAnswer": "C",
+      "isCorrect": true
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "D",
+      "correctAnswer": "C",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "C",
+      "correctAnswer": "C",
+      "isCorrect": true
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "C",
+      "correctAnswer": "C",
+      "isCorrect": true
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "D",
+      "correctAnswer": "A",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "B",
+      "correctAnswer": "B",
+      "isCorrect": true
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "图形推理",
+      "userAnswer": "C",
+      "correctAnswer": "D",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "A",
+      "correctAnswer": "A",
+      "isCorrect": true
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "图形推理",
+      "userAnswer": "A",
+      "correctAnswer": "D",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-03",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "A",
+      "correctAnswer": "A",
+      "isCorrect": true
+    }
+  ],
+  "byModule": {
+    "判断推理": {
+      "answered": 14,
+      "correct": 6
+    }
+  },
+  "label": "default",
+  "wrongBook": [
+    {
+      "sig": "7d183a505eea",
+      "module": "判断推理",
+      "type": "类比推理",
+      "stem": "茶树：茉莉花茶",
+      "options": {
+        "A": "梅树：梅花糕",
+        "B": "小麦：肉夹馍",
+        "C": "螃蟹：蟹黄包",
+        "D": "冬瓜：冬瓜糖"
+      },
+      "correctAnswer": "C",
+      "analysis": "第一步：判断题干词语间逻辑关系。\n“茶树”长出茶叶，茶叶是“茶树”的一部分，二者是组成关系，茶叶是“茉莉花茶”的原材料。\n第二步：判断选项词语间逻辑关系。\nA项：“梅树”长出梅花，梅花是“梅树”的一部分，二者是组成关系，但梅花不是“梅花糕”的原材料。“梅花糕”只是形状像梅花，与题干逻辑关系不一致，排除；\nB项：制作“肉夹馍”的面粉是由“小麦”磨制而成的，面粉不是“小麦”的一部分，二者不是组成关系，与题干逻辑关系不一致，排除；\nC项：“螃蟹”产出的蟹黄是“蟹黄包”的原材料，蟹黄是“螃蟹”的一部分，二者是组成关系，与题干逻辑关系一致，当选；\nD项：“冬瓜”就是“冬瓜糖”的直接原材料，而题干是间接原材料关系，与题干逻辑关系不一致，排除。\n故正确答案为C。",
+      "wrongCount": 5,
+      "box": 3,
+      "consecutive": 2,
+      "mastered": true,
+      "lastAt": 1793674888263
+    },
+    {
+      "sig": "a69d3cf5f653",
+      "module": "判断推理",
+      "type": "类比推理",
+      "stem": "莫愁前路无知己：天下谁人不识君",
+      "options": {
+        "A": "不识庐山真面目：只缘身在此山中",
+        "B": "商女不知亡国恨：隔江犹唱后庭花",
+        "C": "春色满园关不住：一枝红杏出墙来",
+        "D": "出师未捷身先死：长使英雄泪满襟"
+      },
+      "correctAnswer": "A",
+      "analysis": "第一步：判断题干词语间逻辑关系。\n题干诗句的意思是不要担心前路茫茫没有知己，普天之下都认识你。因为“普天之下都认识你”，所以“不要担心前路茫茫没有知己”。“天下谁人不识君”为因，“莫愁前路无知己”为果，二者为因果关系。\n第二步：判断选项词语间逻辑关系。\nA项：诗句的意思是我之所以认不清庐山真正的面目，是因为我人身处在庐山之中，“只缘身在此山中”是因，“不识庐山真面目”是果，二者为因果关系，与题干逻辑关系一致，当选；\nB项：诗句的意思是卖唱的歌女不懂什么叫亡国之恨，所以隔着江水还高唱着《玉树后庭花》。因为“歌女不懂什么叫亡国之恨”，所以“隔着江水还能高唱”。“商女不知亡国恨”是因，“隔江犹唱后庭花”是果，二者为因果关系，但顺序与题干相反，与题干逻辑关系不一致，排除；\nC项：诗句的意思是一扇柴门虽然关住了游人，却关不住满园春色，一枝红色的杏花早已探出墙来。“一枝红杏出墙来”侧面体现了“春色满园”，不是“春色满园”的原因，与题干逻辑关系不一致，排除；\nD项：诗句的意思是可惜出师伐魏还没有取得最后的胜利就先去世了，常使后代英雄感慨泪湿衣襟！“出师未捷身先死”是因，“长使英雄泪满襟”是果，二者为因果关系，但顺序与题干相反，与题干逻辑关系不一致，排除。\n故正确答案为A。",
+      "wrongCount": 1,
+      "box": 3,
+      "consecutive": 2,
+      "mastered": true,
+      "lastAt": 1793683645470
+    },
+    {
+      "sig": "a2db8ca94ce8",
+      "module": "判断推理",
+      "type": "图形推理",
+      "stem": "从所给的四个选项中，选择最合适的一个填入问号处，使之呈现一定的规律性（    ）。",
+      "options": {
+        "A": "A",
+        "B": "B",
+        "C": "C",
+        "D": "D"
+      },
+      "correctAnswer": "D",
+      "analysis": "元素组成不同，且无明显属性规律，考虑数量规律。观察发现，题干已知图形均为多圆相切变形图，考虑笔画数。题干中所有图形均由一笔画成，故？处应为一笔画图形。A、B、C三项均有4个奇点，由两笔画成，D项有2个奇点，由一笔画成。\n故正确答案为D。",
+      "wrongCount": 2,
+      "box": 1,
+      "consecutive": 0,
+      "mastered": false,
+      "lastAt": 1793683548168
+    }
+  ],
+  "essayRecords": [
+    {
+      "ts": 1793672410375,
+      "paperId": "国考/2026/申论-副省级",
+      "no": 2,
+      "chars": 163,
+      "score": 6.2,
+      "max": 15,
+      "ratio": 0.413
+    }
+  ]
+}
