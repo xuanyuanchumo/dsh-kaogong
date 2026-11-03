@@ -6,7 +6,26 @@
  *       cycle-13 省份维度与导航精简（W2a 源码级静态断言；W3 build 后将补运行时断言）
  */
 import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { startServer, REPO_ROOT } from './dist/server/http.js'
+
+/* ── 0a. combo 完整性自愈（cycle-13 教训⑥：eval-runner 并行预热 test∥build 竞态）──
+ * build 的 tsc 步会把 dist/client/client.js 短暂重写为裸 ESM（bundler 合并前），
+ * 若此刻 smoke 读静态守卫文本（ErrorBoundary/combo 头/图谱关键文本）会假红。
+ * 判据用「行首 import」：裸 ESM 必有（模块间 import），合并 combo 必无（bundler 终检保证）。
+ * 注意不能用 combo 头文本判据——entry 源码本身就含 window.__ModuleLoader__.load({。
+ * 检出裸 ESM → 现场重跑 bundler（幂等 + 原子写 tmp+rename）。 */
+{
+  let comboOk = false
+  try { comboOk = !/^import[ \t]/m.test(fs.readFileSync(new URL('./dist/client/client.js', import.meta.url), 'utf-8')) } catch { /* 无产物 → 交给 0 新鲜度门报错 */ }
+  if (!comboOk) {
+    try {
+      const { spawnSync } = await import('node:child_process')
+      const r = spawnSync(process.execPath, ['scripts/bundle-client.mjs'], { cwd: fileURLToPath(new URL('.', import.meta.url)), stdio: 'pipe' })
+      console.log(`ℹ️ combo 完整性自愈: 检测到裸 ESM 产物，已重跑 bundler (exit=${r.status})`)
+    } catch (e) { console.log('ℹ️ combo 自愈跳过: ' + ((e && e.message) || e)) }
+  }
+}
 
 const results = []
 let failed = 0
