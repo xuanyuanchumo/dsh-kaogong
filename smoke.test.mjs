@@ -7,24 +7,32 @@
  */
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { spawnSync } from 'node:child_process'
 import { startServer, REPO_ROOT } from './dist/server/http.js'
 
 /* ── 0a. combo 完整性自愈（cycle-13 教训⑥：eval-runner 并行预热 test∥build 竞态）──
- * build 的 tsc 步会把 dist/client/client.js 短暂重写为裸 ESM（bundler 合并前），
- * 若此刻 smoke 读静态守卫文本（ErrorBoundary/combo 头/图谱关键文本）会假红。
- * 判据用「行首 import」：裸 ESM 必有（模块间 import），合并 combo 必无（bundler 终检保证）。
- * 注意不能用 combo 头文本判据——entry 源码本身就含 window.__ModuleLoader__.load({。
- * 检出裸 ESM → 现场重跑 bundler（幂等 + 原子写 tmp+rename）。 */
+ * build 的 tsc 步会把 dist/client/client.js 短暂重写为裸 ESM（bundler 合并前）。
+ * 自愈不能只做启动时一次——静态守卫在 ~24s 后才真正读文件，窗口在「读取时刻」。
+ * 判据用「行首 import」：裸 ESM 必有、合并 combo 必无（bundler 终检保证）；
+ * **不能用 combo 头文本判据——entry 源码本身就含 window.__ModuleLoader__.load({**。
+ * 所有读取 dist/client/client.js 的位置一律走 readClientBundle()：读前自检，
+ * 检出裸 ESM → 现场重跑 bundler（幂等 + 原子写 tmp+rename）→ 重读。 */
+const CLIENT_BUNDLE_URL = new URL('./dist/client/client.js', import.meta.url)
+function readClientBundle(reason) {
+  let txt = fs.readFileSync(CLIENT_BUNDLE_URL, 'utf-8')
+  if (/^import[ \t]/m.test(txt)) {
+    try {
+      const r = spawnSync(process.execPath, ['scripts/bundle-client.mjs'], { cwd: fileURLToPath(new URL('.', import.meta.url)), stdio: 'pipe' })
+      console.log(`ℹ️ combo 完整性自愈(${reason}): 检测到裸 ESM 产物，已重跑 bundler (exit=${r.status})`)
+      txt = fs.readFileSync(CLIENT_BUNDLE_URL, 'utf-8')
+    } catch (e) { console.log(`ℹ️ combo 自愈跳过(${reason}): ` + ((e && e.message) || e)) }
+  }
+  return txt
+}
 {
   let comboOk = false
-  try { comboOk = !/^import[ \t]/m.test(fs.readFileSync(new URL('./dist/client/client.js', import.meta.url), 'utf-8')) } catch { /* 无产物 → 交给 0 新鲜度门报错 */ }
-  if (!comboOk) {
-    try {
-      const { spawnSync } = await import('node:child_process')
-      const r = spawnSync(process.execPath, ['scripts/bundle-client.mjs'], { cwd: fileURLToPath(new URL('.', import.meta.url)), stdio: 'pipe' })
-      console.log(`ℹ️ combo 完整性自愈: 检测到裸 ESM 产物，已重跑 bundler (exit=${r.status})`)
-    } catch (e) { console.log('ℹ️ combo 自愈跳过: ' + ((e && e.message) || e)) }
-  }
+  try { comboOk = !/^import[ \t]/m.test(fs.readFileSync(CLIENT_BUNDLE_URL, 'utf-8')) } catch { /* 无产物 → 交给 0 新鲜度门报错 */ }
+  if (!comboOk) readClientBundle('启动')
 }
 
 const results = []
@@ -426,7 +434,7 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
 
 // ── v1.8.0 前端静态守卫（新交互能力的形态约束）──
 {
-  const client = fs.readFileSync(new URL('./dist/client/client.js', import.meta.url), 'utf8')
+  const client = readClientBundle('v1.8图谱守卫')
   check('图谱用 Canvas 2D 渲染', client.includes("getContext('2d')") || client.includes('getContext("2d")'))
   check('图谱 ResizeObserver 自适应', client.includes('ResizeObserver'))
   check('图谱 DPR 感知', client.includes('devicePixelRatio'))
@@ -603,7 +611,7 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   catch (e) { check('UI 内联脚本语法合法', false, e.message) }
 
   // R9 静态守卫：含 hook 的组件禁止函数直调（条件 hook → "Rendered fewer hooks" GUI 整树崩溃）
-  const client = fs.readFileSync(new URL('./dist/client/client.js', import.meta.url), 'utf8')
+  const client = readClientBundle('R9/combo守卫')
   const directCalls = [...client.matchAll(/(?:^|[^.\w$])(Native\w+|KaogongMainPanel|KaogongTabBody|KaogongMainBounded|KaogongTabBounded)\(\s*[A-Za-z${]/gm)]
     .filter(m => !/function|=>/.test(client.slice(Math.max(0, m.index - 40), m.index)))
   check('client 无组件函数直调（R9 条件hook守卫）', directCalls.length === 0, directCalls.map(m => m[1]).join(','))

@@ -226,9 +226,135 @@
       "stdout": "[eval-runner] cache miss (plugin version changed (1.8.0 → 1.9.0)) — will run: test, lint, build\n[eval-runner] sampling hint: full (28.3% of 60 source files changed)\n[eval-runner] parallel warm-up: test, lint, build started in detached children (Amdahl: wall time ≈ max T_i instead of Σ T_i)\n[eval-runner] results cached to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json (keyed by Merkle root 95cb1916b50e…)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-13\\项目评估报告.md\n",
       "stderr": "\n3 dimension(s) failed: E3, E8, Q2\n",
       "durationMs": 37072
+    },
+    {
+      "flowId": "eval-runner-2026-11-03T14:44:29.956Z-12",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "FAILED",
+      "startedAt": "2026-11-03T14:44:29.956Z",
+      "cycle": "cycle-13",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-03T14:44:29.956Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T14:44:34.439Z",
+      "exitCode": 1,
+      "stdout": "[eval-runner] source Merkle root unchanged — reusing cached results for: test, lint, build (evidence: D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-13\\项目评估报告.md\n",
+      "stderr": "\n2 dimension(s) failed: E3, E8\n",
+      "durationMs": 4479
+    },
+    {
+      "flowId": "eval-runner-2026-11-03T14:45:00.489Z-13",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "FAILED",
+      "startedAt": "2026-11-03T14:45:00.489Z",
+      "cycle": "cycle-13",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-03T14:45:00.489Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T14:45:36.425Z",
+      "exitCode": 1,
+      "stdout": "[eval-runner] cache miss (first run (no cache)) — will run: test, lint, build\n[eval-runner] sampling hint: full (no baseline)\n[eval-runner] parallel warm-up: test, lint, build started in detached children (Amdahl: wall time ≈ max T_i instead of Σ T_i)\n[eval-runner] results cached to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json (keyed by Merkle root 95cb1916b50e…)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-13\\项目评估报告.md\n",
+      "stderr": "\n2 dimension(s) failed: E3, E8\n",
+      "durationMs": 35933
+    },
+    {
+      "flowId": "eval-runner-2026-11-03T14:48:35.541Z-14",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-03T14:48:35.541Z",
+      "cycle": "cycle-13",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-03T14:48:35.541Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T14:49:05.521Z",
+      "exitCode": 0,
+      "stdout": "[eval-runner] cache miss (first run (no cache)) — will run: test, lint, build\n[eval-runner] sampling hint: full (no baseline)\n[eval-runner] parallel warm-up: test, lint, build started in detached children (Amdahl: wall time ≈ max T_i instead of Σ T_i)\n[eval-runner] results cached to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json (keyed by Merkle root 95cb1916b50e…)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-13\\项目评估报告.md\n\nAll 16 evaluated dimension(s) passed.\n",
+      "stderr": "",
+      "durationMs": 29976
+    },
+    {
+      "flowId": "gate-check-2026-11-03T14:49:12.676Z-15",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--quality",
+        "--record"
+      ],
+      "status": "FAILED",
+      "startedAt": "2026-11-03T14:49:12.676Z",
+      "cycle": "cycle-13",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-03T14:49:12.676Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T14:49:17.068Z",
+      "exitCode": 1,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-13 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 PASS recorded (hash eb8597ddef61ee72...)\n[FAIL] G1: 4 of 4 tasks not completed §cycle-13\n  [LEDGER] G1 FAIL recorded (hash 522adb328883ce62...)\n[FAIL] G2: Test report summary not recognized: 测试报告-cycle13.md has no 通过/失败 rows (expected the §2 汇总 table) §cycle-13\n  [LEDGER] G2 FAIL recorded (hash 807f94c38b099662...)\n[PASS] G3: Build passed: npx tsc §cycle-13 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 PASS recorded (hash 940cee1b56d34ae8...)\n",
+      "stderr": "\nGate check FAILED. Fix issues before proceeding.\n",
+      "durationMs": 4388
+    },
+    {
+      "flowId": "gate-check-2026-11-03T14:50:51.512Z-16",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--quality",
+        "--record"
+      ],
+      "status": "FAILED",
+      "startedAt": "2026-11-03T14:50:51.512Z",
+      "cycle": "cycle-13",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-03T14:50:51.512Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T14:50:56.891Z",
+      "exitCode": 1,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-13 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[FAIL] G1: No task entries found (fill the task tables in 任务清单.md) §cycle-13\n  [LEDGER] G1 FAIL recorded (hash 3165c3e316d59b80...)\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-13\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 PASS recorded (hash 7e93e8e2b05d93d4...)\n[PASS] G3: Build passed: npx tsc §cycle-13 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n",
+      "stderr": "\nGate check FAILED. Fix issues before proceeding.\n",
+      "durationMs": 5373
+    },
+    {
+      "flowId": "gate-check-2026-11-03T14:51:51.368Z-17",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-03T14:51:51.368Z",
+      "cycle": "cycle-13",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-03T14:51:51.368Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T14:51:57.158Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-13 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[PASS] G1: All 16 tasks completed §cycle-13\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 PASS recorded (hash 7918241a07e53f99...)\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-13\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 unchanged, not re-recorded\n[PASS] G3: Build passed: npx tsc §cycle-13 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 5785
     }
   ],
-  "counter": 11,
+  "counter": 17,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

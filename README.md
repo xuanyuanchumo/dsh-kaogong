@@ -103,6 +103,26 @@ data/                     # progress/<slug>-<hash8>.json · runtime.json · life
 ## AI 增强（可选，需模型）
 `kaogong_launch` · `kaogong_ai_tutor` · `kaogong_ai_plan` · `kaogong_ai_shenlun` — 素材供模型加工模式，离线核心与之解耦。
 
+## DSH 宿主能力利用矩阵（cycle-13 登记）
+
+| 缝 | 状态 | 说明 |
+|---|---|---|
+| `ctx.tools.register` | ✅ 已用 | 5 个 AI 工具，均声明 `output:{schema,render}`（宿主强制） |
+| `ctx.webServer`（同源路由） | ✅ 已用 | 主通道 `/kaogong/*`：零 CORS、原生 React 面板 |
+| `ctx.inject(['webServer'])` | ✅ 已用 | 懒到达正解（R10 事故固化）：服务就绪才运行，disposer 归框架 |
+| `sidebar.panellist` + `main` slot | ✅ 已用 | 左栏「考公学习」全屏沉浸面板（svg 带 `data-dsh-panel-entry`） |
+| `sidebarRightTabs` + keyed slot | ✅ 已用 | 右侧并排标签（双注册同 id + guide 函数式；v1.9 瘦身为引导卡+摘要+快捷入口） |
+| `ctx.locale.register` | ✅ 已用 | `locale/{zh,en}.json` + factory 内 DICTS 双语 |
+| 独立端口兜底 + 信标 adopt | ✅ 已用 | 8400-8404 端口段；`/api/status.app` 自证身份；崩溃安全换端口 |
+| `ctx.storage` / `ctx.storageDomain` | ⏸ 未用 | 进度已自管 `data/progress` 命名空间（离线优先、零迁移收益） |
+| `ctx.settings`（配置表单） | ⏸ 未用 | 无用户可调配置面；未来加主题/倒计时设置时启用 |
+| `ctx.hmr` | ⏸ 未用 | 开发期用 `plugin_manager` 重载（fiber 重挂载），运行时无需自订阅 |
+| `ctx.otel` / `productTelemetry` | ⏸ 未用 | 自有环形遥测（p50/p95）已满足白盒面板；外发遥测违背离线隐私设计 |
+| `ctx.attachments` / `fileUploads` | ⏸ 未用 | 纯本地只读题库，无二进制上传面 |
+| `ctx.userQuestions` / `planMode` | ⏸ 未用 | 学习场景无 HITL 问答/计划协作需求 |
+
+> 登记原则：核心缝（UI/工具/路由/i18n）全用；未用缝均有「离线优先」设计理由，避免盲目追新。新增缝前先在此表登记意图。
+
 ## 开发验证
 
 ```bash

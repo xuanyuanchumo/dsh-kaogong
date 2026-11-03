@@ -189,9 +189,11 @@ for (const needle of ["getContext('2d')", 'function relax', 'function step', 'fu
 
 /* 原子写（cycle-13 教训⑥）：eval-runner 并行预热会同时跑 test∥build，
  * smoke 可能在「tsc 已重写、bundler 未合并」的窗口读产物；tmp+rename 保证
- * 读者要么看到完整旧 combo、要么看到完整新 combo，绝不读到半截文件。 */
-writeFileSync(join(clientDir, 'client.js.tmp'), bundle)
-renameSync(join(clientDir, 'client.js.tmp'), join(clientDir, 'client.js'))
+ * 读者要么看到完整旧 combo、要么看到完整新 combo，绝不读到半截文件。
+ * tmp 名带 pid：smoke 自愈与 build 子进程的 bundler 可能并发，防同名 tmp 互踩。 */
+const tmpOut = join(clientDir, 'client.js.tmp-' + process.pid)
+writeFileSync(tmpOut, bundle)
+renameSync(tmpOut, join(clientDir, 'client.js'))
 const kb = (Buffer.byteLength(bundle) / 1024).toFixed(1)
 console.log(`[bundle-client] 已合并 ${order.length} 个模块 → dist/client/client.js（${kb} KB）`)
 console.log('[bundle-client] 拓扑序: ' + order.join(' → '))
