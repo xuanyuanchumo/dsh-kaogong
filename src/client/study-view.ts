@@ -1,6 +1,8 @@
 /**
  * study-view.ts — 学习类视图族（cycle-13 T-025 从 client.ts 拆出）
- * 仪表盘 / 刷题 / 错题本 / 会话练题控件 / 图形推理 / 深度题库。
+ * 仪表盘 / 刷题 / 错题本 / 图形推理 / 深度题库。
+ * cycle-13 对话窗口瘦身：会话练题控件已整体删除，
+ * 练题流程收敛到左栏「考公学习」面板（对话窗口回归纯对话）。
  */
 
 import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow } from './ui-kit.js'
@@ -180,130 +182,6 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
             w.mastered ? h('span', { style: { color: '#10b981', fontSize: 11, fontWeight: 700 } }, '已掌握') : null),
           h('div', { style: { fontSize: 12.5, lineHeight: 1.65, maxHeight: 66, overflow: 'hidden' } }, w.stem))))
     }
-
-    /**
-     * T-024 会话内练题（conversation.input.left slot）
-     *
-     * 设计：输入框左侧一个「📚 练题」按钮，点击向上弹出题目浮层。
-     * 完全自管状态（抽题/作答/判分/解析），不订阅会话数据、不改父组件。
-     * 风险控制：整个注册包在 try/catch 内；slot 缺席则静默跳过（不影响对话）。
-     */
-    export function KaogongQuickPractice(props: any) {
-      const [open, setOpen] = React.useState(false)
-      const [q, setQ] = React.useState(null)
-      const [sel, setSel] = React.useState('')
-      const [result, setResult] = React.useState(null)
-      const [busy, setBusy] = React.useState(false)
-      const [stat, setStat] = React.useState({ done: 0, right: 0 })
-
-      const apiBase = (props && props.apiBase) || '/kaogong/api'
-
-      const draw = React.useCallback(async () => {
-        setBusy(true)
-        try {
-          const r = await fetch(apiBase + '/questions?module=' + encodeURIComponent('判断推理') + '&count=1&sort=srs')
-          const d = await r.json()
-          setQ((d.questions || [])[0] || null)
-          setSel('')
-          setResult(null)
-        } catch {
-          setQ(null)
-        } finally { setBusy(false) }
-      }, [apiBase])
-
-      const submit = async () => {
-        if (!q || !sel) return
-        setBusy(true)
-        try {
-          const r = await fetch(apiBase + '/check', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: q, answer: sel }),
-          })
-          const d = await r.json()
-          setResult(d)
-          setStat((st: any) => ({ done: st.done + 1, right: st.right + (d.isCorrect ? 1 : 0) }))
-        } catch { /* 静默 */ } finally { setBusy(false) }
-      }
-
-      const toggle = () => {
-        const next = !open
-        setOpen(next)
-        if (next && !q) draw()
-      }
-
-      // 按钮（常驻输入栏）
-      const btn = h('button', {
-        type: 'button',
-        title: '考公练题：抽一道行测题在这作答',
-        'aria-label': '考公练题',
-        style: {
-          display: 'inline-flex', alignItems: 'center', gap: 4, height: 28, padding: '0 9px',
-          border: '1px solid rgba(148,163,184,.35)', borderRadius: 8, background: open ? 'rgba(99,102,241,.12)' : 'transparent',
-          color: open ? '#6366f1' : 'inherit', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-        },
-        onClick: toggle,
-      }, '📚 练题', stat.done ? h('span', { style: { fontSize: 10.5, opacity: .75 } }, stat.right + '/' + stat.done) : null)
-
-      // 面板（向上弹出）
-      let panel = null
-      if (open) {
-        const options = q && q.options ? entries(q.options).map(([L, txt]: any) => {
-          const isRight = result && L === q.correctAnswer
-          const isWrong = result && L === sel && L !== q.correctAnswer
-          const chosen = !result && L === sel
-          const border = isRight ? '#10b981' : isWrong ? '#ef4444' : chosen ? '#6366f1' : 'rgba(148,163,184,.3)'
-          const bg = isRight ? 'rgba(16,185,129,.08)' : isWrong ? 'rgba(239,68,68,.07)' : chosen ? 'rgba(99,102,241,.08)' : 'transparent'
-          return h('div', {
-            key: L,
-            style: { display: 'flex', gap: 8, padding: '7px 9px', border: '2px solid ' + border, background: bg, borderRadius: 8, marginTop: 6, cursor: result ? 'default' : 'pointer', fontSize: 12, lineHeight: 1.55 },
-            onClick: () => { if (!result) setSel(L) },
-          },
-            String(txt).trim().toUpperCase().startsWith(L) ? null : h('b', { style: { flexShrink: 0 } }, L),
-            h('span', { style: { flex: 1 } }, String(txt).replace(/^[A-D][.、．:：]s*/, '')))
-        }) : null
-
-        const body = !q
-          ? h('div', { style: { fontSize: 12, color: '#64748b', padding: 12 } }, busy ? '抽题中…' : '暂无题目（题库服务可能未就绪）')
-          : h('div', {},
-              h('div', { style: { fontSize: 11, color: '#94a3b8', marginBottom: 6 } }, (q.module || '') + (q.type ? ' · ' + q.type : '') + (q.fromWrongBook ? ' · 错题回炉' : '')),
-              h('div', { style: { fontSize: 12.5, lineHeight: 1.7, maxHeight: 140, overflowY: 'auto' } }, q.stem),
-              options,
-              !result
-                ? (sel ? h('button', {
-                    style: { marginTop: 10, padding: '6px 14px', border: 0, borderRadius: 8, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', fontSize: 12, cursor: 'pointer' },
-                    onClick: submit,
-                  }, busy ? '判分中…' : '提交判分') : null)
-                : h('div', {},
-                    h('div', { style: { marginTop: 10, fontSize: 12, fontWeight: 700, color: result.isCorrect ? '#10b981' : '#ef4444' } },
-                      result.isCorrect ? '✅ 正确' : '❌ 错误（答案 ' + q.correctAnswer + '）'),
-                    result.analysis ? h('div', { style: { marginTop: 6, fontSize: 11.5, lineHeight: 1.65, maxHeight: 110, overflowY: 'auto', color: 'var(--text-muted,#64748b)' } }, String(result.analysis).slice(0, 600)) : null,
-                    h('button', {
-                      style: { marginTop: 8, padding: '5px 12px', border: '1px solid rgba(148,163,184,.35)', borderRadius: 8, background: 'transparent', fontSize: 11.5, cursor: 'pointer' },
-                      onClick: draw,
-                    }, '下一题 →')))
-
-        panel = h('div', {
-          style: {
-            position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, zIndex: 60,
-            width: 340, maxWidth: '86vw', padding: 12, borderRadius: 12,
-            background: 'var(--surface-card,#fff)', border: '1px solid rgba(148,163,184,.3)',
-            boxShadow: '0 10px 32px rgba(15,23,42,.16)',
-          },
-          role: 'dialog', 'aria-label': '考公练题面板',
-        },
-          h('div', { style: { display: 'flex', alignItems: 'center', marginBottom: 6 } },
-            h('b', { style: { fontSize: 12.5 } }, '📚 随堂练题'),
-            h('button', {
-              style: { marginLeft: 'auto', border: 0, background: 'none', cursor: 'pointer', fontSize: 14, color: '#94a3b8', lineHeight: 1 },
-              'aria-label': '关闭', onClick: () => setOpen(false),
-            }, '×')),
-          body)
-      }
-
-      return h('div', { style: { position: 'relative', display: 'inline-flex', alignItems: 'center' } }, btn, panel)
-    }
-
     /**
      * 图形推理专项视图（T-023 完整版 · 整合 gk-tuxing 354 题）
      * 每题含：题干图（354 张本地图）/ 规律分类 / 参考答案 / 原创解题思路 / 分析 / 陷阱

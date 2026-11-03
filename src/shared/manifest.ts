@@ -53,6 +53,8 @@ export const CAPABILITIES = {
     { path: '/api/wrong', label: '错题清单', consumers: ['ui:wrongbook'] },
     { path: '/api/wrong/remove', label: '错题移除', consumers: ['ui:wrongbook'] },
     { path: '/api/stats', label: '学习统计', consumers: ['ui:dashboard', 'ui:wrongbook'] },
+    // cycle-13 省份维度：/api/papers 新增 province 查询参数（省考卷=省级目录名、国考卷=「全国」）；
+    // 响应透出 provinces facet（[{name,total,minYear,maxYear,subjects}]，码点升序）——端点路径不变，避免口径漂移
     { path: '/api/papers', label: '真题卷列表', consumers: ['ui:papers'] },
     { path: '/api/paper', label: '单卷详情(材料+题+答案)', consumers: ['ui:papers', 'ui:essay'] },
     { path: '/api/topics', label: '专题聚合', consumers: ['ui:topics'] },
@@ -65,7 +67,7 @@ export const CAPABILITIES = {
     { path: '/api/paper/exam/submit', label: '整卷模考交卷', consumers: ['ui:exam'] },
     { path: '/api/paper/exam/history', label: '模考历史', consumers: ['ui:exam', 'ui:dashboard'] },
     { path: '/api/naoku/status', label: '深度题库状态', consumers: ['ui:deepbank'] },
-    { path: '/api/naoku/questions', label: '深度标注抽题', consumers: ['ui:deepbank'] },
+    { path: '/api/naoku/questions', label: '深度标注抽题', consumers: ['ui:deepbank', 'ui:topics'] },
     { path: '/api/naoku/kadian', label: '知识点检索', consumers: ['ui:deepbank'] },
     { path: '/api/naoku/practice', label: '按知识点刷题', consumers: ['ui:deepbank'] },
     { path: '/api/naoku-img', label: '深度题库配图服务', consumers: ['ui:deepbank', 'ui:practice'] },
@@ -77,8 +79,9 @@ export const CAPABILITIES = {
     { path: '/api/tuxing-img', label: '图形推理配图', consumers: ['ui:tuxing'] },
     { path: '/api/plan', label: '学习计划', consumers: ['ui:plan'] },
     { path: '/api/search', label: '知识检索', consumers: ['ui:search', 'tool:kaogong_ai_tutor'] },
-    { path: '/api/method', label: '方法论', consumers: ['ui:method', 'tool:kaogong_ai_tutor', 'tool:kaogong_ai_shenlun'] },
-    { path: '/api/methods', label: '方法论目录', consumers: ['ui:method'] },
+    // cycle-13：专题枢纽方法论分区消费（ui:topics）——声明口径与实际消费方一致
+    { path: '/api/method', label: '方法论', consumers: ['ui:method', 'ui:topics', 'tool:kaogong_ai_tutor', 'tool:kaogong_ai_shenlun'] },
+    { path: '/api/methods', label: '方法论目录', consumers: ['ui:method', 'ui:topics'] },
     { path: '/api/progress', label: '进度', consumers: ['ui:dashboard', 'ui:plan', 'tool:kaogong_ai_plan'] },
     { path: '/api/graph', label: '图谱数据', consumers: ['ui:graph'] },
     // v1.8 交互式图谱三端点 + 生命周期状态机（白盒链路：client 视图消费）

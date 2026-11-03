@@ -3,14 +3,15 @@
 考公备考整合插件：15 个开源仓库 → 离线可视化学习平台，DSH Web GUI **双入口**：左栏「考公学习」全屏沉浸面板 + 右侧 Sidebar 并排标签（引导页亦有入口）。
 
 ## Commands
-- Build/类型门: `npm run build`（**tsc**：类型错误阻断 + 产出 `dist/`）。**改完 .ts 必须 build，宿主编织的是 dist**
-- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**144 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端）+ `node render.test.mjs`（**22 断言**，真实 React 18 + 真实 client.js 集成渲染，含变异验证与新视图遍历）
+- Build/类型门: `npm run build`（**tsc + scripts/bundle-client.mjs**：类型错误阻断 + 多文件产物拓扑序合并为宿主要求的单 combo）。**改完 .ts 必须 build（宿主编织的是 dist），改完任何 src/client/*.ts 也必须 build（client 产物是 bundler 合并的，裸 tsc 会把 dist/client/client.js 重写回裸 ESM → 宿主拒绝加载）**
+- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**164 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + **cycle-13 省份维度运行时断言 R-P-01..03/R-N-01**）+ `node render.test.mjs`（**35 断言**，真实 React 18 + 真实 client.js 集成渲染，含变异验证、**专题枢纽六分区/省份 chips/白盒流动图/图谱升级包断言与键盘命令行为验证**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
 - **沙箱验证（禁主力直测）**: `node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`（token 行取 URL；插件崩只崩沙箱）
 - 热更新重载: `plugin_manager set_plugin include:kaogong enabled=false → true`（fiber 重挂载）
 - 安装/重装: `plugin_manager remove_bundle dsh-kaogong → install_bundle <绝对路径>`
 
 ## 架构契约（改动前必读）
 - **T-022 构建模型**：源码是 `src/**/*.ts`，tsc 镜像编译到 `dist/`；`package.json` main/exports 全指向 dist；`noEmitOnError` 让类型错误阻断构建；`verbatimModuleSyntax` 保证 client 的 `import type` 被完全擦除（产物仍是 combo 纯脚本）。smoke 有「dist 新鲜度门」。
+  **Bundler 一段（cycle-13 T-025）**：client 源码是 `src/client/*.ts` 多个真 ESM 模块，tsc 产出 `dist/client/*.js` 多文件后，**必须**经 `scripts/bundle-client.mjs` 按 **DFS 拓扑序**合并回宿主 Web 组合加载器要求的**单文件 combo factory**（`window.__ModuleLoader__.load`）。合并后所有模块体共享 factory 单一作用域 → **全部文件顶层名必须唯一**（重名 = 重复声明 SyntaxError，bundler 有防御）；铁律：不重命名标识符、不压缩、不删注释（中文注释全保留）、绝不产生行首 `export `/`import `。所有先跑 tsc 的 npm scripts（build/test/test:render/test:all/prepack）都接了 bundler——**绕过 bundler 直接 tsc 会把 dist/client/client.js 重写回裸 ESM**（W1 实证 smoke 132/144 事故）。
 - `manifest.js` 是能力**单一事实源**：端点/工具/视图/lifecycle 声明；server 与 UI 与可观测面板三方消费。改端点必须同步改 CAPABILITIES.endpoints，否则能力矩阵漂移（孤儿检测会报）。
 - `server.js`：数据生产 + 信标（`/api/status.app === 'dsh-kaogong'`）+ ws 命名空间隔离（`data/progress/<slug>-<hash8>.json`）+ 遥测（环形 p50/p95）+ 图谱（PageRank/密度/连通分量/健康度加权模型）。
 - `index.js`：Host 半。工具必须声明 `output:{schema,render}`（宿主强制）。启动服务**只能走 async startServer + .catch**。
@@ -61,3 +62,10 @@
 - **[R11 事故·Client 半从未加载] 裸 ESM `export` → `SyntaxError: Unexpected token 'export'`**：宿主 Web 组合加载器要求 **combo factory 格式**（`window.__ModuleLoader__.load({id, factory(require){... return {inject, apply}}})`），不是 ESM。此前「插件已加载」日志全部来自 Host 半，Client 半一直没进 GUI（compat_guardian 早写「加载失败的插件条目：kaogong」= 就是这个）。两处必守：① 无顶层 `export`；② factory 必须 `return {inject, apply}`（缺失 → "invalid plugin, expect function or object with apply, received undefined"）。样式注入也别依赖 `styles` 全局（combo 环境可能无），用 `typeof styles !== 'undefined'` + `<style>` 兜底。
 - **[R11b] `dsh.client.inject` 只能声明 boot 图里真实存在的包**：声明不存在的包（如 `@deepseek-ai/dsh-client-ui-slots`——slots 由内核/sidebar-right 内部提供）会让条目**永不激活**且宿主只报 `1 entry did not activate`。查法：浏览器 `window.__DSH_BOOT__.entries` 里逐个核对。
 - **[R12 事故] 视图 prop 形状不匹配 → ErrorBoundary 降级**：`h(NativeGraphView, { data })` 传整包而组件解构 `const {metrics} = props.data`（期望已解包的 g 对象）→ `Cannot read properties of undefined (reading 'V')`。**教训：ErrorBoundary 只保证「不白屏宿主」，面板自身正确性必须靠测试**——render.test 现已 mock 全端点真实形状 + 每次视图切换断言不得出现 `role="alert"`；并用变异测试验证（回退该 bug 测试必须失败）。
+
+## cycle-13 事故与教训（v1.9.0）
+- **① 复杂度超预算的拆法已成惯例**：`createGraphEngine` 单函数复杂度 260 > 预算 180（W1），W2b 又加回来到 217（W3 再拆）。**模式固定：「只读纯函数外提 + 闭包值同名参数穿线，写引擎原语状态的函数留闭包」**——读取语义「调用时刻实参 ≡ 调用时刻闭包值」，函数体逐字节等价；允许的写入面只有节点/canvas 等堆上共享对象属性。落点：`graph-physics.ts`（物理/渲染/查询原语）、`graph-transition.ts`（过渡动画插值+视口查询+键盘命令纯表+视图过滤态合并）、`graph-canvas.ts`（画布装配原语：测量/尺寸/光标/小地图绑定）。复用此模式，不要发明新拆法。
+- **② 先 tsc 的 npm scripts 必须接 bundler**：test/render 脚本若只跑 `tsc`，会把 `dist/client/client.js` 从合并后的 combo **重写回裸 ESM** → 宿主加载器拒绝（R11 形态复发）。W1 实证 smoke 曾 132/144。**规矩：任何新增 npm script 只要产出 dist，就必须 `tsc && node scripts/bundle-client.mjs` 全链。**
+- **③ 多工人并行禁跑 build/smoke/render**：dist 会被互相覆盖、测试端口段会冲突。并行自检**只用 `npx tsc --noEmit`**（只读、无产物、无端口）；build 与全量测试留给收口工人独占跑。
+- **④ nav 锚点测试必须跟导航重构同步**：W2a 把「刷题/图形推理/深度题库/申论」收敛进专题枢纽分区后，render.test 里 3 处按旧一级导航锚定的断言直接 throw（找到按钮即失败）。**教训：改导航结构必须同一波次改 render 锚点——组件内 tab 用 `data-kg-hub-tab` 属性锚定（非路由），经枢纽触达的视图断言要走「点导航 → 点分区 tab」两步。**
+- **⑤（测试基建）smoke 快照门测试的 keep-alive 竞态**：同步重建 1683 套卷索引会阻塞事件循环 ~10s，超过 Node http 默认 keepAliveTimeout(5s)，其后的 fetch 复用已被服务端关闭的连接 → `ECONNRESET` 裸崩。**规矩：长阻塞操作放在 HTTP 断言之后、且其后不再有 fetch；动 `data/.paper-index.json` 必须测前备份、finally 还原。**

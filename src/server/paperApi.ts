@@ -2,7 +2,9 @@
  * server/paperApi.js — 真题卷 / 专题 / 申论评改 域（v1.6）
  *
  * 端点：
- *   GET  /api/papers?subject=&exam=&year=&q=   试卷列表（含聚合维度）
+ *   GET  /api/papers?subject=&exam=&year=&province=&q=  试卷列表（含聚合维度；
+ *              cycle-13 新增 province 过滤：省考卷=省级目录名、国考卷=「全国」；
+ *              响应含 provinces facet：[{ name, total, minYear, maxYear, subjects }]）
  *   GET  /api/paper?id=<paperId>               单卷详情（材料+题目+参考答案）
  *   GET  /api/topics                           专题（科目级 + 申论题型）
  *   POST /api/essay/grade  {questionId|question, answer}  申论离线评分
@@ -79,16 +81,18 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
   }
 
   function handlePaperApi(path, params, post, method, wsRaw) {
-    // 试卷列表
+    // 试卷列表（cycle-13：新增 province 省份过滤；响应透出 provinces facet 与 subjects 并列）
     if (path === '/api/papers' && method === 'GET') {
       const list = listPapers(repoRoot, {
         subject: params.get('subject') || undefined,
         exam: params.get('exam') || undefined,
         year: params.get('year') || undefined,
+        province: params.get('province') || undefined,
         q: params.get('q') || undefined,
       })
       const idx = buildPaperIndex(repoRoot)
-      return { ...list, subjects: idx.subjects, builtAt: idx.builtAt }
+      // provinces facet 由索引 v2（schemaVersion: 2）内置；旧快照重建期间兜底空数组
+      return { ...list, subjects: idx.subjects, provinces: idx.provinces || [], builtAt: idx.builtAt }
     }
 
     // 单卷详情

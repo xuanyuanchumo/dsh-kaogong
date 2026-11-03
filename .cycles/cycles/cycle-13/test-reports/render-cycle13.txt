@@ -1,0 +1,67 @@
+Warning: React has detected a change in the order of Hooks called by V14Parent. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+1. useState                   useState
+2. undefined                  useState
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    at V14Parent (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:24:22)
+The above error occurred in the <V14Parent> component:
+
+    at V14Parent (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:24:22)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+✅ 模式层: v1.4 条件直调如预期抛错（Rendered more hooks than during the previous rende）
+✅ 模式层: v1.5 组件挂载同序列零崩溃
+✅ combo 格式: __ModuleLoader__.load 注册 + factory 返回 {inject,apply}
+kaogong 双入口已注册 (left=panel, right=tab, 宿主原生面板优先)
+✅ 真实 client.js: apply() 注册 main/tab 席位
+✅ 真实 client.js: 主面板渲染（同源通道 + 仪表盘）
+✅ 真实 client.js: 专题枢纽→刷题分区渲染模块选择面板
+✅ 真实 client.js: 选模块→抽题渲染题干
+✅ 真实 client.js: 作答→提交→就地判分+解析（v1.7 刷题修复验证）
+Warning: Each child in a list should have a unique "key" prop.
+
+Check the render method of `ObsFlowChart`. See https://reactjs.org/link/warning-keys for more information.
+    at path
+    at ObsFlowChart (eval at <anonymous> (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:155:3), <anonymous>:4035:42)
+    at div
+    at ObsGlassCard (eval at <anonymous> (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:155:3), <anonymous>:3967:26)
+    at div
+    at NativeObsView (eval at <anonymous> (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:155:3), <anonymous>:4306:41)
+    at div
+    at div
+    at KaogongMainPanel (eval at <anonymous> (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:155:3), <anonymous>:4620:37)
+    at KaogongErrorBoundary (eval at <anonymous> (file:///D:/Projects/TraeProjects/kaogong/dsh-kaogong/render.test.mjs:155:3), <anonymous>:174:26)
+    at KaogongMainBounded
+✅ 真实 client.js: 5 连一级视图切换压力（含图谱 prop 形状，零降级；刷题分区压力见 RENDER-N-02）
+✅ 真实 client.js: v1.6 视图（真题卷/专题/申论·枢纽分区）零降级
+✅ 真实 client.js: 模考/深度题库（枢纽分区）零降级（R15 守卫）
+✅ 真实 client.js: 图谱视图挂载 Canvas 且引擎使用 2D 上下文
+✅ 真实 client.js: 图谱工具条（重置/适配/标签/布局）齐备
+✅ 真实 client.js: 节点类型过滤 chips 由 NODE_META 驱动
+✅ 真实 client.js: 图谱指标条含社区数 + 集聚系数
+✅ 真实 client.js: 图谱类型过滤交互不降级
+✅ 真实 client.js: 白盒面板八区块齐备（生命周期/对账/性能/告警/命名空间/管理动作）
+✅ 真实 client.js: 生命周期 stepper 渲染阶段与三态
+✅ 真实 client.js: 能力对账表含 state 徽标
+✅ 真实 client.js: 端点性能表含 sparkline SVG
+✅ 真实 client.js: 能力对账过滤输入生效（表格范围）
+✅ 真实 client.js: 白盒面板交互（过滤/开关）不降级
+✅ RENDER-N-02: 专题枢纽六分区 tab（总览/行测刷题/图形推理/深度题库/申论/方法论）齐备且逐区切换零降级
+✅ RENDER-P-01: 省份 chips 渲染（facet 驱动）且点击触发 ?province=山东 过滤请求
+✅ RENDER-O-11: 能力流三列图渲染（注册→生产→消费 SVG + 贝塞尔链接）
+✅ RENDER-O-12: 量化四卡渲染（SLO/错误预算/遥测样本/健康度）
+✅ RENDER-O-13: 能力对账表三态灯列 + 三态筛选 chips 渲染
+✅ RENDER-O-14: 生命周期事件泳道热力格渲染（阶段 × 14 天网格）
+✅ RENDER-O-15: obs 全字段缺失降级不抛错（卡片级降级，无 role=alert）
+✅ RENDER-G-11: 着色模式按钮组（类型/社区/PageRank/中介/度）且社区着色切换零降级
+✅ RENDER-G-12: 图例卡（节点/边类型过滤 chips）渲染
+✅ RENDER-G-13: 小地图接线齐备（引擎 ok=false 时容器条件降级，装配/绘制链在产物中）
+✅ RENDER-G-14: 导出 PNG 按钮渲染且 canvas stub 下点击不抛错
+✅ RENDER-G-15: 键盘提示 + 快捷键真实生效（l: 布局：力导向 → 布局：分层；Esc 清除不抛错）
+✅ RENDER-G-16: 图谱着色/导出/键盘全交互序列 canvas stub 零降级
+
+═══ 渲染回归: 35 通过 / 0 失败 ═══

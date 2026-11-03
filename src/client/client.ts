@@ -22,8 +22,9 @@
  * 宿主加载器契约（单文件 combo、无行首 export、factory 返回 {inject, apply}）不变。
  */
 
-import { h, React, MOUNT_PATH, PORTS, APP_NAME, KaogongErrorBoundary } from './ui-kit.js'
-import { NativeDashboardView, NativePracticeView, NativeWrongbookView, KaogongQuickPractice, NativeTuxingView, NativeDeepBankView } from './study-view.js'
+import { h, React, MOUNT_PATH, PORTS, APP_NAME, Stat, KaogongErrorBoundary } from './ui-kit.js'
+// cycle-13 对话窗口瘦身：会话练题控件已删除（会话输入区 slot 随之下线）
+import { NativeDashboardView, NativePracticeView, NativeWrongbookView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
 import { NativeExamView, NativePapersView, NativeTopicsView, NativeEssayView } from './papers-view.js'
 import { NativeGraphView } from './graph-view.js'
 import { NativeObsView } from './obs-view.js'
@@ -172,10 +173,12 @@ import { NativeObsView } from './obs-view.js'
             h('div', { className: 'kg-spin', role: 'status' }), t('loading')))
       }
 
-      // v1.7.4 导航分组：学习 / 题库 / 复盘（三组各司其职，减少横向拥挤）
+      // cycle-13 导航精简（用户明确要求）：移除「刷题 / 深度题库 / 图形推理 / 申论」四个一级入口，
+      // 这四项全部收敛进「专题」页的练习枢纽分区（papers-view.ts NativeTopicsView）；
+      // 路由可达性保留：setView('practice'/'deepbank'/'tuxing'/'essay') 仍有效（下方视图分发未删）。
       const NAV_GROUPS: Array<{ id: string; label: string; items: Array<[string, string]> }> = [
-        { id: 'learn', label: '学习', items: [['dashboard', '📊 仪表盘'], ['practice', '✏️ 刷题'], ['deepbank', '🧠 深度题库'], ['tuxing', '🔷 图形推理'], ['exam', '⏱ 模考']] },
-        { id: 'bank', label: '题库', items: [['papers', '📚 真题卷'], ['topics', '🎯 专题'], ['essay', '✍️ 申论']] },
+        { id: 'learn', label: '学习', items: [['dashboard', '📊 仪表盘'], ['exam', '⏱ 模考']] },
+        { id: 'bank', label: '题库', items: [['papers', '📚 真题卷'], ['topics', '🎯 专题']] },
         { id: 'review', label: '复盘', items: [['wrongbook', '📕 错题本'], ['graph', '🕸️ 图谱'], ['obs', '📡 可观测']] },
       ]
       return h('div', { className: 'kg-page', role: 'main', 'aria-label': t('title') },
@@ -201,7 +204,7 @@ import { NativeObsView } from './obs-view.js'
           view === 'practice' ? h(NativePracticeView, { key: 'pr' + tick + JSON.stringify(viewParams), api, initialModule: viewParams.module || '', onGoWrongbook: () => setView('wrongbook') }) : null,
           view === 'deepbank' ? h(NativeDeepBankView, { key: 'dp' + tick, api, initialModule: viewParams.module || '', initialCategory: viewParams.category || '' }) : null,
           view === 'tuxing' ? h(NativeTuxingView, { key: 'tx' + tick, api }) : null,
-          view === 'topics' ? h(NativeTopicsView, { key: 'tp' + tick, api, onGo: (v, params) => setView(v, params || {}) }) : null,
+          view === 'topics' ? h(NativeTopicsView, { key: 'tp' + tick, api, onGo: (v, params) => setView(v, params || {}), initialModule: viewParams.module || '' }) : null,
           view === 'essay' ? h(NativeEssayView, { key: 'es' + tick + JSON.stringify(viewParams), api, initialType: viewParams.type || '' }) : null,
           // 父 effect 管理数据的视图
           view !== 'papers' && view !== 'topics' && view !== 'essay' && view !== 'exam' && view !== 'practice' && view !== 'deepbank' && view !== 'tuxing' && !data && !err ? h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' })) : null,
@@ -224,7 +227,69 @@ import { NativeObsView } from './obs-view.js'
         h('path', { d: 'M14 3.2A1.2 1.2 0 0 0 12.8 2H9v12.4h3.8A1.2 1.2 0 0 0 14 13.2z' }),
         h('path', { d: 'M5.5 5.5h1M10.5 5.5h1' }))
     }
-    /** 右侧 tab 正文：同源优先原生，端口兜底 iframe */
+    /**
+     * cycle-13 对话窗口瘦身：右侧 tab 精简正文（引导卡 + 学习摘要 + 快捷入口）。
+     * 此前同源通道直接把完整 KaogongMainPanel（七视图全家桶）塞进右侧 tab，
+     * 空间局促且与左栏面板功能重复。现在：完整功能收敛到左栏「考公学习」沉浸面板，
+     * 右侧只做轻量摘要 —— /api/stats 单端点取数，字段全部可选降级（缺什么藏什么）。
+     * R9：真组件 + h() 挂载，hook 数恒定（useState×2 + useEffect×1）。
+     */
+    function KaogongTabHome({ wsKey, t, channel, reloadKey }) {
+      const [stats, setStats] = React.useState(null)
+      const [goHint, setGoHint] = React.useState('')
+      React.useEffect(() => {
+        let cancelled = false
+        setStats(null)
+        ;(async () => {
+          try {
+            const r = await fetch(`${channel.base}/api/stats?ws=${encodeURIComponent(wsKey)}`, { signal: AbortSignal.timeout(4000) })
+            const j = await r.json()
+            if (!cancelled) setStats(j && typeof j === 'object' ? j : null)
+          } catch { if (!cancelled) setStats(null) }
+        })()
+        return () => { cancelled = true }
+      }, [channel, wsKey, reloadKey])
+      // 快捷入口：写入视图偏好（左栏面板挂载时读取同一 localStorage 键）+ 提示语
+      const go = (view: string, label: string) => {
+        try { localStorage.setItem('kg-native-view', view) } catch { /* 隐私模式等场景静默 */ }
+        setGoHint('已定位「' + label + '」— 打开左栏「考公学习」面板即可直达')
+      }
+      const wrongOpen = stats && stats.wrong && typeof stats.wrong.open === 'number' ? stats.wrong.open : null
+      const SUMMARY = [
+        stats && typeof stats.answered === 'number' ? [stats.answered, '累计答题', '#10b981'] : null,
+        stats && typeof stats.rate === 'number' ? [stats.rate + '%', '总体正确率', '#6366f1'] : null,
+        stats && typeof stats.day === 'number' ? ['D' + stats.day, '计划进度', '#f59e0b'] : null,
+        wrongOpen !== null ? [wrongOpen, '待消灭错题', '#ef4444'] : null,
+      ].filter(Boolean)
+      const QUICK = [
+        ['topics', '🎯 专题练习', '专题'],
+        ['papers', '📚 真题卷', '真题卷'],
+        ['exam', '⏱ 整卷模考', '模考'],
+        ['wrongbook', '📕 错题本', '错题本'],
+        ['graph', '🕸️ 知识图谱', '图谱'],
+      ]
+      return h('div', { className: 'kg-tabhome' },
+        // 引导卡
+        h('div', { style: { background: 'linear-gradient(135deg,rgba(99,102,241,.10),rgba(139,92,246,.08))', border: '1px solid rgba(99,102,241,.25)', borderRadius: 12, padding: '14px 16px', margin: 12 } },
+          h('div', { style: { fontWeight: 800, fontSize: 14.5 } }, '📚 ' + t('title')),
+          h('div', { style: { fontSize: 11.5, color: '#64748b', marginTop: 5, lineHeight: 1.7 } }, t('guideDesc')),
+          h('div', { style: { fontSize: 11, color: '#4f46e5', marginTop: 8, fontWeight: 600 } }, '完整功能（刷题 · 深度题库 · 申论评改 · 方法论 · 可观测）请打开左栏「考公学习」面板')),
+        // 学习摘要（字段可选降级：无数据时整块隐藏）
+        SUMMARY.length ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(72px,1fr))', gap: 8, margin: '0 12px 12px' } },
+          SUMMARY.map(([v, l, c]: any, i: number) => h('div', { key: i, style: { background: 'var(--surface-card,#fff)', border: '1px solid rgba(148,163,184,.15)', borderRadius: 10, padding: '10px 4px', textAlign: 'center' } },
+            h('div', { style: { fontSize: 17, fontWeight: 800, color: c } }, String(v)),
+            h('div', { style: { fontSize: 10, color: '#64748b', marginTop: 2 } }, l))))
+          : h('div', { style: { fontSize: 11.5, color: '#94a3b8', margin: '0 12px 12px' } }, '学习摘要暂不可用（服务未就绪或暂无数据）'),
+        // 快捷入口
+        h('div', { style: { margin: '0 12px 12px' } },
+          h('div', { style: { fontSize: 11, color: '#94a3b8', marginBottom: 6, fontWeight: 600 } }, '快捷入口'),
+          h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+            QUICK.map(([view, label, short]) => h('button', {
+              key: view, className: 'kg-navbtn', onClick: () => go(view, short),
+            }, label))),
+          goHint ? h('div', { style: { fontSize: 11, color: '#10b981', marginTop: 8 } }, goHint) : null))
+    }
+    /** 右侧 tab 正文：同源优先原生精简体，端口兜底 iframe */
     function KaogongTabBody({ wsKey, sidebarRight, t }) {
       const channel = useChannel()
       const [reloadKey, setReloadKey] = React.useState(0)
@@ -241,8 +306,9 @@ import { NativeObsView } from './obs-view.js'
             h('span', null, '🏠 ' + t('native') + ' · ' + channel.base),
             h('span', { style: { opacity: .6, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, `${t('probe')} ${String(wsKey).split(/[\\/]/).pop()}`),
             h('button', { 'aria-label': t('retry'), style: { marginLeft: 'auto' }, onClick: () => setReloadKey(k => k + 1) }, t('retry'))),
-          h('div', { className: 'kg-frame' },
-            h(KaogongMainPanel, { wsKey, t, key: reloadKey })))
+          // cycle-13 对话窗口瘦身：不再内嵌完整面板，改为引导卡 + 摘要 + 快捷入口
+          h('div', { className: 'kg-frame', style: { overflowY: 'auto' } },
+            h(KaogongTabHome, { wsKey, t, channel, reloadKey, key: reloadKey })))
       }
       const url = `${channel.base}/?ws=${encodeURIComponent(wsKey)}&embed=1&_r=${reloadKey}`
       return h('div', { className: 'kg-shell', role: 'region', 'aria-label': t('title') },
@@ -291,6 +357,7 @@ import { NativeObsView } from './obs-view.js'
           .kg-navbtn{border:0;cursor:pointer;font-size:12px;font-weight:600;padding:5px 10px;border-radius:8px;font-family:inherit;background:transparent;color:var(--text-muted,#64748b)}
           .kg-navbtn:hover{background:rgba(99,102,241,.08)}
           .kg-navbtn.on{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+          .kg-tabhome{flex:1;min-height:0;display:block;width:100%}
           @media (max-width:420px){.kg-bar{font-size:10.5px;gap:5px}}
         `
         ctx.effect(() => {
@@ -313,22 +380,8 @@ import { NativeObsView } from './obs-view.js'
           )
         ), 'kaogong panel icon')
 
-        // T-024：会话输入区「练题」控件（slot 缺席时静默跳过，绝不影响对话）
-        ctx.effect(() => {
-          try {
-            const injectSlot = (ctx.slots as any).inject
-            if (typeof injectSlot !== 'function') return
-            return injectSlot.call(ctx.slots, 'conversation.input.left', () =>
-              (ctx.slots as any).register(
-                { name: 'conversation.input.left', id: PANEL_ID, order: 85, inject: () => ({ apiBase: '/kaogong/api' }) },
-                KaogongQuickPractice,
-              ),
-            )
-          } catch (e) {
-            console.warn('[dsh-kaogong] 会话练题控件注册跳过：', (e as any)?.message || e)
-            return
-          }
-        }, 'kaogong quick practice')
+        // ── cycle-13 对话窗口瘦身：会话输入区「练题」控件（conversation.input.left）已随
+        // 对应组件一并下线 —— 对话窗口回归纯对话，练题全部收敛到左栏面板 ──
 
         ctx.effect(() => ctx.slots.inject('main', () =>
           ctx.slots.register(

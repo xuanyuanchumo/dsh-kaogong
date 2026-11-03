@@ -12,6 +12,13 @@
  *   ## 题目 → ### 第 N 题 → 【题干加粗】+ 关联材料 + 作答要求 + <details>参考答案</details>
  *
  * 只读；磁盘索引惰性构建并缓存（进程内 TTL 60s），避免每次请求全盘扫描。
+ *
+ * cycle-13 索引 v2（schemaVersion: 2）：
+ *  - 每条 paper 新增 province 维度：省考/<省份>/<年份>/… → parts[1]；国考/<年份>/… → 「全国」；
+ *    其余顶层目录（公安招警 / 公检法 等特殊名）直接作为省份口径。region 字段保留原语义（零删除）。
+ *  - 新增 provinces facet：[{ name, total, minYear, maxYear, subjects }]，按 name 码点升序（确定性）。
+ *  - 快照根写入 schemaVersion: 2；读取时 schemaVersion !== 2 一律视为旧版失效 → 现场重建
+ *    （旧快照无此字段自动重建，首次约 16s，属预期）。
  */
 import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, basename, relative, dirname } from 'node:path'
@@ -42,7 +49,8 @@ export function buildPaperIndex(repoRoot, force = false) {
   if (!force) {
     try {
       const snap = JSON.parse(readFileSync(INDEX_FILE(), 'utf-8'))
-      if (snap && snap.total > 0 && Array.isArray(snap.papers)) {
+      // cycle-13：schemaVersion !== 2 一律视为旧版快照（无省份维度）→ 丢弃重建
+      if (snap && snap.schemaVersion === 2 && snap.total > 0 && Array.isArray(snap.papers)) {
         paperIndex = { ts: now, data: snap }
         return snap
       }
@@ -71,10 +79,14 @@ export function buildPaperIndex(repoRoot, force = false) {
       const paperType = meta.卷型 || stem.slice(dash + 1)
       const rel = relative(root, full).replace(/\\/g, '/')
       const parts = rel.split('/')
+      // cycle-13 省份维度：省考/<省份>/<年份>/<科目>-<卷型>.md → parts[1]；
+      // 国考/<年份>/… → 「全国」；其余顶层目录（公安招警/公检法等特殊名）直接作省份。
+      const province = parts[0] === '省考' ? (parts[1] || '') : (parts[0] === '国考' ? '全国' : (parts[0] || ''))
       papers.push({
         id: rel.replace(/\.md$/, ''),
         exam: meta.考试 || parts[0] || '',
         region: meta.地区 || parts[0] || '',
+        province,
         year: +(meta.年份 || parts[1]) || null,
         subject,
         paperType: paperType || (parts.length > 3 ? parts[2] : ''),
@@ -99,7 +111,27 @@ export function buildPaperIndex(repoRoot, force = false) {
     exams: [...new Set(list.map((x: any) => x.exam))],
   })).sort((a, b) => b.count - a.count)
 
-  const data = { papers, subjects, total: papers.length, builtAt: new Date().toISOString() }
+  // cycle-13 省份维度聚合：按省份统计卷数 / 年份跨度 / 科目分布。
+  // 排序用码点比较（< / >），不用 localeCompare —— 确定性纪律：同输入两次构建深相等。
+  const byProvince: any = {}
+  for (const p of papers) {
+    const key = p.province || '未知'
+    ;(byProvince[key] = byProvince[key] || []).push(p)
+  }
+  const provinces = entries(byProvince).map(([name, list]: any) => {
+    const ys = list.map((x: any) => x.year).filter(Boolean)
+    const subjCnt: any = {}
+    for (const x of list) subjCnt[x.subject] = (subjCnt[x.subject] || 0) + 1
+    return {
+      name,
+      total: list.length,
+      minYear: ys.length ? Math.min.apply(null, ys) : null,
+      maxYear: ys.length ? Math.max.apply(null, ys) : null,
+      subjects: subjCnt,
+    }
+  }).sort((a: any, b: any) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+
+  const data = { schemaVersion: 2, papers, subjects, provinces, total: papers.length, builtAt: new Date().toISOString() }
   // 落盘快照（失败不影响业务：下次现场重建）
   try {
     const f = INDEX_FILE()
@@ -165,19 +197,21 @@ export function buildTopics(repoRoot) {
   return { topics, subjects: idx.subjects, total: idx.total }
 }
 
-/** 按条件筛选试卷列表（供真题卷列表页） */
-export function listPapers(repoRoot: string, { subject, exam, year, q }: any = {}) {
+/** 按条件筛选试卷列表（供真题卷列表页）；cycle-13 新增 province 过滤（与 subject/exam/year/q 并列） */
+export function listPapers(repoRoot: string, { subject, exam, year, province, q }: any = {}) {
   const idx = buildPaperIndex(repoRoot)
   let list = idx.papers
   if (subject) list = list.filter(p => p.subject === subject)
   if (exam) list = list.filter(p => p.exam === exam)
+  if (province) list = list.filter(p => p.province === province)
   if (year) list = list.filter(p => p.year === +year)
   if (q) {
     const k = q.toLowerCase()
     list = list.filter(p => (p.id + p.exam + p.paperType).toLowerCase().includes(k))
   }
-  // 年份新→旧，同年按卷型
-  list = [...list].sort((a, b) => (b.year || 0) - (a.year || 0) || String(a.paperType).localeCompare(String(b.paperType)))
+  // 年份新→旧，同年按卷型（码点比较，不依赖环境 locale —— 确定性纪律）
+  list = [...list].sort((a, b) => (b.year || 0) - (a.year || 0)
+    || (String(a.paperType) < String(b.paperType) ? -1 : String(a.paperType) > String(b.paperType) ? 1 : 0))
   return { total: list.length, papers: list.slice(0, 200) }
 }
 

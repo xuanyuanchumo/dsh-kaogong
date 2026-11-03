@@ -4,6 +4,8 @@
  */
 
 import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from './ui-kit.js'
+// cycle-13 专题枢纽：行测刷题 / 图形推理 / 深度题库 三个既有视图嵌入本页分区（R9：h() 挂载）
+import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
 
     /* ══ v1.6 新增：真题卷 / 专题 / 申论评改（全部宿主原生渲染，组件自管数据）══ */
 
@@ -152,7 +154,8 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from './
 
     /** 真题卷库 */
     export function NativePapersView({ api, initialSubject = '' }) {
-      const [filters, setFilters] = React.useState({ subject: initialSubject || '', year: '' })
+      // cycle-13 省份维度：filters 新增 province（与 subject/year 并列，URL 构建自动透传 ?province=）
+      const [filters, setFilters] = React.useState({ subject: initialSubject || '', year: '', province: '' })
       // T-019：按考点看卷
       const [mode, setMode] = React.useState('year')
       const [cats, setCats] = React.useState([])
@@ -243,12 +246,25 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from './
                 h('span', { style: { flex: 1 } }, String(cp.paper || '').replace(/（网友回忆版）|《行测》题|《申论》题/g, '')),
                 h('span', { style: { ...KV_TAG, fontSize: 10, background: 'rgba(16,185,129,.12)', color: '#10b981' } }, cp.count + ' 题')))) : null) : null,
           list && list.subjects ? h('div', { style: { display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' } },
-            h('button', { style: { ...KV_BTN, ...(filters.subject === '' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }, onClick: () => setFilters({ subject: '', year: '' }) }, '全部'),
+            h('button', { style: { ...KV_BTN, ...(filters.subject === '' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }, onClick: () => setFilters({ subject: '', year: '', province: '' }) }, '全部'),
             list.subjects.map(sc => h('button', {
               key: sc.subject,
               style: { ...KV_BTN, ...(filters.subject === sc.subject ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) },
-              onClick: () => setFilters({ subject: sc.subject, year: '' }),
+              onClick: () => setFilters({ subject: sc.subject, year: '', province: '' }),
             }, sc.subject + ' ' + sc.count))) : null,
+          // cycle-13 省份维度 chips：provinces facet 驱动（索引 v2 起可用；旧数据无 facet 时整行隐藏）
+          list && Array.isArray(list.provinces) && list.provinces.length ? h('div', { style: { display: 'flex', gap: 5, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' } },
+            h('span', { style: { fontSize: 10.5, color: '#94a3b8' } }, '省份'),
+            h('button', {
+              style: { ...KV_BTN, ...(filters.province === '' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) },
+              onClick: () => setFilters({ ...filters, province: '' }),
+            }, '全部'),
+            list.provinces.map((p: any) => h('button', {
+              key: p.name,
+              title: p.subjects ? entries(p.subjects).map(([s, n]) => s + ' ' + n).join(' · ') + `（${p.minYear || '?'}-${p.maxYear || '?'}）` : p.name,
+              style: { ...KV_BTN, ...(filters.province === p.name ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) },
+              onClick: () => setFilters({ ...filters, province: filters.province === p.name ? '' : p.name }),
+            }, p.name + ' ' + p.total))) : null,
           h('div', { style: { display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' } },
             ['2026', '2025', '2024', '2023', '2022', '2021', '2020'].map(y => h('button', {
               key: y,
@@ -263,31 +279,58 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from './
               onClick: () => { setOpenId(p.id); setDetail(null) },
             },
               h('span', { style: { width: 46, fontWeight: 700, color: '#6366f1' } }, p.year || '—'),
-              h('span', { style: { width: 58, color: '#64748b' } }, p.exam),
+              h('span', { style: { width: 58, color: '#64748b' } }, p.province || p.exam),
               h('span', { style: { flex: 1 } }, p.subject + ' · ' + p.paperType),
               h('span', { style: { color: '#64748b', fontSize: 11.5 } }, p.questionCount + ' 题'),
               p.verified ? h('span', { style: { ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' } }, '已核验') : null))) : null))
     }
 
 
-    /** 专题 */
+    /** 专题 → 练习枢纽 */
     /**
-     * 专题视图（v1.7.1 重构）：行测 / 申论 两个频道，各自专题 + 练习入口。
-     * 用户诉求：申论练习不应单独存在，应并入专题；行测也要有对应练习入口。
-     * 每个专题带 entry:{view,params} —— 点击即跳转到对应练习视图（统一路由）。
+     * 专题练习枢纽（cycle-13 升级，组件名与 props 契约不变）：
+     * 导航精简后「刷题 / 图形推理 / 深度题库 / 申论」四个一级入口全部收敛到本页分区 tab。
+     * 分区结构：🧭 总览（v1.7.1 既有专题树，行为零变化）｜✏️ 行测刷题｜🔷 图形推理｜🧠 深度题库｜✍️ 申论｜📖 方法论。
+     * 子视图懒挂载（visited 标记，首次进入才挂载）+ 常驻（display:none 隐藏）+ 固定 key：
+     * 切换分区不重挂载、不丢状态、不重复请求（R9：子视图一律 h() 挂载，父 hook 数恒定）。
      */
-    export function NativeTopicsView({ api, onGo }) {
+    const TOPIC_HUB_TABS = [
+      { id: 'overview', label: '🧭 总览' },
+      { id: 'practice', label: '✏️ 行测刷题' },
+      { id: 'tuxing', label: '🔷 图形推理' },
+      { id: 'deepbank', label: '🧠 深度题库' },
+      { id: 'essay', label: '✍️ 申论' },
+      { id: 'method', label: '📖 方法论' },
+    ]
+
+    export function NativeTopicsView({ api, onGo, initialModule = '' }) {
       const [tree, setTree] = React.useState(null)
       const [channel, setChannel] = React.useState('xingce')
+      // 深链（setView('topics', { module })）直达刷题分区并预选模块；常规进入默认总览
+      const [sec, setSec] = React.useState(initialModule ? 'practice' : 'overview')
+      const [visited, setVisited] = React.useState(() => (initialModule ? { overview: true, practice: true } : { overview: true }))
 
       React.useEffect(() => { api('/topics').then(setTree).catch(() => setTree(null)) }, [api])
 
-      if (!tree) return h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' }), '加载专题…')
+      const visit = (id: string) => {
+        setSec(id)
+        setVisited(v => (v[id] ? v : { ...v, [id]: true }))
+      }
 
-      const chs = tree.channels || []
+      // 胶囊分区 tab 条（选中渐变；data-kg-hub-tab 供测试/脚本锚定）
+      const tabRow = h('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 14, padding: 4, background: 'rgba(148,163,184,.09)', borderRadius: 12 } },
+        TOPIC_HUB_TABS.map(tb => h('button', {
+          key: tb.id,
+          'data-kg-hub-tab': tb.id,
+          style: { ...KV_BTN, border: 0, padding: '7px 15px', fontSize: 12.5, fontWeight: 700, borderRadius: 9, ...(sec === tb.id ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff' } : {}) },
+          onClick: () => visit(tb.id),
+        }, tb.label)))
+
+      // ── 总览分区：既有专题树（行测/申论频道 + 练习入口），内部行为零变化 ──
+      const chs = tree ? (tree.channels || []) : []
       const cur = chs.find(c => c.id === channel) || chs[0]
       const go = (entry) => { if (entry && onGo) onGo(entry.view, entry.params || {}) }
-      const st = tree.stats || {}
+      const st = tree ? (tree.stats || {}) : {}
 
       // 频道切换 + 统计
       const head = h('div', {},
@@ -304,8 +347,8 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from './
           h(Stat, { v: st.essayPapers, l: '申论套卷', color: '#8b5cf6' }),
           h(Stat, { v: st.naokuTotal, l: '深度标注题', color: '#10b981' })))
 
-      // 频道内的练习入口
-      const entriesCard = h(Card, { title: '🚀 ' + cur.name + '练习入口' },
+      // 频道内的练习入口（cur 缺席时降级为提示，绝不抛错）
+      const entriesCard = cur ? h(Card, { title: '🚀 ' + cur.name + '练习入口' },
         h('div', { style: { fontSize: 11.5, color: '#64748b', marginBottom: 10 } }, cur.desc),
         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10 } },
           (cur.entries || []).map((e, i) => h('div', {
@@ -315,9 +358,10 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from './
           },
             h('div', { style: { fontWeight: 800, fontSize: 13.5 } }, e.label),
             h('div', { style: { fontSize: 10.5, color: '#94a3b8', marginTop: 4 } }, '点击进入')))))
+        : h(Card, { title: '🚀 练习入口' }, h('div', { style: { fontSize: 12, color: '#64748b' } }, '专题数据暂不可用 — 可直接使用上方分区练习'))
 
       // 专题列表（按 kind 分组）
-      const topics = cur.topics || []
+      const topics = cur ? (cur.topics || []) : []
       const groups: any = {}
       for (const t2 of topics) (groups[t2.kind] = groups[t2.kind] || []).push(t2)
       const KIND_LABEL = { module: '六大模块', category: '细分题型', 'essay-type': '申论题型' }
@@ -337,7 +381,126 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from './
               h('div', { style: { fontSize: 11.5, color: '#64748b', lineHeight: 1.6 } }, t2.desc || ''),
               h('div', { style: { fontSize: 10.5, color: '#6366f1', marginTop: 6, fontWeight: 600 } }, '开始练习 →'))))))
 
-      return h('div', {}, head, entriesCard, ...topicCards)
+      const overview = !tree
+        ? h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' }), '加载专题…')
+        : h('div', {}, head, entriesCard, ...topicCards)
+
+      // 分区包裹：非当前分区 display:none 隐藏（保持挂载 → 状态不丢）
+      const wrap = (id: string, node) => h('div', { key: id, style: sec === id ? undefined : { display: 'none' } }, node)
+
+      return h('div', {},
+        tabRow,
+        visited.overview ? wrap('overview', overview) : null,
+        visited.practice ? wrap('practice', h(NativePracticeView, { key: 'topic-practice', api, initialModule: initialModule || '', onGoWrongbook: onGo ? () => onGo('wrongbook', {}) : undefined })) : null,
+        visited.tuxing ? wrap('tuxing', h(NativeTuxingView, { key: 'topic-tuxing', api })) : null,
+        visited.deepbank ? wrap('deepbank', h(NativeDeepBankView, { key: 'topic-deepbank', api, initialModule: '', initialCategory: '' })) : null,
+        visited.essay ? wrap('essay', h(NativeEssayView, { key: 'topic-essay', api, initialType: '' })) : null,
+        visited.method ? wrap('method', h(TopicMethodView, { key: 'topic-method', api })) : null)
+    }
+
+    /**
+     * 方法论技巧分区（cycle-13 新增，用户点名缺失）：两部分数据全部来自既有端点（只消费不新增）——
+     * ① kaogong-skill 十主题方法论：/api/methods（目录）+ /api/method?topic=（markdown 正文）；
+     * ② naoku 母题思维 / 易错点精选：/api/naoku/questions?count=20&random=0（ORDER BY id，确定性）
+     *    过滤出带 mother/pitfalls 标注的题，取前 6 条做卡片。
+     * 字段全部可选降级：目录缺失 / 题库未就绪 → 友好空态 + 静态引导卡，绝不抛错、绝不臆造字段。
+     * R9：真组件（useState×6 + useEffect×2，hook 数恒定），由 NativeTopicsView 经 h() 挂载。
+     */
+    export function TopicMethodView({ api }) {
+      const [topics, setTopics] = React.useState(null)          // 方法论目录（10 主题）
+      const [open, setOpen] = React.useState('')                // 当前展开的方法论主题
+      const [contents, setContents] = React.useState({})        // 主题正文缓存 { [topic]: content }
+      const [busy, setBusy] = React.useState(false)
+      const [picks, setPicks] = React.useState(null)            // 母题/易错点精选
+      const [pickOpen, setPickOpen] = React.useState(-1)
+
+      React.useEffect(() => {
+        let cancelled = false
+        api('/methods').then((d: any) => { if (!cancelled) setTopics(d && Array.isArray(d.topics) ? d.topics : []) }).catch(() => { if (!cancelled) setTopics([]) })
+        return () => { cancelled = true }
+      }, [api])
+
+      React.useEffect(() => {
+        let cancelled = false
+        api('/naoku/questions?count=20&random=0')
+          .then((d: any) => {
+            if (cancelled) return
+            const qs = (d && d.questions) || []
+            setPicks(qs.filter((x: any) => x && (x.mother || x.pitfalls)).slice(0, 6))
+          })
+          .catch(() => { if (!cancelled) setPicks([]) })
+        return () => { cancelled = true }
+      }, [api])
+
+      const openTopic = async (label: string) => {
+        if (open === label) { setOpen(''); return }
+        setOpen(label)
+        if (contents[label]) return
+        setBusy(true)
+        try {
+          const d = await api('/method?topic=' + encodeURIComponent(label))
+          setContents(c => ({ ...c, [label]: (d && d.content) || '内容暂缺' }))
+        } catch {
+          setContents(c => ({ ...c, [label]: '内容加载失败，请稍后重试' }))
+        } finally { setBusy(false) }
+      }
+
+      // ① 方法论目录卡（网格）
+      const methodGrid = topics === null
+        ? h('div', { style: { fontSize: 12, color: '#64748b' } }, '加载方法论目录…')
+        : topics.length === 0
+          ? h('div', { style: { fontSize: 12, color: '#f59e0b' } }, '⚠️ 方法论目录暂不可用（kaogong-skill 参考文件缺失）')
+          : h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 } },
+              topics.map((tp: any) => h('div', {
+                key: tp.id || tp.label,
+                style: { border: '1.5px solid rgba(148,163,184,.25)', borderRadius: 12, padding: 13, cursor: 'pointer', textAlign: 'center', background: open === tp.label ? 'rgba(99,102,241,.07)' : 'rgba(148,163,184,.04)' },
+                onClick: () => openTopic(String(tp.label)),
+              },
+                h('div', { style: { fontWeight: 800, fontSize: 13 } }, '📖 ' + tp.label),
+                h('div', { style: { fontSize: 10.5, color: '#94a3b8', marginTop: 4 } }, open === tp.label ? '点击收起' : '点击展开全文'))))
+
+      // 展开的方法论正文（RichText 渲染 markdown）
+      const methodDetail = open && contents[open]
+        ? h(Card, { title: '📖 ' + open + ' · 方法论全文' },
+            h(RichText, { text: String(contents[open]), fontSize: 12.5, maxHeight: '48vh' }))
+        : open ? h(Card, { title: '📖 ' + open }, h('div', { style: { fontSize: 12, color: '#64748b' } }, busy ? '加载正文…' : '正文暂缺')) : null
+
+      // ② 母题思维 / 易错点精选卡
+      const pickCards = picks === null
+        ? h('div', { style: { fontSize: 12, color: '#64748b' } }, '加载母题精选…')
+        : picks.length === 0
+          ? h(Card, { title: '🧩 母题思维 / 易错点精选' },
+              h('div', { style: { fontSize: 12, color: '#64748b', lineHeight: 1.8 } },
+                '深度题库未就绪（需 Node ≥ 22.19 内置 node:sqlite 且 GongkaoNaoku 分片存在），母题精选暂缺。',
+                h('div', { style: { marginTop: 6, color: '#4f46e5' } }, '可先阅读上方方法论；或在左栏面板「深度题库」分区练习（那里有未掌握时的回落方案）。')))
+          : h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 10 } },
+              picks.map((q: any, i: number) => h('div', { key: q.id || i },
+                h('div', {
+                  style: { border: '1.5px solid rgba(148,163,184,.25)', borderRadius: 12, padding: 13, cursor: 'pointer', background: pickOpen === i ? 'rgba(139,92,246,.06)' : 'rgba(148,163,184,.04)' },
+                  onClick: () => setPickOpen(pickOpen === i ? -1 : i),
+                },
+                  h('div', { style: { display: 'flex', gap: 5, marginBottom: 5, flexWrap: 'wrap' } },
+                    h('span', { style: KV_TAG }, q.module || '深度标注'),
+                    q.type ? h('span', { style: { ...KV_TAG, fontSize: 10, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' } }, q.type) : null,
+                    q.mother ? h('span', { style: { ...KV_TAG, fontSize: 10, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' } }, '🧩 母题') : null,
+                    q.pitfalls ? h('span', { style: { ...KV_TAG, fontSize: 10, background: 'rgba(239,68,68,.12)', color: '#ef4444' } }, '⚠️ 易错') : null),
+                  h('div', { style: { fontSize: 12, fontWeight: 600, lineHeight: 1.6 } }, String(q.kadian || q.stem || '').slice(0, 56) + (String(q.kadian || q.stem || '').length > 56 ? '…' : '')),
+                  h('div', { style: { fontSize: 10.5, color: '#6366f1', marginTop: 6, fontWeight: 600 } }, pickOpen === i ? '收起 ▲' : '展开详情 ▼')),
+                pickOpen === i ? h('div', { style: { border: '1.5px solid rgba(139,92,246,.35)', borderTop: 0, borderRadius: '0 0 12px 12px', padding: 12, background: 'rgba(139,92,246,.04)' } },
+                  q.stem ? h('div', { style: { marginBottom: 8 } }, h('div', { style: { fontWeight: 700, fontSize: 11.5, color: '#64748b', marginBottom: 3 } }, '题干'), h(RichText, { text: String(q.stem).slice(0, 400), fontSize: 11.5, maxHeight: 160 })) : null,
+                  q.mother ? h('div', { style: { marginBottom: 8 } }, h('div', { style: { fontWeight: 700, fontSize: 11.5, color: '#8b5cf6', marginBottom: 3 } }, '🧩 母题思维'), h(RichText, { text: q.mother, fontSize: 11.5, maxHeight: 200 })) : null,
+                  q.pitfalls ? h('div', null, h('div', { style: { fontWeight: 700, fontSize: 11.5, color: '#ef4444', marginBottom: 3 } }, '⚠️ 易错点'), h(RichText, { text: q.pitfalls, fontSize: 11.5, maxHeight: 200 })) : null) : null)))
+
+      return h('div', {},
+        h(Card, { title: '📖 方法论技巧（kaogong-skill 十主题）' },
+          h('div', { style: { fontSize: 11.5, color: '#64748b', marginBottom: 10 } },
+            '行测 / 申论 / 职测 / 综应 / 公基 / 公文 / 面试 / 时政 / 报考 / 复盘 十大主题备考方法论，点击主题展开全文。'),
+          methodGrid),
+        methodDetail,
+        h(Card, { title: '🧩 母题思维 / 易错点精选（深度题库标注）' },
+          h('div', { style: { fontSize: 11.5, color: '#64748b', marginBottom: 10 } },
+            '从 GongkaoNaoku 27506 题的五维标注中精选带「母题思维 / 易错点」的真题，点击卡片展开题干与标注全文。'),
+          pickCards))
     }
 
     /** 申论练习 + 离线评改 */

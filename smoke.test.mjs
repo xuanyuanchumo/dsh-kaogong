@@ -3,9 +3,10 @@
  * 运行: node smoke.test.mjs
  * 覆盖: 信标发现 / adopt复用 / 崩溃安全(EADDRINUSE不逃逸) / 工作区隔离 /
  *       抽题判分 / 计划结构化 / 检索方法论 / 图谱指标 / 遥测 / 能力矩阵
+ *       cycle-13 省份维度与导航精简（W2a 源码级静态断言；W3 build 后将补运行时断言）
  */
 import fs from 'node:fs'
-import { startServer } from './dist/server/http.js'
+import { startServer, REPO_ROOT } from './dist/server/http.js'
 
 const results = []
 let failed = 0
@@ -420,6 +421,120 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   check('可观测面板有 sparkline（内联 SVG）', /Sparkline/.test(client) && /polyline/.test(client))
   check('可观测面板有诊断导出', /Blob/.test(client) && /diagnostics-/.test(client))
   check('可观测面板保留学习质量（不回归）', client.includes('申论均分率'))
+}
+
+// ── cycle-13 省份维度与导航精简（W2a：源码级静态断言；W3 build 后将补运行时断言）──
+// 说明：本波次不执行 npm run build / smoke（三路并行防 dist 与端口冲突），因此本块
+// 只读 src 源文本做静态断言（沿「UI 内联脚本门读 src/ui/index.html」的既有惯例）。
+// 运行时断言（province facet ≥35、/api/papers?province= 过滤生效、快照 schemaVersion=2
+// 失效重建、专题枢纽分区切换零降级）留给 W3 在 build 后补齐。
+{
+  const readSrc = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf8')
+  // SMOKE-P-01 省份维度·索引 v2
+  const pd = readSrc('./src/adapters/paperData.ts')
+  check('SMOKE-P-01 索引v2：快照 schemaVersion=2 版本门（旧快照自动重建）',
+    pd.includes('schemaVersion: 2') && pd.includes('snap.schemaVersion === 2'))
+  check('SMOKE-P-01 索引v2：paper 记录含 province 维度（省考→parts[1] / 国考→全国）',
+    /province[,:]/.test(pd) && pd.includes("'全国'") && pd.includes("parts[0] === '省考'"))
+  check('SMOKE-P-01 索引v2：provinces facet 聚合且按码点排序（无 localeCompare 调用）',
+    pd.includes('byProvince') && /const provinces = /.test(pd) && !pd.includes('localeCompare('))
+  const pv = readSrc('./src/client/papers-view.ts')
+  check('SMOKE-P-01 真题卷视图：省份 chips 过滤（provinces facet 驱动）',
+    pv.includes('省份') && pv.includes('list.provinces') && /filters\.province/.test(pv))
+  check('SMOKE-P-01 专题枢纽：方法论分区与母题精选就位（只消费既有端点）',
+    pv.includes('方法论') && /TopicMethodView/.test(pv) && pv.includes('/api/methods') && pv.includes('/api/naoku/questions'))
+  // SMOKE-N-01 导航精简（精确锚定 NAV_GROUPS 数组文本，避免误伤专题页内文案）
+  const cl = readSrc('./src/client/client.ts')
+  const nav = (cl.match(/const NAV_GROUPS[\s\S]*?\n {6}\]/) || [''])[0]
+  check('SMOKE-N-01 导航精简：一级入口保留仪表盘/模考/真题卷/专题/错题本/图谱/可观测',
+    nav.includes("'dashboard'") && nav.includes("'exam'") && nav.includes("'papers'") && nav.includes("'topics'") &&
+    nav.includes("'wrongbook'") && nav.includes("'graph'") && nav.includes("'obs'"), nav ? 'ok' : 'NAV_GROUPS 未锚定')
+  check('SMOKE-N-01 导航精简：刷题/深度题库/图形推理/申论退出一级导航',
+    !!nav && !/['"](?:practice|deepbank|tuxing|essay)['"]/.test(nav) &&
+    !nav.includes('刷题') && !nav.includes('深度题库') && !nav.includes('图形推理') && !nav.includes('申论'))
+  check('SMOKE-N-01 导航精简：四视图路由仍可达（仅导航收敛，分发未删）',
+    /view === 'practice'/.test(cl) && /view === 'deepbank'/.test(cl) && /view === 'tuxing'/.test(cl) && /view === 'essay'/.test(cl))
+  // SMOKE-N-02 对话窗口瘦身
+  const sv = readSrc('./src/client/study-view.ts')
+  check('SMOKE-N-02 对话窗口瘦身：KaogongQuickPractice 已完全移除',
+    !sv.includes('KaogongQuickPractice') && !cl.includes('KaogongQuickPractice'))
+  check('SMOKE-N-02 对话窗口瘦身：右侧 tab 为精简引导体（KaogongTabHome）',
+    cl.includes('KaogongTabHome') && /h\(KaogongTabHome,/.test(cl) && !/h\(KaogongMainPanel, \{ wsKey, t, key: reloadKey/.test(cl))
+}
+
+// ── cycle-13 省份维度运行时断言（W3，build 后补齐 W2a 交接）──
+// 沿用既有 server 测试 harness（8495 端口段 / publishRuntime=false / 真实仓库索引）。
+// 顺序纪律：HTTP 断言先行，快照门重建（同步阻塞事件循环 ~10s，超过 http 默认
+// keepAliveTimeout 5s）放在本块最后 —— 重建后不再有 fetch，规避 keep-alive 复位竞态。
+// 快照门测试会动 data/.paper-index.json：测前备份、finally 还原，绝不污染后续手工使用。
+{
+  // R-P-02 HTTP 过滤语义（走测试 harness 服务端实例）
+  const psd = await J(`${B}/api/papers?province=${encodeURIComponent('山东')}`)
+  check('R-P-02 ?province=山东 全部命中且 total>0',
+    psd.total > 0 && (psd.papers || []).length > 0 && (psd.papers || []).every(p => p.province === '山东'),
+    `total=${psd.total}`)
+  const allP = await J(`${B}/api/papers`)
+  check('R-P-02 无参返回全量 + provinces facet（服务端透出）',
+    allP.total > 1000 && Array.isArray(allP.provinces) && allP.provinces.length >= 35,
+    `total=${allP.total} provinces=${allP.provinces && allP.provinces.length}`)
+
+  // R-N-01 方法论分区数据源活体检查（/api/methods 结构化 + /api/naoku/questions 降级语义）
+  const methodsR = await fetch(`${B}/api/methods`)
+  const meW3 = await methodsR.json()
+  check('R-N-01 /api/methods 活体（HTTP 200 + 10 主题目录）',
+    methodsR.status === 200 && Array.isArray(meW3.topics) && meW3.topics.length === 10,
+    `status=${methodsR.status} topics=${meW3.topics && meW3.topics.length}`)
+  const nkR = await fetch(`${B}/api/naoku/questions?count=20&random=0`)
+  const nkW3 = await nkR.json()
+  // naoku 未就绪时端点必须返回结构化空/降级（HTTP 200 + fallback 标记），绝非 5xx
+  const nkStructured = nkR.status === 200 && nkW3 && typeof nkW3 === 'object' &&
+    (nkW3.fallback === true ? Array.isArray(nkW3.questions) && nkW3.questions.length === 0
+                            : Array.isArray(nkW3.questions))
+  check('R-N-01 /api/naoku/questions 结构化（就绪=题目数组 / 未就绪=空数组+fallback，非 5xx）',
+    nkStructured, `status=${nkR.status} ready=${nkW3.source === 'naoku'} n=${nkW3.questions && nkW3.questions.length}`)
+
+  // R-P-03 + R-P-01：快照 v2 版本门（运行时，模块级）
+  const IDX = 'data/.paper-index.json'
+  const BAK = 'data/.paper-index.json.w3-bak'
+  const had = fs.existsSync(IDX)
+  if (had) fs.copyFileSync(IDX, BAK)
+  try {
+    // R-P-03 快照 v2 版本门（运行时）：写入 schemaVersion=1 伪快照 → 必须弃用并现场重建。
+    // （新鲜模块实例经 URL query 击穿：?w3=1 与 ?w3=2 是独立模块，进程内缓存互不可见。）
+    fs.writeFileSync(IDX, JSON.stringify({ schemaVersion: 1, total: 1, papers: [], note: 'W3 测试伪快照' }))
+    let idx1 = null, idx2 = null, dt1 = -1, dt2 = -1, err1 = null
+    try {
+      const m1 = await import('./dist/adapters/paperData.js?w3=1')
+      const t0 = Date.now()
+      idx1 = m1.buildPaperIndex(REPO_ROOT)
+      dt1 = Date.now() - t0
+      const m2 = await import('./dist/adapters/paperData.js?w3=2')
+      const t1 = Date.now()
+      idx2 = m2.buildPaperIndex(REPO_ROOT)
+      dt2 = Date.now() - t1
+    } catch (e) { err1 = e }
+    check('R-P-03 快照v2门：schemaVersion=1 伪快照被弃用并触发现场重建（provinces facet 到位）',
+      !!idx1 && Array.isArray(idx1.provinces) && idx1.provinces.length >= 35,
+      err1 ? String(err1).slice(0, 80) : `provinces=${idx1 && idx1.provinces && idx1.provinces.length} rebuild=${dt1}ms`)
+    check('R-P-03 快照v2门：二次构建走 v2 快照且耗时显著下降（不硬断言毫秒）',
+      !!idx2 && dt2 < dt1, `rebuild=${dt1}ms snapshot=${dt2}ms`)
+
+    // R-P-01 真实仓库索引：provinces facet 内容 + 确定性（重建 vs 快照两次深相等）
+    const names = (idx1 && idx1.provinces ? idx1.provinces : []).map(p => p.name)
+    const ascNames = names.every((n, i) => i === 0 || names[i - 1] < n)   // 码点比较（< / >）
+    check('R-P-01 provinces facet ≥35 项', names.length >= 35, String(names.length))
+    check('R-P-01 含「山东」与「全国」', names.includes('山东') && names.includes('全国'), names.slice(0, 6).join('/'))
+    check('R-P-01 provinces 码点升序（无 localeCompare）', ascNames, names.slice(0, 6).join('/'))
+    const sameFacet = !!idx1 && !!idx2 &&
+      JSON.stringify(idx1.provinces) === JSON.stringify(idx2.provinces) &&
+      JSON.stringify(idx1.papers) === JSON.stringify(idx2.papers)
+    check('R-P-01 两次构建深相等（重建结果 ≡ 快照结果，确定性）', sameFacet,
+      `provinces ${idx1 && idx1.provinces && idx1.provinces.length} vs ${idx2 && idx2.provinces && idx2.provinces.length}`)
+  } finally {
+    // 测后还原现场（避免污染后续手工使用）
+    if (had && fs.existsSync(BAK)) { fs.copyFileSync(BAK, IDX); fs.rmSync(BAK) }
+    else if (!had && fs.existsSync(IDX)) fs.rmSync(IDX)
+  }
 }
 
 // ── 12. 崩溃安全：外部非本应用占用 → 自动换端口而非裸抛 EADDRINUSE ──

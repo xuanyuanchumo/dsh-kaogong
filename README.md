@@ -1,10 +1,14 @@
-# dsh-kaogong — 考公备考一键式学习平台 · v1.8
+# dsh-kaogong — 考公备考一键式学习平台 · v1.9.0
 
 > 整合 15 个考公开源仓库 → **DSH 宿主内原生界面**：左栏「考公学习」全屏面板 + 右侧 Sidebar 并排标签（引导页亦有入口）。
 > 完全离线可用（零模型依赖、零 npm 依赖）；**AI 为可选增强**：5 个工具中 `kaogong_ai_essay_review` 可把「离线基线分 + 方法论」交模型做深度点评。
 > **v1.8 新增**：**可交互力导向图谱**（Canvas 2D · 缩放/平移/拖拽/搜索/过滤/布局切换/路径分析/标签去重叠）、
 > **白盒管理面板**（生命周期状态机 · 能力对账 · 端点性能表 · 告警 · 诊断导出）、
 > **图分析算法族**（度分布/标签传播社区/集聚系数/介数中心性/拓扑分层/最短路/k跳邻域/反向可达）。
+> **v1.9 新增（cycle-13）**：**导航七项 + 专题枢纽六分区**（刷题/图形推理/深度题库/申论/方法论收敛为枢纽分区 tab）、
+> **真题卷省份维度**（索引 v2 · provinces facet ≥35 省 · `?province=` 过滤 chips）、
+> **图谱升级包**（五档着色模式/图例卡/小地图/导出 PNG/键盘快捷键/布局过渡动画）、
+> **白盒流动可视化**（能力流三列图 · 量化四卡 · 三态灯对账 · 生命周期事件泳道）。
 
 ## 双通道架构（v1.4 核心）
 
@@ -23,7 +27,8 @@ plugin_manager install_bundle D:/Projects/TraeProjects/kaogong/dsh-kaogong
 安装即生效：
 1. **Host** 挂载宿主同源路由 `/kaogong/*`（+ 兜底独立端口自动启动）
 2. **Client** 注册双入口：左栏面板图标（`sidebar.panellist` + `main`）+ 右侧标签（`sidebarRightTabs` + guide）
-3. 刷新 DSH Web GUI → 点左栏 📚 图标 → **原生全屏学习面板**（仪表盘/刷题/错题本/图谱/可观测）
+3. 刷新 DSH Web GUI → 点左栏 📚 图标 → **原生全屏学习面板**（v1.9 导航七项：仪表盘/模考/真题卷/专题/错题本/图谱/可观测；
+   原「刷题/图形推理/深度题库/申论」收敛进「🎯 专题」页的枢纽分区 tab，路由仍可达）
 
 独立运行（无 DSH）：`node -e "import('./src/server/http.js').then(m=>m.startServer(8400))"` → http://127.0.0.1:8400
 
@@ -32,18 +37,17 @@ plugin_manager install_bundle D:/Projects/TraeProjects/kaogong/dsh-kaogong
 | 视图 | 能力 |
 |------|------|
 | 📊 仪表盘 | 仓库就绪/答题/正确率/模块掌握度（正确率×置信）/14日趋势线/30日热力/🔥streak |
-| 🧠 **深度题库** | **27506 题五维标注**（考点定位/解题推理链/最快解法/易错点/母题思维）+ 知识点检索 + 含图 10647 题 |
+| 🎯 **专题枢纽**（v1.9） | **六分区 tab**：🧭 总览（专题树）｜✏️ 行测刷题｜🔷 图形推理｜🧠 深度题库｜✍️ 申论｜📖 方法论（含母题精选）；懒挂载+常驻，切换不重挂不丢状态 |
+| 🧠 **深度题库** | **27506 题五维标注**（考点定位/解题推理链/最快解法/易错点/母题思维）+ 知识点检索 + 含图 10647 题（经专题枢纽分区触达） |
 | ⏱ **整卷模考** | 选卷 → 限时倒计时（行测 120min）→ 逐题作答 → 交卷 → **模块得分分布 + 错题清单**（答案不下发防作弊） |
-| ✏️ 刷题 | SRS 智能（错题回炉+弱点加权）/键盘流 A-D·Enter·N/单题计时/连击/toast |
-| 📚 **真题卷** | **1683 套卷库**（申论 944 / 行测 739，2008-2026）：科目/年份筛选 → 详情（给定材料分段 + 题目 + 分值 + 作答要求 + 参考答案折叠 + **题目配图**） |
-| 🎯 **专题** | 科目专题（年份跨度/题量）+ 申论五类题型（概括/分析/对策/应用文/大作文） |
-| ✍️ **申论** | 按题型选题 → **材料阅读区** → 作答 → 离线评分（小题四维/大作文分档）→ 采分点命中/遗漏诊断 |
+| ✏️ 刷题 | SRS 智能（错题回炉+弱点加权）/键盘流 A-D·Enter·N/单题计时/连击/toast（经专题枢纽分区触达） |
+| 📚 **真题卷** | **1683 套卷库**（申论 944 / 行测 739，2008-2026）：科目/**省份**/年份筛选（v1.9 索引 v2：provinces facet ≥35 省，含「全国」，码点升序；点击省份 chip → `?province=` 过滤）→ 详情（给定材料分段 + 题目 + 分值 + 作答要求 + 参考答案折叠 + **题目配图**） |
 | 📕 错题本 | 五箱 SRS：答错降箱收集→回炉升箱→箱≥3连对2=掌握；签名去重；300 环形 |
 | 📅 计划 | 30 天四阶段日历 + 进度日滑杆 |
 | 🔍 检索 | 15 仓库全文检索（DFS 限深早停） |
 | 📖 方法论 | 10 主题参考（kaogong-skill 实战方法论） |
-| 🕸️ **交互图谱** | **Canvas 2D 力导向**（FR 模型 + 预收敛 + 自适应）：滚轮缩放（光标锚点）/拖空白平移/拖节点钉住/hover 邻域高亮/点击详情抽屉/双击聚焦/搜索定位/类型过滤/力导向↔分层切换/标签去重叠；指标 V·E·密度·连通分量·孤儿·健康度·**社区数**·**集聚系数**；**路径分析**（最短路高亮） |
-| 📡 **白盒管理** | 生命周期 stepper（三态+事件时间线）· 能力对账表（声明/活跃/孤儿/未声明）· 端点性能表（p50/p95/错误率/sparkline/可排序/可过滤）· 分级告警 · 慢端点 TOP · 命名空间清单 · **诊断 JSON 导出** · 摘要复制 |
+| 🕸️ **交互图谱** | **Canvas 2D 力导向**（FR 模型 + 预收敛 + 自适应 + **350ms 布局过渡动画**）：滚轮缩放（光标锚点）/拖空白平移/拖节点钉住/hover 邻域高亮/点击详情抽屉/双击聚焦/搜索定位/类型过滤/力导向↔分层切换/标签去重叠；**v1.9 升级包**：**五档着色模式**（类型/社区/PageRank/中介/度，连续指标五停渐变+半径随指标）· **图例卡**（节点/边类型计数点击显隐）· **小地图**（右下 150×100 点击/拖拽平移视口）· **导出 PNG** · **键盘快捷键**（+/−/0/f/l/Esc）；指标 V·E·密度·连通分量·孤儿·健康度·**社区数**·**集聚系数**；**路径分析**（最短路高亮） |
+| 📡 **白盒管理** | 生命周期 stepper（三态+事件时间线）· 能力对账表（声明/活跃/孤儿/未声明 + **v1.9 三态灯列与三态筛选**）· 端点性能表（p50/p95/错误率/sparkline/可排序/可过滤）· **v1.9 能力流三列图**（注册→生产→消费 SVG 贝塞尔链接）· **量化四卡**（SLO 达成率/错误预算/遥测样本/能力健康度）· **生命周期事件泳道**（阶段 × 近 14 天热力）· 分级告警 · 慢端点 TOP · 命名空间清单 · **诊断 JSON 导出** · 摘要复制 |
 
 ### 图谱算法族（v1.8，确定性可复现）
 
@@ -83,6 +87,8 @@ src/
 │   └── dataApi.js        # 只读数据查询域（banks/plan/search/method）
 ├── host/index.js         # Cordis Host 半：webServer 同源挂载(主) + 端口兜底 + 4 AI 工具
 ├── client/client.js      # Cordis Client 半：双入口 + 宿主原生 React 面板 + 通道探测
+│   （v1.9 模块族：client/study-view·papers-view·graph-analytics·graph-physics·
+│     graph-transition(过渡动画+键盘命令纯表)·graph-canvas(画布装配原语)·graph-engine·graph-view·obs-view·ui-kit）
 └── ui/ (index.html+app.css)  # 零依赖 SPA（同源路由页；服务端内联 CSS）
 locale/{zh,en}.json       # DSH 插件规范 i18n 位置
 data/                     # progress/<slug>-<hash8>.json · runtime.json · lifecycle.jsonl
@@ -100,9 +106,19 @@ data/                     # progress/<slug>-<hash8>.json · runtime.json · life
 ## 开发验证
 
 ```bash
-npm run build        # 语法门 ×8
-node smoke.test.mjs  # 40 断言 E2E（信标/adopt/隔离/图谱/遥测/崩溃安全/SRS闭环/同源路由/UI契约）
+npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并单 combo（零错误）
+node smoke.test.mjs  # 164 断言 E2E（信标/adopt/隔离/图谱算法族/遥测/崩溃安全/SRS闭环/
+                     # 同源路由/UI契约/图算法确定性 + 省份维度运行时断言 R-P-01..03/R-N-01）
+node render.test.mjs # 35 断言真实 React 18 + 真实 client.js 集成渲染（含专题枢纽六分区/
+                     # 省份 chips/白盒流动图/图谱升级包断言与键盘命令行为验证）
+node "D:/Projects/TraeProjects/dsh-anic/assets/skill/scripts/band-detector.mjs" .   # 复杂度预算（Status: OK）
 ```
+
+**bundler 构建链（cycle-13 T-025）**：源码 `src/client/*.ts` 为 11 个真 ESM 模块，tsc 产出
+`dist/client/*.js` 后由 `scripts/bundle-client.mjs` 按 **DFS 拓扑序**合并回宿主要求的**单文件
+combo factory**（`window.__ModuleLoader__.load`）。铁律：不重命名标识符、不压缩、不删注释；
+全部文件顶层名唯一（单一作用域，重名即重复声明 SyntaxError）；**改完任何 src/client/*.ts 必须
+`npm run build`**——smoke/render 也已接线 bundler（裸 tsc 会把产物重写回裸 ESM，宿主拒绝加载）。
 
 ANIC 质量流程：`.cycles/`（intent→spec(S1-S8)→plan→门禁 G0-G3 全绿→归档 cycle-1/1-dualentry/2/3；L4 人授权；自举 CONVERGED；举他 sourceUntouched 证明）。技术债：`.cycles/tech-debt/backlog.md`。事故簿：`CLAUDE.md`。
 

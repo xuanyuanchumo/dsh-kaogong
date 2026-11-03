@@ -1,0 +1,38 @@
+Complexity Band Detection Report
+  Total complexity score: 1919
+  Average per file: 68.5
+  Budget: 180 | Upper band: 207 | Lower band: 153
+  Status: OK
+  History snapshots: 43
+  Statistical Control:
+    Mean: 66.38 | StdDev: 10.86
+    1σ: [55.5, 77.2]
+    2σ: [44.7, 88.1]
+    3σ: [33.8, 99.0]
+
+WESTERN ELECTRIC RULE VIOLATIONS (13):
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #25, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #26, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #27, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #28, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #29, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #30, value=61.42)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #27, value=88.61)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #28, value=88.61)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #29, value=88.61)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #30, value=61.42)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #22, value=56.50)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #23, value=54.06)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #42, value=68.54)
+
+COMPLEXITY HOTSPOTS (top 5):
+  [182] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\shared\manifest.ts (branches: 132, functions: 25)
+  [173] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\client\graph-physics.ts (branches: 119, functions: 27)
+  [171] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\client\graph-engine.ts (branches: 103, functions: 34)
+  [165] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\client\graph-view.ts (branches: 129, functions: 18)
+  [152] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\server\http.ts (branches: 86, functions: 33)
+
+13 Western Electric rule violation(s) detected. Process may be out of statistical control.
+
+Mode: report (default) | alarms: WE_VIOLATIONS(13)
+Report mode: alarms surfaced as report data, exit 0 (use --strict for gate semantics).
