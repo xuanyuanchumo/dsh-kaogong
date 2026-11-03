@@ -105,9 +105,111 @@
       "stdout": "[PASS] G0: Evaluation report found in cycle-1 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[PASS] G1: All 14 tasks completed §cycle-1\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 unchanged, not re-recorded\n[PASS] G2: Zero failures, zero errors (smoke-24.md) §cycle-1\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 unchanged, not re-recorded\n[PASS] G3: Build passed: node --check src/host/index.js && node --check src/server/http.js && node --check src/client/client.js && node --check src/shared/manifest.js && node --check src/adapters/repoData.js §cycle-1 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n\nAll gates PASSED.\n",
       "stderr": "",
       "durationMs": 367
+    },
+    {
+      "flowId": "init-cycle-2026-11-03T05:44:28.123Z-6",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-03T05:44:28.123Z",
+      "cycle": "cycle-2",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-03T05:44:28.123Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T05:44:28.237Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-1 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-1\n",
+      "stderr": "",
+      "durationMs": 106
+    },
+    {
+      "flowId": "band-detector-2026-11-03T09:14:43.372Z-7",
+      "script": "band-detector",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--threshold",
+        "0.15"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-03T09:14:43.372Z",
+      "cycle": "cycle-12",
+      "phase": "build",
+      "attribution": {
+        "at": "2026-11-03T09:14:43.372Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T09:14:43.493Z",
+      "exitCode": 0,
+      "stdout": "Complexity Band Detection Report\n  Total complexity score: 1595\n  Average per file: 88.6\n  Budget: 180 | Upper band: 207 | Lower band: 153\n  Status: OVER_BUDGET\n  History snapshots: 26\n  Statistical Control:\n    Mean: 62.60 | StdDev: 9.66\n    1σ: [52.9, 72.3]\n    2σ: [43.3, 81.9]\n    3σ: [33.6, 91.6]\n\nWESTERN ELECTRIC RULE VIOLATIONS (2):\n  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #25, value=88.61)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #23, value=54.06)\n\nOVER BUDGET (1 files):\n  [677] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\client.ts (branches: 475, functions: 101)\n\nCOMPLEXITY HOTSPOTS (top 2):\n  [677] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\client.ts (branches: 475, functions: 101)\n  [182] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\shared\\manifest.ts (branches: 132, functions: 25)\n\n1 file(s) over complexity budget. Refactor before proceeding.\n\n2 Western Electric rule violation(s) detected. Process may be out of statistical control.\n\nMode: report (default) | alarms: OVER_BUDGET(1 files), WE_VIOLATIONS(2)\nReport mode: alarms surfaced as report data, exit 0 (use --strict for gate semantics).\n",
+      "stderr": "",
+      "durationMs": 109
+    },
+    {
+      "flowId": "gate-ledger-2026-11-03T09:16:50.749Z-8",
+      "script": "gate-ledger",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "list"
+      ],
+      "status": "FAILED",
+      "startedAt": "2026-11-03T09:16:50.749Z",
+      "cycle": "cycle-12",
+      "phase": "build",
+      "attribution": {
+        "at": "2026-11-03T09:16:50.749Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T09:16:50.851Z",
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "[gate-ledger] 只接受 1 个位置参数（project-dir），收到 2 个: D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong list\nUsage: node gate-ledger.mjs <project-dir> --gate G0|G1|G2|G3 --result PASS|FAIL [--detail \"...\"]\n       node gate-ledger.mjs <project-dir> --verify\n       node gate-ledger.mjs <project-dir> --list\n",
+      "durationMs": 99
+    },
+    {
+      "flowId": "gate-ledger-2026-11-03T09:17:02.194Z-9",
+      "script": "gate-ledger",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--list"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-03T09:17:02.194Z",
+      "cycle": "cycle-12",
+      "phase": "build",
+      "attribution": {
+        "at": "2026-11-03T09:17:02.194Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T09:17:02.301Z",
+      "exitCode": 0,
+      "stdout": "Gate Ledger (61 entries):\n  [2026-11-02T08:38:32.396Z] G0 评估收敛门 — FAIL\n    hash: e06dfbbd2f49eb90...\n    detail: No cycle workspace\n  [2026-11-02T08:38:32.405Z] G1 任务收敛门 — FAIL\n    hash: 54c79ac616d9a3df...\n    detail: No cycle workspace\n  [2026-11-02T08:38:32.413Z] G2 测试收敛门 — FAIL\n    hash: 6997ec8d1865dd12...\n    detail: No cycle workspace\n  [2026-11-02T08:38:32.651Z] G3 构建收敛门 — FAIL\n    hash: fb5bb0273ac983bf...\n    detail: Build passed: node --check index.js && node --check server.js && node --check cl\n  [2026-11-02T08:41:30.006Z] G0 评估收敛门 — FAIL\n    hash: e31e36342c06a3f3...\n    detail: Evaluation report found in cycle-1 (16 dimension rows) [Q1:PASS,Q5:SKIP]\n  [2026-11-02T08:41:30.018Z] G1 任务收敛门 — FAIL\n    hash: 143fdf6d54ab6657...\n    detail: No task entries found (fill the task tables in 任务清单.md) §cycle-1\n  [2026-11-02T08:41:30.027Z] G2 测试收敛门 — FAIL\n    hash: c60ee69c34ed867c...\n    detail: No test reports §cycle-1\n  [2026-11-02T08:41:30.278Z] G3 构建收敛门 — FAIL\n    hash: f4b29c84cc4fd71a...\n    detail: Build passed: node --check index.js && node --check server.js && node --check cl\n  [2026-11-02T08:57:58.521Z] G1 任务收敛门 — FAIL\n    hash: b93ea34036ac88ba...\n    detail: 4 of 18 tasks not completed §cycle-1\n  [2026-11-02T08:57:58.530Z] G2 测试收敛门 — FAIL\n    hash: ae43b4264f14c8cf...\n    detail: Test report summary not recognized: smoke-24.md has no 通过/失败 rows (expected the \n  [2026-11-02T08:57:58.851Z] G3 构建收敛门 — FAIL\n    hash: 525cab233ffa29e5...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-02T09:01:26.686Z] G0 评估收敛门 — PASS\n    hash: d38c861b459ce981...\n    detail: Evaluation report found in cycle-1 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-02T09:01:26.696Z] G1 任务收敛门 — PASS\n    hash: 030a1be9811891c0...\n    detail: All 14 tasks completed §cycle-1 [Q7:PASS]\n  [2026-11-02T09:01:26.705Z] G2 测试收敛门 — PASS\n    hash: 66da1522a5ab7e8b...\n    detail: Zero failures, zero errors (smoke-24.md) §cycle-1 [Q2:PASS]\n  [2026-11-02T09:01:26.984Z] G3 构建收敛门 — PASS\n    hash: 51d5faa8f0f5b83b...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-02T09:27:40.639Z] G1 任务收敛门 — PASS\n    hash: 99d7c45911aec42c...\n    detail: All 9 tasks completed §cycle-1 [Q7:PASS]\n  [2026-11-02T09:27:40.652Z] G2 测试收敛门 — PASS\n    hash: c71ca804e15eaadc...\n    detail: Zero failures, zero errors (smoke-28.md) §cycle-1 [Q2:PASS]\n  [2026-11-02T15:07:41.996Z] G0 评估收敛门 — PASS\n    hash: e7a7f2bcec7c0855...\n    detail: Evaluation report found in cycle-2 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-02T15:07:42.007Z] G1 任务收敛门 — PASS\n    hash: 621818373672c52d...\n    detail: All 12 tasks completed §cycle-2 [Q7:PASS]\n  [2026-11-02T15:07:42.018Z] G2 测试收敛门 — PASS\n    hash: e3e6e8442b530368...\n    detail: Zero failures, zero errors (smoke-35.md) §cycle-2 [Q2:PASS]\n  [2026-11-02T15:07:42.473Z] G3 构建收敛门 — PASS\n    hash: 51dbbbfc13800e40...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-02T15:42:07.706Z] G0 评估收敛门 — PASS\n    hash: c34e783e0fc12ef5...\n    detail: Evaluation report found in cycle-3 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-02T15:42:07.722Z] G1 任务收敛门 — PASS\n    hash: 57e1a13ab259fbbd...\n    detail: All 8 tasks completed §cycle-3 [Q7:PASS]\n  [2026-11-02T15:42:07.732Z] G2 测试收敛门 — PASS\n    hash: 88f4b25cef1e024e...\n    detail: Zero failures, zero errors (smoke-40.md) §cycle-3 [Q2:PASS]\n  [2026-11-02T15:42:08.461Z] G3 构建收敛门 — PASS\n    hash: 54300c5d6f439748...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-02T16:45:20.175Z] G0 评估收敛门 — PASS\n    hash: 19889dd305cb9d7b...\n    detail: Evaluation report found in cycle-4 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-02T16:45:20.188Z] G1 任务收敛门 — PASS\n    hash: 6c36a67211237fc0...\n    detail: All 9 tasks completed §cycle-4 [Q7:PASS]\n  [2026-11-02T16:45:20.198Z] G2 测试收敛门 — PASS\n    hash: 26898736415dc3b8...\n    detail: Zero failures, zero errors (compat-hardening.md) §cycle-4 [Q2:PASS]\n  [2026-11-02T16:45:20.620Z] G3 构建收敛门 — PASS\n    hash: b8f8518133940d16...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-03T01:33:28.466Z] G0 评估收敛门 — PASS\n    hash: 90ffafb99edc23b5...\n    detail: Evaluation report found in cycle-5 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-03T01:33:28.477Z] G1 任务收敛门 — PASS\n    hash: 36a0331a3b89ed54...\n    detail: All 11 tasks completed §cycle-5 [Q7:PASS]\n  [2026-11-03T01:33:28.485Z] G2 测试收敛门 — PASS\n    hash: 68435b58b398d631...\n    detail: Zero failures, zero errors (sandbox-closure.md) §cycle-5 [Q2:PASS]\n  [2026-11-03T01:33:28.968Z] G3 构建收敛门 — PASS\n    hash: 503eeb7ed299392e...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-03T02:22:37.931Z] G0 评估收敛门 — PASS\n    hash: 73b91e5b56be3571...\n    detail: Evaluation report found in cycle-6 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-03T02:22:37.943Z] G1 任务收敛门 — PASS\n    hash: fdeed9b7db168ae6...\n    detail: All 12 tasks completed §cycle-6 [Q7:PASS]\n  [2026-11-03T02:22:37.952Z] G2 测试收敛门 — PASS\n    hash: cefc0c27381e62f8...\n    detail: Zero failures, zero errors (v16-native.md) §cycle-6 [Q2:PASS]\n  [2026-11-03T02:22:38.379Z] G3 构建收敛门 — PASS\n    hash: 22f05c5b827481a6...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-03T02:57:25.728Z] G0 评估收敛门 — PASS\n    hash: 41dafbad7adabfad...\n    detail: Evaluation report found in cycle-7 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-03T02:57:25.741Z] G1 任务收敛门 — PASS\n    hash: 1e05bf22b9acb8e4...\n    detail: All 14 tasks completed §cycle-7 [Q7:PASS]\n  [2026-11-03T02:57:25.750Z] G2 测试收敛门 — PASS\n    hash: a5ec8380857d2387...\n    detail: Zero failures, zero errors (v17-complete.md) §cycle-7 [Q2:PASS]\n  [2026-11-03T02:57:26.178Z] G3 构建收敛门 — PASS\n    hash: fae113ab61231a35...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-03T04:24:35.140Z] G0 评估收敛门 — PASS\n    hash: f58385f18643003a...\n    detail: Evaluation report found in cycle-8 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-03T04:24:35.152Z] G1 任务收敛门 — PASS\n    hash: f8cb981c4edcc63a...\n    detail: All 17 tasks completed §cycle-8 [Q7:PASS]\n  [2026-11-03T04:24:35.161Z] G2 测试收敛门 — PASS\n    hash: 62d5e6e24d7b2f20...\n    detail: Zero failures, zero errors (v172-fixes.md) §cycle-8 [Q2:PASS]\n  [2026-11-03T04:24:35.581Z] G3 构建收敛门 — PASS\n    hash: 7dd239ab77907b56...\n    detail: Build passed: node --check src/host/index.js && node --check src/server/http.js \n  [2026-11-03T05:04:27.599Z] G0 评估收敛门 — PASS\n    hash: f8c64a62dd0a8453...\n    detail: Evaluation report found in cycle-9 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-03T05:04:27.611Z] G1 任务收敛门 — PASS\n    hash: 3e5377037383b67a...\n    detail: All 12 tasks completed §cycle-9 [Q7:PASS]\n  [2026-11-03T05:04:27.619Z] G2 测试收敛门 — PASS\n    hash: 53f56fa257679eaf...\n    detail: Zero failures, zero errors (t022-ts.md) §cycle-9 [Q2:PASS]\n  [2026-11-03T05:04:30.064Z] G3 构建收敛门 — PASS\n    hash: f92d64dc1f94581a...\n    detail: Build passed: npx tsc §cycle-9 [dist=absent] [Q3:PASS,Q4:PASS]\n  [2026-11-03T05:17:19.751Z] G0 评估收敛门 — PASS\n    hash: a8e6158fa84f178e...\n    detail: Evaluation report found in cycle-10 (16 dimension rows) [Q1:PASS,Q5:PASS]\n  [2026-11-03T05:17:19.764Z] G1 任务收敛门 — PASS\n    hash: fd0b1d6ce66c1eb7...\n    detail: All 8 tasks completed §cycle-10 [Q7:PASS]\n  [2026-11-03T05:17:19.773Z] G2 测试收敛门 — PASS\n    hash: 71c33b3284def068...\n    detail: Zero failures, zero errors (v174-debt.md) §cycle-10 [Q2:PASS]\n  [2026-11-03T05:17:22.375Z] G3 构建收敛门 — PASS\n    hash: 195008d0b44127e9...\n    detail: Build passed: npx tsc §cycle-10 [dist=absent] [Q3:PASS,Q4:PASS]\n  [2026-11-03T05:29:03.299Z] G0 评估收敛门 — PASS\n    hash: cf95e6364a065fba...\n    detail: Evaluation report found in cycle-11 (16 dimens",
+      "stderr": "",
+      "durationMs": 104
+    },
+    {
+      "flowId": "init-cycle-2026-11-03T10:22:44.635Z-10",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-03T10:22:44.635Z",
+      "cycle": "cycle-12",
+      "phase": "build",
+      "attribution": {
+        "at": "2026-11-03T10:22:44.635Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T10:22:44.749Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-13 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-13\n",
+      "stderr": "",
+      "durationMs": 110
     }
   ],
-  "counter": 5,
+  "counter": 10,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

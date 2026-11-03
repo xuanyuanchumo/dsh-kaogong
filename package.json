@@ -46,12 +46,12 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/bundle-client.mjs",
     "typecheck": "tsc --noEmit",
-    "prepack": "tsc",
-    "test": "tsc && node smoke.test.mjs",
-    "test:render": "tsc && node render.test.mjs",
-    "test:all": "tsc && node smoke.test.mjs && node render.test.mjs",
+    "prepack": "tsc && node scripts/bundle-client.mjs",
+    "test": "tsc && node scripts/bundle-client.mjs && node smoke.test.mjs",
+    "test:render": "tsc && node scripts/bundle-client.mjs && node render.test.mjs",
+    "test:all": "tsc && node scripts/bundle-client.mjs && node smoke.test.mjs && node render.test.mjs",
     "lint": "tsc --noEmit"
   },
   "keywords": [
