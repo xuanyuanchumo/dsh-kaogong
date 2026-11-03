@@ -627,6 +627,13 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   const pkg = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
   check('peerDependencies 声明 dsh 范围', !!pkg.peerDependencies?.['@deepseek-ai/dsh'], JSON.stringify(pkg.peerDependencies || {}))
   check('engines.dsh 声明', !!pkg.engines?.dsh, JSON.stringify(pkg.engines || {}))
+  // 版本三锚点一致（cycle-13 收口教训：W3 升 package.json 漏改 manifest → 沙箱 banner 仍报 1.8.0）
+  {
+    const mSrc = fs.readFileSync(new URL('./src/shared/manifest.ts', import.meta.url), 'utf-8')
+    const mv = (mSrc.match(/plugin: \{ id: 'kaogong', name: 'dsh-kaogong', version: '([^']+)'/) || [])[1]
+    const rm = fs.readFileSync(new URL('./README.md', import.meta.url), 'utf-8').match(/·\s*v([\d.]+)/)
+    check('版本三锚点一致（package.json=manifest=README）', pkg.version === mv && pkg.version === (rm ? rm[1] : null), `pkg=${pkg.version} manifest=${mv} readme=${rm && rm[1]}`)
+  }
   // R8：独立端口畸形请求防线（回调整体 try + clientError 兜底）
   const httpSrc = fs.readFileSync(new URL('./dist/server/http.js', import.meta.url), 'utf8')
   check('独立端口 clientError 兜底', httpSrc.includes("server.on('clientError'"))

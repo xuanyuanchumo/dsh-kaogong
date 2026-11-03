@@ -1,11 +1,3 @@
-{"ts":"2026-11-03T01:33:21.828Z","event":"server-adopt","port":8495,"pid":13320}
-{"ts":"2026-11-03T01:33:22.273Z","event":"server-listen-probe","port":8491}
-{"ts":"2026-11-03T01:58:52.406Z","event":"server-adopt","port":8400,"pid":12576}
-{"ts":"2026-11-03T01:59:45.339Z","event":"server-listen","port":8400}
-{"ts":"2026-11-03T02:15:08.031Z","event":"server-listen-probe","port":8496}
-{"ts":"2026-11-03T02:17:36.636Z","event":"server-listen-probe","port":8495}
-{"ts":"2026-11-03T02:17:36.674Z","event":"server-adopt","port":8495,"pid":24732}
-{"ts":"2026-11-03T02:17:37.270Z","event":"server-listen-probe","port":8491}
 {"ts":"2026-11-03T02:17:54.617Z","event":"server-listen-probe","port":8495}
 {"ts":"2026-11-03T02:17:54.653Z","event":"server-adopt","port":8495,"pid":9700}
 {"ts":"2026-11-03T02:17:55.157Z","event":"server-listen-probe","port":8491}
@@ -298,3 +290,11 @@
 {"ts":"2026-11-03T14:48:36.132Z","event":"server-listen-probe","port":8495}
 {"ts":"2026-11-03T14:48:36.182Z","event":"server-adopt","port":8495,"pid":6112}
 {"ts":"2026-11-03T14:49:01.400Z","event":"server-listen-probe","port":8491}
+{"ts":"2026-11-03T14:52:57.683Z","event":"server-listen","port":8400}
+{"ts":"2026-11-03T14:54:31.580Z","event":"server-listen","port":8401}
+{"ts":"2026-11-03T14:55:41.707Z","event":"server-listen-probe","port":8495}
+{"ts":"2026-11-03T14:55:41.758Z","event":"server-adopt","port":8495,"pid":812}
+{"ts":"2026-11-03T14:56:19.503Z","event":"server-listen-probe","port":8491}
+{"ts":"2026-11-03T14:56:44.697Z","event":"server-listen-probe","port":8495}
+{"ts":"2026-11-03T14:56:44.752Z","event":"server-adopt","port":8495,"pid":23300}
+{"ts":"2026-11-03T14:57:25.210Z","event":"server-listen-probe","port":8491}

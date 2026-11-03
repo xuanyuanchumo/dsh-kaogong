@@ -929,6 +929,30 @@
       "scored": 0,
       "totalScore": 0,
       "elapsedSec": 5400
+    },
+    {
+      "ts": 1793717742317,
+      "paperId": "国考/2008/行测-统考",
+      "subject": "行测",
+      "year": 2008,
+      "answered": 140,
+      "correct": 140,
+      "rate": 100,
+      "scored": 0,
+      "totalScore": 0,
+      "elapsedSec": 5400
+    },
+    {
+      "ts": 1793717805190,
+      "paperId": "国考/2008/行测-统考",
+      "subject": "行测",
+      "year": 2008,
+      "answered": 140,
+      "correct": 140,
+      "rate": 100,
+      "scored": 0,
+      "totalScore": 0,
+      "elapsedSec": 5400
     }
   ],
   "essayRecords": [
@@ -2464,6 +2488,46 @@
     },
     {
       "ts": 1793717316619,
+      "paperId": null,
+      "no": null,
+      "chars": 14,
+      "score": 6.1,
+      "max": 40,
+      "ratio": 0.152,
+      "mode": "article"
+    },
+    {
+      "ts": 1793717742328,
+      "paperId": null,
+      "no": null,
+      "chars": 173,
+      "score": 28.6,
+      "max": 40,
+      "ratio": 0.715,
+      "mode": "article"
+    },
+    {
+      "ts": 1793717742343,
+      "paperId": null,
+      "no": null,
+      "chars": 14,
+      "score": 6.1,
+      "max": 40,
+      "ratio": 0.152,
+      "mode": "article"
+    },
+    {
+      "ts": 1793717805205,
+      "paperId": null,
+      "no": null,
+      "chars": 173,
+      "score": 28.6,
+      "max": 40,
+      "ratio": 0.715,
+      "mode": "article"
+    },
+    {
+      "ts": 1793717805222,
       "paperId": null,
       "no": null,
       "chars": 14,
