@@ -1,4 +1,3 @@
-{"ts":"2026-11-03T02:17:54.617Z","event":"server-listen-probe","port":8495}
 {"ts":"2026-11-03T02:17:54.653Z","event":"server-adopt","port":8495,"pid":9700}
 {"ts":"2026-11-03T02:17:55.157Z","event":"server-listen-probe","port":8491}
 {"ts":"2026-11-03T02:18:46.794Z","event":"server-listen","port":8401}
@@ -298,3 +297,4 @@
 {"ts":"2026-11-03T14:56:44.697Z","event":"server-listen-probe","port":8495}
 {"ts":"2026-11-03T14:56:44.752Z","event":"server-adopt","port":8495,"pid":23300}
 {"ts":"2026-11-03T14:57:25.210Z","event":"server-listen-probe","port":8491}
+{"ts":"2026-11-03T14:58:01.306Z","event":"server-listen","port":8401}

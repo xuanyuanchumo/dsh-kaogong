@@ -1,7 +1,7 @@
 {
   "app": "dsh-kaogong",
   "port": 8401,
-  "pid": 24692,
-  "startedAt": "2026-11-03T14:54:07.442Z",
-  "version": "1.8.0"
+  "pid": 19032,
+  "startedAt": "2026-11-03T14:57:53.719Z",
+  "version": "1.9.0"
 }
