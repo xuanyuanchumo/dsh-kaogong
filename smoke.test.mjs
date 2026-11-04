@@ -308,6 +308,12 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   check('SMOKE-RP-01 每仓库含 upstream 真实 GitHub 地址', rs.repos.every(r => typeof r.upstream === 'string' && r.upstream.startsWith('https://github.com/')))
   // ①b 关于本项目：self 元数据透出（GitHub 跳转单一事实源=manifest SELF_META）
   check('SMOKE-RP-01b self 元数据（repo/releases/issues/npm + 版本=manifest 锚点）', rs.self && rs.self.repo === 'https://github.com/xuanyuanchumo/dsh-kaogong' && typeof rs.self.version === 'string' && /^1\./.test(rs.self.version) && rs.self.releases.includes('/releases') && rs.self.issues.includes('/issues') && typeof rs.self.npm === 'string', JSON.stringify(rs.self || {}).slice(0, 200))
+  // cycle-17 版本统一守卫：/api/repos 的 self.version 必须与 /api/capabilities 的 plugin.version
+  // 同源相等（两处都引用 CAPABILITIES.plugin.version 单一事实源；页面徽章与能力矩阵漂移即红）
+  {
+    const capsV = await J(`${B}/api/capabilities`)
+    check('SMOKE-VER-01 self.version ≡ capabilities.plugin.version（版本单一事实源）', rs.self && capsV.plugin && rs.self.version === capsV.plugin.version, `self=${rs.self && rs.self.version} caps=${capsV.plugin && capsV.plugin.version}`)
+  }
   // ② 校验路径：未知 key / 无作业取消 → {error} 且 HTTP 200
   const bad1 = await P(`${B}/api/repos/install`, { key: 'no_such_repo' })
   const bad2 = await P(`${B}/api/repos/cancel`, { key: 'sakib' })
