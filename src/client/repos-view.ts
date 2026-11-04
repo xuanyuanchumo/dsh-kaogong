@@ -40,6 +40,37 @@ function RpJobLog({ job }: any) {
       job.error ? '错误: ' + job.error + '\n' : '', (job.log || []).join('\n')) : null)
 }
 
+/** 外链小按钮（target=_blank + rel 安全；字段缺失即不渲染该项） */
+function rpLinkBtn(url: any, label: any, title: any) {
+  if (!url || typeof url !== 'string') return null
+  return h('a', {
+    href: url, target: '_blank', rel: 'noreferrer noopener', title: title || url,
+    style: { ...KV_BTN, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' },
+  }, label + ' ↗')
+}
+
+/** 「关于本项目」卡：本插件 GitHub 仓库/Release/Issue/npm 跳转 + 版本徽章（self 元数据缺失整卡隐藏） */
+function RpAboutProject({ self }: any) {
+  if (!self || typeof self !== 'object' || !self.repo) return null
+  return h('div', {
+    style: {
+      display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+      marginBottom: 14, padding: '10px 14px', borderRadius: 12,
+      background: 'linear-gradient(135deg,rgba(99,102,241,.08),rgba(20,184,166,.06))',
+      border: '1px solid rgba(99,102,241,.22)',
+    },
+  },
+    h('span', { style: { fontWeight: 800, fontSize: 12.5, color: '#334155' } }, '🧭 关于本项目 · ' + (self.name || 'dsh-kaogong')),
+    self.version ? h('span', { style: { ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#059669' } }, 'v' + self.version) : null,
+    self.desc ? h('span', { style: { fontSize: 11, color: '#64748b', flex: '1 1 200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: self.desc }, self.desc) : null,
+    h('span', { style: { marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' } },
+      rpLinkBtn(self.repo, 'GitHub 仓库', '项目主页与源码'),
+      rpLinkBtn(self.releases, 'Release', '版本发布记录（含更新说明）'),
+      rpLinkBtn(self.issues, '反馈 Issue', '问题反馈与功能建议'),
+      rpLinkBtn(self.npm, 'npm', 'npm 包页面'),
+      rpLinkBtn(self.repo ? self.repo + '#-致敬上游全部数据与成果归原作者' : '', '上游致谢', '15 个数据仓库与原作者列表')))
+}
+
 export function NativeReposView({ api }: any) {
   /* ── hooks 顶部恒定：state×5 + effect×2 + callback×4 ── */
   const [data, setData] = React.useState(null)
@@ -117,6 +148,9 @@ export function NativeReposView({ api }: any) {
 
   return h('div', {},
     err ? h('div', { style: { fontSize: 11.5, color: '#b45309', marginBottom: 8 } }, '⚠ ' + err) : null,
+
+    /* ⓪ 关于本项目（GitHub/Release/Issue/npm 跳转 + 版本徽章） */
+    h(RpAboutProject, { self: data.self }),
 
     /* ① 总览 */
     h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 14 } },

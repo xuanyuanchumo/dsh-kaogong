@@ -306,6 +306,8 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   const tiers = new Set(rs.repos.map(r => r.tier))
   check('SMOKE-RP-01 tier 词表=required/recommended/optional 且必选≥3', [...tiers].every(t => ['required', 'recommended', 'optional'].includes(t)) && tiers.size === 3 && rs.repos.filter(r => r.tier === 'required').length >= 3, [...tiers].join(','))
   check('SMOKE-RP-01 每仓库含 upstream 真实 GitHub 地址', rs.repos.every(r => typeof r.upstream === 'string' && r.upstream.startsWith('https://github.com/')))
+  // ①b 关于本项目：self 元数据透出（GitHub 跳转单一事实源=manifest SELF_META）
+  check('SMOKE-RP-01b self 元数据（repo/releases/issues/npm + 版本=manifest 锚点）', rs.self && rs.self.repo === 'https://github.com/xuanyuanchumo/dsh-kaogong' && typeof rs.self.version === 'string' && /^1\./.test(rs.self.version) && rs.self.releases.includes('/releases') && rs.self.issues.includes('/issues') && typeof rs.self.npm === 'string', JSON.stringify(rs.self || {}).slice(0, 200))
   // ② 校验路径：未知 key / 无作业取消 → {error} 且 HTTP 200
   const bad1 = await P(`${B}/api/repos/install`, { key: 'no_such_repo' })
   const bad2 = await P(`${B}/api/repos/cancel`, { key: 'sakib' })

@@ -4,7 +4,7 @@
 
 ## Commands
 - Build/类型门: `npm run build`（**tsc + scripts/bundle-client.mjs**：类型错误阻断 + 多文件产物拓扑序合并为宿主要求的单 combo）。**改完 .ts 必须 build（宿主编织的是 dist），改完任何 src/client/*.ts 也必须 build（client 产物是 bundler 合并的，裸 tsc 会把 dist/client/client.js 重写回裸 ESM → 宿主拒绝加载）**
-- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**164 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + **cycle-13 省份维度运行时断言 R-P-01..03/R-N-01**）+ `node render.test.mjs`（**35 断言**，真实 React 18 + 真实 client.js 集成渲染，含变异验证、**专题枢纽六分区/省份 chips/白盒流动图/图谱升级包断言与键盘命令行为验证**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
+- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**203 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + cycle-13 省份维度 R-P/R-N + cycle-15 记忆 R-MEM/三布局/流动粒子/白盒三件套 + **cycle-16 题库管理 R-P-01..05（/api/repos* 控制面+数据根四级解析+崩溃安全静态守卫）**）+ `node render.test.mjs`（**42 断言**，真实 React 18 + 真实 client.js 集成渲染，含专题枢纽/省份 chips/白盒流动图/图谱升级包/记忆跳回/**C16 题库面板「关于本项目」卡与安装请求**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
 - **沙箱验证（禁主力直测）**: `node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`（token 行取 URL；插件崩只崩沙箱）
 - 热更新重载: `plugin_manager set_plugin include:kaogong enabled=false → true`（fiber 重挂载）
 - 安装/重装: `plugin_manager remove_bundle dsh-kaogong → install_bundle <绝对路径>`
@@ -79,3 +79,12 @@
 - **⑨（combo 单作用域）新增顶层名必须全局唯一**：环形布局 `graphCircularLayout`（transition）、粒子边集 `KG_FLOW_RELS`（physics）、布局序列 `KG_LAYOUTS/KG_LAYOUT_LABEL/kgNextLayout`（graph-view）、记忆 `kgMemAgo/useKgMem/KgMemBanner`（study-view）、白盒 `ObsQuantLadder/ObsLifeRing/ObsScatter/supDigits`（obs-view）——本轮刻意走「模块前缀」纪律（graph 系 graph*/KG_*、study 系 kg*/Kg*、obs 系 Obs*/sup*），bundler 重名防御只兜底不豁免。**规矩：新增 client 顶层名 = 前缀 + 语义，禁止裸词（`layout`、`banner` 这种撞名即 SyntaxError）。**
 - **⑩（hub 常驻视图的重入断言）**：专题枢纽六分区「懒挂载+常驻，切换不重挂」——render 测试里 practice/tuxing/deepbank 一旦被 N-02 进入过，后续断言面对的是**旧组件状态**（横幅不会因 `__kgMemStore` 后置变化重现）。**修法：记忆 mock 仓库在 fetch mock 定义后立即置位（所有挂载可见）；重入断言前先「← 模块」回选择页（题目页没有横幅——横幅只挂模块选择/未抽题态）。**带 `initialModule` 的专题直入不弹横幅是**有意设计**（显式意图优先于记忆）。
 - **⑪（记忆域设计取舍）**：记忆存 **progress.memory[kind]** 而非 localStorage——跟随 `?ws=` 命名空间天然隔离、跨设备（同工作区）一致、且复用既有 saveProgress 原子写；题目**整对象入记忆**（≤8KB 校验）保证「跳回原题」字面成立（SRS 抽题是随机的，靠 kind+重抽无法复现原题）。12-kind LRU 防历史 kind 残留膨胀；kind 白名单防键污染/原型链。
+
+## cycle-16 事故与教训（v1.11.0 一键式题库管理 + 发布）
+- **⑫（发布根本问题）npm 包不含题库数据**：15 仓库合计 ~2.2GB 且各有上游版权，绝不能随包分发；原 `REPO_ROOT=上级目录` 是开发态假设，安装态下数据全缺。解法=**数据根四级解析**（env `KG_REPOS_DIR` > `data/repos-config.json` > 开发态上级（含任一登记仓库才识别）> `data/repos` 托管默认）+ 题库管理面板一键克隆。**凡「路径」进运行期，一律做成可配置事实源，禁止模块加载期硬编码位置。**
+- **⑬（动态根的重建模式）**：数据根变更不能散落改七个域文件的闭包捕获——采用**域工厂重建**：`buildDomains(root)` 集中装配（各域 makeXxxApi 签名零改动），`rebuildDomains()` 换根 + 三级缓存失效（resetPaperIndex / resetNaoku / graphCache 归零），安装/删除/换根全部走 `onRootChanged` 回调。**新增跨域共享可变前提时，先答「谁持有、谁重建、谁失效」三问再动手。**
+- **⑭（spawn 崩溃安全同族）**：git 子进程的 `proc.on('error')`（git 不存在/权限）与 `close` 非零码都必须收敛为 job failed——与 cycle-0 的 listen EADDRINUSE 同族教训：**一切外部异步错误必须挂回受控 Promise/状态，绝不 uncaughtException 击杀宿主**。另 `GIT_TERMINAL_PROMPT=0` 防 git 在无 TTY 环境弹凭据提示永久挂起。
+- **⑮（发布卫生）**：`data/.naoku.db`（147MB，GitHub 单文件 100MB 红线）与 progress/runtime/lifecycle 曾入 git 跟踪——发布前 `git rm --cached` + gitignore + **独立干净快照目录**（_publish-kaogong，无 data/.dsh/.cycles/.git）初始化发布仓。npm pack 311KB 是「包卫生」的机器证据。教训：**运行时产物从第一天就 gitignore；发布走干净快照，不在开发仓打 tag 直推。**
+- **⑯（异步路由改造检查单）**：`handleApi` 变异步必须同步改**全部调用点**（同源 attachWebRoute + 独立端口 buildHttpServer 两处 `req.on('end')` 都要 async+await），并保留 try/catch 收敛 500。tsc 全绿 + smoke 全绿才算改完。
+- **⑰（面板元数据单一事实源）**：「关于本项目」卡的 GitHub/Release/Issue/npm 链接存 `SELF_META`（manifest），server `/api/repos` 透出 `self`，UI 只消费不硬编码；version 引用 `CAPABILITIES.plugin.version` 而非第二处字面量（版本三锚点守卫只认一处）。
+- **⑱（沙箱模拟安装态）**：验证「npm 安装后无数据」的正确方法 = 沙箱带 `KG_REPOS_DIR=空目录` 启动（present=0/requiredMissing=3），再走真实一键克隆→功能即时恢复（/api/method 从「参考文件未找到」变真实全文）→pull/browse/remove 全链路。**环境性缺陷用「干净环境复现 + 修复后同环境回归」闭环，不在开发态环境自欺。**

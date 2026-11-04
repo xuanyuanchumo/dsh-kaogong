@@ -130,6 +130,18 @@ globalThis.fetch = async (url) => {
     lifecycle: { stages: [{ stage: 'serve', desc: '稳态', state: 'current' }], events: [], current: 'serve' },
   }) }
   if (u.includes('/api/wrong')) return { json: async () => ({ wrong: [], summary: { open: 0, mastered: 0 } }) }
+  // cycle-16 题库管理面板数据源（self 元数据驱动「关于本项目」卡；repos 分级卡片）
+  if (u.includes('/api/repos')) return { json: async () => ({
+    root: 'D:/demo/repos', rootSource: 'auto', mirror: '', git: true,
+    self: { name: 'dsh-kaogong', version: '1.11.0', repo: 'https://github.com/xuanyuanchumo/dsh-kaogong', homepage: 'https://github.com/xuanyuanchumo/dsh-kaogong#readme', releases: 'https://github.com/xuanyuanchumo/dsh-kaogong/releases', issues: 'https://github.com/xuanyuanchumo/dsh-kaogong/issues', npm: 'https://www.npmjs.com/package/dsh-kaogong', license: 'MIT', desc: '考公备考整合插件' },
+    repos: [
+      { key: 'xingcezhenti', tier: 'required', size: '341MB', desc: '行测真题', upstream: 'https://github.com/ERRRC/xingcezhenti', present: false, isGit: false, files: 0, job: null },
+      { key: 'kaogong-skill', tier: 'required', size: '3MB', desc: '方法论', upstream: 'https://github.com/KeWang0622/kaogong-skill', present: true, isGit: true, files: 16, job: { state: 'done', action: 'clone', log: ['ok'] } },
+      { key: 'gwy-zhenti', tier: 'recommended', size: '626MB', desc: '真题卷', upstream: 'https://github.com/ProfessorZhi/gwy-zhenti', present: false, isGit: false, files: 0, job: null },
+      { key: 'sakib', tier: 'optional', size: '1MB', desc: '文档库', upstream: 'https://github.com/vsakib/sakib', present: false, isGit: false, files: 0, job: null },
+    ],
+    summary: { total: 15, present: 1, requiredMissing: ['xingcezhenti'], running: 0, tiers: { required: 3, recommended: 2, optional: 10 } },
+  }) }
   // cycle-15 专项刷题记忆：GET 返回全局记忆仓库（POST 由视图静默回写，响应不参与断言）
   if (u.includes('/api/memory')) {
     return { json: async () => ({ memory: globalThis.__kgMemStore || {} }) }
@@ -686,6 +698,37 @@ try {
       t = JSON.stringify(tr.toJSON())
       if (!t.includes('深度题库上次的题')) throw new Error('C15 深度题库跳回未恢复原题')
       ok('C15-06: 深度题库记忆横幅 → 一键跳回原题')
+    }
+
+    /* ══ cycle-16：题库管理面板（关于本项目 GitHub 跳转 + 分级卡片 + 零降级）══ */
+    {
+      const rpBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('题库管理'))
+      if (!rpBtn) throw new Error('C16 未找到题库管理导航按钮')
+      await act(async () => { rpBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 120)) })
+      const t = JSON.stringify(tr.toJSON())
+      // 关于本项目卡：GitHub 仓库/Release/Issue/npm 四类跳转 + 版本徽章
+      for (const k of ['关于本项目', 'GitHub 仓库', 'Release', '反馈 Issue', 'npm', '上游致谢', 'v1.11.0']) {
+        if (!t.includes(k)) throw new Error('C16 题库面板缺「' + k + '」')
+      }
+      if (!t.includes('https://github.com/xuanyuanchumo/dsh-kaogong')) throw new Error('C16 关于本项目卡未挂真实仓库 URL')
+      // 分级卡片 + 状态徽章 + 一键必选 + 数据根/镜像配置
+      for (const k of ['必选 · ', '推荐 · ', '可选 · ', '已安装', '未安装', '一键安装必选包', '数据根与镜像代理']) {
+        if (!t.includes(k)) throw new Error('C16 题库面板区块缺失: ' + k)
+      }
+      // 上游仓库链接逐卡存在（致敬跳转）
+      if (!t.includes('https://github.com/ERRRC/xingcezhenti')) throw new Error('C16 上游仓库跳转缺失')
+      if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C16 题库面板渲染降级')
+      // 安装按钮真实触达 POST /repos/install（fetch 日志断言）
+      const before = globalThis.__kgFetchLog.length
+      const installBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('⬇ xingcezhenti'))
+      if (!installBtn) throw new Error('C16 一键安装必选按钮缺失')
+      await act(async () => { installBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+      const after = globalThis.__kgFetchLog.slice(before).join(' ')
+      if (!after.includes('/api/repos/install')) throw new Error('C16 安装按钮未触发 /api/repos/install 请求')
+      if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C16 安装交互后渲染降级')
+      ok('C16-01: 题库管理面板（关于本项目 GitHub 跳转×4+致谢 · 分级卡片 · 一键安装真实发请求 · 零降级）')
     }
   }
 

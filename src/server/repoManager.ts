@@ -16,7 +16,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, statSync, rmSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { REPOS_META } from '../shared/manifest.js'
+import { REPOS_META, SELF_META } from '../shared/manifest.js'
 import { readReposConfig, writeReposConfig, isInside } from './dataRoot.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
@@ -132,6 +132,7 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
     const requiredMissing = list.filter(r => r.tier === 'required' && !r.present).map(r => r.key)
     return {
       root, rootSource: cfg.root ? 'config' : 'auto', mirror: cfg.mirror || '',
+      self: SELF_META,   // 本插件自身元数据（面板「关于本项目」卡片消费；单一事实源在 manifest）
       git: null, // 异步探测结果单独字段（见下）
       repos: list,
       summary: { total: list.length, present: presentN, requiredMissing, running: runningCount(),

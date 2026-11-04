@@ -143,6 +143,20 @@ export const CAPABILITIES = {
   methodTopics: ['行测', '申论', '职测', '综应', '公基', '公文', '面试', '时政', '报考', '复盘'],
 }
 
+// ── cycle-16 本插件自身元数据（题库管理面板「关于本项目」卡片的单一事实源）──
+// 面板不硬编码 URL——server /api/repos 透出 self，UI 消费；改仓库地址只改这里。
+export const SELF_META = {
+  name: 'dsh-kaogong',
+  version: CAPABILITIES.plugin.version,   // 引用单一事实源，杜绝第二处版本字面量（三锚点守卫只认 plugin.version）
+  repo: 'https://github.com/xuanyuanchumo/dsh-kaogong',
+  homepage: 'https://github.com/xuanyuanchumo/dsh-kaogong#readme',
+  releases: 'https://github.com/xuanyuanchumo/dsh-kaogong/releases',
+  issues: 'https://github.com/xuanyuanchumo/dsh-kaogong/issues',
+  npm: 'https://www.npmjs.com/package/dsh-kaogong',
+  license: 'MIT',
+  desc: '考公备考整合插件（DSH 宿主原生面板）— 15 开源仓库一键式整合 · 离线可视化',
+}
+
 // ── cycle-16 原始题库注册表（题库管理面板的单一事实源）──
 // tier: required=必选（核心刷题/方法论/图推三视图的硬依赖）· recommended=推荐（真题卷/模考/深度题库）·
 //       optional=可选（增强素材，按需拉取避免一次下载过大）。
