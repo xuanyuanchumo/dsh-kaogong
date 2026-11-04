@@ -337,7 +337,9 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   check('SMOKE-RP-05 spawn error 事件必须接住（崩溃安全）', /proc\.on\('error'/.test(rmSrc) && rmSrc.includes('GIT_TERMINAL_PROMPT'))
   check('SMOKE-RP-05 智能判断 clone vs pull + 非 git 目录保护', rmSrc.includes("existsSync(join(target, '.git')) ? 'pull' : 'clone'") && rmSrc.includes('拒绝覆盖'))
   const httpSrc16 = readSrc('./src/server/http.ts')
-  check('SMOKE-RP-05 数据根变更重建域并失效缓存（paperIndex/naoku/graphCache）', httpSrc16.includes('resetPaperIndex()') && httpSrc16.includes('resetNaoku()') && httpSrc16.includes('graphCache = { ts: 0, data: null }'))
+  check('SMOKE-RP-05 数据根变更重建域并失效缓存（paperIndex/naoku/graphCache）', httpSrc16.includes('resetPaperIndex()') && httpSrc16.includes('resetNaoku()') && httpSrc16.includes('graphCache.clear()'))
+  // cycle-17 隔离守卫：图谱缓存必须按 wsKey 分槽（跨工作区进度不互染）
+  check('SMOKE-RP-06 图谱缓存按 wsKey 分槽（跨项目隔离）', httpSrc16.includes('const graphCache = new Map') && httpSrc16.includes('graphCache.set(ck') && httpSrc16.includes('domains.store.wsKey(wsRaw)'))
   check('SMOKE-RP-05 manifest 声明 7 个 /api/repos* 端点且消费者=ui:repos', (readSrc('./src/shared/manifest.ts').match(/path: '\/api\/repos/g) || []).length === 7)
   const clientSrc = readSrc('./src/client/client.ts')
   check('SMOKE-RP-05 client 接线题库管理视图（分发+自管数据名单）', clientSrc.includes('h(NativeReposView') && clientSrc.includes("view === 'repos'"))

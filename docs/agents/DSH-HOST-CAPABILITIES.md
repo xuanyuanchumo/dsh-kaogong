@@ -16,9 +16,10 @@
 | **样式** | `styles.insert(css)`（可能不存在）→ `<style>` 兜底 | 全部 UI 样式 | combo 环境未必有 `styles` 全局（R11） |
 | **本地化** | `ctx.locale.register({...})` | 面板文案 `t()` | 注册必须在 `try/catch` 内，locale 服务缺失时降级为原文 |
 | **生命周期/热重载** | `ctx.effect(fn, label)` | 路由挂载、样式注入 | 本代资源一律闭包局部变量；模块级可变状态 + cleanup = 热重载竞态源（R7） |
-| **兼容性闸门** | `package.json` 的 `peerDependencies` + `engines.dsh` + `dsh.compatibility.dshReleases` | 三处都声明 | 缺声明时 guardian 报「兼容性未知」，闸门无法保护 |
+| **兼容性闸门** | `package.json` 的 `peerDependencies` + `engines.dsh` + `dsh.compatibility.dshReleases` | 三处都声明；**peer 范围带显式预发布分支**（`>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.0 <0.3.0-0 || >=0.3.0-rc.0 <0.4.0-0`——node-semver 对无预发布分支的宽范围会静默排除所有 rc 版，用户 ERESOLVE；awesome-dsh-plugin 贡献规范明文要求） | 缺声明时 guardian 报「兼容性未知」，闸门无法保护 |
 | **Plugin Manager** | `plugin_manager install_bundle / set_plugin` | 安装与热重载 | 重装前先 `remove_bundle`；`link:` 挂载改源码即刻生效 |
-| **Node 内置能力** | `node:sqlite`（22.19+）、`node:crypto`、`node:fs` | 深度题库只读查询、签名、索引 | `node:sqlite` 必须**动态 import**（顶层 import 会让旧 Node 整插件加载失败） |
+| **Node 内置能力** | `node:sqlite`（22.19+）、`node:crypto`、`node:fs`、`node:child_process` | 深度题库只读查询、签名、索引、**题库一键克隆（spawn git）** | `node:sqlite` 必须**动态 import**（顶层 import 会让旧 Node 整插件加载失败）；spawn 必须 `windowsHide:true`（否则 Windows 每次调用闪控制台窗口，v1.12 修）+ `on('error')` 接住 + `GIT_TERMINAL_PROMPT=0` 防无 TTY 挂起 |
+| **插件市场元数据** | `dsh.bundle.patch` + `dsh.client` + `icon.svg` + `assets/icon-180.png` + `screenshots.json` + GitHub topic `dsh-plugin` | awesome-dsh-plugin / dsh-market 收录形态（v1.12 齐备） | 市场条目 YAML 只放 `data/plugins/<owner>__<repo>.yml` 一个文件提交；npm 包的 `repository` 字段必须回指仓库（自动关联下载量） |
 
 ## 二、尚未使用、但值得接的能力
 

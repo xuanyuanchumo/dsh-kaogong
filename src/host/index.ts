@@ -79,23 +79,39 @@ export function apply(ctx) {
 
   ctx.tools.register({
     name: 'kaogong_launch',
-    description: '考公学习平台状态与引导。返回服务端口、启动方式与功能清单。平台内嵌于 DSH Web GUI 右侧边栏「考公学习」标签（引导页也有入口），完全离线可用。',
+    description: '考公学习平台状态与引导（全部字段实时取自服务，非硬编码）。平台双入口：左栏「考公学习」全屏面板 + 右侧 Sidebar 标签。完全离线可用；题库数据未就绪时引导用户到「📦 题库管理」一键安装。',
     parameters: { type: 'object', properties: { workspace: { type: 'string', description: '可选：当前项目工作区绝对路径（用于隔离进度查询）' } } },
     output: textOutput,
     async execute(args) {
-      let status: any = { app: 'down' }
+      // cycle-17：消灭「工具输出陈旧显示」——视图/工具/端点/仓库/数据根全部来自
+      // /api/capabilities + /api/status + /api/repos 实时数据，杜绝手写模板漂移
+      let status: any = { app: 'down' }, caps: any = null, repos: any = null
       try { status = await callApi('/api/status', args.workspace) } catch {}
+      try { caps = await callApi('/api/capabilities') } catch {}
+      try { repos = await callApi('/api/repos', args.workspace) } catch {}
       const up = status.app === CAPABILITIES.plugin.name
+      const views: string[] = ((caps && caps.views) || []).map((v: any) => v.label)
+      const toolsN = ((caps && caps.tools) || []).length
+      const epN = ((caps && caps.endpoints) || []).length
       const lines = [
-        '## 📚 考公学习平台',
-        `**服务状态**: ${up ? `✅ ${base()}（${status.repos?.ready}/${status.repos?.total} 仓库就绪，运行 ${status.uptimeSec}s）` : `❌ 未就绪（宿主启动=${runtime.boot}；查看 data/runtime.json 与 lifecycle.jsonl）`}`,
-        '**GUI 入口**: DSH Web GUI 右侧边栏「考公学习」标签 / 引导页(Guide)入口',
-        '', '### 离线功能',
-        '- 仪表盘/刷题/30天计划/知识检索/方法论/知识图谱/可观测 7 视图',
-        '', '### AI增强（可选）',
-        '- kaogong_ai_tutor 错题辅导 · kaogong_ai_plan 个性化建议 · kaogong_ai_shenlun 申论批改',
+        `## 📚 考公学习平台 · v${(caps && caps.plugin && caps.plugin.version) || CAPABILITIES.plugin.version}`,
+        `**服务状态**: ${up ? `✅ ${base()}（同源路由 ${MOUNT_PATH}/* · 运行 ${status.uptimeSec}s · pid ${status.pid}）` : `❌ 未就绪（宿主启动=${runtime.boot}；查看 data/runtime.json 与 lifecycle.jsonl）`}`,
+        `**数据根**: ${status.repoRoot || '—'}（${repos && repos.rootSource === 'config' ? '自定义' : '自动解析'}）`,
+        `**GUI 入口**: 左栏「考公学习」全屏面板（主）+ 右侧边栏标签摘要（引导页亦有入口）`,
+        '',
+        `### 离线功能（${views.length} 视图 · ${epN} 端点 · 实时清单）`,
+        views.length ? '- ' + views.join(' · ') : '- （能力矩阵未就绪）',
+        '',
+        `### AI 增强（可选 · ${toolsN} 工具）`,
+        '- 素材供模型加工模式；离线核心与模型解耦（无模型全部功能可用）',
       ]
-      if (up) lines.push('', `**当前进度**：第${status.progress?.day}天 · ${status.progress?.answered}题 · 正确率${status.progress?.rate}%`)
+      if (up && repos) {
+        const miss = (repos.summary && repos.summary.requiredMissing) || []
+        lines.push('', `### 题库数据：${repos.summary.present}/${repos.summary.total} 仓库就绪`)
+        if (miss.length) lines.push(`⚠️ 必选缺失：${miss.join('、')} —— 打开「📦 题库管理」一键安装必选包（约 363MB，国内可先配 gh-proxy 镜像）`)
+        else lines.push('✅ 必选/推荐数据齐备')
+      }
+      if (up && status.progress) lines.push('', `**当前进度**：第${status.progress.day}天 · ${status.progress.answered}题 · 正确率${status.progress.rate}%`)
       return { text: lines.join('\n') }
     },
   })

@@ -11,7 +11,7 @@ client 半就是 React 18 应用：
 ```js
 const React = require('react')          // 宿主模块表提供，无需打包
 const h = React.createElement
-// 13 个视图全部是函数组件，用 hooks：
+// 15 个视图全部是函数组件，用 hooks：
 const [view, setView] = React.useState('dashboard')
 React.useEffect(() => { /* fetch */ }, [view])
 React.useCallback(...) / React.useRef(...) / React.useMemo(...)
@@ -41,10 +41,10 @@ React.useCallback(...) / React.useRef(...) / React.useMemo(...)
 
 | TS 能拦住的问题 | 本项目的替代防线 |
 |---|---|
-| 未定义标识符（如 R15 的 `NativeDeepBankView is not defined`） | `node --check`（语法通过但引用未定义查不出）→ **靠 render.test 真挂载每个视图**（R15 后已覆盖全部 13 视图） |
+| 未定义标识符（如 R15 的 `NativeDeepBankView is not defined`） | `node --check`（语法通过但引用未定义查不出）→ **靠 render.test 真挂载每个视图**（R15 后已覆盖全部 15 视图） |
 | prop 形状不匹配（R12 的 `props.data.metrics` 读到 undefined） | **render.test mock 全端点真实形状 + 每次切换断言无 `role="alert"`** |
 | 字符串枚举拼错（如 `view === 'deepbank'`） | smoke 静态断言 + 真机点击验证 |
-| 后端响应结构漂移 | smoke 端到端断言（80 条，跑真实 server + 真实数据） |
+| 后端响应结构漂移 | smoke 端到端断言（204 条，跑真实 server + 真实数据） |
 
 这些防线**能覆盖大部分类型错误**，但确实不如编译器早——R15 就是漏到了真机才发现（因为 render 测试当时只点了 3 个视图）。
 
@@ -106,6 +106,18 @@ function MyView({ api }) {
 - 返回 `undefined` = 不归我管；返回对象 = 响应体（自动 JSON 序列化）。
 - **二进制端点**必须注册在 JSON 链路之前，并做：路径穿越防护（`resolve` 后必须仍在根内）+ 扩展名白名单 + `writeHead` 失败保护（头已发出不得二次写）。
 - 新端点三件套：**manifest 声明 → server 实现 → UI 消费**，缺一 drift。
+- **路径是运行期事实**（R19）：数据根一律经 `dataRoot.resolveReposRoot()` 解析；变更走 `rebuildDomains()`（域重建 + resetPaperIndex/resetNaoku/graphCache 三失效），禁止新增加载期硬编码路径。
+- **缓存键覆盖响应的全部可变输入维度**（R20）：响应含 per-ws 字段（如 progress）时，缓存必须按 wsKey 分槽并设上限（graphCache Map + LRU 24）。
+- **子进程纪律**（R21/cycle-0 同族）：`spawn` 一律 `windowsHide: true`（Windows 控制台闪现）+ `GIT_TERMINAL_PROMPT=0` 类无交互开关 + `on('error')` 与 close 非零码全部收敛为作业状态；外部异步错误绝不冒泡。
+- **面向模型/用户的文案从事实源渲染**（R22）：工具输出、引导文案一律取自 `/api/capabilities` 等实时端点，不手写模板（防声明/呈现漂移）。
+- 业务性失败返回 `{error}` + HTTP 200（UI 卡片级降级）；仅基础设施异常才 5xx。
+
+### 2.3b 市场与发布纪律（v1.12 新增）
+
+- peer/engines 范围必须带**显式预发布分支**（`>=A <B-0 || >=B-rc.0 <C-0 || …`）——无预发布分支的宽范围静默排除所有 rc（node-semver 规则），用户 ERESOLVE。
+- 发布走**独立干净快照目录**（无 `data/`、`.dsh/`、`.cycles/`、开发仓 git 历史）；`npm pack --dry-run` 是包卫生的机器证据。
+- GitHub 推送优先 **SSH**（Windows 下 HTTPS 443 易被重置，22 端口稳定）。
+- 市场投稿 = 一个 YAML 文件（`data/plugins/<owner>__<repo>.yml`）；仓库需 topic `dsh-plugin`、`dsh.bundle` 声明、真实代码、描述数字与代码核对属实。
 
 ### 2.4 适配器纪律
 

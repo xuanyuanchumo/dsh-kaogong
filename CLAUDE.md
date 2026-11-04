@@ -4,7 +4,7 @@
 
 ## Commands
 - Build/类型门: `npm run build`（**tsc + scripts/bundle-client.mjs**：类型错误阻断 + 多文件产物拓扑序合并为宿主要求的单 combo）。**改完 .ts 必须 build（宿主编织的是 dist），改完任何 src/client/*.ts 也必须 build（client 产物是 bundler 合并的，裸 tsc 会把 dist/client/client.js 重写回裸 ESM → 宿主拒绝加载）**
-- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**203 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + cycle-13 省份维度 R-P/R-N + cycle-15 记忆 R-MEM/三布局/流动粒子/白盒三件套 + **cycle-16 题库管理 R-P-01..05（/api/repos* 控制面+数据根四级解析+崩溃安全静态守卫）**）+ `node render.test.mjs`（**42 断言**，真实 React 18 + 真实 client.js 集成渲染，含专题枢纽/省份 chips/白盒流动图/图谱升级包/记忆跳回/**C16 题库面板「关于本项目」卡与安装请求**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
+- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**204 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + cycle-13 省份维度 R-P/R-N + cycle-15 记忆 R-MEM/三布局/流动粒子/白盒三件套 + **cycle-16/17 题库管理 R-P-01..06（/api/repos* 控制面+数据根四级解析+崩溃安全静态守卫+跨工作区缓存分槽隔离）**）+ `node render.test.mjs`（**42 断言**，真实 React 18 + 真实 client.js 集成渲染，含专题枢纽/省份 chips/白盒流动图/图谱升级包/记忆跳回/**C16 题库面板「关于本项目」卡与安装请求**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
 - **沙箱验证（禁主力直测）**: `node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`（token 行取 URL；插件崩只崩沙箱）
 - 热更新重载: `plugin_manager set_plugin include:kaogong enabled=false → true`（fiber 重挂载）
 - 安装/重装: `plugin_manager remove_bundle dsh-kaogong → install_bundle <绝对路径>`
@@ -88,3 +88,10 @@
 - **⑯（异步路由改造检查单）**：`handleApi` 变异步必须同步改**全部调用点**（同源 attachWebRoute + 独立端口 buildHttpServer 两处 `req.on('end')` 都要 async+await），并保留 try/catch 收敛 500。tsc 全绿 + smoke 全绿才算改完。
 - **⑰（面板元数据单一事实源）**：「关于本项目」卡的 GitHub/Release/Issue/npm 链接存 `SELF_META`（manifest），server `/api/repos` 透出 `self`，UI 只消费不硬编码；version 引用 `CAPABILITIES.plugin.version` 而非第二处字面量（版本三锚点守卫只认一处）。
 - **⑱（沙箱模拟安装态）**：验证「npm 安装后无数据」的正确方法 = 沙箱带 `KG_REPOS_DIR=空目录` 启动（present=0/requiredMissing=3），再走真实一键克隆→功能即时恢复（/api/method 从「参考文件未找到」变真实全文）→pull/browse/remove 全链路。**环境性缺陷用「干净环境复现 + 修复后同环境回归」闭环，不在开发态环境自欺。**
+
+## cycle-17 事故与教训（v1.12.0 隔离与显示修复 + 市场合规）
+- **⑲（R20 缓存维度教训）**：图谱缓存全局单槽但响应内嵌 per-ws 的 `progress` → A 项目访问后 B 项目在 TTL 内读到 A 的进度（跨项目污染，用户可感知「我的数据怎么是别人的」）。修法 `Map<wsKey,slot>` + LRU 24。**规矩：给响应加缓存前，先列出响应的全部可变输入维度（ws/root/参数），缓存键必须覆盖其中「租户级」维度。**守卫=smoke R-P-06 静态断言 + 双 ws 运行时实证（X.day=7/Y.day=1）。
+- **⑳（R21 windowsHide）**：`spawn('git')` 在 Windows 默认给子进程分配控制台——题库每次 clone/pull/探测都闪黑窗。宿主 GUI 插件的一切子进程 spawn 必须 `windowsHide:true`（probeGit 也不例外）。
+- **㉑（R22 工具输出陈旧）**：`kaogong_launch` 手写「7 视图」模板，实际 15 视图——声明与呈现漂移。**面向模型/用户的文案也从事实源渲染**：views/tools/endpoints 计数取 `/api/capabilities`，repoRoot/pid 取 `/api/status`，数据就绪取 `/api/repos`。这是「声明 vs 运行态同源」纪律（v1.8 遥测事故）在呈现层的推论。
+- **㉒（市场 peer 预发布陷阱）**：`>=0.2.0-rc.2 <0.4.0-0` 看似宽，node-semver 规则下**静默排除所有 rc**（预发布只匹配同 tuple 且带预发布标签的比较符）→ 用户装 rc 版宿主 ERESOLVE。修法：每段带预发布分支 `|| >=0.2.1-rc.0 <0.3.0-0 ||`。awesome-dsh-plugin 贡献规范明文要求，CI 检查 `dsh.bundle` 声明（只声明 `dsh.client` 不可安装是最常见被拒原因）。
+- **㉓（GitHub 推送通道）**：Windows 上 HTTPS 443 直连 github.com 会被重置（`Recv failure: Connection was reset`），SSH 22 端口稳定——发布仓 remote 一律 SSH（`git@github.com:…`）；Contents API 兜底适合单文件热修（注意 API 提交与本地分支会分叉，推送前先 `fetch + rebase origin/main`）。

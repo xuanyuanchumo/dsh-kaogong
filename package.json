@@ -1,6 +1,6 @@
 {
   "name": "dsh-kaogong",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "考公备考整合插件 — 一键式题库管理(必选/推荐/可选分级+镜像代理) · 离线可视化 · 双入口 · SRS错题本 · 专项刷题记忆 · 白盒可观测",
   "homepage": "https://github.com/xuanyuanchumo/dsh-kaogong#readme",
   "repository": {
@@ -14,11 +14,11 @@
   "main": "dist/host/index.js",
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.4.0-0"
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.0 <0.3.0-0 || >=0.3.0-rc.0 <0.4.0-0"
   },
   "engines": {
     "node": ">=22.19",
-    "dsh": ">=0.2.0-rc.2 <0.4.0-0"
+    "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.0 <0.3.0-0 || >=0.3.0-rc.0 <0.4.0-0"
   },
   "exports": {
     ".": "./dist/host/index.js",
@@ -33,6 +33,9 @@
     "src/shared/types.ts",
     "locale",
     "docs",
+    "assets",
+    "screenshots.json",
+    "icon.svg",
     "README.md",
     "CLAUDE.md"
   ],

@@ -1,20 +1,31 @@
 # 数据源与适配器
 
-> 15 个开源仓库 → 三个适配器。原则：**只读**源仓库，慢操作做缓存，平台能力做降级。
+> 15 个开源仓库 → 适配器层。原则：**只读**源仓库，慢操作做缓存，平台能力做降级。
+> **v1.11 关键变化：数据根可配置**。npm/GitHub 安装态下插件包内不含数据（~2.2GB，归上游作者），
+> 数据根四级解析：env `KG_REPOS_DIR` > `data/repos-config.json` > 开发态上级目录 > `data/repos` 托管默认；
+> 用户在「📦 题库管理」一键克隆（分级：必选/推荐/可选），安装/删除后域重建 + 三级缓存失效。
 
-## 一、仓库地图（工作区 `D:\Projects\TraeProjects\kaogong`）
+## 一、仓库地图（根=运行期解析的数据根，见上；开发态识别为工作区上级目录）
 
-| 仓库 | 规模 | 内容 | 本项目用途 |
-|---|---|---|---|
-| **gwy-zhenti** | 1806 md + **114849 图** | 真题卷（**1683 套**：申论 944 / 行测 739，2008–2026） | ✅ 真题卷库 / 申论 / 模考 / 配图 |
-| **GongkaoNaoku** | 147MB db 分片 | **27506 题五维标注**（考点/推理链/速解/易错/母题） | ✅ 深度题库 |
-| **xingcezhenti** | 39051 图 + 分模块 | 行测分模块题 + 图片库 | ✅ 深度题库配图来源 |
-| **kaogong-skill** | 80 文件 | 方法论 10 主题 | ✅ 方法论视图 / AI 工具素材 |
-| **xingce-app** | 325 文件 | 行测应用 | 部分（题库） |
-| **gk-tuxing** | 390 文件 | 图形推理专题站 | 规划中（T-023） |
-| **qiuzhao-epi-bank** | 72 文件 | 求职 EPI 题库 | 参考 |
-| **civil-exam-agent** | 95 文件 | Agent 实验 | 参考 |
-| **developer2gwy** / **sakib** / **NovaForge** / **yunduanqiqu** / **kaogongzhentizhengliu** / **AdministrativeAptitudeTest** / **Exam_Database** | 小 | 笔记/工具/镜像 | 备用 |
+| 仓库 | tier | pack | 内容 | 本项目用途 |
+|---|---|---|---|---|
+| **xingcezhenti** | 必选 | 341MB | 515 套卷 58890 题分模块 + 39051 图 | ✅ 刷题硬依赖 / 深度题库配图来源 |
+| **kaogong-skill** | 必选 | 3MB | 方法论 10 主题 | ✅ 方法论视图 / AI 工具素材 |
+| **gk-tuxing** | 必选 | 19MB | 图形推理 354 题逐题解析（13 规律） | ✅ 图推视图（T-023 已落地） |
+| **gwy-zhenti** | 推荐 | 626MB | 真题卷 **1683 套**（申论 944/行测 739，2008–2026）+ 114849 图 | ✅ 真题卷库 / 申论 / 模考 / 配图 |
+| **GongkaoNaoku** | 推荐 | 120MB | **27506 题五维标注** db 分片 | ✅ 深度题库 |
+| kaogongzhentizhengliu | 可选 | 208MB | 22375 篇考点重组深度笔记 | 检索增强 |
+| AdministrativeAptitudeTest | 可选 | 2MB | 近二十年国考省考选调生试卷 PDF | 打印模考 |
+| NovaForge | 可选 | 3MB | 通用笔记模板（LaTeX/Typst/Markdown） | 备用 |
+| sakib | 可选 | 1MB | 公考知识文档库 | 检索增强 |
+| developer2gwy | 可选 | 1MB | 程序员上岸公考实践指南 | 备用 |
+| Exam_Database | 可选 | 131MB | 多渠道考公素材题库 | 检索增强 |
+| qiuzhao-epi-bank | 可选 | 486MB | 秋招行测/银行 EPI 697 题 PWA | 参考 |
+| xingce-app | 可选 | 46MB | 离线行测 App（22298 题 Android） | 数据参考 |
+| civil-exam-agent | 可选 | 276MB | 公考督导智能体系统 | 参考 |
+| yunduanqiqu | 可选 | 5MB | 申论范文/面试真题/素材分享 | 备用 |
+
+> 注册表真值 = `src/shared/manifest.ts` 的 `REPOS_META`（含 upstream 真实地址）；本表与其同步。
 
 ## 二、适配器一览
 
@@ -89,10 +100,10 @@
 
 1. 勘察真实结构（**必须看原始字节**，不能凭假设——CRLF、中文键、图片扩展名都踩过坑）。
 2. 写适配器到 `src/adapters/`，只读 + 加缓存。
-3. 若产出新端点 → 先改 `manifest.js`。
-4. 在 `src/server/` 加域模块并挂进 `handleApi` 链。
-5. smoke 加**真实数据**端到端断言（不要 mock）。
-6. 更新本文件。
+3. 若产出新端点 → 先改 `manifest.js`（端点 + REPOS_META 若为新仓库要登记 tier/upstream）。
+4. 在 `src/server/` 加域模块并挂进 `handleApi` 链（域工厂 `buildDomains` 内装配，保证换根重建覆盖它）。
+5. smoke 加**真实数据**端到端断言（不要 mock）；运行时断言置于 §11b 长阻塞之前、§12 关服务器之前（教训⑤⑧）。
+6. 更新本文件 + API-REFERENCE。
 
 ## 五、性能基线（实测）
 

@@ -78,7 +78,7 @@ function rebuildDomains() {
   if (changed) {
     resetPaperIndex()
     resetNaoku()
-    graphCache = { ts: 0, data: null }
+    graphCache.clear()
   }
   return { root: next, changed }
 }
@@ -244,10 +244,14 @@ function lifecycleSnapshot() {
 }
 
 // ══ 图谱快照（5s TTL 缓存；节点/边/指标/健康度）══
-let graphCache: any = { ts: 0, data: null }
+// cycle-17 隔离修复：快照内嵌 progress（ws 相关字段），缓存必须按 wsKey 分槽——
+// 否则工作区 A 先访问后，B 在 TTL 内命中同一份缓存，读到 A 的进度（跨项目污染）。
+const graphCache = new Map<string, any>()
 function graphSnapshot(wsRaw) {
+  const ck = domains.store.wsKey(wsRaw)
+  const hit = graphCache.get(ck)
   const now = Date.now()
-  if (graphCache.data && now - graphCache.ts < 5000) return graphCache.data
+  if (hit && hit.data && now - hit.ts < 5000) return hit.data
   const banks = {
     banks: Object.fromEntries(entries(REPOS).map(([k, v]) => [k, { desc: v, exists: exists(join(domains.root, k)) }])),
     ...repoStats(domains.root),
@@ -286,7 +290,11 @@ function graphSnapshot(wsRaw) {
     analytics,
     layout: layeredLayout(ge.nodes, ge.edges),
   }
-  graphCache = { ts: now, data }
+  graphCache.set(ck, { ts: now, data })
+  if (graphCache.size > 24) { // 防无界增长：按时间戳清最旧槽（LRU 近似）
+    const oldest = [...graphCache.entries()].sort((a, b) => a[1].ts - b[1].ts).slice(0, graphCache.size - 24)
+    for (const [k] of oldest) graphCache.delete(k)
+  }
   return data
 }
 

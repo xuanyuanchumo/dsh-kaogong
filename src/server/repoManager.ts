@@ -32,7 +32,7 @@ function probeGit(): Promise<boolean> {
   if (gitProbe) return gitProbe
   gitProbe = new Promise((res) => {
     try {
-      const p = spawn('git', ['--version'], { stdio: 'ignore' })
+      const p = spawn('git', ['--version'], { stdio: 'ignore', windowsHide: true })
       p.on('error', () => res(false))
       p.on('close', (code) => res(code === 0))
     } catch { res(false) }
@@ -76,7 +76,9 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
     jobs.set(key, job)
     let proc: any = null
     try {
-      proc = spawn('git', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_TERMINAL_PROMPT: '0', 'GIT_CONFIG_NOSYSTEM': '1' } })
+      // windowsHide: true —— Windows 关键项：不加则每次 clone/pull 闪现黑色控制台窗口
+      // （「调用插件时命令窗口闪烁」问题的根因；宿主 GUI 环境必须静默执行子进程）
+      proc = spawn('git', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', 'GIT_CONFIG_NOSYSTEM': '1' } })
     } catch (e: any) {
       job.state = 'failed'; job.error = 'spawn 失败: ' + (e && e.message); job.finishedAt = Date.now()
       return { ok: true, key, job: jobView(key) }

@@ -1,4 +1,4 @@
-# 事故簿（R1–R15）
+# 事故簿（R1–R22）
 
 > 每条都含：现象 → 根因 → 修复 → **守卫**（防止再次发生）。
 > 新增事故请追加，并在 `smoke.test.mjs` / `render.test.mjs` 落对应断言。
@@ -122,3 +122,49 @@
 - **现象**：smoke 报 `does not provide an export named 'gradeEssayArticle'`。
 - **根因**：拆 `paperParse.js` 时删除正则匹配范围过宽，误删该函数。
 - **修复**：重建；教训同 R15（结构性删除要点名核对导出清单）。
+
+## cycle-15/16/17 新增
+
+### R16 · 图谱「打不开」假象（永久 spinner）
+- **现象**：重复点同一导航项后卡 spinner。
+- **根因**：`setView` 无条件 `setData(null)`，但父 effect 依赖 `[channel, view, api, tick]`——view 未变则不重跑，data 永远 null。
+- **修复**：命中同一视图时自增 `tick` 强制重取。
+- **守卫**：「视图重入」契约（CLAUDE.md v1.8）；教训：**清空数据 + 依赖驱动重取组合必须有显式刷新令牌参与依赖**。
+
+### R17 · 力学参数失衡致图谱塌缩
+- **现象**：141 节点全图挤成中心一团，标签 100% 重叠。
+- **根因**：魔数 `LINK=90/REP=9000` 在 V≈140 时弹簧+向心压过斥力。
+- **修复**：Fruchterman-Reingold 按节点数标定（`k=sqrt(area/V)`）+ 预收敛 `relax(140)` + `fit()`。
+- **教训**：力导向参数必须随规模归一，布局后必须适配视口。
+
+### R18 · 预热与同步重建双路争抢（性能倒退）
+- **现象**：冷启动首查 31.5s，比纯同步基线还差。
+- **根因**：分块预热与请求触发的同步 `buildPaperIndex` 并发扫盘互相争抢。
+- **修复**：`prewarmRun` 代际令牌——同步路径启动即作废在途预热；smoke harness 传 `prewarm:false`。
+- **教训**：预热是「尽力而为」，请求路径永远有同步兜底。
+
+### R19 · 安装态数据全缺（发布根本问题）
+- **现象**：npm/GitHub 单独安装后 15 仓库全部 absent，功能空转。
+- **根因**：`REPO_ROOT=上级目录` 是开发态假设；题库 ~2.2GB 且各有上游版权不能随包分发。
+- **修复**：数据根四级解析（dataRoot.ts）+ 域工厂重建（buildDomains/rebuildDomains）+ 题库管理一键克隆（repoManager + repos-view）。
+- **守卫**：smoke R-P-05 静态守卫 + 沙箱 `KG_REPOS_DIR=空目录` 端到端（克隆→功能即时恢复→pull/browse/remove）。
+- **教训**：**路径是运行期事实，不是加载期常量**。
+
+### R20 · 图谱缓存跨工作区泄漏
+- **现象**：A 项目访问 `/api/graph` 后，B 项目在 5s TTL 内命中同一缓存，读到 A 的 `progress`（跨项目污染）。
+- **根因**：graphCache 是全局单槽，但快照内嵌 ws 相关字段。
+- **修复**：缓存改 `Map<wsKey, {ts,data}>` 分槽 + LRU 上限 24 槽。
+- **守卫**：smoke R-P-06 静态守卫 + 运行时双 ws 断言（X.day=7 / Y.day=1）。
+- **教训**：**缓存键必须覆盖响应的全部可变输入维度**——凡响应含 per-tenant 字段，缓存必须 per-tenant。
+
+### R21 · Windows 控制台窗口闪现（「命令窗口显示问题」）
+- **现象**：题库安装/更新时桌面每次弹出黑色 cmd 窗口。
+- **根因**：`spawn('git', …)` 未设 `windowsHide:true`（Node 在 Windows 默认给子进程分配控制台）。
+- **修复**：全部 spawn（含 probeGit）加 `windowsHide:true`；配套 `GIT_TERMINAL_PROMPT=0` 防无 TTY 凭据提示挂起。
+- **教训**：**宿主 GUI 插件里一切 spawn/exec 默认 windowsHide:true**，这是桌面体验硬约束。
+
+### R22 · 工具输出陈旧（「调用时显示问题」另一半）
+- **现象**：`kaogong_launch` 报「7 视图」，实际 15 视图；入口描述停留在「右侧标签」。
+- **根因**：工具 execute 里手写文案模板，与 manifest 演进脱钩（声明/呈现漂移）。
+- **修复**：输出全部实时取自 `/api/capabilities`（views/tools/endpoints 计数）+ `/api/status`（repoRoot/pid）+ `/api/repos`（数据就绪与缺失引导）。
+- **守卫**：「凡声明 vs 运行态对账，两侧口径必须同源」纪律的呈现层推论——**面向用户/模型的文案也从事实源渲染，不手写**。
