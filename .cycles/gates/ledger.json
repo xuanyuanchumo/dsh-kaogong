@@ -656,7 +656,52 @@
       "timestamp": "2026-11-03T14:51:51.545Z",
       "previousHash": "7e93e8e2b05d93d42708d1651940196ae333d5a664b24abd6389e3e5d7aaaefe",
       "hash": "7918241a07e53f99424313de86574239388843d866f0005807ceb12cfd72d44c"
+    },
+    {
+      "gate": "G0",
+      "gateName": "评估收敛门",
+      "result": "PASS",
+      "detail": "Evaluation report found in cycle-15 (16 dimension rows) [Q1:PASS,Q5:PASS]",
+      "timestamp": "2026-11-03T16:34:36.706Z",
+      "previousHash": "7918241a07e53f99424313de86574239388843d866f0005807ceb12cfd72d44c",
+      "hash": "09dbd56062b1af02556de2f04649d906c6751c88c7bf50c68fa7fad0efc55b9c"
+    },
+    {
+      "gate": "G1",
+      "gateName": "任务收敛门",
+      "result": "PASS",
+      "detail": "All 12 tasks completed §cycle-15 [Q7:PASS]",
+      "timestamp": "2026-11-03T16:34:36.722Z",
+      "previousHash": "09dbd56062b1af02556de2f04649d906c6751c88c7bf50c68fa7fad0efc55b9c",
+      "hash": "f40683e4bc21809cadb4cf2d3d2c992714bd73e354de4aa91bf09c9051384108"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "FAIL",
+      "detail": "Zero failures, zero errors (测试报告.md) §cycle-15 [Q2:FAIL]",
+      "timestamp": "2026-11-03T16:34:36.736Z",
+      "previousHash": "f40683e4bc21809cadb4cf2d3d2c992714bd73e354de4aa91bf09c9051384108",
+      "hash": "aa5b91ef8054847daddde05e4b6c492c51ff8e44998d2195ff4d519dab929ab4"
+    },
+    {
+      "gate": "G3",
+      "gateName": "构建收敛门",
+      "result": "PASS",
+      "detail": "Build passed: npx tsc §cycle-15 [dist=absent] [Q3:PASS,Q4:PASS]",
+      "timestamp": "2026-11-03T16:34:39.794Z",
+      "previousHash": "aa5b91ef8054847daddde05e4b6c492c51ff8e44998d2195ff4d519dab929ab4",
+      "hash": "eb1242c5124a5bf7432f76d7747b501280f096e4e7c2711b7d855a5f4e657c4e"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "PASS",
+      "detail": "Zero failures, zero errors (测试报告.md) §cycle-15 [Q2:PASS]",
+      "timestamp": "2026-11-03T16:35:27.813Z",
+      "previousHash": "eb1242c5124a5bf7432f76d7747b501280f096e4e7c2711b7d855a5f4e657c4e",
+      "hash": "a3531ef14732ff86533f89f713ef4d45307be333f77c9e0e205a1c01ffcd783e"
     }
   ],
-  "chainHead": "7918241a07e53f99424313de86574239388843d866f0005807ceb12cfd72d44c"
+  "chainHead": "a3531ef14732ff86533f89f713ef4d45307be333f77c9e0e205a1c01ffcd783e"
 }

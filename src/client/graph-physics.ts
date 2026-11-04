@@ -14,6 +14,9 @@
 
 import { graphHash, graphClamp, graphShade, GRAPH_NODE_META, GRAPH_EDGE_META } from './graph-analytics.js'
 
+    /** cycle-15：流动粒子语义边集合（produces/consumes/feeds/serves = 注册→生产→消费 的数据流关系） */
+    const KG_FLOW_RELS = ['produces', 'consumes', 'feeds', 'serves']
+
     /* ── 节点/边模型（服务端边缺失端点时直接跳过该边，不抛错） ── */
     /** buildGraphModel — 原 createGraphEngine 内联模型构建段逐字节等价外提；
      *  BASE_R 随模型返回，供引擎 reset 复用同一确定性初值（v1.8 事故簿契约）。 */
@@ -329,6 +332,34 @@ import { graphHash, graphClamp, graphShade, GRAPH_NODE_META, GRAPH_EDGE_META } f
             ctx.stroke()
           }
           ctx.globalAlpha = 1
+
+          /* ── cycle-15：边流动粒子（数据流可视化，opt-in）──
+             仅 KG_FLOW_RELS 四类「流动语义」边沿线画匀速粒子；每边相位由端点 id 散列
+             决定（确定性：同输入同相位），时间项由引擎以 now/周期 传入（渲染层无时钟
+             副作用）。开启期间引擎保持 rAF，关闭即恢复省电停帧。 */
+          if (o && o.flow && o.flow.on) {
+            const ft = (typeof o.flow.t === 'number' && isFinite(o.flow.t)) ? o.flow.t % 1 : 0
+            for (const e of simEdges) {
+              const rel = e && e.rel
+              if (!rel || KG_FLOW_RELS.indexOf(rel) < 0) continue
+              const a = simNodes[e.a], b = simNodes[e.b]
+              if (!a || !b || !nodeVisible(a, view, focusSet) || !nodeVisible(b, view, focusSet)) continue
+              if (view.hiddenEdges.has(rel)) continue
+              const ax2 = a.x * zoom + panX, ay2 = a.y * zoom + panY
+              const bx2 = b.x * zoom + panX, by2 = b.y * zoom + panY
+              const phase = graphHash(String(e.a) + '>' + String(e.b))
+              const pr = Math.max(1.6, 2.4 / zoom + 1.1)
+              ctx.fillStyle = colorOfEdge(rel, edgeMeta)
+              ctx.globalAlpha = 0.85
+              for (let k = 0; k < 2; k++) {
+                const tt = (ft + phase + k * 0.5) % 1
+                ctx.beginPath()
+                ctx.arc(ax2 + (bx2 - ax2) * tt, ay2 + (by2 - ay2) * tt, pr, 0, Math.PI * 2)
+                ctx.fill()
+              }
+            }
+            ctx.globalAlpha = 1
+          }
 
           /* 标签去重叠（贪心占位）：算法不变（labelBoxes 包围盒冲突即跳过）。
              现代化：节点改用预烘焙径向渐变精灵 + 柔和阴影；选中/hover 外圈脉冲光环。 */

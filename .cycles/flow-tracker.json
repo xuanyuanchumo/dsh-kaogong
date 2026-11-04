@@ -391,9 +391,97 @@
       "stdout": "Initialized cycle-14 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-14\n",
       "stderr": "",
       "durationMs": 259
+    },
+    {
+      "flowId": "init-cycle-2026-11-03T15:58:08.899Z-20",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-03T15:58:08.899Z",
+      "cycle": "cycle-14",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-03T15:58:08.899Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T15:58:09.188Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-13 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-13\n",
+      "stderr": "",
+      "durationMs": 284
+    },
+    {
+      "flowId": "gate-check-2026-11-03T16:34:36.577Z-21",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--gate",
+        "all",
+        "--quality",
+        "--record"
+      ],
+      "status": "FAILED",
+      "startedAt": "2026-11-03T16:34:36.577Z",
+      "cycle": "cycle-15",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-03T16:34:36.577Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T16:34:39.803Z",
+      "exitCode": 1,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-15 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 PASS recorded (hash 09dbd56062b1af02...)\n[PASS] G1: All 12 tasks completed §cycle-15\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 PASS recorded (hash f40683e4bc21809c...)\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-15\n  [FAIL] G2-Quality: Quality dimensions failed: Q2\n  [LEDGER] G2 FAIL recorded (hash aa5b91ef8054847d...)\n[PASS] G3: Build passed: npx tsc §cycle-15 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 PASS recorded (hash eb1242c5124a5bf7...)\n",
+      "stderr": "\nGate check FAILED. Fix issues before proceeding.\n",
+      "durationMs": 3222
+    },
+    {
+      "flowId": "gate-check-2026-11-03T16:35:27.698Z-22",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--gate",
+        "all",
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-03T16:35:27.698Z",
+      "cycle": "cycle-15",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-03T16:35:27.698Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-03T16:35:30.897Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-15 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[PASS] G1: All 12 tasks completed §cycle-15\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 unchanged, not re-recorded\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-15\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 PASS recorded (hash a3531ef14732ff86...)\n[PASS] G3: Build passed: npx tsc §cycle-15 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 3196
+    },
+    {
+      "flowId": "init-cycle-2026-11-04T00:49:14.354Z-23",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-04T00:49:14.354Z",
+      "cycle": "cycle-15",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-04T00:49:14.354Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-04T00:49:15.156Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-13 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-13\n",
+      "stderr": "",
+      "durationMs": 782
     }
   ],
-  "counter": 19,
+  "counter": 23,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

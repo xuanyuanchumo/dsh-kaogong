@@ -10,12 +10,12 @@
  * 与 xingcezhenti 目录解析互补：Naoku 提供 kadian/reasoning/fastest/pitfalls 五维标注，
  * 是「方法论原生化」的数据基础；不可用时上层自动回落。
  */
-import { initNaoku, naokuReady, naokuStatus, naokuStats, naokuQuestions, searchKadian, questionsByKadian, papersByCategory, categoryList } from '../adapters/naoku.js'
+import { initNaoku, resetNaoku, naokuReady, naokuStatus, naokuStats, naokuQuestions, searchKadian, questionsByKadian, papersByCategory, categoryList } from '../adapters/naoku.js'
 import { safeImagePath } from '../adapters/naokuImage.js'
 import { createReadStream, statSync } from 'node:fs'
 import { extname } from 'node:path'
 
-export { initNaoku }
+export { initNaoku, resetNaoku }
 
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }
 

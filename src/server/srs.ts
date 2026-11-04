@@ -46,9 +46,41 @@ function resolveRetry(progress, q) {
   return item
 }
 
-/** 路由：/api/questions(sort=srs) /api/wrong /api/wrong/remove /api/stats；未命中返回 undefined */
+/** 路由：/api/memory(专项刷题记忆,cycle-15) /api/questions(sort=srs) /api/wrong /api/wrong/remove /api/stats；未命中返回 undefined */
 export function makeSrsApi({ repoRoot, store }) {
   const { loadProgress, saveProgress } = store
+
+  /* ── cycle-15 专项刷题记忆（progress.memory 域）──
+     数据模型：progress.memory[kind] = { …业务字段, at: 时间戳 }
+       kind ∈ practice(行测刷题) / tuxing(图形推理) / deep(深度题库) …；
+     硬约束：kind 必须匹配 ^[a-z][a-z0-9-]{0,31}$（防键污染/原型链）；
+       data 必须是普通对象且 JSON 序列化 ≤ 8KB（题目对象量级，防 progress 文件膨胀）；
+       最多 12 个 kind，超出按 at 最旧淘汰（LRU 环形，防历史残留堆积）。
+     隔离：走 loadProgress/saveProgress，天然按 ?ws= 命名空间分文件（PROJ_A/B 互不污染）。 */
+  function memoryApi(post: any, method: string, wsRaw: any) {
+    if (method === 'GET') {
+      const p = loadProgress(wsRaw)
+      return { memory: p.memory && typeof p.memory === 'object' ? p.memory : {} }
+    }
+    // POST：kind 校验 + data 形状/体积校验，任何违规都返回 {error} 且 HTTP 200（与图查询端点同口径）
+    const kind = String((post && post.kind) || '')
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(kind)) return { error: 'kind 需匹配 ^[a-z][a-z0-9-]{0,31}$' }
+    const data = (post && post.data && typeof post.data === 'object' && !Array.isArray(post.data)) ? post.data : null
+    if (!data) return { error: '缺少 data 对象' }
+    let size = 0
+    try { size = JSON.stringify(data).length } catch { return { error: 'data 不可序列化' } }
+    if (size > 8192) return { error: 'data 超过 8KB 上限（当前 ' + size + 'B）' }
+    const p = loadProgress(wsRaw)
+    p.memory = (p.memory && typeof p.memory === 'object') ? p.memory : {}
+    p.memory[kind] = { ...data, at: Date.now() }
+    const keys = Object.keys(p.memory)
+    if (keys.length > 12) {
+      keys.sort((a, b) => ((p.memory[a] && p.memory[a].at) || 0) - ((p.memory[b] && p.memory[b].at) || 0))
+      for (const k of keys.slice(0, keys.length - 12)) delete p.memory[k]
+    }
+    saveProgress(wsRaw, p)
+    return { ok: true, kind, memory: p.memory[kind] }
+  }
 
   function srsQuestions(wsRaw, moduleName, count) {
     const p = loadProgress(wsRaw)
@@ -103,6 +135,9 @@ export function makeSrsApi({ repoRoot, store }) {
   }
 
   return function handleSrsApi(path, params, post, method, wsRaw) {
+    if (path === '/api/memory' && (method === 'GET' || method === 'POST')) {
+      return memoryApi(post, method, wsRaw)
+    }
     if (path === '/api/questions' && method === 'GET' && params.get('sort') === 'srs') {
       return srsQuestions(wsRaw, params.get('module') || 'all', parseInt(params.get('count') || params.get('limit') || '1'))
     }

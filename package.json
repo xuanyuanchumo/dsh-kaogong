@@ -1,7 +1,15 @@
 {
   "name": "dsh-kaogong",
-  "version": "1.9.1",
-  "description": "考公备考整合插件 — 15开源仓库 · 离线可视化 · 双入口(左沉浸+右并排) · SRS错题本 · 白盒可观测",
+  "version": "1.11.0",
+  "description": "考公备考整合插件 — 一键式题库管理(必选/推荐/可选分级+镜像代理) · 离线可视化 · 双入口 · SRS错题本 · 专项刷题记忆 · 白盒可观测",
+  "homepage": "https://github.com/xuanyuanchumo/dsh-kaogong#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xuanyuanchumo/dsh-kaogong.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xuanyuanchumo/dsh-kaogong/issues"
+  },
   "type": "module",
   "main": "dist/host/index.js",
   "peerDependencies": {
@@ -55,13 +63,19 @@
     "lint": "tsc --noEmit"
   },
   "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
     "kaogong",
     "考公",
     "公务员",
     "行测",
     "申论",
     "exam",
-    "civil-service"
+    "civil-service",
+    "srs",
+    "offline-first"
   ],
   "license": "MIT",
   "devDependencies": {

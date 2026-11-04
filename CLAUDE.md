@@ -73,3 +73,9 @@
 
 ## cycle-14 事故与教训（v1.9.1）
 - **⑦（性能）索引分块预热必须带代际令牌**：`prewarmPaperIndex` 分块构建期间若请求抢先触发同步 `buildPaperIndex`，两路并发扫盘互相争抢 → 首查实测 31.5s（比纯同步基线还差）。**修法：`prewarmRun` 代际令牌——同步路径一经启动即自增，预热批次检测到换代立即退出**。同时记住：预热是「尽力而为」，请求路径永远有同步兜底；smoke harness 必须传 `prewarm:false`（否则预热把缓存热好，R-P-03 的快照耗时断言失真）。本机实测冷同步重建 ~30s（1683 文件 × Windows Defender 实时扫描开销），快照命中后二查 10ms。
+
+## cycle-15 事故与教训（v1.10.0）
+- **⑧（测试基建）smoke 运行时断言必须放在 §12 崩溃安全之前**：§12 为了测端口降级会 `server.close()` 主测试实例，此后 `B`（8495）连接一律 ECONNREFUSED **裸崩**（uncaught fetch failed）。本 cycle 的 /api/memory 运行时段最初放在文件尾，实测崩在 MEM-01。**规矩：凡新端点运行时断言，插到「§11 之后、§12 之前」；文件尾只允许纯静态/源码级守卫。**
+- **⑨（combo 单作用域）新增顶层名必须全局唯一**：环形布局 `graphCircularLayout`（transition）、粒子边集 `KG_FLOW_RELS`（physics）、布局序列 `KG_LAYOUTS/KG_LAYOUT_LABEL/kgNextLayout`（graph-view）、记忆 `kgMemAgo/useKgMem/KgMemBanner`（study-view）、白盒 `ObsQuantLadder/ObsLifeRing/ObsScatter/supDigits`（obs-view）——本轮刻意走「模块前缀」纪律（graph 系 graph*/KG_*、study 系 kg*/Kg*、obs 系 Obs*/sup*），bundler 重名防御只兜底不豁免。**规矩：新增 client 顶层名 = 前缀 + 语义，禁止裸词（`layout`、`banner` 这种撞名即 SyntaxError）。**
+- **⑩（hub 常驻视图的重入断言）**：专题枢纽六分区「懒挂载+常驻，切换不重挂」——render 测试里 practice/tuxing/deepbank 一旦被 N-02 进入过，后续断言面对的是**旧组件状态**（横幅不会因 `__kgMemStore` 后置变化重现）。**修法：记忆 mock 仓库在 fetch mock 定义后立即置位（所有挂载可见）；重入断言前先「← 模块」回选择页（题目页没有横幅——横幅只挂模块选择/未抽题态）。**带 `initialModule` 的专题直入不弹横幅是**有意设计**（显式意图优先于记忆）。
+- **⑪（记忆域设计取舍）**：记忆存 **progress.memory[kind]** 而非 localStorage——跟随 `?ws=` 命名空间天然隔离、跨设备（同工作区）一致、且复用既有 saveProgress 原子写；题目**整对象入记忆**（≤8KB 校验）保证「跳回原题」字面成立（SRS 抽题是随机的，靠 kind+重抽无法复现原题）。12-kind LRU 防历史 kind 残留膨胀；kind 白名单防键污染/原型链。

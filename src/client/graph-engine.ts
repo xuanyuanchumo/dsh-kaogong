@@ -10,7 +10,7 @@ import { graphClamp, GRAPH_NODE_META, GRAPH_EDGE_META, graphEngineStub } from '.
 import { buildGraphModel, step, draw, applyLayered, nodeVisible, worldOf, localPt, hitTest, drawMini, miniTransform, miniToWorld,
          graphViewBBox, graphRelaxIntegrate, graphResetInitialCoords, graphPathEdgeSet, graphNeighborSet } from './graph-physics.js'
 import { GRAPH_TRANS_DUR, graphTransProgress, graphTransEase, graphTransSnapshotFrom, graphTransSnapshotTo, graphTransRestoreFrom,
-         graphTransLerpCoords, graphTransSnapCoords, graphViewportOf, graphMergeViewFilters } from './graph-transition.js'
+         graphTransLerpCoords, graphTransSnapCoords, graphViewportOf, graphMergeViewFilters, graphCircularLayout } from './graph-transition.js'
 import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMap, graphUnbindMiniMap } from './graph-canvas.js'
 
     /**
@@ -63,6 +63,8 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
       let colorModel: any = null
       let radiusBoost = false
       const trans: any = { active: false, t0: 0, dur: 350, fx: null, fy: null, tx: null, ty: null }
+      // cycle-15：边流动粒子开关（opt-in；开启期间 frame 保持 rAF，关闭恢复省电停帧）
+      let flowOn = false
       // 脉冲环限频：hover/选中存在时以 ~30fps 重绘（60fps 裸跑会翻倍每秒工作量）
       let lastPulseDraw = 0
 
@@ -172,10 +174,11 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
           if (!busy && pulseOn && now - lastPulseDraw < 30) { schedule(); return }
           if (pulseOn || busy) lastPulseDraw = now
           const ph = pulseOn ? (now % 1600) / 1600 : 0.5
-          // 主画布：新增绘制状态（着色/脉冲相位）经选项对象 o 穿线
+          // 主画布：新增绘制状态（着色/脉冲相位/流动粒子）经选项对象 o 穿线
           draw(ctx, dpr, W, H, zoom, panX, panY, {
             hoverId, selectedId, simNodes, simEdges, byId, view, pathNodeSet, pathEdgeSet,
             hoverPos, focusSet, nodeMeta, edgeMeta, colorModel, pulse: ph,
+            flow: { on: flowOn, t: now / 1700 },   // cycle-15：粒子时间项（确定性相位 + 时间推进）
           })
           // 小地图：同一帧内绘制（数据/视口/着色天然一致，无第二循环）
           if (miniCtx) {
@@ -187,7 +190,8 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
           // （只在「自然冷却到 0」时触发，用户交互 kick 不会反复抖动视图）
           if (alpha === 0 && !autoFitted && !trans.active) { autoFitted = true; fit() }
         } catch {}
-        if (busy || hoverId || selectedId) schedule()
+        // cycle-15：流动粒子开启期间持续 rAF（即使无物理/hover）；关闭即自然停帧（省电）
+        if (busy || hoverId || selectedId || flowOn) schedule()
       }
       function schedule() { if (!raf) { try { raf = rafFn(frame) } catch { raf = null } } }
       function kick(boost: any) { autoFitted = false; alpha = Math.max(alpha, typeof boost === 'number' ? boost : 0.6); schedule() }
@@ -297,12 +301,14 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
        */
       function setLayout(mode: any) {
         try {
-          const target = mode === 'layered' ? 'layered' : 'force'
+          // cycle-15：三布局——force（FR 力导向）/ layered（Kahn 分层）/ circular（语义环形）
+          const target = mode === 'layered' ? 'layered' : mode === 'circular' ? 'circular' : 'force'
           const V = simNodes.length
           // ① 起点坐标快照（纯读外提 graph-transition.ts，同名参数穿线）
           const { fx, fy } = graphTransSnapshotFrom(simNodes)
-          // ② 终态计算（与无动画路径完全一致的确定性结果；applyLayered/relax 原地写坐标）
+          // ② 终态计算（与无动画路径完全一致的确定性结果；applyLayered/circular/relax 原地写坐标）
           if (target === 'layered') applyLayered(simNodes, layers, nodeMeta)
+          else if (target === 'circular') graphCircularLayout(simNodes, nodeMeta, W, H)
           else relax(90)
           // ③ 终点快照 + 总位移（用于「已在目标布局」时跳过动画）
           const { tx, ty, dist } = graphTransSnapshotTo(simNodes, fx, fy)
@@ -338,6 +344,7 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
           if (v.selected !== undefined) selectedId = v.selected || null
           if (v.colorModel !== undefined) colorModel = (v.colorModel && typeof v.colorModel === 'object') ? v.colorModel : null
           if (v.radiusBoost !== undefined) radiusBoost = !!v.radiusBoost
+          if (v.flowParticles !== undefined) flowOn = !!v.flowParticles   // cycle-15：粒子开关（字段级合并语义）
           requestDraw()
         } catch {}
       }

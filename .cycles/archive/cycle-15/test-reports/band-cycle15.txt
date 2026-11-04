@@ -1,0 +1,65 @@
+Complexity Band Detection Report
+  Total complexity score: 2024
+  Average per file: 72.3
+  Budget: 180 | Upper band: 207 | Lower band: 153
+  Status: OK
+  History snapshots: 50
+  Statistical Control:
+    Mean: 67.37 | StdDev: 10.04
+    1σ: [57.3, 77.4]
+    2σ: [47.3, 87.5]
+    3σ: [37.2, 97.5]
+
+WESTERN ELECTRIC RULE VIOLATIONS (40):
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #22, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #23, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #24, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #25, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #26, value=88.61)
+  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #27, value=61.42)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #7, value=56.25)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #8, value=55.88)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #9, value=59.30)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #20, value=54.06)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #21, value=88.61)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #24, value=88.61)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #25, value=88.61)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #26, value=88.61)
+  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #27, value=61.42)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #19, value=56.50)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #20, value=54.06)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #39, value=68.54)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #40, value=68.54)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #41, value=68.54)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #42, value=68.54)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #43, value=68.54)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #44, value=68.54)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #45, value=69.50)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #46, value=69.54)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #47, value=69.54)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #48, value=72.29)
+  Rule 4: 连续 8 点在中心线同侧 (at snapshot #49, value=72.29)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #41, value=68.54)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #42, value=68.54)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #43, value=68.54)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #44, value=68.54)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #45, value=69.50)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #46, value=69.54)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #47, value=69.54)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #48, value=72.29)
+  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #49, value=72.29)
+  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #24, value=88.61)
+  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #25, value=88.61)
+  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #26, value=88.61)
+
+COMPLEXITY HOTSPOTS (top 5):
+  [182] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\shared\manifest.ts (branches: 132, functions: 25)
+  [179] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\client\graph-physics.ts (branches: 125, functions: 27)
+  [174] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\client\graph-engine.ts (branches: 106, functions: 34)
+  [167] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\client\graph-view.ts (branches: 131, functions: 18)
+  [153] D:\Projects\TraeProjects\kaogong\dsh-kaogong\src\server\http.ts (branches: 87, functions: 33)
+
+40 Western Electric rule violation(s) detected. Process may be out of statistical control.
+
+Mode: report (default) | alarms: WE_VIOLATIONS(40)
+Report mode: alarms surfaced as report data, exit 0 (use --strict for gate semantics).

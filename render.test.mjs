@@ -130,6 +130,15 @@ globalThis.fetch = async (url) => {
     lifecycle: { stages: [{ stage: 'serve', desc: '稳态', state: 'current' }], events: [], current: 'serve' },
   }) }
   if (u.includes('/api/wrong')) return { json: async () => ({ wrong: [], summary: { open: 0, mastered: 0 } }) }
+  // cycle-15 专项刷题记忆：GET 返回全局记忆仓库（POST 由视图静默回写，响应不参与断言）
+  if (u.includes('/api/memory')) {
+    return { json: async () => ({ memory: globalThis.__kgMemStore || {} }) }
+  }
+  // cycle-15 图形推理/深度题库数据源 mock（让横幅与恢复路径可测；N-02 分区切换零降级）
+  if (u.includes('/api/tuxing/cats')) return { json: async () => ({ ready: true, total: 354, cats: [{ cat: 'shuliang', name: '数量规律', count: 40 }] }) }
+  if (u.includes('/api/tuxing/list')) return { json: async () => ({ total: 2, questions: [{ no: 1, catName: '数量规律', ans: 'A', imgUrl: '' }, { no: 2, catName: '数量规律', ans: 'B', imgUrl: '' }] }) }
+  if (u.includes('/api/naoku/status')) return { json: async () => ({ ready: true, stats: { total: 27506, kadianCoverage: 100, fastestCoverage: 90, withImage: 10647 } }) }
+  if (u.includes('/api/naoku/questions') || u.includes('/api/naoku/practice')) return { json: async () => ({ questions: [{ module: '判断推理', stem: '深度题库抽题', options: { A: 'a' }, correctAnswer: 'A', kadian: '考点X' }] }) }
   // v1.6 新端点真实形状（cycle-13：papers mock 带 provinces facet ≥3 项，驱动省份 chips 行）
   if (u.includes('/api/papers')) return { json: async () => ({ total: 1683, papers: [{ id: '国考/2009/申论-副省级', exam: '国考', year: 2009, subject: '申论', paperType: '副省级', province: '全国', questionCount: 4, verified: true }], subjects: [{ subject: '申论', count: 944 }, { subject: '行测', count: 739 }], provinces: [{ name: '山东', total: 12, minYear: 2009, maxYear: 2024, subjects: { 申论: 6, 行测: 6 } }, { name: '全国', total: 100, minYear: 2008, maxYear: 2026, subjects: { 申论: 50, 行测: 50 } }, { name: '广东', total: 30, minYear: 2010, maxYear: 2025, subjects: { 申论: 15, 行测: 15 } }] }) }
   if (u.includes('/api/paper?')) return { json: async () => ({ id: 'x', exam: '国考', year: 2009, subject: '申论', paperType: '副省级', materials: [{ no: 1, text: '材料正文' }], questions: [{ no: 1, stem: '题干', score: 20, requirement: '不超过300字', relatedMaterials: '材料1', reference: '参考答案内容' }] }) }
@@ -145,6 +154,13 @@ globalThis.fetch = async (url) => {
   if (u.includes('/api/essay/grade')) return { json: async () => ({ score: 15, max: 20, chars: 200, limit: 300, dims: { coverage: 78, structure: 80, length: 85, language: 100 }, hitTerms: ['产业结构'], missingTerms: ['粮食'], feedback: ['整体达标'], referenceAvailable: true }) }
   if (u.includes('/api/essay/history')) return { json: async () => ({ total: 2, recent: [], avgRatio: 70 }) }
   return { json: async () => ({}) }
+}
+
+// cycle-15 专项刷题记忆：全局记忆仓库（三专项视图挂载时 GET；翻题 POST 由视图静默回写）
+globalThis.__kgMemStore = {
+  practice: { module: '判断推理', at: Date.now() - 60e3, question: { module: '判断推理', type: '逻辑', stem: '上次的题干（记忆恢复）', options: { A: 'a1', B: 'b1', C: 'c1', D: 'd1' }, correctAnswer: 'B', analysis: '解析文本' } },
+  tuxing: { cat: 'shuliang', catName: '数量规律', no: 2, idx: 1, at: Date.now() - 120e3 },
+  deep: { module: '数量关系', at: Date.now() - 180e3, question: { module: '数量关系', stem: '深度题库上次的题', options: { A: 'x', B: 'y' }, correctAnswer: 'A', kadian: '母题思维' } },
 }
 
 try {
@@ -588,6 +604,89 @@ try {
     if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('RENDER-G-16 图谱交互后出现渲染降级')
     if (!JSON.stringify(tr.toJSON()).includes('🕸️ 交互图谱')) throw new Error('RENDER-G-16 图谱视图主体消失')
     ok('RENDER-G-16: 图谱着色/导出/键盘全交互序列 canvas stub 零降级')
+
+    /* ══ cycle-15：布局三态轮换 + 流动粒子开关（追加，不削弱既有）══ */
+    // C15-01：布局按钮三态轮换 force→layered→circular→force（按钮与键盘 l 共用 KG_LAYOUTS 序列）
+    {
+      const lb = () => tr.root.findAllByType('button').find(b => String(b.props.children).includes('布局：'))
+      if (!lb()) throw new Error('C15 布局按钮缺失')
+      const seq = [String(lb().props.children)]
+      for (let i = 0; i < 3; i++) {
+        await act(async () => { lb().props.onClick() })
+        await act(async () => { await new Promise(r => setTimeout(r, 25)) })
+        seq.push(String(lb().props.children))
+      }
+      if (!(seq[0] !== seq[1] && seq[1] !== seq[2] && seq[2] !== seq[3] && seq[3] === seq[0])) {
+        throw new Error('C15 布局三态轮换异常: ' + seq.join('→'))
+      }
+      ok(`C15-01: 布局按钮三态轮换（${seq.join('→')}）`)
+    }
+    // C15-02：流动粒子开关（opt-in：开→引擎维持 rAF；关→恢复停帧；全程零降级）
+    {
+      const fb = () => tr.root.findAllByType('button').find(b => String(b.props.children).includes('流动粒子'))
+      if (!fb()) throw new Error('C15 流动粒子按钮缺失')
+      await act(async () => { fb().props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const onLabel = String(fb().props.children)
+      if (!onLabel.includes('开')) throw new Error('C15 流动粒子开启失败: ' + onLabel)
+      await act(async () => { fb().props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      if (!String(fb().props.children).includes('关')) throw new Error('C15 流动粒子关闭失败')
+      if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C15 流动粒子交互后渲染降级')
+      ok('C15-02: 流动粒子开关切换正常（opt-in rAF 语义，关闭恢复省电）')
+    }
+
+    /* ══ cycle-15：白盒三件套（延迟分位阶梯/吞吐四象限/生命周期完成度环）══ */
+    {
+      const oBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('可观测'))
+      if (!oBtn) throw new Error('C15 未找到可观测导航按钮')
+      await act(async () => { oBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 90)) })
+      const obsText = JSON.stringify(tr.toJSON())
+      for (const k of ['延迟分位阶梯', '吞吐 × 延迟四象限', 'SLO 200ms', '/7 阶段']) {
+        if (!obsText.includes(k)) throw new Error('C15 白盒三件套缺失: ' + k)
+      }
+      if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C15 白盒渲染降级')
+      ok('C15-03: 白盒三件套（延迟阶梯/吞吐象限/完成度环 5/7 阶段）渲染且零降级')
+    }
+
+    /* ══ cycle-15：专项刷题记忆三视图（横幅 + 一键跳回原题）══ */
+    // C15-04：刷题 —— 回模块选择页 → 横幅出现 → 继续上次 → 恢复原题干
+    {
+      await enterHubTab('practice')
+      const backBtn = tr.root.findAllByType('button').find(b => String(b.props.children) === '← 模块')
+      if (backBtn) { await act(async () => { backBtn.props.onClick() }); await act(async () => { await new Promise(r => setTimeout(r, 40)) }) }
+      let t = JSON.stringify(tr.toJSON())
+      if (!t.includes('上次练到「判断推理」')) throw new Error('C15 刷题记忆横幅缺失')
+      const resumeBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('继续上次'))
+      if (!resumeBtn) throw new Error('C15 继续上次按钮缺失')
+      await act(async () => { resumeBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      t = JSON.stringify(tr.toJSON())
+      if (!t.includes('上次的题干（记忆恢复）')) throw new Error('C15 记忆跳回未恢复原题')
+      ok('C15-04: 刷题记忆横幅 → 一键跳回上次的模块与原题')
+    }
+    // C15-05：图形推理 —— 横幅显示「规律类型 · 题号」
+    {
+      await enterHubTab('tuxing')
+      const t = JSON.stringify(tr.toJSON())
+      if (!t.includes('上次练到「数量规律」 · 第 2 题')) throw new Error('C15 图形推理记忆横幅缺失: [tx全串=' + t.includes('上次练到「数量规律」') + ', 第2题=' + t.includes('第 2 题') + ']')
+      if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C15 图形推理记忆横幅渲染降级')
+      ok('C15-05: 图形推理记忆横幅（规律类型 · 题号）渲染')
+    }
+    // C15-06：深度题库 —— 横幅出现 → 继续上次 → 恢复原题
+    {
+      await enterHubTab('deepbank')
+      let t = JSON.stringify(tr.toJSON())
+      if (!t.includes('上次练到「数量关系」')) throw new Error('C15 深度题库记忆横幅缺失')
+      const resumeBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('继续上次'))
+      if (!resumeBtn) throw new Error('C15 深度题库继续按钮缺失')
+      await act(async () => { resumeBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      t = JSON.stringify(tr.toJSON())
+      if (!t.includes('深度题库上次的题')) throw new Error('C15 深度题库跳回未恢复原题')
+      ok('C15-06: 深度题库记忆横幅 → 一键跳回原题')
+    }
   }
 
   tr.unmount()

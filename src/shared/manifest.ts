@@ -18,7 +18,7 @@ const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 // ── 能力清单（与 index.js / client.js / ui 实际注册保持同步）──
 export const CAPABILITIES = {
-  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.9.1', mode: 'offline-first' },
+  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.11.0', mode: 'offline-first' },
 
   // 宿主 UI 双入口（client 半注册；图谱与可观测面板消费此声明）
   entries: [
@@ -83,6 +83,17 @@ export const CAPABILITIES = {
     { path: '/api/method', label: '方法论', consumers: ['ui:method', 'ui:topics', 'tool:kaogong_ai_tutor', 'tool:kaogong_ai_shenlun'] },
     { path: '/api/methods', label: '方法论目录', consumers: ['ui:method', 'ui:topics'] },
     { path: '/api/progress', label: '进度', consumers: ['ui:dashboard', 'ui:plan', 'tool:kaogong_ai_plan'] },
+    // cycle-15 专项刷题记忆：按工作区命名空间隔离的「上次练到 xx 的 xx 题」；
+    // 消费方=三个专项视图（刷题/图形推理/深度题库），进入视图时读、翻题时写
+    { path: '/api/memory', label: '专项刷题记忆', consumers: ['ui:practice', 'ui:tuxing', 'ui:deepbank'] },
+    // cycle-16 题库管理：原始仓库一键安装/更新/删除/浏览/自定义数据根/镜像代理
+    { path: '/api/repos', label: '题库状态总览', consumers: ['ui:repos'] },
+    { path: '/api/repos/install', label: '题库安装/更新', consumers: ['ui:repos'] },
+    { path: '/api/repos/job', label: '题库作业查询', consumers: ['ui:repos'] },
+    { path: '/api/repos/cancel', label: '题库作业取消', consumers: ['ui:repos'] },
+    { path: '/api/repos/remove', label: '题库删除', consumers: ['ui:repos'] },
+    { path: '/api/repos/browse', label: '题库目录浏览', consumers: ['ui:repos'] },
+    { path: '/api/repos/config', label: '数据根与镜像配置', consumers: ['ui:repos'] },
     { path: '/api/graph', label: '图谱数据', consumers: ['ui:graph'] },
     // v1.8 交互式图谱三端点 + 生命周期状态机（白盒链路：client 视图消费）
     { path: '/api/graph/neighborhood', label: '图谱·k跳邻域', consumers: ['ui:graph'] },
@@ -118,6 +129,7 @@ export const CAPABILITIES = {
     { id: 'search', label: '知识检索' },
     { id: 'method', label: '方法论' },
     { id: 'graph', label: '知识图谱' },
+    { id: 'repos', label: '题库管理' },
     { id: 'observability', label: '可观测' },
   ],
 
@@ -129,6 +141,29 @@ export const CAPABILITIES = {
   ],
   modules: ['政治理论', '常识判断', '言语理解与表达', '数量关系', '判断推理', '资料分析'],
   methodTopics: ['行测', '申论', '职测', '综应', '公基', '公文', '面试', '时政', '报考', '复盘'],
+}
+
+// ── cycle-16 原始题库注册表（题库管理面板的单一事实源）──
+// tier: required=必选（核心刷题/方法论/图推三视图的硬依赖）· recommended=推荐（真题卷/模考/深度题库）·
+//       optional=可选（增强素材，按需拉取避免一次下载过大）。
+// upstream: 上游 GitHub 仓库（无 .git 后缀，repoManager 拼接）；size: 上游 pack 体积近似（git count-objects 实测）。
+// 致敬上游：全部题目数据与解析成果归各仓库作者所有，本插件只做整合与可视化。
+export const REPOS_META: any = {
+  xingcezhenti:           { tier: 'required',    size: '341MB', upstream: 'https://github.com/ERRRC/xingcezhenti',           desc: '515套卷58890题行测真题库（刷题视图硬依赖）' },
+  'kaogong-skill':        { tier: 'required',    size: '3MB',   upstream: 'https://github.com/KeWang0622/kaogong-skill',     desc: '考公AI技能包·方法论10主题（方法论视图硬依赖）' },
+  'gk-tuxing':            { tier: 'required',    size: '19MB',  upstream: 'https://github.com/Cha551/gk-tuxing',             desc: '图形推理真题354道逐题解析（图推视图硬依赖）' },
+  'gwy-zhenti':           { tier: 'recommended', size: '626MB', upstream: 'https://github.com/ProfessorZhi/gwy-zhenti',      desc: '国考省考真题1683套（真题卷/模考/申论评改依赖）' },
+  GongkaoNaoku:           { tier: 'recommended', size: '120MB', upstream: 'https://github.com/jangviktor-web/GongkaoNaoku',  desc: '深度题库27506题五维标注（深度题库视图依赖）' },
+  kaogongzhentizhengliu:  { tier: 'optional',    size: '208MB', upstream: 'https://github.com/ERRRC/kaogongzhentizhengliu',  desc: '22375篇考点重组深度笔记（检索增强）' },
+  AdministrativeAptitudeTest: { tier: 'optional', size: '2MB',  upstream: 'https://github.com/jecoat/AdministrativeAptitudeTest', desc: '近二十年国考省考试卷PDF（打印模考）' },
+  NovaForge:              { tier: 'optional',    size: '3MB',   upstream: 'https://github.com/SiriusFzh/NovaForge',          desc: '通用笔记模板库（LaTeX/Typst/Markdown）' },
+  sakib:                  { tier: 'optional',    size: '1MB',   upstream: 'https://github.com/vsakib/sakib',                 desc: '公考知识文档库（检索增强）' },
+  developer2gwy:          { tier: 'optional',    size: '1MB',   upstream: 'https://github.com/miss-mumu/developer2gwy',      desc: '程序员上岸公考指南（选岗/策略）' },
+  Exam_Database:          { tier: 'optional',    size: '131MB', upstream: 'https://github.com/869909419/Exam_Database',      desc: '多渠道考公素材题库（检索增强）' },
+  'qiuzhao-epi-bank':     { tier: 'optional',    size: '486MB', upstream: 'https://github.com/Timothy-yqw19/qiuzhao-epi-bank', desc: '秋招行测/银行EPI 697题PWA（扩展练习）' },
+  'xingce-app':           { tier: 'optional',    size: '46MB',  upstream: 'https://github.com/YMDHZBSJ/xingce-app',          desc: '离线行测App 22298题（数据参考）' },
+  'civil-exam-agent':     { tier: 'optional',    size: '276MB', upstream: 'https://github.com/tongnian0666-code/civil-exam-agent', desc: '公考督导智能体系统（AI 增强参考）' },
+  yunduanqiqu:            { tier: 'optional',    size: '5MB',   upstream: 'https://github.com/hwlvipone/yunduanqiqu',        desc: '申论范文/面试真题/素材分享' },
 }
 
 // ── 图构建：邻接表 ──

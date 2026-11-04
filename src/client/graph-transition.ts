@@ -101,3 +101,35 @@ export function graphMergeViewFilters(view: any, v: any): void {
   if (v.showOrphans !== undefined) view.showOrphans = v.showOrphans !== false
   if (v.showLabels !== undefined) view.showLabels = v.showLabels !== false
 }
+
+/* ── cycle-15：环形布局（第三布局，setLayout 的 'circular' 终态计算段）──
+   数学模型：语义环 = 节点按 NODE_META.layer（插件→生命周期→入口/通道→视图/端点/工具→
+   数据域→仓库→模块…）分层序 + 同层内 id 字典序排序，沿单位圆顺时针铺开；
+   半径自适应：R = min(R_fit, max(R_need, 140))，其中 R_need = V·labelGap/(2π)
+   （周长恰好容纳 V 个标签间距），R_fit = 0.42·min(W,H)（画布可容纳上限）——
+   标签不重叠由周长约束保证，画布不溢出由 fit 上限保证。
+   确定性：排序键固定（layer,id）→ 同输入两次输出坐标深相等（smoke 口径）。
+   写入面：仅节点堆对象属性 x/y/vx/vy（W1 先例允许面，与 graphTransSnapCoords 同级）。 */
+export function graphCircularLayout(simNodes: any[], nodeMeta: any, W: any, H: any): void {
+  const V = simNodes.length
+  if (!V) return
+  const ordered = simNodes.slice().sort((a, b) => {
+    const la = (nodeMeta && nodeMeta[a.type] && nodeMeta[a.type].layer) || 0
+    const lb = (nodeMeta && nodeMeta[b.type] && nodeMeta[b.type].layer) || 0
+    if (la !== lb) return la - lb
+    const sa = String(a.id), sb = String(b.id)
+    return sa < sb ? -1 : sa > sb ? 1 : 0
+  })
+  const labelGap = 26                                     // 单标签占位弧长（px，与标签字号匹配）
+  const rFit = Math.max(120, Math.min(Number(W) || 640, Number(H) || 420) * 0.42)
+  const rNeed = (V * labelGap) / (2 * Math.PI)            // 周长约束半径
+  const R = Math.min(rFit, Math.max(rNeed, 140))
+  const cx = (Number(W) || 640) / 2, cy = (Number(H) || 420) / 2
+  for (let i = 0; i < V; i++) {
+    const ang = -Math.PI / 2 + (2 * Math.PI * i) / V      // 顶部起、顺时针
+    const n = ordered[i]
+    n.x = cx + R * Math.cos(ang)
+    n.y = cy + R * Math.sin(ang)
+    n.vx = 0; n.vy = 0
+  }
+}

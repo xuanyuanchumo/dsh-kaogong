@@ -32,6 +32,12 @@ const INDEX_TTL = 60_000
 
 let paperIndex: any = { ts: 0, data: null }
 
+/** cycle-16 数据根热变更：作废内存索引缓存并作废在途预热（磁盘快照是 root 无关的相对 id，保留复用） */
+export function resetPaperIndex() {
+  prewarmRun++
+  paperIndex = { ts: 0, data: null }
+}
+
 function safeRead(p, max = 400000) {
   try { const c = readFileSync(p, 'utf-8'); return c.length > max ? c.slice(0, max) : c } catch { return null }
 }
@@ -147,7 +153,6 @@ export function buildPaperIndex(repoRoot, force = false) {
   // 代际令牌：同步重建一经启动即作废进行中的分块预热（否则两路并发扫盘互相争抢，首查反而变慢——cycle-14 实测 31.5s 教训）
   prewarmRun++
   if (!force && paperIndex.data && now - paperIndex.ts < INDEX_TTL) return paperIndex.data
-
   // 磁盘快照：优先复用（避免每次进程重启都扫 1683 个文件）
   if (!force) {
     try {

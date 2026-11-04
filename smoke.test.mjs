@@ -251,6 +251,98 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   }
 }
 
+// ── cycle-15 专项刷题记忆 /api/memory + 图谱三布局/流动粒子 + 白盒三件套（运行时+源码级守卫）──
+// 位置纪律（教训⑧+⑤）：必须在 §11b 长阻塞索引重建之前（keep-alive 竞态）、§12 崩溃安全之前
+// （该节 server.close() 后 B 不可用）。运行时 fetch 断言只允许活在「连接池健康窗口」内。
+{
+  const fs = await import('node:fs')
+  const readSrc = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf-8')
+  // ① 运行时：默认空 → POST 写入 → GET 回读（PROJ_A 命名空间；产物文件由结尾清理段回收）
+  const MA = `${B}/api/memory?ws=PROJ_A`
+  const m0 = await J(MA)
+  check('SMOKE-MEM-01 记忆默认为空对象', m0 && typeof m0.memory === 'object' && Object.keys(m0.memory).length === 0, JSON.stringify(m0).slice(0, 80))
+  const m1 = await P(MA, { kind: 'practice', data: { module: '判断推理', question: { stem: '记忆恢复原题干', options: { A: 'a', B: 'b' }, correctAnswer: 'A', module: '判断推理' } } })
+  check('SMOKE-MEM-02 记忆写入 ok+kind+at', m1 && m1.ok === true && m1.kind === 'practice' && typeof (m1.memory && m1.memory.at) === 'number', JSON.stringify(m1).slice(0, 120))
+  const m2 = await J(MA)
+  check('SMOKE-MEM-03 记忆回读含原题对象', m2?.memory?.practice?.question?.stem === '记忆恢复原题干' && m2?.memory?.practice?.module === '判断推理', JSON.stringify(m2).slice(0, 120))
+  // ② 隔离：PROJ_B 看不到 PROJ_A 的记忆（工作区命名空间隔离语义）
+  const m3 = await J(`${B}/api/memory?ws=PROJ_B`)
+  check('SMOKE-MEM-04 记忆按工作区隔离', m3 && m3.memory && !m3.memory.practice, JSON.stringify(m3).slice(0, 80))
+  // ③ 校验：非法 kind / 缺 data / 超限 均受控拒绝（HTTP 200 + {error}，绝不 5xx）
+  const m4a = await P(MA, { kind: 'BAD_KIND', data: {} })
+  const m4b = await P(MA, { kind: 'practice' })
+  const m4c = await P(MA, { kind: 'practice', data: { blob: 'x'.repeat(9000) } })
+  check('SMOKE-MEM-05 非法 kind/缺 data/超 8KB 均受控拒绝', !!(m4a && m4a.error) && !!(m4b && m4b.error) && !!(m4c && m4c.error), JSON.stringify([m4a, m4b, m4c]).slice(0, 200))
+  // ④ manifest 单一事实源：端点声明 + 消费者=三专项视图（三端同步契约）
+  const manifestSrc = readSrc('./src/shared/manifest.ts')
+  check('SMOKE-MEM-06 manifest 声明 /api/memory 且消费者=三专项视图', manifestSrc.includes("path: '/api/memory'") && manifestSrc.includes("consumers: ['ui:practice', 'ui:tuxing', 'ui:deepbank']"))
+  // ⑤ 图谱三布局：环形布局函数（层序+id 序圆周、半径自适应）+ 引擎分支 + 三态轮换单一序列
+  const transSrc = readSrc('./src/client/graph-transition.ts')
+  const engineSrc = readSrc('./src/client/graph-engine.ts')
+  const physicsSrc = readSrc('./src/client/graph-physics.ts')
+  const graphViewSrc = readSrc('./src/client/graph-view.ts')
+  check('SMOKE-GR15-01 环形布局（语义层序圆周+半径自适应+确定性）', /export function graphCircularLayout/.test(transSrc) && transSrc.includes('labelGap') && transSrc.includes('2 * Math.PI * i) / V'))
+  check('SMOKE-GR15-01 引擎接受 circular 且终态走确定性函数', engineSrc.includes("mode === 'circular' ? 'circular'") && engineSrc.includes('graphCircularLayout(simNodes, nodeMeta, W, H)'))
+  check('SMOKE-GR15-01 布局三态轮换（按钮=键盘同一 KG_LAYOUTS 序列）', graphViewSrc.includes("const KG_LAYOUTS = ['force', 'layered', 'circular']") && (graphViewSrc.match(/kgNextLayout/g) || []).length >= 2)
+  // ⑥ 流动粒子：语义边集 + 确定性相位 + opt-in 开关（关闭即停帧省电）
+  check('SMOKE-GR15-02 流动粒子语义边集+确定性相位', physicsSrc.includes('const KG_FLOW_RELS') && physicsSrc.includes('graphHash(String(e.a)') && engineSrc.includes('flow: { on: flowOn, t: now / 1700 }'))
+  check('SMOKE-GR15-02 粒子 opt-in（开启续帧/关闭停帧）', engineSrc.includes('|| flowOn) schedule()') && graphViewSrc.includes('flowParticles: flowOn'))
+  // ⑦ 白盒三件套：延迟分位阶梯 / 生命周期完成度环 / 吞吐×延迟四象限
+  const obsSrc = readSrc('./src/client/obs-view.ts')
+  check('SMOKE-OBS15-01 延迟分位阶梯（SLO 200/500 阈值线+有序统计量）', obsSrc.includes('function ObsQuantLadder') && obsSrc.includes("'SLO 200ms'") && obsSrc.includes("'500ms'"))
+  check('SMOKE-OBS15-01 生命周期完成度环（done/total 圆环占比）', obsSrc.includes('function ObsLifeRing') && obsSrc.includes('strokeDasharray') && obsSrc.includes("state === 'done'"))
+  check('SMOKE-OBS15-02 吞吐×延迟四象限（log10 对数轴+中位吞吐+SLO 横线）', obsSrc.includes('function ObsScatter') && obsSrc.includes('Math.log10(1 +') && obsSrc.includes('中位吞吐'))
+}
+
+// ── cycle-16 一键式题库管理（/api/repos* 运行时 + 数据根动态化静态守卫）──
+// 位置纪律（教训⑧+⑤）：运行时断言必须在 §11b 长阻塞之前、§12 关服务器之前。
+// 真实 clone 不在 smoke 跑（341MB+ 网络依赖）；只测控制面协议与校验路径。
+{
+  const fs = await import('node:fs')
+  const readSrc = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf-8')
+  // ① 状态总览：结构完整 + 15 仓库全登记 + tier 词表合法
+  const rs = await J(`${B}/api/repos`)
+  check('SMOKE-RP-01 /api/repos 结构（root/repos/summary/git）', rs && typeof rs.root === 'string' && Array.isArray(rs.repos) && rs.repos.length === 15 && typeof rs.git === 'boolean' && rs.summary && rs.summary.total === 15, JSON.stringify(rs).slice(0, 140))
+  const tiers = new Set(rs.repos.map(r => r.tier))
+  check('SMOKE-RP-01 tier 词表=required/recommended/optional 且必选≥3', [...tiers].every(t => ['required', 'recommended', 'optional'].includes(t)) && tiers.size === 3 && rs.repos.filter(r => r.tier === 'required').length >= 3, [...tiers].join(','))
+  check('SMOKE-RP-01 每仓库含 upstream 真实 GitHub 地址', rs.repos.every(r => typeof r.upstream === 'string' && r.upstream.startsWith('https://github.com/')))
+  // ② 校验路径：未知 key / 无作业取消 → {error} 且 HTTP 200
+  const bad1 = await P(`${B}/api/repos/install`, { key: 'no_such_repo' })
+  const bad2 = await P(`${B}/api/repos/cancel`, { key: 'sakib' })
+  check('SMOKE-RP-02 未知 key 安装/无作业取消均受控拒绝', !!(bad1 && bad1.error) && !!(bad2 && bad2.error), JSON.stringify([bad1, bad2]).slice(0, 160))
+  // ③ 浏览：已就绪仓库返回条目；越界 sub 拒绝（路径穿越防线）
+  const readyKey = (rs.repos.find(r => r.present) || {}).key || 'sakib'
+  const br = await J(`${B}/api/repos/browse?key=${encodeURIComponent(readyKey)}`)
+  const brBad = await J(`${B}/api/repos/browse?key=sakib&sub=${encodeURIComponent('../../../etc')}`)
+  check('SMOKE-RP-03 目录浏览可用（就绪仓库返回 items 数组）', Array.isArray(br.items), JSON.stringify(br).slice(0, 120))
+  check('SMOKE-RP-03 越界 sub 受控拒绝', !!(brBad && brBad.error), JSON.stringify(brBad).slice(0, 100))
+  // ④ 配置往返：mirror 写入→读回→还原（测前备份 config 文件）
+  const CFGF = new URL('./data/repos-config.json', import.meta.url)
+  const hadCfg = fs.existsSync(CFGF)
+  const bak = hadCfg ? fs.readFileSync(CFGF, 'utf-8') : null
+  try {
+    const cf = await P(`${B}/api/repos/config`, { mirror: 'https://example-mirror.test/' })
+    const rs2 = await J(`${B}/api/repos`)
+    check('SMOKE-RP-04 镜像配置写入即生效（status 回显）', !!(cf && cf.ok) && rs2.mirror === 'https://example-mirror.test/', JSON.stringify(rs2.mirror))
+  } finally {
+    if (hadCfg) fs.writeFileSync(CFGF, bak)
+    else if (fs.existsSync(CFGF)) fs.rmSync(CFGF)
+  }
+  // ⑤ 静态守卫：数据根解析优先级 / spawn 崩溃安全 / 域重建失效链 / combo 前缀纪律
+  const drSrc = readSrc('./src/server/dataRoot.ts')
+  check('SMOKE-RP-05 数据根四级解析（env>config>dev-parent>managed）', drSrc.includes('KG_REPOS_DIR') && drSrc.includes('repos-config.json') && drSrc.includes('dev-parent') && drSrc.includes('managed-default'))
+  const rmSrc = readSrc('./src/server/repoManager.ts')
+  check('SMOKE-RP-05 spawn error 事件必须接住（崩溃安全）', /proc\.on\('error'/.test(rmSrc) && rmSrc.includes('GIT_TERMINAL_PROMPT'))
+  check('SMOKE-RP-05 智能判断 clone vs pull + 非 git 目录保护', rmSrc.includes("existsSync(join(target, '.git')) ? 'pull' : 'clone'") && rmSrc.includes('拒绝覆盖'))
+  const httpSrc16 = readSrc('./src/server/http.ts')
+  check('SMOKE-RP-05 数据根变更重建域并失效缓存（paperIndex/naoku/graphCache）', httpSrc16.includes('resetPaperIndex()') && httpSrc16.includes('resetNaoku()') && httpSrc16.includes('graphCache = { ts: 0, data: null }'))
+  check('SMOKE-RP-05 manifest 声明 7 个 /api/repos* 端点且消费者=ui:repos', (readSrc('./src/shared/manifest.ts').match(/path: '\/api\/repos/g) || []).length === 7)
+  const clientSrc = readSrc('./src/client/client.ts')
+  check('SMOKE-RP-05 client 接线题库管理视图（分发+自管数据名单）', clientSrc.includes('h(NativeReposView') && clientSrc.includes("view === 'repos'"))
+  const rvSrc = readSrc('./src/client/repos-view.ts')
+  check('SMOKE-RP-05 combo 顶层名纪律（rp/Rp/RP 前缀或 Native*View 视图惯例，教训⑨）', !/^(?:function|const|class)\s+(?!rp|Rp|RP|NativeReposView)[A-Za-z_$]/m.test(rvSrc))
+}
+
 // ── 11b. v1.6 真题卷 / 专题 / 申论评改（真实数据端到端）──
 {
   const W2 = '?ws=PROJ_P'
@@ -658,7 +750,7 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('申论草稿·选题主文装载草稿且提交清除', /setAnswer\(readDraft\(q\)\)/.test(papersView) && /localStorage\.removeItem\(essayDraftKey\(cur\)\)/.test(papersView) && papersView.includes('草稿已本地暂存'))
   // ④ 索引分块预热：paperData 有 prewarmPaperIndex + setImmediate 分批；http.ts 启动接线；smoke harness 关闭预热（防 R-P-03 互踩）
   check('索引预热·分块构建不阻塞事件循环', /export function prewarmPaperIndex/.test(paperData) && /setImmediate\(step\)/.test(paperData) && /const BATCH = 40/.test(paperData))
-  check('索引预热·服务启动接线且测试可关', httpSrc.includes('prewarmPaperIndex(REPO_ROOT)') && /prewarm = options\.prewarm !== false/.test(httpSrc))
+  check('索引预热·服务启动接线且测试可关', httpSrc.includes('prewarmPaperIndex(getRepoRoot())') && /prewarm = options\.prewarm !== false/.test(httpSrc))
   const smokeSelf = fs.readFileSync(new URL('./smoke.test.mjs', import.meta.url), 'utf-8')
   check('索引预热·smoke harness 显式关闭', (smokeSelf.match(/prewarm: false/g) || []).length >= 3)
 }

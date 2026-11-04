@@ -466,10 +466,134 @@ function ObsLaneHeat(props: any) {
     h('svg', { width: '100%', viewBox: '0 0 ' + gridW + ' ' + gridH, style: { display: 'block', maxWidth: gridW } }, cells))
 }
 
+/* ═══════════════ cycle-15 可观测性升级三件套（零依赖手绘 SVG，全部确定性） ═══════════════
+   ① ObsQuantLadder 延迟分位阶梯图：tel.histogram {p50,p90,p95,p99,max} 有序统计量 → 水平
+      阶梯条 + 200ms SLO / 500ms 硬顶两条竖直阈值虚线（与 server 告警契约同阈值）；
+   ② ObsLifeRing 生命周期完成度环：done/total 阶段 → SVG 圆环（stroke-dasharray 圆周占比）
+      + 中心百分比（完成度 = 已完成阶段数 / 总阶段数，round）；
+   ③ ObsScatter 吞吐×延迟四象限散点：每端点 x=log10(1+count)（对数轴压缩长尾）、y=p95
+      （1200ms 截断到可视域）、泡径 ∝ √(1+errors)（面积∝错误量级）；横线=200ms SLO、
+      竖线=活跃端点中位吞吐 → 「高吞吐 ∧ 慢」右上象限即治理优先级（四象限分析）。 */
+
+/** ① 延迟分位阶梯（无 hook 纯组件；hist 缺失/为空 → null 整块隐藏，卡片级降级） */
+function ObsQuantLadder(props: any) {
+  const hist: any = (props && props.hist) || {}
+  const rows: any[] = [['p50', hist.p50], ['p90', hist.p90], ['p95', hist.p95], ['p99', hist.p99], ['max', hist.max]]
+    .filter((r: any) => typeof r[1] === 'number' && isFinite(r[1]))
+  if (!rows.length) return null
+  const cap = Math.max(400, hist.max || 0, hist.p99 || 0)   // 条长上限（保证 500ms 阈值线有头部空间）
+  const W = 560, barH = 16, gap = 7, labelW = 34, topPad = 6
+  const Hh = topPad + rows.length * (barH + gap) + 4
+  const xOf = (v: any) => labelW + (Math.min(Number(v), cap) / cap) * (W - labelW - 8)
+  const items: any[] = []
+  for (const th of [[200, '#f59e0b', 'SLO 200ms'], [500, '#ef4444', '500ms']] as any[]) {
+    if (th[0] > cap) continue
+    items.push(h('line', { key: 'th' + th[0], x1: xOf(th[0]), y1: 2, x2: xOf(th[0]), y2: Hh - 2, stroke: th[1], strokeWidth: 1, strokeDasharray: '3 3', opacity: .75 }))
+    items.push(h('text', { key: 'thl' + th[0], x: xOf(th[0]) + 3, y: 10, fontSize: 8, fill: th[1] }, th[2]))
+  }
+  rows.forEach((r: any, i: number) => {
+    const y = topPad + i * (barH + gap)
+    const col = r[1] > 500 ? '#ef4444' : r[1] > 200 ? '#f59e0b' : '#10b981'
+    items.push(h('text', { key: 'k' + i, x: 2, y: y + 12, fontSize: 9.5, fontFamily: 'monospace', fill: '#64748b' }, r[0]))
+    items.push(h('rect', { key: 'b' + i, x: labelW, y, width: Math.max(2, xOf(r[1]) - labelW), height: barH, rx: 4, fill: col, opacity: .82 }))
+    items.push(h('text', { key: 'v' + i, x: xOf(r[1]) + 5, y: y + 12, fontSize: 9, fontFamily: 'monospace', fill: '#475569' }, r[1] + 'ms'))
+  })
+  return h('div', null,
+    h('div', { style: { fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6 } }, '⏱ 延迟分位阶梯（全局合并样本）'),
+    h('svg', { width: '100%', viewBox: '0 0 ' + W + ' ' + Hh, style: { display: 'block', maxWidth: W }, role: 'img', 'aria-label': '延迟分位阶梯图' }, items),
+    h('div', { style: { fontSize: 9.5, color: '#94a3b8', marginTop: 4 } },
+      'p50/p90/p95/p99/max = 各端点环形样本合并后的有序统计量 · 绿<200ms ≤ 琥珀<500ms ≤ 红'))
+}
+
+/** ② 生命周期完成度环（无 hook；stages 缺失 → null） */
+function ObsLifeRing(props: any) {
+  const life: any = (props && props.life) || null
+  const stages: any[] = Array.isArray(life && life.stages) ? life.stages : []
+  if (!stages.length) return null
+  const done = stages.filter((s: any) => s && s.state === 'done').length
+  const total = stages.length
+  const pct = total ? Math.round((done / total) * 100) : 0
+  const R = 15, C = 2 * Math.PI * R
+  const col = pct >= 100 ? '#10b981' : pct >= 50 ? '#0ea5e9' : '#f59e0b'
+  return h('span', {
+    title: '生命周期完成度：' + done + '/' + total + ' 阶段已完成（' + pct + '%）',
+    style: { display: 'inline-flex', alignItems: 'center', gap: 5 },
+  },
+    h('svg', { width: 38, height: 38, viewBox: '0 0 38 38', role: 'img', 'aria-label': '生命周期完成度环' },
+      h('circle', { cx: 19, cy: 19, r: R, fill: 'none', stroke: 'rgba(148,163,184,.25)', strokeWidth: 4 }),
+      h('circle', { cx: 19, cy: 19, r: R, fill: 'none', stroke: col, strokeWidth: 4, strokeLinecap: 'round',
+        strokeDasharray: (C * pct / 100).toFixed(2) + ' ' + C.toFixed(2),
+        transform: 'rotate(-90 19 19)' }),
+      h('text', { x: 19, y: 23, textAnchor: 'middle', fontSize: 9.5, fontWeight: 800, fill: '#475569' }, pct + '%')),
+    h('span', { style: { fontSize: 10, color: '#64748b' } }, done + '/' + total + ' 阶段'))
+}
+
+/** ③ 吞吐×延迟四象限散点（无 hook；rows=NativeObsView 对账行，按 path 字典序确定性渲染） */
+function ObsScatter(props: any) {
+  const rows: any[] = Array.isArray(props && props.rows) ? props.rows : []
+  const pts = rows
+    .filter((r: any) => r && (r.count || 0) > 0 && typeof r.p95 === 'number')
+    .map((r: any) => ({
+      path: String(r.path), count: r.count || 0, p95: r.p95 || 0, errors: r.errors || 0,
+      x: Math.log10(1 + (r.count || 0)),
+      color: (r.undeclared || r.orphan) ? '#ef4444' : (r.p95 || 0) > 200 ? '#f59e0b' : '#10b981',
+    }))
+    .sort((a: any, b: any) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+  if (!pts.length) return null
+  const W = 560, Hh = 168, padL = 40, padB = 22, padT = 10
+  const xMax = Math.max.apply(null, [1].concat(pts.map((p: any) => p.x)))
+  const yMax = Math.min(1200, Math.max.apply(null, [240].concat(pts.map((p: any) => Math.min(p.p95, 1200)))))
+  const xOf = (v: any) => padL + (v / xMax) * (W - padL - 10)
+  const yOf = (v: any) => padT + (1 - Math.min(v, yMax) / yMax) * (Hh - padT - padB)
+  // 象限线：竖=活跃端点中位吞吐（对数域），横=200ms SLO（与告警契约同阈值）
+  const counts = pts.map((p: any) => p.count).sort((a: any, b: any) => a - b)
+  const med = counts.length % 2 ? counts[(counts.length - 1) / 2] : (counts[counts.length / 2 - 1] + counts[counts.length / 2]) / 2
+  const medX = Math.log10(1 + med)
+  const items: any[] = []
+  items.push(h('line', { key: 'ax1', x1: padL, y1: padT - 4, x2: padL, y2: Hh - padB, stroke: 'rgba(148,163,184,.5)', strokeWidth: 1 }))
+  items.push(h('line', { key: 'ax2', x1: padL, y1: Hh - padB, x2: W - 8, y2: Hh - padB, stroke: 'rgba(148,163,184,.5)', strokeWidth: 1 }))
+  // y 轴刻度（0 / 200 / yMax）+ x 轴刻度（1/10/100/… 数量级）
+  for (const yv of [0, 200, yMax]) {
+    if (yv > yMax) continue
+    items.push(h('text', { key: 'yt' + yv, x: padL - 4, y: yOf(yv) + 3, fontSize: 8.5, fontFamily: 'monospace', fill: '#94a3b8', textAnchor: 'end' }, String(yv)))
+  }
+  // x 轴数量级刻度：count=10^dec → 精确位置 log10(1+10^dec)（dec=0 即 count=1）
+  for (let dec = 0; dec <= 6; dec++) {
+    const xv = Math.log10(1 + Math.pow(10, dec))
+    if (xv > xMax) break
+    items.push(h('text', { key: 'xt' + dec, x: xOf(xv), y: Hh - padB + 12, fontSize: 8.5, fontFamily: 'monospace', fill: '#94a3b8', textAnchor: 'middle' }, '10' + (dec ? supDigits(String(dec)) : '')))
+  }
+  items.push(h('line', { key: 'slo', x1: padL, y1: yOf(200), x2: W - 8, y2: yOf(200), stroke: '#f59e0b', strokeWidth: 1, strokeDasharray: '4 3', opacity: .8 }))
+  items.push(h('text', { key: 'slol', x: W - 12, y: yOf(200) - 3, fontSize: 8, fill: '#b45309', textAnchor: 'end' }, 'SLO 200ms'))
+  items.push(h('line', { key: 'med', x1: xOf(medX), y1: padT - 2, x2: xOf(medX), y2: Hh - padB, stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '2 3', opacity: .7 }))
+  items.push(h('text', { key: 'medl', x: xOf(medX) + 3, y: padT + 8, fontSize: 8, fill: '#64748b' }, '中位吞吐'))
+  pts.forEach((p: any, i: number) => {
+    const r2 = 2.5 + Math.sqrt(Math.min(p.errors, 50)) * 1.1
+    items.push(h('circle', {
+      key: 'p' + i, cx: xOf(p.x), cy: yOf(p.p95), r: Math.min(10, r2),
+      fill: p.color, opacity: .78, stroke: '#fff', strokeWidth: .8,
+    }, h('title', null, p.path + ' · ' + p.count + ' 次 · p95 ' + p.p95 + 'ms · 错 ' + p.errors)))
+  })
+  items.push(h('text', { key: 'xl', x: W - 8, y: Hh - 4, fontSize: 8.5, fill: '#94a3b8', textAnchor: 'end' }, '请求数（log₁₀）'))
+  items.push(h('text', { key: 'yl', x: padL - 26, y: padT + 2, fontSize: 8.5, fill: '#94a3b8' }, 'p95 ms'))
+  return h('div', null,
+    h('div', { style: { fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6 } }, '🔵 吞吐 × 延迟四象限（治理优先级直读）'),
+    h('svg', { width: '100%', viewBox: '0 0 ' + W + ' ' + Hh, style: { display: 'block', maxWidth: W }, role: 'img', 'aria-label': '吞吐延迟四象限散点图' }, items),
+    h('div', { style: { fontSize: 9.5, color: '#94a3b8', marginTop: 4 } },
+      'x=log₁₀(1+请求数) · y=p95（1200ms 截断）· 泡径∝√错误数 · 右上（高吞吐∧慢）= 治理优先 · 红=漂移/孤儿'))
+}
+
+/** 上标数字（x 轴数量级 10¹ 10² 用；确定性小工具） */
+function supDigits(s: string): string {
+  const M: any = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' }
+  return String(s).split('').map((c: string) => M[c] || c).join('')
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    NativeObsView — 白盒管理/可观测面板（v1.8.0 重做 + W2c 流动可视化升级）
    区块：量化卡(W2c) · 能力流(W2c) · 告警 · 学习质量 · 运行态 · 生命周期 stepper
         + 事件泳道(W2c) · 能力对账×性能表(三态灯 W2c) · 慢端点 TOP · 命名空间
+        + 延迟分位阶梯/吞吐象限/完成度环(cycle-15)
    ═══════════════════════════════════════════════════════════════════════ */
 
 export function NativeObsView(props) {
@@ -648,6 +772,12 @@ export function NativeObsView(props) {
     /* ── W2c 量化卡片区（面板顶部四指标卡，渐变数字） ── */
     h(ObsQuantCards, { tel, caps }),
 
+    /* ── cycle-15：延迟分位阶梯 × 吞吐四象限（可观测性量化升级；任一无数据自动隐藏该半区） ── */
+    h(ObsGlassCard, { title: '📊 延迟分布 × 吞吐象限', accent: '#0ea5e9' },
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 16 } },
+        h(ObsQuantLadder, { hist }),
+        h(ObsScatter, { rows }))),
+
     /* ── F 告警区（有告警才出现，避免视觉噪音）── */
     alertsRows.length
       ? h(ObsGlassCard, { title: '🚨 运行告警 · ' + alertsRows.length + ' 条', accent: '#ef4444' },
@@ -691,8 +821,8 @@ export function NativeObsView(props) {
       h(Stat, { v: (hist.p95 || 0) + 'ms', l: '全局 p95', color: (hist.p95 || 0) > 200 ? '#f59e0b' : '#10b981' }),
       h(Stat, { v: (hist.max || 0) + 'ms', l: '最慢样本' })),
 
-    /* ── C 生命周期状态机 + W2c 事件泳道 ── */
-    h(ObsGlassCard, { title: '🔁 生命周期状态机', accent: '#0ea5e9' },
+    /* ── C 生命周期状态机 + W2c 事件泳道 + cycle-15 完成度环 ── */
+    h(ObsGlassCard, { title: '🔁 生命周期状态机', accent: '#0ea5e9', extra: h(ObsLifeRing, { life }) },
       stages.length
         ? h('div', null,
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap', marginBottom: 12 } },

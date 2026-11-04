@@ -21,20 +21,23 @@ import {
   topoLayers, shortestPath, neighborhood, reverseReach, layeredLayout,
 } from '../shared/manifest.js'
 import { REPOS, XINGCE_MODULES, safeReadFile, exists, safeReadDir, getRandomQuestions, repoStats } from '../adapters/repoData.js'
-import { prewarmPaperIndex } from '../adapters/paperData.js'
+import { prewarmPaperIndex, resetPaperIndex } from '../adapters/paperData.js'
 import { makeWsStore } from './ws.js'
 import { makeSrsApi, srsHooks } from './srs.js'
 import { makeDataApi, makeStudyPlan } from './dataApi.js'
 import { makePaperApi } from './paperApi.js'
-import { makeNaokuApi, initNaoku } from './naokuApi.js'
+import { makeNaokuApi, initNaoku, resetNaoku } from './naokuApi.js'
 import { makeTuxingApi } from './tuxingApi.js'
+import { resolveReposRoot } from './dataRoot.js'
+import { makeRepoManager } from './repoManager.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PKG_ROOT = resolve(HERE, '..', '..')          // <pkg>
-export const REPO_ROOT = resolve(PKG_ROOT, '..')    // 15 仓库所在根
+/** 开发态兼容常量（smoke 直接引用）；运行期真实根走 getRepoRoot() 动态解析 */
+export const REPO_ROOT = resolve(PKG_ROOT, '..')
 const DATA_DIR = join(PKG_ROOT, 'data')
 const PROGRESS_DIR = join(DATA_DIR, 'progress')
 const RUNTIME_FILE = join(DATA_DIR, 'runtime.json')
@@ -43,17 +46,44 @@ const PLAN_FILE = join(DATA_DIR, 'study-plan.md')
 const APP_NAME = 'dsh-kaogong'
 const BOOT_TS = Date.now()
 
-// 域装配（依赖注入，无全局单例耦合）
-const store = makeWsStore(PROGRESS_DIR)
-const { loadProgress, saveProgress, wsKey, listWorkspaces } = store
-const srsApi = makeSrsApi({ repoRoot: REPO_ROOT, store })
-const dataApi = makeDataApi({ repoRoot: REPO_ROOT, planFile: PLAN_FILE })
-const paperApi = makePaperApi({ repoRoot: REPO_ROOT, store })
-const naokuApi = makeNaokuApi({ repoRoot: REPO_ROOT, dataDir: DATA_DIR, store })
-const tuxingApi = makeTuxingApi({ repoRoot: REPO_ROOT })
-// Naoku 深度题库惰性初始化（node:sqlite 动态 import；失败则优雅降级）
-initNaoku(REPO_ROOT, DATA_DIR).catch(() => {})
-const studyPlan = makeStudyPlan(PLAN_FILE)
+// ══ cycle-16 数据根动态化：域装配工厂（一键式安装的架构基座）══
+// npm/GitHub 安装态下题库数据不在包内；数据根 = env KG_REPOS_DIR > data/repos-config.json
+// > 开发态上级目录（含任一登记仓库）> 托管默认 data/repos/。
+// 数据根变更（换根/安装/删除）→ rebuildDomains()：域工厂重建 + 缓存失效，各域文件零改动。
+let domains: any = null
+function buildDomains(root: string) {
+  const store = makeWsStore(PROGRESS_DIR)
+  const d = {
+    root,
+    store,
+    srsApi: makeSrsApi({ repoRoot: root, store }),
+    dataApi: makeDataApi({ repoRoot: root, planFile: PLAN_FILE }),
+    paperApi: makePaperApi({ repoRoot: root, store }),
+    naokuApi: makeNaokuApi({ repoRoot: root, dataDir: DATA_DIR, store }),
+    tuxingApi: makeTuxingApi({ repoRoot: root }),
+    studyPlan: makeStudyPlan(PLAN_FILE),
+  }
+  initNaoku(root, DATA_DIR).catch(() => {})
+  return d
+}
+export function getRepoRoot(): string {
+  if (!domains) domains = buildDomains(resolveReposRoot(Object.keys(REPOS)).root)
+  return domains.root
+}
+/** 数据根变更后重建（repoManager 回调；graphCache 一并作废） */
+function rebuildDomains() {
+  const next = resolveReposRoot(Object.keys(REPOS)).root
+  const changed = !domains || domains.root !== next
+  domains = buildDomains(next)
+  if (changed) {
+    resetPaperIndex()
+    resetNaoku()
+    graphCache = { ts: 0, data: null }
+  }
+  return { root: next, changed }
+}
+const repoManager = makeRepoManager({ getRoot: getRepoRoot, onRootChanged: rebuildDomains })
+getRepoRoot()   // 模块加载即解析一次（后续只读复用）
 
 // ══ 生命周期事件日志（环形 300 行）══
 function logLifecycle(event, data = {}) {
@@ -219,19 +249,19 @@ function graphSnapshot(wsRaw) {
   const now = Date.now()
   if (graphCache.data && now - graphCache.ts < 5000) return graphCache.data
   const banks = {
-    banks: Object.fromEntries(entries(REPOS).map(([k, v]) => [k, { desc: v, exists: exists(join(REPO_ROOT, k)) }])),
-    ...repoStats(REPO_ROOT),
+    banks: Object.fromEntries(entries(REPOS).map(([k, v]) => [k, { desc: v, exists: exists(join(domains.root, k)) }])),
+    ...repoStats(domains.root),
   }
   const modules = { modules: Object.fromEntries(entries(XINGCE_MODULES).map(([name, dir]) => {
-    const p = join(REPO_ROOT, 'xingcezhenti', dir)
+    const p = join(domains.root, 'xingcezhenti', dir)
     return [name, { dir, fileCount: exists(p) ? safeReadDir(p).filter(f => f.endsWith('.md')).length : 0 }]
   })) }
-  const plan = studyPlan('all')
+  const plan = domains.studyPlan('all')
   delete plan.raw
   const ge = buildGraph({ banks, modules, plan })
   const metrics = graphMetrics(ge.nodes, ge.edges)
   const tel = telemetrySnapshot()
-  const p = loadProgress(wsRaw)
+  const p = domains.store.loadProgress(wsRaw)
   // ── v1.8 追加：分析层（纯函数、确定性；每次缓存未命中重算，5s TTL）──
   const deg = degreeAnalysis(ge.nodes, ge.edges)
   const analytics = {
@@ -318,37 +348,43 @@ function renderUI() {
   return out
 }
 
-// ══ 核心路由（域链分发：srs ?? paper ?? data ?? core）══
-function handleApi(path, params, post, method, wsRaw, port) {
-  return srsApi(path, params, post, method, wsRaw)
-    ?? tuxingApi.handle(path, params)
-    ?? naokuApi.handle(path, params, post, method, wsRaw)
-    ?? paperApi.handle(path, params, post, method, wsRaw)
-    ?? dataApi(path, params, post, method)
+// ══ 核心路由（域链分发：repoManager(异步) ?? srs ?? paper ?? data ?? core）══
+async function handleApi(path, params, post, method, wsRaw, port) {
+  // cycle-16 题库管理域（异步：git 作业控制面）——前置于同步域链，仅接管 /api/repos*
+  if (path.startsWith('/api/repos')) {
+    const r = await repoManager.handle(path, params, post, method)
+    if (r !== undefined) return r
+  }
+  return domains.srsApi(path, params, post, method, wsRaw)
+    ?? domains.tuxingApi.handle(path, params)
+    ?? domains.naokuApi.handle(path, params, post, method, wsRaw)
+    ?? domains.paperApi.handle(path, params, post, method, wsRaw)
+    ?? domains.dataApi(path, params, post, method)
     ?? coreApi(path, params, post, method, wsRaw, port)
 }
 
 function coreApi(path, params, post, method, wsRaw, port) {
   if (path === '/api/status') {
-    const rs = repoStats(REPO_ROOT)
-    const p = loadProgress(wsRaw)
+    const rs = repoStats(domains.root)
+    const p = domains.store.loadProgress(wsRaw)
     return {
       app: APP_NAME, port, pid: process.pid, uptimeSec: Math.round((Date.now() - BOOT_TS) / 1000),
       repos: rs,
-      db: exists(join(REPO_ROOT, 'GongkaoNaoku', 'kaogong.db')),
-      ws: wsKey(wsRaw),
+      repoRoot: domains.root,
+      db: exists(join(domains.root, 'GongkaoNaoku', 'kaogong.db')),
+      ws: domains.store.wsKey(wsRaw),
       progress: { day: p.day, answered: p.answered, correct: p.correct, wrong: p.wrong, rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 },
     }
   }
   if (path === '/api/questions' && method === 'GET') {
-    return getRandomQuestions(REPO_ROOT, params.get('module') || '判断推理', parseInt(params.get('count') || params.get('limit') || '1'))
+    return getRandomQuestions(domains.root, params.get('module') || '判断推理', parseInt(params.get('count') || params.get('limit') || '1'))
   }
   if (path === '/api/check' && method === 'POST') {
     const q = post.question
     if (!q || !q.correctAnswer) return { error: '缺少题目对象（需含 correctAnswer）' }
     const answer = (post.answer || '').toUpperCase().trim()
     const isCorrect = answer === q.correctAnswer
-    const progress = loadProgress(wsRaw)
+    const progress = domains.store.loadProgress(wsRaw)
     if (post.label && !progress.label) progress.label = post.label
     progress.answered++
     if (isCorrect) progress.correct++; else progress.wrong++
@@ -366,20 +402,20 @@ function coreApi(path, params, post, method, wsRaw, port) {
       const item = srsHooks.resolveRetry(progress, q)
       if (item) wrongEvent = { type: item.mastered ? 'mastered' : 'promoted', sig: item.sig, box: item.box, consecutive: item.consecutive }
     }
-    saveProgress(wsRaw, progress)
+    domains.store.saveProgress(wsRaw, progress)
     return { isCorrect, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongEvent, progress: { answered: progress.answered, correct: progress.correct, wrong: progress.wrong, rate: Math.round(progress.correct / progress.answered * 100) } }
   }
   if (path === '/api/progress' && method === 'GET') {
-    const p = loadProgress(wsRaw)
-    return { ...p, ws: wsKey(wsRaw), rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
+    const p = domains.store.loadProgress(wsRaw)
+    return { ...p, ws: domains.store.wsKey(wsRaw), rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
   }
   if (path === '/api/progress' && method === 'POST') {
-    const p = loadProgress(wsRaw)
+    const p = domains.store.loadProgress(wsRaw)
     if (post.day) p.day = Math.max(1, Math.min(30, post.day))
     if (post.label) p.label = post.label
     if (post.reset) { p.answered = 0; p.correct = 0; p.wrong = 0; p.history = []; p.byModule = {}; p.wrongBook = [] }
-    saveProgress(wsRaw, p)
-    return { ...p, ws: wsKey(wsRaw), rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
+    domains.store.saveProgress(wsRaw, p)
+    return { ...p, ws: domains.store.wsKey(wsRaw), rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
   }
   if (path === '/api/graph') return graphSnapshot(wsRaw)
   // v1.8 图查询三端点（未知节点 → {error} 且 200，不让异常冒泡）
@@ -410,7 +446,7 @@ function coreApi(path, params, post, method, wsRaw, port) {
       lifecycle: lifecycleSnapshot(),
     }
   }
-  if (path === '/api/workspaces') return { workspaces: listWorkspaces() }
+  if (path === '/api/workspaces') return { workspaces: domains.store.listWorkspaces() }
   return { error: `Unknown API: ${path}` }
 }
 
@@ -455,7 +491,7 @@ export async function startServer(preferredPort = 8400, options: any = {}) {
       logLifecycle(publishRuntime ? 'server-listen' : 'server-listen-probe', { port })
       // cycle-14 性能：启动后后台分块预热真题卷索引（快照命中即毫秒级；无快照分块构建不阻塞事件循环）。
       // smoke 传 prewarm:false 关闭——避免预热与 R-P-03 快照实验互踩（预热会把缓存热好，耗时断言失真）。
-      if (prewarm) prewarmPaperIndex(REPO_ROOT)
+      if (prewarm) prewarmPaperIndex(getRepoRoot())
       return { server, port, adopted: false }
     } catch (e) {
       if (e.code === 'EADDRINUSE') continue
@@ -495,15 +531,15 @@ export function attachWebRoute(webServer, mountPath = '/kaogong') {
     }
     if (rel.startsWith('/api/')) {
       // 图片端点走二进制流（T-018），不进 JSON 链路
-      if (rel === '/api/paper-img') { paperApi.serveImage(params, res); return }
-      if (rel === '/api/naoku-img') { naokuApi.serveImage(params, res); return }
-      if (rel === '/api/tuxing-img') { tuxingApi.serveImage(params, res); return }
+      if (rel === '/api/paper-img') { domains.paperApi.serveImage(params, res); return }
+      if (rel === '/api/naoku-img') { domains.naokuApi.serveImage(params, res); return }
+      if (rel === '/api/tuxing-img') { domains.tuxingApi.serveImage(params, res); return }
       let body = ''
       req.on('data', c => body += c)
-      req.on('end', () => {
+      req.on('end', async () => {
         try {
           const post = body ? JSON.parse(body) : {}
-          finish(200, 'application/json; charset=utf-8', JSON.stringify(handleApi(rel, params, post, req.method, wsRaw, 0)))
+          finish(200, 'application/json; charset=utf-8', JSON.stringify(await handleApi(rel, params, post, req.method, wsRaw, 0)))
         } catch (e) {
           finish(500, 'application/json; charset=utf-8', JSON.stringify({ error: e.message }))
         }
@@ -545,15 +581,15 @@ function buildHttpServer(port) {
       }
       if (path.startsWith('/api/')) {
         // 图片端点走二进制流（T-018），不进 JSON 链路
-        if (path === '/api/paper-img') { paperApi.serveImage(params, res); return }
-        if (path === '/api/naoku-img') { naokuApi.serveImage(params, res); return }
-        if (path === '/api/tuxing-img') { tuxingApi.serveImage(params, res); return }
+        if (path === '/api/paper-img') { domains.paperApi.serveImage(params, res); return }
+        if (path === '/api/naoku-img') { domains.naokuApi.serveImage(params, res); return }
+        if (path === '/api/tuxing-img') { domains.tuxingApi.serveImage(params, res); return }
         let body = ''
         req.on('data', c => body += c)
-        req.on('end', () => {
+        req.on('end', async () => {
           try {
             const post = body ? JSON.parse(body) : {}
-            finish(200, 'application/json; charset=utf-8', JSON.stringify(handleApi(path, params, post, req.method, wsRaw, port)))
+            finish(200, 'application/json; charset=utf-8', JSON.stringify(await handleApi(path, params, post, req.method, wsRaw, port)))
           } catch (e) {
             finish(500, 'application/json; charset=utf-8', JSON.stringify({ error: e.message }))
           }

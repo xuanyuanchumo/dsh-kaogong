@@ -28,6 +28,7 @@ import { NativeDashboardView, NativePracticeView, NativeWrongbookView, NativeTux
 import { NativeExamView, NativePapersView, NativeTopicsView, NativeEssayView } from './papers-view.js'
 import { NativeGraphView } from './graph-view.js'
 import { NativeObsView } from './obs-view.js'
+import { NativeReposView } from './repos-view.js'
 
 ;(window as any).__ModuleLoader__.load({
   id: 'dsh-kaogong',
@@ -118,7 +119,7 @@ import { NativeObsView } from './obs-view.js'
       React.useEffect(() => {
         if (!channel) return
         // v1.6：自管数据视图（papers/topics/essay）由子组件自行 fetch，父不介入
-        if (view === 'papers' || view === 'topics' || view === 'essay' || view === 'exam' || view === 'practice' || view === 'deepbank' || view === 'tuxing') { setData(null); return }
+        if (view === 'papers' || view === 'topics' || view === 'essay' || view === 'exam' || view === 'practice' || view === 'deepbank' || view === 'tuxing' || view === 'repos') { setData(null); return }
         let cancelled = false
         setErr(null)
         ;(async () => {
@@ -180,6 +181,7 @@ import { NativeObsView } from './obs-view.js'
         { id: 'learn', label: '学习', items: [['dashboard', '📊 仪表盘'], ['exam', '⏱ 模考']] },
         { id: 'bank', label: '题库', items: [['papers', '📚 真题卷'], ['topics', '🎯 专题']] },
         { id: 'review', label: '复盘', items: [['wrongbook', '📕 错题本'], ['graph', '🕸️ 图谱'], ['obs', '📡 可观测']] },
+        { id: 'admin', label: '管理', items: [['repos', '📦 题库管理']] },
       ]
       return h('div', { className: 'kg-page', role: 'main', 'aria-label': t('title') },
         h('div', { className: 'kg-page-head' },
@@ -204,10 +206,11 @@ import { NativeObsView } from './obs-view.js'
           view === 'practice' ? h(NativePracticeView, { key: 'pr' + tick + JSON.stringify(viewParams), api, initialModule: viewParams.module || '', onGoWrongbook: () => setView('wrongbook') }) : null,
           view === 'deepbank' ? h(NativeDeepBankView, { key: 'dp' + tick, api, initialModule: viewParams.module || '', initialCategory: viewParams.category || '' }) : null,
           view === 'tuxing' ? h(NativeTuxingView, { key: 'tx' + tick, api }) : null,
+          view === 'repos' ? h(NativeReposView, { key: 'rp' + tick, api }) : null,
           view === 'topics' ? h(NativeTopicsView, { key: 'tp' + tick, api, onGo: (v, params) => setView(v, params || {}), initialModule: viewParams.module || '' }) : null,
           view === 'essay' ? h(NativeEssayView, { key: 'es' + tick + JSON.stringify(viewParams), api, initialType: viewParams.type || '' }) : null,
           // 父 effect 管理数据的视图
-          view !== 'papers' && view !== 'topics' && view !== 'essay' && view !== 'exam' && view !== 'practice' && view !== 'deepbank' && view !== 'tuxing' && !data && !err ? h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' })) : null,
+          view !== 'papers' && view !== 'topics' && view !== 'essay' && view !== 'exam' && view !== 'practice' && view !== 'deepbank' && view !== 'tuxing' && view !== 'repos' && !data && !err ? h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' })) : null,
           // R9：子视图经组件挂载，key=view+tick → 切换即干净重挂载，父 hook 链恒定
           data && data.kind === 'dashboard' ? h(NativeDashboardView, { key: 'd' + tick, data }) : null,
           data && data.kind === 'wrongbook' ? h(NativeWrongbookView, { key: 'w' + tick, data: data.wb }) : null,

@@ -11,6 +11,12 @@ import { createGraphEngine } from './graph-engine.js'
 import { graphKeyCommand } from './graph-transition.js'
 import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetLayout, graphReadLayers, GRAPH_NODE_META, GRAPH_EDGE_META, graphPaintModel, graphLocalBetweenness, graphDegreeHistogram, GRAPH_COLOR_MODES, GRAPH_SEQ_STOPS } from './graph-analytics.js'
 
+    /* ── cycle-15：布局三态序列 + 文案（工具条按钮与键盘 l 键共用同一序列，单一事实源）──
+       force=FR 力导向 · layered=Kahn 拓扑分层 · circular=语义环形（NODE_META.layer 层序圆周）。 */
+    const KG_LAYOUTS = ['force', 'layered', 'circular']
+    const KG_LAYOUT_LABEL: any = { force: '布局：力导向', layered: '布局：分层', circular: '布局：环形' }
+    const kgNextLayout = (v: any) => KG_LAYOUTS[(KG_LAYOUTS.indexOf(String(v)) + 1) % KG_LAYOUTS.length]
+
     /**
      * NativeGraphView — 契约 §3 的原生交互图谱（真组件；hook 数量恒定）。
      * props: { data: /api/graph 响应, stats?: /api/stats, api?: (p,opts)=>Promise }
@@ -51,6 +57,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       const [colorMode, setColorMode] = React.useState('type')
       const [radiusBoost, setRadiusBoost] = React.useState(false)
       const [legendOpen, setLegendOpen] = React.useState(true)
+      const [flowOn, setFlowOn] = React.useState(false)   // cycle-15：边流动粒子开关（opt-in，开启期间引擎保持 rAF）
 
       // 本地降级分析（analytics 缺失时作为唯一事实源；也用于抽屉的任意节点 PageRank）
       const local: any = React.useMemo(() => graphLocalAnalytics(nodes, edges), [nodes, edges])
@@ -228,6 +235,13 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         try { e.setView({ colorModel: paint, radiusBoost }) } catch {}
       }, [paint, radiusBoost])
 
+      // cycle-15：流动粒子开关同步（字段级合并语义；关闭即恢复省电停帧）
+      React.useEffect(() => {
+        const e = engineRef.current
+        if (!e || !e.ok) return
+        try { e.setView({ flowParticles: flowOn }) } catch {}
+      }, [flowOn])
+
       // 路径高亮同步
       React.useEffect(() => {
         const e = engineRef.current
@@ -332,7 +346,8 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           } else if (cmd === 'fit') {
             if (e && e.ok) { e.fit(); if (ev.preventDefault) ev.preventDefault() }
           } else if (cmd === 'toggle-layout') {
-            setLayout((v: any) => (v === 'force' ? 'layered' : 'force'))
+            // cycle-15：l 键在 力导向→分层→环形 三态间轮换（与工具条按钮同一序列）
+            setLayout((v: any) => kgNextLayout(v))
             if (ev.preventDefault) ev.preventDefault()
           } else if (cmd === 'clear') {
             setSelected(null)
@@ -534,7 +549,8 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           h('span', { style: { fontSize: 12.5, fontWeight: 800, marginRight: 2 } }, '🕸️ 交互图谱'),
           gbtn('重置视图', false, () => { setFocusId(null); try { if (engineRef.current && engineRef.current.ok) engineRef.current.reset() } catch {} }),
           gbtn('适配画布', false, () => { try { if (engineRef.current && engineRef.current.ok) engineRef.current.fit() } catch {} }),
-          gbtn(layout === 'force' ? '布局：力导向' : '布局：分层', true, () => setLayout((v: any) => (v === 'force' ? 'layered' : 'force'))),
+          gbtn(KG_LAYOUT_LABEL[layout] || '布局：力导向', true, () => setLayout((v: any) => kgNextLayout(v))),
+          gbtn(flowOn ? '流动粒子：开' : '流动粒子：关', !!flowOn, () => setFlowOn((v: any) => !v)),
           gbtn(showLabels ? '标签：开' : '标签：关', !!showLabels, () => setShowLabels((v: any) => !v)),
           gbtn(focusId ? '退出聚焦' : '聚焦选中', !!focusId, () => { if (selected) setFocusId(focusId ? null : selected) }),
           // W2b：着色模式胶囊组（type 默认 / community / pagerank / betweenness / degree）

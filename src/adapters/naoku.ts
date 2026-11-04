@@ -83,6 +83,13 @@ export function naokuStatus() {
   return { ready: !!db, failed: dbFailed, path: dbPath }
 }
 
+/** cycle-16 数据根热变更：关闭既有连接并清失败标记，允许对新根重开（合并 db 在 data/ 下与 root 无关，ensureDb 会直接复用） */
+export function resetNaoku() {
+  try { if (db && db.close) db.close() } catch { /* 已关闭 */ }
+  db = null
+  dbFailed = false
+}
+
 function safeAll(sql, params = []) {
   if (!db) return []
   try { return db.prepare(sql).all(...params) } catch { return [] }

@@ -7,6 +7,77 @@
 
 import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow } from './ui-kit.js'
 
+/* ════════════ cycle-15 专项刷题记忆（/api/memory · 按工作区命名空间隔离）════════════
+   三端同步契约：manifest 声明 /api/memory → server/srs.js memoryApi 实现 → 本视图族消费。
+   语义：进入专项视图时读「上次练到 xx 的 xx 题」，翻题/换题时静默回写；
+   恢复 = 一键把该视图恢复到上次的模块 + 原题对象（题目整对象入记忆，保证「跳回原题」）。 */
+
+/** 相对时间文案（确定性：同输入同输出；无效/未来时间戳回退为空 → 横幅自动隐藏该段） */
+function kgMemAgo(ts: any): string {
+  const t = Number(ts)
+  if (!isFinite(t) || t <= 0) return ''
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000))
+  if (s < 60) return '刚刚'
+  if (s < 3600) return Math.floor(s / 60) + ' 分钟前'
+  if (s < 86400) return Math.floor(s / 3600) + ' 小时前'
+  return Math.floor(s / 86400) + ' 天前'
+}
+
+/** 记忆钩子：GET /api/memory 载入指定 kind + save() 静默 POST 回写。
+ *  字段全部可选降级：端点未就绪/网络失败一律 loaded=true + data=null（不阻塞视图）；
+ *  save 永不抛错（学习路径不因记忆失败中断）。hook 数恒定：useState×2 + useEffect×1 + useCallback×1。 */
+function useKgMem(api: any, kind: string) {
+  const [data, setData] = React.useState(null)
+  const [loaded, setLoaded] = React.useState(false)
+  React.useEffect(() => {
+    let dead = false
+    setLoaded(false)
+    try {
+      Promise.resolve(api('/memory')).then((d: any) => {
+        if (dead) return
+        const m = d && d.memory && d.memory[kind]
+        setData(m && typeof m === 'object' ? m : null)
+        setLoaded(true)
+      }).catch(() => { if (!dead) setLoaded(true) })
+    } catch { if (!dead) setLoaded(true) }
+    return () => { dead = true }
+  }, [api, kind])
+  const save = React.useCallback((patch: any) => {
+    try {
+      Promise.resolve(api('/memory', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, data: patch }),
+      })).catch(() => {})
+    } catch { /* 记忆失败静默 */ }
+  }, [api, kind])
+  return { data, loaded, save }
+}
+
+/** 记忆恢复横幅（无 hook 纯组件）：渐变玻璃条 + 「上次练到 …」+ 相对时间 + 继续跳回/从头开始。
+ *  data 为空或调用方判定不展示时返回 null（卡片级降级，绝不 role="alert"）。 */
+function KgMemBanner(props: any) {
+  const d = props && props.data
+  if (!d) return null
+  return h('div', {
+    style: {
+      display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      marginBottom: 12, padding: '9px 13px', borderRadius: 12,
+      background: 'linear-gradient(135deg,rgba(99,102,241,.10),rgba(139,92,246,.08))',
+      border: '1px solid rgba(99,102,241,.28)',
+    },
+  },
+    h('span', { style: { fontSize: 12.5, fontWeight: 700, color: '#4f46e5' } }, '💾 ' + String(props.text || '上次练到这里')),
+    d.at ? h('span', { style: { fontSize: 10.5, color: '#94a3b8' } }, kgMemAgo(d.at)) : null,
+    h('button', {
+      style: { marginLeft: 'auto', border: 0, cursor: 'pointer', fontFamily: 'inherit', padding: '6px 14px', borderRadius: 9, fontSize: 12, fontWeight: 700, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff' },
+      onClick: props.onResume,
+    }, '▶ 继续上次'),
+    h('button', {
+      style: { border: '1px solid rgba(148,163,184,.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', padding: '6px 12px', borderRadius: 9, fontSize: 12, color: '#64748b' },
+      onClick: props.onDismiss,
+    }, '从头开始'))
+}
+
     /* ── 子视图：真组件（R9：一律经 h(Comp, props) 挂载）── */
     export function NativeDashboardView(props) {
       const { st, stats, extra } = props.data
@@ -55,6 +126,10 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
       const [result, setResult] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [stat, setStat] = React.useState({ done: 0, right: 0 })
+      // cycle-15：专项刷题记忆（上次练到 xx 的 xx 题；hook 数恒定，R9）
+      const { data: memData, loaded: memLoaded, save: memSave } = useKgMem(api, 'practice')
+      const [memOff, setMemOff] = React.useState(false)
+      const remember = (question: any, mod: any) => { if (question) memSave({ module: mod || module || '', question }) }
 
       const queueRef = React.useRef([])   // 单一数据源：剩余题队列
       const [queueLen, setQueueLen] = React.useState(0)
@@ -66,6 +141,7 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
         setQ(rest[0] || null)
         setSel(null)
         setResult(null)
+        remember(rest[0], module)   // cycle-15：翻题即记忆（写「上次练到」）
       }
 
       const draw = React.useCallback(async (mod, useSrs) => {
@@ -79,6 +155,7 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
         setQ(list[0])
         setSel(null)
         setResult(null)
+        remember(list[0], mod)   // cycle-15：抽题即记忆
       }, [api])
 
       // v1.7.1：从专题入口带 initialModule 进来时自动抽题（无需再点模块）
@@ -105,6 +182,24 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
       // 模块选择面板
       if (!module) {
         return h('div', {},
+          // cycle-15：记忆恢复横幅（带 initialModule 的专题直入不弹——显式意图优先）
+          (!initialModule && memLoaded && memData && memData.question && !memOff)
+            ? h(KgMemBanner, {
+                key: 'kgmem-practice',
+                data: memData,
+                text: '上次练到「' + (memData.module || '未记录模块') + '」· ' + String((memData.question && memData.question.stem) || '').slice(0, 26) + '…',
+                onResume: () => {
+                  const mq = memData.question
+                  setModule(memData.module || '判断推理')
+                  queueRef.current = [mq]   // 恢复队列=只含上次那题，「下一题」走正常抽题
+                  setQueueLen(0)
+                  setQ(mq)
+                  setSel(null)
+                  setResult(null)
+                },
+                onDismiss: () => setMemOff(true),
+              })
+            : null,
           h(Card, { title: '✏️ 选择练习模块' },
             h('div', { style: { display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' } },
               h('button', { style: { ...KV_BTN, ...(srs ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }, onClick: () => setSrs(true) }, '🧠 SRS 智能（错题回炉优先）'),
@@ -196,21 +291,32 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
       const [revealed, setRevealed] = React.useState(false)
       const [stat, setStat] = React.useState({ done: 0, right: 0 })
       const [busy, setBusy] = React.useState(false)
+      // cycle-15：图形推理记忆（规律类型 + 题号 + idx；hook 数恒定，R9）
+      const { data: memData, loaded: memLoaded, save: memSave } = useKgMem(api, 'tuxing')
+      const [memOff, setMemOff] = React.useState(false)
 
       React.useEffect(() => {
         api('/tuxing/cats').then((d: any) => setCats(d)).catch(() => setCats({ ready: false, cats: [] }))
       }, [api])
 
-      const load = React.useCallback(async (c: string) => {
+      const load = React.useCallback(async (c: string, resumeIdx?: number) => {
         setBusy(true)
         try {
           const d = await api('/tuxing/list?limit=20' + (c ? '&cat=' + encodeURIComponent(c) : ''))
           setList(d)
-          setIdx(0)
+          // cycle-15：记忆恢复路径——按上次的 idx 落位（clamp 到列表长度内；非恢复路径 idx=0）
+          const ri = Number(resumeIdx) > 0 ? Math.min(Math.floor(Number(resumeIdx)), ((d && d.questions) || []).length - 1) : 0
+          setIdx(ri < 0 ? 0 : ri)
           setSel('')
           setRevealed(false)
         } finally { setBusy(false) }
       }, [api])
+
+      // cycle-15：翻题即记忆（写「上次练到 xx 类 · 第 N 题」；save 稳定引用，不引发循环）
+      React.useEffect(() => {
+        const cur = list && list.questions ? list.questions[idx] : null
+        if (cur) memSave({ cat, catName: cur.catName || '', no: cur.no || 0, idx })
+      }, [idx, list, cat, memSave])
 
       const q = list && list.questions ? list.questions[idx] : null
 
@@ -225,6 +331,16 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
       // ── 分类选择页 ──
       if (!list) {
         return h('div', {},
+          // cycle-15：记忆恢复横幅（一键回到「上次的规律类型 · 上次的题」）
+          (memLoaded && memData && memData.cat !== undefined && !memOff)
+            ? h(KgMemBanner, {
+                key: 'kgmem-tuxing',
+                data: memData,
+                text: '上次练到「' + (memData.catName || memData.cat || '未记录规律') + '」' + (memData.no ? ' · 第 ' + memData.no + ' 题' : ''),
+                onResume: () => { setCat(memData.cat || ''); load(memData.cat || '', Number(memData.idx) || 0) },
+                onDismiss: () => setMemOff(true),
+              })
+            : null,
           h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 } },
             h(Stat, { v: cats.total, l: '图形推理真题', color: '#6366f1' }),
             h(Stat, { v: cats.cats.length, l: '规律类型', color: '#8b5cf6' }),
@@ -326,6 +442,9 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
       const [busy, setBusy] = React.useState(false)
       // T-023：图形推理专项（按规律类型细分，gk-tuxing 卷库的归类思路）
       const [tuxing, setTuxing] = React.useState(null)
+      // cycle-15：深度题库记忆（module + 原题对象整存，恢复即回到原题；hook 数恒定，R9）
+      const { data: memData, loaded: memLoaded, save: memSave } = useKgMem(api, 'deep')
+      const [memOff, setMemOff] = React.useState(false)
       const loadTuxing = () => {
         if (tuxing) return
         api('/naoku/kadian?q=' + encodeURIComponent('图形推理') + '&limit=40')
@@ -345,11 +464,13 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
             + (mod ? '&module=' + encodeURIComponent(mod) : '')
             + (initialCategory && !mod ? '&category=' + encodeURIComponent(initialCategory) : '')
           const d = await api('/naoku/questions?' + qs)
-          setQ((d.questions || [])[0] || null)
+          const dq = (d.questions || [])[0] || null
+          setQ(dq)
           setSel(null)
           setRevealed(false)
+          if (dq) memSave({ module: mod || module || '', question: dq })   // cycle-15：抽题即记忆
         } finally { setBusy(false) }
-      }, [api, initialCategory])
+      }, [api, initialCategory, memSave])
 
       // 从专题入口带 module/category 进来时自动抽题
       const bootRef = React.useRef(false)
@@ -368,10 +489,12 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
 
       const drawByKadian = async (k) => {
         const d = await api('/naoku/practice?kadian=' + encodeURIComponent(k) + '&count=1')
-        setQ((d.questions || [])[0] || null)
+        const dq = (d.questions || [])[0] || null
+        setQ(dq)
         setSel(null)
         setRevealed(false)
         setKadians([])
+        if (dq) memSave({ module: module || '判断推理', question: dq })   // cycle-15：按考点抽题同样记忆
       }
 
       // ── 未就绪 ──
@@ -499,6 +622,16 @@ import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow
         statsRow,
         searchCard,
         tuxingCard,
+        // cycle-15：记忆恢复横幅（未抽题时展示；恢复 = 直接回到上次的模块 + 原题）
+        (!q && memLoaded && memData && memData.question && !memOff)
+          ? h(KgMemBanner, {
+              key: 'kgmem-deep',
+              data: memData,
+              text: '上次练到「' + (memData.module || '未记录模块') + '」· ' + String((memData.question && memData.question.stem) || '').slice(0, 26) + '…',
+              onResume: () => { setModule(memData.module || ''); setQ(memData.question); setSel(null); setRevealed(false) },
+              onDismiss: () => setMemOff(true),
+            })
+          : null,
         h(Card, { title: '🎯 深度刷题（带解题思维链）' },
           h('div', { style: { display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' } }, moduleBtns),
           busy ? h('div', { style: { fontSize: 12, color: '#64748b' } }, '抽题中…') : null,
