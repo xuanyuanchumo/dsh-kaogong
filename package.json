@@ -58,6 +58,7 @@
   },
   "scripts": {
     "build": "tsc && node scripts/bundle-client.mjs",
+    "version:bump": "node scripts/bump-version.mjs",
     "typecheck": "tsc --noEmit",
     "prepack": "tsc && node scripts/bundle-client.mjs",
     "test": "tsc && node scripts/bundle-client.mjs && node smoke.test.mjs",
