@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>考公学习平台</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+<!--
+  dsh-kaogong 独立 SPA（零依赖单文件，CSS 由服务端内联 app.css）
+  v1.8（cycle-12）：交互式可交互知识图谱（力导向/分层·缩放平移·拖拽·悬停·过滤·搜索·路径）
+                   + 可观测面板（生命周期 stepper / 能力对账 / 端点性能排序 / 告警分级 / 命名空间）
+                   + 现代响应式排版与深色模式（prefers-color-scheme）
+  约束：所有 API 走 ?ws= 隔离键；不引外部依赖；所有接口字符串经 textContent/文本节点进 DOM（禁未转义 innerHTML）
+-->
+<style>/*__APP_CSS__*/</style>
+</head>
+<body>
+<div class="nav">
+  <div class="brand">📚 考公学习</div>
+  <div class="tabs" id="tabs"></div>
+  <div class="nav-right">
+    <span class="ws-tag" id="ws-tag" title="当前工作区隔离命名空间">…</span>
+    <span class="beacon down" id="beacon"></span>
+    <span id="beacon-txt">连接中</span>
+    <button class="icon-btn" id="theme-btn" title="切换主题（跟随系统 / 浅色 / 深色）" aria-label="切换主题">🌗</button>
+  </div>
+</div>
+<div class="content" id="app"></div>
+<div class="toast" id="toasts" aria-live="polite"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   基础层：参数 / API / 发现 / 主题 / DOM 工具
+   ═══════════════════════════════════════════════════════════════ */
+const PARAMS = new URLSearchParams(location.search)
+const WS = PARAMS.get('ws') || 'default'
+let BASE = null
+
+/** 所有请求统一附加 ws 隔离键；返回值一律 JSON */
+async function api(p, opts) {
+  const sep = p.includes('?') ? '&' : '?'
+  const res = await fetch(BASE + p + sep + 'ws=' + encodeURIComponent(WS), opts)
+  return res.json()
+}
+/** 容错请求：{ok,data} / {ok:false,err}，供可观测视图做分区降级（接口失败不白屏） */
+async function apiSafe(p, opts) {
+  try {
+    const data = await api(p, opts)
+    if (data && typeof data === 'object' && data.error && Object.keys(data).length === 1) return { ok: false, err: String(data.error) }
+    return { ok: true, data }
+  } catch (e) {
+    return { ok: false, err: e && e.message ? e.message : String(e) }
+  }
+}
+async function discover() {
+  // 同源优先：UI 由宿主路由 /kaogong/ 提供时，API 直接走同源（零 CORS、无端口依赖）
+  if (location.pathname.startsWith('/kaogong')) {
+    try {
+      const r = await fetch(`/kaogong/api/status?ws=${encodeURIComponent(WS)}`, { signal: AbortSignal.timeout(1200) })
+      const j = await r.json()
+      if (j && j.app === 'dsh-kaogong') { BASE = '/kaogong'; return j }
+    } catch {}
+  }
+  for (const port of [8400, 8401, 8402, 8403, 8404]) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/api/status?ws=${encodeURIComponent(WS)}`, { signal: AbortSignal.timeout(900) })
+      const j = await r.json()
+      if (j && j.app === 'dsh-kaogong') { BASE = `http://127.0.0.1:${port}`; return j }
+    } catch {}
+  }
+  return null
+}
+
+/** 当前是否深色（auto 模式跟随系统） */
+function isDark() {
+  const t = document.documentElement.dataset.theme
+  if (t === 'dark') return true
+  if (t === 'light') return false
+  return matchMedia('(prefers-color-scheme: dark)').matches
+}
+;(function initTheme() {
+  const urlTheme = PARAMS.get('theme')
+  const saved = localStorage.getItem('kg-theme')
+  // 默认 auto：CSS 侧用 prefers-color-scheme 适配；显式选择则固定
+  const mode = (urlTheme === 'dark' || urlTheme === 'light') ? urlTheme
+    : (saved === 'dark' || saved === 'light' ? saved : 'auto')
+  document.documentElement.dataset.theme = mode
+  document.getElementById('theme-btn').onclick = () => {
+    const n = isDark() ? 'light' : 'dark'
+    document.documentElement.dataset.theme = n
+    localStorage.setItem('kg-theme', n)
+    if (cur === 'graph' || cur === 'obs') render()
+  }
+  // 系统主题变化：仅 auto 模式跟随（图谱需重绘取色）
+  try {
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (document.documentElement.dataset.theme === 'auto' && (cur === 'graph' || cur === 'obs')) render()
+    })
+  } catch {}
+})()
+
+/** 极简 DOM 构造器。p 允许为 null（R4 事故：显式 null 会击穿默认参数） */
+function el(t, p = {}, ...ch) {
+  const e = document.createElement(t)
+  for (const [k, v] of Object.entries(p||{})) {
+    if (v == null) continue
+    if (k === 'class') e.className = v
+    else if (k === 'style') e.style.cssText = v
+    else if (k === 'html') e.innerHTML = v // 仅限内部静态字符串；接口数据一律走文本节点
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v)
+    else e.setAttribute(k, v)
+  }
+  ch.flat(9).forEach(c => c != null && c !== false && e.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c))))
+  return e
+}
+function kv(l, v) { return el('div', { class: 'kvi' }, l, el('b', null, v)) }
+function kv0(l, v) { return el('div', { class: 'card stat' }, el('div', { class: 'v', style: 'font-size:19px' }, String(v)), el('div', { class: 'l' }, l)) }
+function toast(msg, type = 'info', ms = 2600) {
+  const box = document.getElementById('toasts')
+  const t = el('div', { class: type }, msg)
+  box.appendChild(t)
+  setTimeout(() => { t.style.transition = 'opacity .3s,transform .3s'; t.style.opacity = '0'; t.style.transform = 'translateY(8px)'; setTimeout(() => t.remove(), 320) }, ms)
+}
+function skel(n = 3) { return el('div', { class: 'card' }, Array.from({ length: n }, (_, i) => el('div', { class: 'skel ' + (i === 0 ? 'mid' : 'big') }))) }
+/** 降级提示条（接口不可用 / 数据缺失时替代白屏） */
+function notice(msg, kind = 'warn') { return el('div', { class: 'notice ' + kind }, '⚠️ ', msg) }
+function fmtDur(s) {
+  if (s == null || isNaN(s)) return '—'
+  if (s < 60) return s + 's'
+  if (s < 3600) return Math.floor(s / 60) + 'm' + (s % 60) + 's'
+  return Math.floor(s / 3600) + 'h' + Math.floor((s % 3600) / 60) + 'm'
+}
+
+/* ═══ SVG 图表（零依赖）═══ */
+function svgmk(tag, at) { const n = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, v] of Object.entries(at)) n.setAttribute(k, v); return n }
+function svgLine(days) {
+  if (!days || days.length < 2) return el('div', { style: 'font-size:12px;color:var(--muted);padding:18px 0;text-align:center' }, '数据不足 2 天，先坚持刷题吧')
+  const W = 460, H = 120, P = 24, max = Math.max(...days.map(d => d.answered), 5)
+  const x = i => P + i * (W - 2 * P) / (days.length - 1), yA = v => H - P - (v / max) * (H - 2 * P), yR = v => H - P - (v / 100) * (H - 2 * P)
+  const svg = svgmk('svg', { viewBox: `0 0 ${W} ${H}` })
+  svg.appendChild(svgmk('line', { x1: P, y1: H - P, x2: W - P, y2: H - P, class: 'chart-grid' }))
+  svg.appendChild(svgmk('polyline', { points: days.map((d, i) => `${x(i)},${yA(d.answered)}`).join(' '), class: 'chart-line', stroke: '#6366f1' }))
+  svg.appendChild(svgmk('polyline', { points: days.map((d, i) => `${x(i)},${yR(d.rate)}`).join(' '), class: 'chart-line', stroke: '#10b981', 'stroke-dasharray': '4 3' }))
+  days.forEach((d, i) => { svg.appendChild(svgmk('circle', { cx: x(i), cy: yA(d.answered), r: 2.6, fill: '#6366f1' })); svg.appendChild(svgmk('circle', { cx: x(i), cy: yR(d.rate), r: 2.6, fill: '#10b981' })) })
+  const lx = svgmk('text', { x: P, y: 12, class: 'chart-label' }); lx.textContent = '● 答题数(左) 　● 正确率%(右)　' + days[0].date.slice(5) + ' → ' + days[days.length - 1].date.slice(5)
+  svg.appendChild(lx)
+  return el('div', { class: 'chartcard' }, svg)
+}
+function svgRadar(mastery) {
+  const mods = Object.keys(mastery || {})
+  if (mods.length < 3) return el('div', { style: 'font-size:12px;color:var(--muted);padding:18px 0;text-align:center' }, '至少 3 个模块有作答后展示能力雷达')
+  const C = 110, R = 78, N = mods.length
+  const svg = svgmk('svg', { viewBox: '0 0 220 220' })
+  const pt = (i, r) => { const a = Math.PI * 2 * i / N - Math.PI / 2; return [C + r * Math.cos(a), C + r * Math.sin(a)] }
+  for (const ring of [0.33, 0.66, 1]) svg.appendChild(svgmk('polygon', { points: mods.map((_, i) => pt(i, R * ring).join(',')).join(' '), fill: 'none', class: 'chart-grid' }))
+  svg.appendChild(svgmk('polygon', { points: mods.map((m, i) => pt(i, R * (mastery[m].mastery / 100)).join(',')).join(' '), fill: 'rgba(99,102,241,.22)', stroke: '#6366f1', 'stroke-width': 2 }))
+  mods.forEach((m, i) => { const [tx, ty] = pt(i, R + 20); const t = svgmk('text', { x: tx, y: ty, 'text-anchor': 'middle', class: 'chart-label' }); t.textContent = m.slice(0, 4) + '·' + mastery[m].mastery; t.style.fontSize = '9px'; svg.appendChild(t) })
+  return el('div', { class: 'chartcard' }, svg)
+}
+function svgHeat(days) {
+  const map = {}; (days || []).forEach(d => map[d.date] = d)
+  const cells = []; const now = new Date()
+  for (let i = 29; i >= 0; i--) {
+    const dt = new Date(now.getTime() - i * 86400000)
+    const k = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    cells.push(map[k] || { date: k, answered: 0, rate: 0 })
+  }
+  const color = c => !c.answered ? 'var(--border)' : c.rate >= 80 ? '#10b981' : c.rate >= 50 ? '#6366f1' : '#f59e0b'
+  const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(10,1fr);gap:5px' })
+  cells.forEach(c => grid.appendChild(el('div', { title: `${c.date} ${c.answered}题 ${c.answered ? c.rate + '%' : ''}`, style: `aspect-ratio:1;border-radius:6px;background:${color(c)};transition:transform .15s`, onmouseenter: e => e.target.style.transform = 'scale(1.18)', onmouseleave: e => e.target.style.transform = '' })))
+  return el('div', {}, grid, el('div', { style: 'font-size:10.5px;color:var(--muted);margin-top:8px' }, '近 30 天学习热力（绿≥80% · 紫≥50% · 橙<50% · 灰=未学）'))
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   导航与路由
+   ═══════════════════════════════════════════════════════════════ */
+const VIEWS = [['dashboard', '📊 仪表盘'], ['practice', '✏️ 刷题'], ['wrongbook', '📕 错题本'], ['plan', '📅 计划'], ['search', '🔍 检索'], ['method', '📖 方法论'], ['graph', '🕸️ 图谱'], ['obs', '📡 可观测']]
+let cur = localStorage.getItem('kg-view') || 'dashboard'; if (!VIEWS.some(v => v[0] === cur)) cur = 'dashboard'
+const tabsEl = document.getElementById('tabs')
+VIEWS.forEach(([id, label]) => { const b = el('button', { class: 'tab' + (id === cur ? ' on' : ''), onclick: () => go(id) }, label); b.dataset.v = id; tabsEl.appendChild(b) })
+function go(id) { cur = id; localStorage.setItem('kg-view', id); tabsEl.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.v === id)); render() }
+let TEARDOWN = null, obsTimer = null
+function teardown() { if (TEARDOWN) { try { TEARDOWN() } catch {} TEARDOWN = null } }
+
+const app = document.getElementById('app')
+async function render() {
+  clearTimeout(obsTimer); teardown()
+  if (!BASE) { const st = await discover(); paintBeacon(st) }
+  app.innerHTML = ''
+  if (!BASE) { app.appendChild(el('div', { class: 'empty' }, el('div', { class: 'spin' }), '正在连接本地服务…', el('div', { style: 'font-size:11px;margin-top:8px;opacity:.7' }, '请确认 DSH 已加载 dsh-kaogong 插件'))); return }
+  const wrap = el('div', { class: 'view-anim' }); app.appendChild(wrap)
+  try {
+    if (cur === 'dashboard') await vDashboard(wrap);
+    else if (cur === 'practice') await vPractice(wrap);
+    else if (cur === 'wrongbook') await vWrongbook(wrap);
+    else if (cur === 'plan') await vPlan(wrap);
+    else if (cur === 'search') vSearch(wrap);
+    else if (cur === 'method') await vMethod(wrap);
+    else if (cur === 'graph') await vGraph(wrap);
+    else if (cur === 'obs') { await vObs(wrap); obsTimer = setTimeout(() => { if (cur === 'obs') render() }, 5000) }
+  } catch (e) {
+    wrap.innerHTML = ''; wrap.appendChild(el('div', { class: 'empty' }, el('div', { class: 'i' }, '⚠️'), '加载失败: ' + e.message, el('button', { class: 'btn o', style: 'margin-top:12px', onclick: render }, '重试')))
+  }
+}
+function paintBeacon(st) {
+  document.getElementById('beacon').className = 'beacon' + (st ? '' : ' down')
+  document.getElementById('beacon-txt').textContent = st ? (BASE === '/kaogong' ? '🏠 宿主同源' : `:${st.port} 就绪`) : '离线'
+  document.getElementById('ws-tag').textContent = '📁 ' + String(WS).split(/[\\\\/]/).pop()
+  document.getElementById('ws-tag').title = WS
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   仪表盘
+   ═══════════════════════════════════════════════════════════════ */
+async function vDashboard(wrap) {
+  wrap.appendChild(skel(2))
+  const [st, stats] = await Promise.all([api('/api/status'), api('/api/stats')])
+  wrap.innerHTML = ''
+  const rate = stats.rate, rc = rate >= 80 ? 'c-ok' : rate >= 60 ? 'c-blue' : rate >= 40 ? 'c-warn' : 'c-bad'
+  wrap.appendChild(el('div', { class: 'grid g4' },
+    el('div', { class: 'card stat c-blue' }, el('div', { class: 'v' }, `${st.repos.ready}/${st.repos.total}`), el('div', { class: 'l' }, '资源仓库')),
+    el('div', { class: 'card stat c-ok' }, el('div', { class: 'v' }, stats.answered), el('div', { class: 'l' }, '累计答题')),
+    el('div', { class: 'card stat ' + rc }, el('div', { class: 'v' }, rate + '%'), el('div', { class: 'l' }, '总体正确率')),
+    el('div', { class: 'card stat c-warn' }, el('div', { class: 'v' }, 'D' + (stats.day || 1)), el('div', { class: 'l' }, '计划进度日'))))
+  const cards = el('div', { class: 'grid g2' })
+  cards.appendChild(el('div', { class: 'card' }, el('div', { class: 'ct' }, '📈 近 14 日趋势', stats.streak > 1 ? el('span', { class: 'streak-badge', style: 'margin-left:auto' }, '🔥 连续 ' + stats.streak + ' 天') : null), svgLine(stats.days)))
+  cards.appendChild(el('div', { class: 'card' }, el('div', { class: 'ct' }, '🎯 模块能力雷达（正确率×置信）'), svgRadar(stats.mastery)))
+  wrap.appendChild(cards)
+  wrap.appendChild(el('div', { class: 'card' }, el('div', { class: 'ct' }, '🗓️ 学习热力', el('span', { style: 'margin-left:auto;font-size:11.5px;color:var(--muted)' }, `📕 待消灭 ${stats.wrong.open} · 已掌握 ${stats.wrong.mastered}`)), svgHeat(stats.days)))
+  wrap.appendChild(el('div', { class: 'card' }, el('div', { class: 'ct' }, '🚀 快速开始'),
+    el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+      el('button', { class: 'btn p', onclick: () => { PS.srs = true; PS.module = '综合'; PS.all = []; PS.qi = 0; PS.q = null; go('practice') } }, '🧠 智能刷题(SRS)'),
+      el('button', { class: 'btn o', onclick: () => go('wrongbook') }, '📕 错题回炉' + (stats.wrong.open ? ` (${stats.wrong.open})` : '')),
+      el('button', { class: 'btn o', onclick: () => go('plan') }, '📅 查看计划'),
+      el('button', { class: 'btn o', onclick: () => go('search') }, '🔍 知识检索'))))
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   刷题（SRS + 计时 + 键盘流 + 连击）
+   ═══════════════════════════════════════════════════════════════ */
+const PS = { module: null, all: [], qi: 0, q: null, sel: null, answered: false, srs: true, streak: 0, t0: 0 }
+async function vPractice(wrap) {
+  if (!PS.module) {
+    const { modules } = await api('/api/modules')
+    const c = el('div', { class: 'card' }, el('div', { class: 'ct' }, '选择练习模式'), el('div', { class: 'grid g4' }))
+    c.lastChild.appendChild(el('div', { class: 'modcard', style: 'border-color:var(--primary);background:var(--chip)', onclick: () => { PS.srs = true; PS.module = '综合'; PS.all = []; PS.qi = 0; PS.q = null; loadQ().then(render) } },
+      el('div', { class: 'n' }, '🧠 智能 SRS'), el('div', { class: 'm' }, '错题回炉优先 + 弱点加权')))
+    c.lastChild.appendChild(el('div', { class: 'modcard', style: 'border-style:dashed', onclick: () => { PS.srs = false; PS.module = '综合'; PS.all = []; PS.qi = 0; PS.q = null; loadQ().then(render) } },
+      el('div', { class: 'n' }, '🎲 纯随机'), el('div', { class: 'm' }, '六模块均匀抽')))
+    Object.entries(modules).forEach(([name, info]) => c.lastChild.appendChild(el('div', { class: 'modcard', onclick: () => { PS.srs = true; PS.module = name; PS.all = []; PS.qi = 0; PS.q = null; loadQ().then(render) } },
+      el('div', { class: 'n' }, name), el('div', { class: 'm' }, `${info.fileCount} 套真题`))))
+    c.appendChild(el('div', { style: 'font-size:11px;color:var(--muted);margin-top:10px' }, '快捷键：<span class="kbd">A</span>~<span class="kbd">D</span> 选择 · <span class="kbd">Enter</span> 提交 · <span class="kbd">N</span> 下一题'))
+    wrap.appendChild(c); return
+  }
+  if (!PS.q) await loadQ()
+  const q = PS.q
+  if (!q) { wrap.appendChild(el('div', { class: 'empty' }, el('div', { class: 'i' }, '📭'), '暂无可解析题目', el('button', { class: 'btn o', style: 'margin-top:12px', onclick: () => { PS.module = null; render() } }, '返回'))); return }
+  PS.t0 = Date.now()
+  const head = el('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap' },
+    el('button', { class: 'btn o', onclick: () => { PS.module = null; PS.q = null; render() } }, '← 模式'),
+    el('span', { class: 'tag' }, q.module), el('span', { class: 'tag' }, q.type),
+    q.fromWrongBook ? el('span', { class: 'srsonly' }, '📕 回炉 · 箱' + q.box + ' · 错' + q.wrongCount + '次') : null,
+    q.year ? el('span', { class: 'tag' }, q.year + '年') : null,
+    el('span', { class: 'timer-pill', id: 'ptimer' }, '00:00'),
+    PS.streak >= 3 ? el('span', { class: 'streak-badge' }, '🔥×' + PS.streak) : null,
+    el('span', { style: 'margin-left:auto;font-size:11px;color:var(--muted)' }, `${PS.qi}/${PS.all.length}`))
+  const c = el('div', { class: 'card' }, head, el('div', { class: 'qstem' }, q.stem))
+  Object.entries(q.options || {}).forEach(([L, text]) => {
+    let cls = 'opt'
+    if (PS.answered) { if (L === q.correctAnswer) cls += ' hit'; else if (L === PS.sel) cls += ' err' }
+    else if (L === PS.sel) cls += ' sel'
+    c.appendChild(el('div', { class: cls, onclick: () => { if (!PS.answered) { PS.sel = L; render() } } }, el('div', { class: 'lb' }, L), el('div', { style: 'flex:1' }, text)))
+  })
+  if (!PS.answered && PS.sel) c.appendChild(el('div', { style: 'margin-top:12px' }, el('button', { class: 'btn p', onclick: submit }, '提交答案 (Enter)')))
+  if (PS.answered) {
+    const ok = PS.sel === q.correctAnswer
+    c.appendChild(el('div', { class: 'analysis' }, el('div', { style: `font-weight:800;margin-bottom:8px;color:${ok ? 'var(--ok)' : 'var(--bad)'}` }, ok ? '✅ 回答正确' : `❌ 错误 · 正确答案 ${q.correctAnswer}`), q.analysis || '（该题无官方解析）'))
+    c.appendChild(el('div', { style: 'margin-top:12px;display:flex;gap:8px' },
+      el('button', { class: 'btn p', onclick: next }, '下一题 (N)'),
+      el('button', { class: 'btn o', onclick: () => { PS.sel = null; PS.answered = false; render() } }, '重答'),
+      el('button', { class: 'btn o', onclick: () => { PS.module = null; PS.q = null; render() } }, '换模式')))
+  }
+  wrap.appendChild(c)
+  const timer = setInterval(() => {
+    const t = document.getElementById('ptimer'); if (!t) { clearInterval(timer); return }
+    const s = Math.floor((Date.now() - PS.t0) / 1000); t.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0')
+    t.className = 'timer-pill' + (s > 120 ? ' hot' : '')
+  }, 500)
+  const keys = e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
+    const k = e.key.toUpperCase()
+    if (!PS.answered && 'ABCD'.includes(k) && q.options && k in q.options) { PS.sel = k; render() }
+    else if (e.key === 'Enter' && PS.sel && !PS.answered) submit()
+    else if (k === 'N' && PS.answered) next()
+  }
+  document.addEventListener('keydown', keys)
+  TEARDOWN = () => { document.removeEventListener('keydown', keys); clearInterval(timer) }
+}
+async function loadQ() {
+  if (PS.qi >= PS.all.length) {
+    const m = PS.module === '综合' ? 'all' : PS.module
+    const data = PS.srs ? await api('/api/questions?module=' + encodeURIComponent(m) + '&count=6&sort=srs') : await api('/api/questions?module=' + encodeURIComponent(m) + '&count=6')
+    PS.all = data.questions || []; PS.qi = 0
+    if (PS.srs && data.mode === 'weighted' && m === 'all') toast('🧠 SRS 弱点加权 → ' + data.weightedModule, 'info', 1800)
+  }
+  PS.q = PS.all[PS.qi++] || null
+}
+async function submit() {
+  const r = await api('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: PS.q, answer: PS.sel, label: String(WS).split(/[\\\\/]/).pop() }) })
+  PS.answered = true
+  if (r.isCorrect) {
+    PS.streak++
+    if (r.wrongEvent && r.wrongEvent.type === 'mastered') toast('🎉 错题已掌握（连对' + r.wrongEvent.consecutive + '次·箱' + r.wrongEvent.box + '）', 'ok', 3200)
+    else if (r.wrongEvent && r.wrongEvent.type === 'promoted') toast('⬆ 回炉成功，升箱至 ' + r.wrongEvent.box + '/5', 'ok', 2000)
+  }
+  else { PS.streak = 0; toast('📕 已收入错题本（降箱重练）', 'warn', 2400) }
+  render()
+}
+function next() { PS.q = null; PS.sel = null; PS.answered = false; render() }
+
+/* ═══════════════════════════════════════════════════════════════
+   错题本
+   ═══════════════════════════════════════════════════════════════ */
+async function vWrongbook(wrap) {
+  wrap.appendChild(skel(2))
+  const { wrong, summary } = await api('/api/wrong')
+  wrap.innerHTML = ''
+  wrap.appendChild(el('div', { class: 'grid g4' },
+    kv0('🔥 待消灭', summary.open), kv0('✅ 已掌握', summary.mastered),
+    el('div', { class: 'card stat' }, el('div', { class: 'v', style: 'font-size:14px;line-height:1.5' }, 'SRS 五箱'), el('div', { class: 'l' }, '答错降箱·答对升箱·箱≥3连对2=掌握')),
+    el('div', { class: 'card stat' }, el('div', { class: 'v', style: 'font-size:15px' }, '✏️'), el('div', { class: 'l' }, '回炉入口'), el('button', { class: 'btn p', style: 'margin-top:6px;padding:5px 12px;font-size:11.5px', onclick: () => { PS.srs = true; PS.module = '综合'; PS.all = []; PS.qi = 0; PS.q = null; go('practice') } }, '智能刷题'))))
+  if (!wrong.length) { wrap.appendChild(el('div', { class: 'empty' }, el('div', { class: 'i' }, '🎉'), '错题本空空如也 — 保持！')); return }
+  const c = el('div', { class: 'card' }, el('div', { class: 'ct' }, '📕 错题清单（未掌握优先 · 最久未复习先出）'))
+  wrong.forEach(w => {
+    const dots = el('span', { class: 'boxdots', title: 'SRS 箱位 ' + w.box + '/5' }, Array.from({ length: 5 }, (_, i) => el('i', { class: i < w.box ? (w.mastered ? 'mst' : 'on') : '' })))
+    c.appendChild(el('div', { class: 'wcard' + (w.mastered ? ' done' : '') },
+      el('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap' },
+        el('span', { class: 'tag' }, w.module), el('span', { class: 'tag' }, '错' + w.wrongCount + '次'), dots,
+        el('span', { style: 'font-size:10.5px;color:var(--muted)' }, new Date(w.lastAt).toLocaleDateString()),
+        w.mastered ? el('span', { class: 'tag', style: 'background:rgba(16,185,129,.15);color:var(--ok)' }, '已掌握') : null,
+        el('button', { class: 'btn o', style: 'margin-left:auto;padding:3px 10px;font-size:11px', onclick: async () => { await api('/api/wrong/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sig: w.sig }) }); toast('已移除', 'info', 1500); render() } }, '✕')),
+      el('div', { style: 'font-size:12.5px;line-height:1.65;max-height:66px;overflow:hidden;cursor:pointer', title: '点击展开/折叠', onclick: e => e.target.style.maxHeight = e.target.style.maxHeight === 'none' ? '66px' : 'none' }, w.stem)))
+  })
+  wrap.appendChild(c)
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   学习计划
+   ═══════════════════════════════════════════════════════════════ */
+async function vPlan(wrap) {
+  const [plan, pg] = await Promise.all([api('/api/plan'), api('/api/progress')])
+  const curDay = pg.day || 1
+  if (!plan.phases || !plan.phases.length) { wrap.appendChild(el('div', { class: 'empty' }, el('div', { class: 'i' }, '📄'), plan.plan || '无计划数据')); return }
+  const ov = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🗓️ 30天四阶段'))
+  plan.phases.forEach(ph => {
+    const pct = Math.max(0, Math.min(1, (curDay - ph.startDay) / (ph.endDay - ph.startDay + 1)))
+    ov.appendChild(el('div', { style: 'margin-bottom:10px' },
+      el('div', { style: 'display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px' },
+        el('span', { style: 'font-weight:700' }, ph.name, el('span', { style: 'color:var(--muted);font-weight:400' }, ` D${ph.startDay}-${ph.endDay}`)),
+        el('span', { style: 'color:var(--muted)' }, Math.round(pct * 100) + '%')),
+      el('div', { class: 'bar' }, el('i', { class: pct >= 1 ? 'f-ok' : 'f-blue', style: `width:${pct * 100}%` }))))
+  })
+  wrap.appendChild(ov)
+  plan.phases.forEach(ph => {
+    const days = plan.days.filter(d => d.phase === ph.name); if (!days.length) return
+    const c = el('div', { class: 'card' }, el('div', { class: 'ct' }, ph.name))
+    days.forEach(d => {
+      const isCur = d.day === curDay
+      const row = el('div', { class: 'pday' + (isCur ? ' cur' : '') }, el('div', { class: 'pnum' }, 'D' + d.day), el('div', { style: 'flex:1' }, el('div', { class: 't' }, d.title)))
+      let body = null
+      row.onclick = () => {
+        if (body) { body.style.display = body.style.display === 'none' ? 'block' : 'none'; return }
+        body = el('div', { class: 'pbody', style: 'display:none' }, (d.tasks || []).map(t => el('div', null, '• ' + t)))
+        row.after(body); body.style.display = 'block'
+      }
+      c.appendChild(row)
+    })
+    wrap.appendChild(c)
+  })
+  const foot = el('div', { class: 'card' }, el('div', { class: 'ct' }, '⚙️ 切换当前进度日'),
+    el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+      el('input', { type: 'range', min: 1, max: 30, value: curDay, style: 'flex:1;min-width:150px', id: 'dayslider' }),
+      el('span', { id: 'daylabel', style: 'font-weight:800;width:34px' }, 'D' + curDay),
+      el('button', { class: 'btn p', onclick: async () => { const v = +document.getElementById('dayslider').value; await api('/api/progress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ day: v }) }); toast('已切换到 D' + v, 'ok', 1500); render() } }, '保存')))
+  foot.querySelector('#dayslider').oninput = e => document.getElementById('daylabel').textContent = 'D' + e.target.value
+  wrap.appendChild(foot)
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   知识检索
+   ═══════════════════════════════════════════════════════════════ */
+async function vSearch(wrap) {
+  const banks = await api('/api/banks')
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🔍 跨仓库知识检索（本地全文）'), el('input', { class: 'sin', placeholder: '输入关键词回车，如：增长率 / 申论范文 / 上岸策略 …', id: 'sin' }))
+  const sel = el('select', { class: 'sin', style: 'margin-top:8px' }); card.appendChild(sel)
+  sel.appendChild(el('option', { value: '' }, '默认三库（sakib / kaogong-skill / developer2gwy）'))
+  Object.entries(banks.banks).filter(([, v]) => v.exists).forEach(([k, v]) => sel.appendChild(el('option', { value: k }, k + ' — ' + v.desc.slice(0, 24))))
+  wrap.appendChild(card)
+  const out = el('div'); wrap.appendChild(out)
+  const inp = card.querySelector('#sin')
+  inp.addEventListener('keydown', async e => {
+    if (e.key !== 'Enter' || !inp.value.trim()) return
+    out.innerHTML = ''; out.appendChild(el('div', { class: 'empty' }, el('div', { class: 'spin' }), '搜索中…'))
+    const { results } = await api('/api/search?q=' + encodeURIComponent(inp.value.trim()) + (sel.value ? '&repo=' + encodeURIComponent(sel.value) : ''))
+    out.innerHTML = ''
+    if (!results.length) { out.appendChild(el('div', { class: 'empty' }, el('div', { class: 'i' }, '🔍'), '未找到相关内容')); return }
+    out.appendChild(el('div', { style: 'font-size:12px;color:var(--muted);margin-bottom:10px' }, results.length + ' 条命中'))
+    results.forEach(r => out.appendChild(el('div', { class: 'sres' }, el('div', { class: 'f' }, '📄 ' + r.file), el('div', { class: 'sn' }, r.snippet))))
+  })
+  inp.focus()
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   方法论
+   ═══════════════════════════════════════════════════════════════ */
+async function vMethod(wrap) {
+  const { topics } = await api('/api/methods')
+  const pick = el('div', { class: 'card' }, el('div', { class: 'ct' }, '📖 方法论主题'), el('div', { class: 'grid g4' }))
+  topics.forEach(t => pick.lastChild.appendChild(el('div', { class: 'modcard', style: t.exists ? '' : 'opacity:.45', onclick: () => openM(t.id) }, el('div', { class: 'n' }, t.label), el('div', { class: 'm' }, t.file + (t.exists ? '' : ' 缺失')))))
+  wrap.appendChild(pick)
+  wrap.appendChild(el('div', { id: 'mbody' }))
+  openM('行测')
+}
+async function openM(topic) {
+  const b = document.getElementById('mbody'); if (!b) return
+  b.innerHTML = ''; b.appendChild(el('div', { class: 'card' }, el('div', { class: 'ct' }, '📖 ' + topic), el('div', { class: 'spin' })))
+  const d = await api('/api/method?topic=' + encodeURIComponent(topic))
+  b.innerHTML = ''
+  b.appendChild(el('div', { class: 'card' }, el('div', { class: 'ct' }, '📖 ' + (d.topic || topic) + ' · ' + (d.file || '')),
+    el('div', { style: 'font-size:13px;line-height:1.8;white-space:pre-wrap;max-height:56vh;overflow-y:auto' }, d.content || d.error || '无内容')))
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   交互式知识图谱（Canvas 2D）
+   - 力导向 + 分层布局切换；滚轮缩放（光标锚点 0.25x–4x）
+   - 拖节点（pin）/ 拖空白平移；hover 邻域高亮 + tooltip；click 详情面板
+   - 类型过滤 chips、边类型图例（可点）、搜索定位、指标条、路径分析
+   - 数据优先 /api/graph 的 nodeMeta/analytics/layout，缺失时本地计算降级
+   ═══════════════════════════════════════════════════════════════ */
+const NODE_META_FALLBACK = {
+  plugin: { label: '插件', color: '#6366f1', icon: '📦', layer: 0 },
+  lifecycle: { label: '生命周期', color: '#0ea5e9', icon: '🔁', layer: 1 },
+  entry: { label: '入口', color: '#8b5cf6', icon: '🚪', layer: 1 },
+  channel: { label: '通道', color: '#14b8a6', icon: '🔌', layer: 1 },
+  view: { label: '视图', color: '#f59e0b', icon: '🖥', layer: 2 },
+  endpoint: { label: '端点', color: '#3b82f6', icon: '🔗', layer: 2 },
+  tool: { label: '工具', color: '#ec4899', icon: '🧰', layer: 2 },
+  domain: { label: '数据域', color: '#10b981', icon: '🗂', layer: 3 },
+  repo: { label: '仓库', color: '#64748b', icon: '📚', layer: 4 },
+  module: { label: '模块', color: '#84cc16', icon: '🧩', layer: 5 },
+  method: { label: '方法论', color: '#a855f7', icon: '📖', layer: 5 },
+  phase: { label: '阶段', color: '#f97316', icon: '📅', layer: 5 },
+  day: { label: '日', color: '#94a3b8', icon: '·', layer: 6 },
+}
+const EDGE_META_FALLBACK = {
+  contains: { label: '包含', color: '#94a3b8' }, produces: { label: '生产', color: '#3b82f6' },
+  consumes: { label: '消费', color: '#10b981' }, registers: { label: '注册', color: '#6366f1' },
+  serves: { label: '服务', color: '#14b8a6' }, hosts: { label: '承载', color: '#8b5cf6' },
+  next: { label: '下一阶段', color: '#0ea5e9' }, 'consumed-by': { label: '被消费', color: '#f59e0b' },
+  feeds: { label: '喂给', color: '#84cc16' },
+}
+const G = {
+  data: null, nodeMeta: NODE_META_FALLBACK, edgeMeta: EDGE_META_FALLBACK,
+  view: { x: 0, y: 0, k: 1 }, layout: 'force',
+  types: new Set(), edgeTypes: new Set(),
+  showLabels: true, showOrphans: true,
+  hover: null, sel: null, solo: null,
+  pathFrom: null, pathTo: null, path: null,
+  alpha: 1, drag: null, pan: null, pinch: null, pointers: new Map(), moved: 0, focus: null,
+}
+const GEL = { cv: null, ctx: null, tip: null, panel: null, wrap: null, legend: null, chips: null, w: 0, h: 0, dpr: 1 }
+let GRAF = 0, GPENDING = 0
+
+const gNodeMeta = t => G.nodeMeta[t] || { label: String(t), color: '#888888', icon: '•', layer: 6 }
+const gEdgeMeta = r => G.edgeMeta[r] || { label: String(r), color: '#94a3b8' }
+function gRadius(type) {
+  if (type === 'plugin') return 22
+  if (type === 'domain' || type === 'view') return 13
+  if (type === 'entry' || type === 'channel' || type === 'lifecycle') return 11
+  if (type === 'day') return 5
+  return 8
+}
+
+/* ── 本地降级算法（服务端 analytics 缺失时使用；全部确定性）── */
+function gLocalDegree(nodes, edges) {
+  const d = {}; nodes.forEach(n => d[n.id] = { in: 0, out: 0, total: 0 })
+  edges.forEach(e => { if (d[e.source]) d[e.source].out++; if (d[e.target]) d[e.target].in++ })
+  nodes.forEach(n => { const x = d[n.id]; x.total = x.in + x.out })
+  return d
+}
+function gLocalComponents(nodes, adj) {
+  const comp = {}; let cid = 0
+  nodes.forEach(n => {
+    if (comp[n.id] != null) return
+    comp[n.id] = cid; const q = [n.id]
+    while (q.length) {
+      const c = q.pop()
+      for (const nb of adj[c] || []) if (comp[nb] == null) { comp[nb] = cid; q.push(nb) }
+    }
+    cid++
+  })
+  return { comp, count: cid }
+}
+function gLocalCommunities(nodes, adj) {
+  const ids = nodes.map(n => n.id).sort()
+  const label = {}; ids.forEach(id => label[id] = id)
+  for (let it = 0; it < 20; it++) {
+    let changed = false
+    ids.forEach(id => {
+      const cnt = {}
+      for (const nb of adj[id] || []) cnt[label[nb]] = (cnt[label[nb]] || 0) + 1
+      let best = label[id], bestC = cnt[label[id]] || 0
+      Object.keys(cnt).sort().forEach(l => { if (cnt[l] > bestC) { best = l; bestC = cnt[l] } })
+      if (best !== label[id]) { label[id] = best; changed = true }
+    })
+    if (!changed) break
+  }
+  const groups = {}; const comm = {}
+  ids.forEach(id => { if (groups[label[id]] == null) groups[label[id]] = Object.keys(groups).length; comm[id] = groups[label[id]] })
+  return comm
+}
+function gLocalClustering(adj) {
+  const c = {}; let sum = 0, cnt = 0
+  Object.keys(adj).forEach(id => {
+    const nb = [...adj[id]], k = nb.length
+    if (k < 2) { c[id] = 0; return }
+    let links = 0
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) if (adj[nb[i]].has(nb[j])) links++
+    const v = 2 * links / (k * (k - 1)); c[id] = v; sum += v; cnt++
+  })
+  return { c, avg: cnt ? sum / cnt : 0 }
+}
+/** 分层布局降级：以节点类型的语义层（NODE_META.layer）为纵向层，层内按 id 排序均布 */
+function gLocalLayered(nodes, w, h) {
+  const rows = {}
+  nodes.forEach(n => { const L = gNodeMeta(n.type).layer; (rows[L] = rows[L] || []).push(n) })
+  const keys = Object.keys(rows).map(Number).sort((a, b) => a - b)
+  const padX = 70, padY = 50
+  keys.forEach((L, li) => {
+    const arr = rows[L].slice().sort((a, b) => (String(a.id) < String(b.id) ? -1 : 1))
+    const y = keys.length > 1 ? padY + li * (h - 2 * padY) / (keys.length - 1) : h / 2
+    arr.forEach((n, i) => {
+      n.x = arr.length > 1 ? padX + i * (w - 2 * padX) / (arr.length - 1) : w / 2
+      n.y = y
+    })
+  })
+}
+
+/** 数据准备：索引边、计算度/社区/集聚/邻接，合并服务端分析结果 */
+function gPrepare(raw) {
+  G.nodeMeta = { ...NODE_META_FALLBACK, ...(raw.nodeMeta || {}) }
+  G.edgeMeta = { ...EDGE_META_FALLBACK, ...(raw.edgeMeta || {}) }
+  const nodes = (raw.nodes || []).map(n => ({
+    ...n, rad: gRadius(n.type), vx: 0, vy: 0, fx: null, fy: null,
+    nb: [], inE: [], outE: [],
+  }))
+  const idx = {}; nodes.forEach(n => idx[n.id] = n)
+  const edges = (raw.edges || []).map(e => ({ ...e, s: idx[e.source], t: idx[e.target] })).filter(e => e.s && e.t)
+  edges.forEach(e => {
+    if (e.s.nb.indexOf(e.t.id) < 0) e.s.nb.push(e.t.id)
+    if (e.t.nb.indexOf(e.s.id) < 0) e.t.nb.push(e.s.id)
+    e.s.outE.push(e); e.t.inE.push(e)
+  })
+  const adj = {}; nodes.forEach(n => adj[n.id] = new Set())
+  edges.forEach(e => { adj[e.source].add(e.target); adj[e.target].add(e.source) })
+  // 本地计算（始终做，服务端字段优先覆盖）
+  const degree = gLocalDegree(nodes, edges)
+  nodes.forEach(n => { const d = degree[n.id]; n.inDeg = d.in; n.outDeg = d.out; n.deg = d.total })
+  const comps = gLocalComponents(nodes, adj)
+  nodes.forEach(n => n.comp = comps.comp[n.id])
+  const comm = gLocalCommunities(nodes, adj)
+  nodes.forEach(n => n.comm = comm[n.id])
+  const clus = gLocalClustering(adj)
+  nodes.forEach(n => n.cluster = clus.c[n.id] || 0)
+  const an = raw.analytics || {}
+  // 服务端分析覆盖
+  if (an.degree) nodes.forEach(n => { const d = an.degree[n.id]; if (d) { n.inDeg = d.in; n.outDeg = d.out; n.deg = d.total } })
+  let commCount = 0, commSizes = []
+  if (Array.isArray(an.communities) && an.communities.length) {
+    commCount = an.communities.length
+    commSizes = an.communities.slice(0, 8).map(c => ({ id: c.id, size: c.size }))
+    const map = {}
+    an.communities.forEach((c, ci) => (c.members || []).forEach(id => map[id] = ci))
+    nodes.forEach(n => { if (map[n.id] != null) n.comm = map[n.id] })
+  } else {
+    const uniq = {}; nodes.forEach(n => uniq[n.comm] = (uniq[n.comm] || 0) + 1)
+    commSizes = Object.keys(uniq).sort((a, b) => uniq[b] - uniq[a]).slice(0, 8).map(k => ({ id: 'C' + k, size: uniq[k] }))
+    commCount = Object.keys(uniq).length
+  }
+  const bw = {}; if (Array.isArray(an.betweenness)) an.betweenness.forEach(b => bw[b.id] = b.score)
+  nodes.forEach(n => n.bw = bw[n.id] || 0)
+  const clAvg = an.clustering && typeof an.clustering.avg === 'number' ? an.clustering.avg : clus.avg
+  const pr = {}; (raw.rank || []).forEach(r => pr[r.id] = r.pr)
+  nodes.forEach(n => n.prS = pr[n.id] || 0)
+  return { nodes, edges, metrics: raw.metrics || {}, health: raw.health || null, rank: raw.rank || [], layout: raw.layout || null, analytics: an, commCount, commSizes, clAvg, adj }
+}
+
+/* ── 布局：分层（服务端 layout 优先）── */
+function gApplyLayered() {
+  if (!G.data) return
+  const { nodes, layout } = G.data
+  const w = GEL.w || 800, h = GEL.h || 500
+  if (layout && layout.id && Object.keys(layout.id).length) {
+    const padX = 60, padY = 40
+    nodes.forEach(n => {
+      const p = layout.id[n.id]
+      if (!p) { n.x = w / 2; n.y = h / 2; return }
+      n.x = padX + (p.x || 0) * (w - 2 * padX)
+      n.y = padY + (p.y || 0) * (h - 2 * padY)
+    })
+  } else {
+    gLocalLayered(nodes, w, h)
+  }
+  nodes.forEach(n => { n.vx = 0; n.vy = 0; n.fx = null; n.fy = null })
+}
+
+function gSize() {
+  const cv = GEL.cv; if (!cv) return
+  const rect = cv.getBoundingClientRect()
+  GEL.w = Math.max(120, Math.round(rect.width || cv.clientWidth || 800))
+  GEL.h = Math.max(160, Math.round(rect.height || cv.clientHeight || 500))
+  GEL.dpr = window.devicePixelRatio || 1
+  cv.width = Math.round(GEL.w * GEL.dpr)
+  cv.height = Math.round(GEL.h * GEL.dpr)
+  if (G.data && G.layout === 'layered') gApplyLayered()
+}
+
+/* ── 帧调度（布局稳定/交互结束后停 rAF，省电）── */
+function gKick(n = 1) { GPENDING = Math.max(GPENDING, n); if (!GRAF) GRAF = requestAnimationFrame(gFrame) }
+function gFrame() {
+  GRAF = 0
+  if (!G.data) return
+  let busy = false
+  if (G.layout === 'force' && G.alpha > 0.02) { gTick(); busy = true }
+  if (gFocusStep()) busy = true
+  gDraw()
+  if (busy) GPENDING = Math.max(GPENDING, 1)
+  GPENDING = Math.max(0, GPENDING - 1)
+  if ((busy || GPENDING > 0) && !GRAF) GRAF = requestAnimationFrame(gFrame)
+}
+function gTick() {
+  const { nodes, edges } = G.data
+  const a = G.alpha
+  for (let i = 0; i < nodes.length; i++) {
+    const A = nodes[i]
+    for (let j = i + 1; j < nodes.length; j++) {
+      const B = nodes[j]
+      if (A.fx != null && B.fx != null) continue
+      let dx = B.x - A.x, dy = B.y - A.y
+      let d2 = dx * dx + dy * dy
+      if (d2 > 160000) continue
+      if (d2 < 1) { dx = (i % 7) - 3.5 + 0.1; dy = (j % 5) - 2; d2 = dx * dx + dy * dy || 1 }
+      const d = Math.sqrt(d2), f = 2600 * a / d2
+      const ux = dx / d, uy = dy / d
+      if (B.fx == null) { B.vx += ux * f; B.vy += uy * f }
+      if (A.fx == null) { A.vx -= ux * f; A.vy -= uy * f }
+    }
+  }
+  for (const e of edges) {
+    const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y
+    const d = Math.sqrt(dx * dx + dy * dy) || 1
+    const rest = e.rel === 'next' ? 60 : e.rel === 'contains' ? 76 : 116
+    const f = (d - rest) * 0.016 * a
+    const ux = dx / d, uy = dy / d
+    if (e.s.fx == null) { e.s.vx += ux * f; e.s.vy += uy * f }
+    if (e.t.fx == null) { e.t.vx -= ux * f; e.t.vy -= uy * f }
+  }
+  for (const n of nodes) {
+    if (n.fx != null) { n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; continue }
+    n.vx -= n.x * 0.0014; n.vy -= n.y * 0.0014
+    n.vx *= 0.86; n.vy *= 0.86
+    n.x += Math.max(-18, Math.min(18, n.vx))
+    n.y += Math.max(-18, Math.min(18, n.vy))
+  }
+  G.alpha *= 0.985
+  if (G.alpha < 0.02) G.alpha = 0.02
+}
+function gFocusStep() {
+  if (!G.focus) return false
+  const f = G.focus, v = G.view
+  const tx = GEL.w / 2 - f.wx * f.k, ty = GEL.h / 2 - f.wy * f.k
+  v.k += (f.k - v.k) * 0.18
+  v.x += (tx - v.x) * 0.18; v.y += (ty - v.y) * 0.18
+  if (Math.abs(tx - v.x) < 0.6 && Math.abs(ty - v.y) < 0.6 && Math.abs(f.k - v.k) < 0.004) { v.x = tx; v.y = ty; v.k = f.k; G.focus = null; return false }
+  return true
+}
+
+/* ── 绘制 ── */
+function gVisible(n) {
+  if (G.types.size && !G.types.has(n.type)) return false
+  if (!G.showOrphans && n.deg === 0) return false
+  if (G.solo && !G.solo.has(n.id)) return false
+  return true
+}
+function gEdgeVisible(e) {
+  if (G.edgeTypes.size && !G.edgeTypes.has(e.rel)) return false
+  if (!G.showOrphans && (e.s.deg === 0 || e.t.deg === 0)) return false
+  if (G.solo && !(G.solo.has(e.s.id) && G.solo.has(e.t.id))) return false
+  return true
+}
+function gDraw() {
+  const { ctx, cv } = GEL
+  if (!ctx || !cv || !G.data) return
+  const dpr = GEL.dpr, v = G.view, dark = isDark()
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  // 底色（跟随主题）
+  ctx.fillStyle = dark ? '#0f172a' : '#ffffff'
+  ctx.fillRect(0, 0, GEL.w, GEL.h)
+  // 轻网格（世界坐标，随缩放步长自适应）
+  const x0 = -v.x / v.k, y0 = -v.y / v.k, x1 = (GEL.w - v.x) / v.k, y1 = (GEL.h - v.y) / v.k
+  let step = 80
+  while ((x1 - x0) / step > 40 && step < 20000) step *= 2
+  ctx.setTransform(dpr * v.k, 0, 0, dpr * v.k, dpr * v.x, dpr * v.y)
+  ctx.strokeStyle = dark ? 'rgba(148,163,184,.10)' : 'rgba(148,163,184,.16)'
+  ctx.lineWidth = 1 / v.k
+  ctx.beginPath()
+  for (let x = Math.floor(x0 / step) * step; x <= x1; x += step) { ctx.moveTo(x, y0); ctx.lineTo(x, y1) }
+  for (let y = Math.floor(y0 / step) * step; y <= y1; y += step) { ctx.moveTo(x0, y); ctx.lineTo(x1, y) }
+  ctx.stroke()
+  // 高亮集合：hover/选中 + 路径 + 邻域
+  const focusNode = G.hover || G.sel
+  const focusSet = new Set()
+  if (focusNode) { focusSet.add(focusNode.id); (focusNode.nb || []).forEach(id => focusSet.add(id)) }
+  const pathSet = new Set(G.path || [])
+  const pathPairs = new Set()
+  if (G.path) for (let i = 0; i < G.path.length - 1; i++) pathPairs.add(G.path[i] + '>' + G.path[i + 1])
+  // 边
+  for (const e of G.data.edges) {
+    if (!gEdgeVisible(e)) continue
+    const onPath = pathPairs.has(e.source + '>' + e.target) || pathPairs.has(e.target + '>' + e.source)
+    const near = focusNode && (e.s === focusNode || e.t === focusNode)
+    const meta = gEdgeMeta(e.rel)
+    let alpha = 0.34
+    if (onPath) alpha = 1
+    else if (near) alpha = 0.85
+    else if (focusSet.size && !(focusSet.has(e.source) && focusSet.has(e.target))) alpha = 0.10
+    else if (G.path && !onPath) alpha = 0.08
+    ctx.globalAlpha = alpha
+    ctx.strokeStyle = onPath ? '#f43f5e' : meta.color
+    ctx.lineWidth = (onPath ? 3 : e.rel === 'contains' ? 1.1 : 1.4) / v.k
+    ctx.setLineDash(onPath ? [] : ['consumes', 'consumed-by', 'feeds', 'hosts', 'serves'].indexOf(e.rel) >= 0 ? [4, 3] : [])
+    ctx.beginPath(); ctx.moveTo(e.s.x, e.s.y); ctx.lineTo(e.t.x, e.t.y); ctx.stroke()
+  }
+  ctx.setLineDash([]); ctx.globalAlpha = 1
+  // 节点
+  for (const n of G.data.nodes) {
+    if (!gVisible(n)) continue
+    const meta = gNodeMeta(n.type)
+    const onPath = pathSet.has(n.id)
+    let alpha = 0.92
+    if (G.path && !onPath) alpha = 0.16
+    else if (focusSet.size && !focusSet.has(n.id)) alpha = 0.30
+    ctx.globalAlpha = alpha
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.rad, 0, 6.2832)
+    ctx.fillStyle = meta.color; ctx.fill()
+    if (n === G.sel) { ctx.strokeStyle = dark ? '#f8fafc' : '#0f172a'; ctx.lineWidth = 2.6 / v.k; ctx.stroke() }
+    else if (onPath) { ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 2.4 / v.k; ctx.stroke() }
+    else if (n === G.hover || n.type === 'plugin') { ctx.strokeStyle = dark ? 'rgba(248,250,252,.85)' : 'rgba(15,23,42,.55)'; ctx.lineWidth = 1.6 / v.k; ctx.stroke() }
+  }
+  ctx.globalAlpha = 1
+  // 标签
+  if (G.showLabels) {
+    ctx.fillStyle = dark ? '#cbd5e1' : '#334155'
+    for (const n of G.data.nodes) {
+      if (!gVisible(n)) continue
+      const important = n.type === 'plugin' || n.type === 'view' || n.type === 'domain' || n.type === 'entry' || n === G.hover || n === G.sel || n.prS > 0.02 || pathSet.has(n.id)
+      if (!(v.k > 0.55 || important)) continue
+      const fs = Math.max(9, Math.min(15, 11 / v.k))
+      ctx.font = `${fs}px -apple-system,"Microsoft YaHei",sans-serif`
+      const txt = String(n.label == null ? n.id : n.label)
+      ctx.globalAlpha = G.path && !pathSet.has(n.id) ? 0.35 : 0.95
+      ctx.fillText(txt.length > 18 ? txt.slice(0, 17) + '…' : txt, n.x + n.rad + 3 / v.k, n.y + 3 / v.k)
+    }
+    ctx.globalAlpha = 1
+  }
+}
+function gPick(mx, my) {
+  if (!G.data) return null
+  const wx = (mx - G.view.x) / G.view.k, wy = (my - G.view.y) / G.view.k
+  let best = null, bd = Infinity
+  for (const n of G.data.nodes) {
+    if (!gVisible(n)) continue
+    const d = (n.x - wx) ** 2 + (n.y - wy) ** 2
+    const rr = (n.rad + 7) / G.view.k
+    if (d < rr * rr && d < bd) { bd = d; best = n }
+  }
+  return best
+}
+
+/* ── 选择 / 面板 ── */
+function gSelect(n, center) {
+  G.sel = n
+  if (!n) { gRenderPanel(); gKick(1); return }
+  if (center) G.focus = { wx: n.x, wy: n.y, k: Math.max(G.view.k, 1.15) }
+  gRenderPanel(); gKick(2)
+}
+function gRenderPanel() {
+  const p = GEL.panel; if (!p) return
+  if (!G.sel) { p.classList.remove('open'); p.replaceChildren(); return }
+  const n = G.sel, meta = gNodeMeta(n.type)
+  const pathBtn = (label, act) => el('button', { class: 'btn o gm', onclick: act }, label)
+  const relRows = []
+  n.outE.slice(0, 10).forEach(e => relRows.push(el('div', { class: 'rel' },
+    el('span', { class: 'rel-tag', style: 'background:' + gEdgeMeta(e.rel).color }, gEdgeMeta(e.rel).label),
+    el('span', { class: 'rel-arrow' }, '→'),
+    el('button', { class: 'linkbtn', onclick: () => gSelect(e.t, true) }, String(e.t.label == null ? e.t.id : e.t.label)))))
+  n.inE.slice(0, 10).forEach(e => relRows.push(el('div', { class: 'rel' },
+    el('span', { class: 'rel-tag', style: 'background:' + gEdgeMeta(e.rel).color }, gEdgeMeta(e.rel).label),
+    el('span', { class: 'rel-arrow' }, '←'),
+    el('button', { class: 'linkbtn', onclick: () => gSelect(e.s, true) }, String(e.s.label == null ? e.s.id : e.s.label)))))
+  const head = el('div', { class: 'g-phead' },
+    el('span', { class: 'g-icon', style: 'background:' + meta.color }, meta.icon || '•'),
+    el('div', { class: 'g-title' }, el('div', { class: 'g-name' }, String(n.label == null ? n.id : n.label)), el('div', { class: 'g-sub' }, (meta.label || n.type) + ' · ' + String(n.id))),
+    el('button', { class: 'close', title: '关闭', onclick: () => { G.sel = null; gRenderPanel(); gKick(1) } }, '✕'))
+  const stats = el('div', { class: 'g-stats' },
+    el('div', { class: 'g-stat' }, el('b', null, String(n.inDeg)), el('span', null, '入度')),
+    el('div', { class: 'g-stat' }, el('b', null, String(n.outDeg)), el('span', null, '出度')),
+    el('div', { class: 'g-stat' }, el('b', null, (n.prS || 0).toFixed(3)), el('span', null, 'PageRank')),
+    el('div', { class: 'g-stat' }, el('b', null, String(n.comm)), el('span', null, '社区')),
+    el('div', { class: 'g-stat' }, el('b', null, (n.cluster || 0).toFixed(2)), el('span', null, '集聚')),
+    el('div', { class: 'g-stat' }, el('b', null, (n.bw || 0).toFixed(3)), el('span', null, '介数')))
+  const extra = []
+  if (n.desc) extra.push(el('div', { class: 'g-desc' }, String(n.desc)))
+  if (n.title) extra.push(el('div', { class: 'g-desc' }, '📅 ' + String(n.title)))
+  if (n.files != null) extra.push(el('div', { class: 'g-desc' }, '📄 ' + String(n.files) + ' 套真题'))
+  if (n.exists !== undefined) extra.push(el('div', { class: 'g-desc' }, n.exists ? '✅ 数据就绪' : '❌ 数据缺失'))
+  const acts = el('div', { class: 'g-pacts' },
+    pathBtn(G.pathFrom === n.id ? '◉ 起点 ✓' : '◉ 设为起点', () => { G.pathFrom = n.id; G.path = null; gRenderPanel(); gPathInfo(); gKick(1) }),
+    pathBtn(G.pathTo === n.id ? '◎ 终点 ✓' : '◎ 设为终点', () => { G.pathTo = n.id; G.path = null; gRenderPanel(); gPathInfo(); gKick(1) }),
+    pathBtn(G.solo ? '↩ 退出邻域' : '🎯 只看邻域', () => {
+      if (G.solo) G.solo = null
+      else { G.solo = new Set([n.id]); (n.nb || []).forEach(id => G.solo.add(id)) }
+      gRenderPanel(); gKick(2)
+    }))
+  const rel = el('div', { class: 'g-rels' }, relRows.length ? relRows : el('div', { class: 'muted sm' }, '（无关联边）'))
+  p.replaceChildren(head, stats, ...extra, acts, el('div', { class: 'g-relh' }, '关系（点击跳转）'), rel)
+  p.classList.add('open')
+}
+function gPathInfo() {
+  const box = document.getElementById('g-path')
+  if (!box) return
+  const nm = id => { const n = G.data && G.data.nodes.find(x => x.id === id); return n ? String(n.label == null ? n.id : n.label) : '—' }
+  box.textContent = G.pathFrom || G.pathTo ? `起点：${G.pathFrom ? nm(G.pathFrom) : '—'} → 终点：${G.pathTo ? nm(G.pathTo) : '—'}` : '未选起终点（在节点详情里设置）'
+  box.title = box.textContent
+}
+async function gComputePath() {
+  if (!G.pathFrom || !G.pathTo) { toast('请先在节点详情里设置起点与终点', 'warn', 2200); return }
+  let r = null
+  const res = await apiSafe('/api/graph/path?from=' + encodeURIComponent(G.pathFrom) + '&to=' + encodeURIComponent(G.pathTo))
+  if (res.ok && res.data && res.data.found) r = res.data
+  if (!r) r = gLocalPath(G.pathFrom, G.pathTo)
+  if (r && r.found && r.path && r.path.length) {
+    G.path = r.path
+    toast('🧭 路径长度 ' + r.length + ' 跳（全局最短路）', 'ok', 2400)
+  } else { G.path = null; toast('两点之间不存在连通路径', 'warn', 2400) }
+  gKick(2); gRenderPanel()
+}
+function gLocalPath(from, to) {
+  if (!G.data) return { found: false, path: [], length: 0 }
+  const nb = {}; G.data.nodes.forEach(n => nb[n.id] = [])
+  G.data.edges.forEach(e => { nb[e.source].push(e.target); nb[e.target].push(e.source) })
+  if (!nb[from] || !nb[to]) return { found: false, path: [], length: 0 }
+  if (from === to) return { found: true, path: [from], length: 0 }
+  const prev = {}, seen = { [from]: 1 }
+  const q = [from]
+  for (let i = 0; i < q.length; i++) {
+    for (const w of nb[q[i]]) {
+      if (seen[w]) continue
+      seen[w] = 1; prev[w] = q[i]
+      if (w === to) { const path = [to]; let c = to; while (c !== from) { c = prev[c]; path.push(c) } return { found: true, path: path.reverse(), length: path.length - 1 } }
+      q.push(w)
+    }
+  }
+  return { found: false, path: [], length: 0 }
+}
+
+/* ── 过滤 chips / 图例 / 指标 ── */
+function gRenderChips() {
+  const box = GEL.chips; if (!box || !G.data) return
+  const counts = {}
+  G.data.nodes.forEach(n => counts[n.type] = (counts[n.type] || 0) + 1)
+  const types = Object.keys(G.nodeMeta).filter(t => counts[t])
+  const chips = [el('button', { class: 'chip' + (G.types.size === 0 ? ' on' : ''), 'aria-pressed': G.types.size === 0 ? 'true' : 'false', onclick: () => { G.types.clear(); gRenderChips(); gKick(2) } }, '全部类型')]
+  types.forEach(t => {
+    const m = gNodeMeta(t), on = G.types.has(t)
+    chips.push(el('button', {
+      class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', title: '点击按类型过滤',
+      onclick: () => { if (G.types.has(t)) G.types.delete(t); else G.types.add(t); gRenderChips(); gKick(2) }
+    }, el('i', { style: 'background:' + m.color }), (m.icon || '') + ' ' + m.label, el('span', { class: 'chip-n' }, String(counts[t]))))
+  })
+  box.replaceChildren(...chips)
+}
+function gRenderLegend() {
+  const box = GEL.legend; if (!box || !G.data) return
+  const rels = [...new Set(G.data.edges.map(e => e.rel))]
+  box.replaceChildren(el('span', { class: 'g-legend-t' }, '边类型'), ...rels.map(r => {
+    const m = gEdgeMeta(r), on = G.edgeTypes.size === 0 || G.edgeTypes.has(r)
+    return el('button', {
+      class: 'g-leg' + (on ? '' : ' off'), title: '点击切换该边类型可见性',
+      onclick: () => { if (G.edgeTypes.has(r)) G.edgeTypes.delete(r); else G.edgeTypes.add(r); gRenderLegend(); gKick(2) }
+    }, el('i', { style: 'background:' + m.color }), m.label)
+  }))
+}
+function gRenderMetrics() {
+  const box = document.getElementById('g-metrics'); if (!box || !G.data) return
+  const d = G.data, M = d.metrics || {}
+  const V = M.V != null ? M.V : d.nodes.length
+  const E = M.E != null ? M.E : d.edges.length
+  const density = M.density != null ? M.density : (V > 1 ? E / (V * (V - 1)) : 0)
+  const comps = M.components != null ? M.components : (d.nodes.length ? Math.max(...d.nodes.map(n => n.comp)) + 1 : 0)
+  const orphans = Array.isArray(M.orphans) ? M.orphans.length : d.nodes.filter(n => n.deg === 0).length
+  const H = d.health
+  const served = !!(d.analytics && d.analytics.communities)
+  const cards = el('div', { class: 'g-metrics' },
+    el('div', { class: 'g-metric' }, el('b', null, String(V)), el('span', null, 'V 节点')),
+    el('div', { class: 'g-metric' }, el('b', null, String(E)), el('span', null, 'E 边')),
+    el('div', { class: 'g-metric' }, el('b', null, Number(density).toFixed(4)), el('span', null, '密度 ρ')),
+    el('div', { class: 'g-metric' }, el('b', null, String(comps)), el('span', null, '连通分量')),
+    el('div', { class: 'g-metric' }, el('b', null, String(orphans)), el('span', null, '孤儿节点')),
+    el('div', { class: 'g-metric' }, el('b', { class: 'hl' }, String(d.commCount)), el('span', null, '社区数')),
+    el('div', { class: 'g-metric' }, el('b', null, Number(d.clAvg).toFixed(3)), el('span', null, '平均集聚')),
+    el('div', { class: 'g-metric' }, el('b', { class: 'hl' }, H ? String(H.total) : '—'), el('span', null, '健康度')))
+  const head = el('div', { class: 'ct' }, '🧮 图论指标（白盒）',
+    el('span', { class: 'src-tag', title: '数据来源：服务端分析优先，缺失时本地计算' }, served ? '服务端分析' : '本地降级计算'))
+  box.replaceChildren(head, cards)
+  if (H && H.factors && H.weights) {
+    const bars = el('div', { class: 'g-health' })
+    const items = [
+      ['连通性', H.factors.connectivity, H.weights.connectivity],
+      ['请求活跃', Math.min(1, H.factors.requestActivity / 50), H.weights.activity],
+      ['延迟达标', H.factors.latencyP95Ok, H.weights.latency],
+      ['低错误率', 1 - H.factors.errorRate, H.weights.errors],
+      ['数据就绪', H.factors.dataReady, H.weights.data],
+    ]
+    items.forEach(([l, v, w]) => bars.appendChild(el('div', { class: 'hbar' },
+      el('span', { class: 'hb-l' }, l),
+      el('div', { class: 'bar' }, el('i', { class: v > 0.7 ? 'f-ok' : v > 0.4 ? 'f-warn' : 'f-bad', style: `width:${Math.round(v * 100)}%` })),
+      el('span', { class: 'hb-v' }, Math.round(v * 100) + '%'),
+      el('span', { class: 'hb-w' }, 'w' + w))))
+    box.appendChild(bars)
+  }
+  if (Array.isArray(M.orphans) && M.orphans.length) {
+    box.appendChild(el('div', { class: 'g-orphans' }, '⚠ 孤儿（无入边）节点：',
+      el('div', { class: 'chips' }, M.orphans.slice(0, 40).map(id => el('span', { class: 'pill bad' }, String(id).replace(/^[a-z-]+:/, ''))))))
+  }
+}
+function gRenderExtra() {
+  const box = document.getElementById('g-extra'); if (!box || !G.data) return
+  const d = G.data
+  // 中心节点
+  const rankCard = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🏆 中心节点（PageRank TOP 12）'))
+  const idx = {}; d.nodes.forEach(n => idx[n.id] = n)
+  if (d.rank.length) {
+    d.rank.forEach(r => {
+      const n = idx[r.id]; if (!n) return
+      rankCard.appendChild(el('div', { class: 'rankrow' },
+        el('i', { style: 'background:' + gNodeMeta(n.type).color }),
+        el('button', { class: 'linkbtn', onclick: () => gSelect(n, true) }, String(n.label == null ? n.id : n.label)),
+        el('span', { class: 'tag' }, gNodeMeta(n.type).label),
+        el('span', { class: 'rank-pr' }, r.pr)))
+    })
+  } else rankCard.appendChild(el('div', { class: 'muted sm' }, '暂无 PageRank 数据'))
+  // 社区分布
+  const commCard = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🏘️ 社区分布（标签传播）'))
+  if (d.commSizes.length) {
+    const max = Math.max(...d.commSizes.map(c => c.size), 1)
+    d.commSizes.forEach(c => commCard.appendChild(el('div', { class: 'hbar' },
+      el('span', { class: 'hb-l' }, String(c.id).slice(0, 16)),
+      el('div', { class: 'bar' }, el('i', { class: 'f-blue', style: `width:${Math.round(c.size / max * 100)}%` })),
+      el('span', { class: 'hb-v' }, String(c.size)))))
+  } else commCard.appendChild(el('div', { class: 'muted sm' }, '暂无社区数据'))
+  box.replaceChildren(rankCard, commCard)
+}
+
+/* ── 视图入口 ── */
+async function vGraph(wrap0) {
+  // 工具条
+  const q = el('input', { class: 'sin g-q', id: 'g-q', placeholder: '搜索节点：输入名称定位…', autocomplete: 'off' })
+  const sug = el('div', { class: 'gsug', id: 'g-sug' })
+  const layoutBtn = el('button', { class: 'btn o gm' }, '🧲 力导向')
+  const fitBtn = el('button', { class: 'btn o gm' }, '⛶ 适配')
+  const resetBtn = el('button', { class: 'btn o gm' }, '↺ 重置')
+  const labelBtn = el('button', { class: 'btn o gm' }, '🏷 标签')
+  const orphanBtn = el('button', { class: 'btn o gm' }, '🔗 孤儿')
+  const pathBtn = el('button', { class: 'btn o gm' }, '🧭 计算路径')
+  const pathInfo = el('span', { class: 'g-path', id: 'g-path' }, '未选起终点（在节点详情里设置）')
+  const tool = el('div', { class: 'gtool' },
+    el('div', { class: 'gsbox' }, q, sug),
+    el('div', { class: 'gbtns' }, layoutBtn, fitBtn, resetBtn, labelBtn, orphanBtn, pathBtn),
+    pathInfo)
+  const chips = el('div', { class: 'gchips', id: 'g-chips' })
+  const cv = el('canvas', { id: 'graph', 'aria-label': '能力图谱画布：支持缩放、拖拽、点击查看详情' })
+  const legend = el('div', { class: 'g-legend', id: 'g-legend' })
+  const tip = el('div', { class: 'g-tip', id: 'g-tip' })
+  const panel = el('aside', { class: 'g-panel', id: 'g-panel' })
+  const cvWrap = el('div', { class: 'gcv', id: 'g-cv' }, cv, legend, tip, panel)
+  const wrap = el('div', { class: 'gwrap', id: 'graphwrap' }, tool, chips, cvWrap)
+  const metrics = el('div', { class: 'card', id: 'g-metrics' }, el('div', { class: 'ct' }, '🧮 图论指标（白盒）'), el('div', { class: 'skel big' }))
+  const extra = el('div', { class: 'grid g2', id: 'g-extra' })
+  wrap0.append(wrap, metrics, extra)
+
+  let raw = null
+  try { raw = await api('/api/graph') } catch (e) { raw = null }
+  if (!raw || !Array.isArray(raw.nodes) || !raw.nodes.length) {
+    metrics.replaceChildren(el('div', { class: 'ct' }, '🧮 图论指标（白盒）'),
+      notice('图谱接口不可用或返回空数据' + (raw && raw.error ? '（' + raw.error + '）' : '') + '，视图已降级。服务恢复后切换标签页自动重试。', 'error'))
+    return
+  }
+  G.data = gPrepare(raw)
+  GEL.cv = cv; GEL.ctx = cv.getContext('2d'); GEL.tip = tip; GEL.panel = panel
+  GEL.legend = legend; GEL.chips = chips; GEL.wrap = cvWrap
+  gSize()
+  G.view = { x: GEL.w / 2, y: GEL.h / 2, k: 1 }
+  G.alpha = 1; G.hover = null; G.sel = null; G.solo = null; G.path = null
+  G.pathFrom = null; G.pathTo = null
+  // 初始位置：分层视角先铺开，否则螺旋散开（世界坐标以 0,0 为质心）
+  if (G.layout === 'layered') gApplyLayered()
+  else G.data.nodes.forEach((n, i) => {
+    if (n.type === 'plugin') { n.x = 0; n.y = 0; return }
+    const a = i * 2.39996, r = 60 + (i % 17) * 26
+    n.x = r * Math.cos(a); n.y = r * Math.sin(a)
+  })
+  gRenderChips(); gRenderLegend(); gRenderMetrics(); gRenderExtra(); gRenderPanel()
+  layoutBtn.textContent = '🧲 力导向'
+  orphanBtn.textContent = '🔗 孤儿显示中'
+
+  // 搜索建议
+  const suggest = text => {
+    const kw = String(text || '').trim().toLowerCase()
+    if (!kw) { sug.classList.remove('open'); sug.replaceChildren(); return [] }
+    const hits = G.data.nodes.filter(n => String(n.label == null ? n.id : n.label).toLowerCase().includes(kw) || String(n.id).toLowerCase().includes(kw))
+      .sort((a, b) => String(a.label).length - String(b.label).length || (String(a.id) < String(b.id) ? -1 : 1)).slice(0, 8)
+    sug.replaceChildren(...(hits.length ? hits.map(n => el('button', {
+      class: 'gsug-i', onpointerdown: e => { e.preventDefault(); gSelect(n, true); q.value = ''; sug.classList.remove('open'); sug.replaceChildren() }
+    }, el('i', { style: 'background:' + gNodeMeta(n.type).color }), el('span', null, String(n.label == null ? n.id : n.label)), el('span', { class: 'gsug-t' }, gNodeMeta(n.type).label))) : [el('div', { class: 'gsug-empty' }, '无匹配节点')]))
+    sug.classList.add('open')
+    return hits
+  }
+  q.addEventListener('input', () => suggest(q.value))
+  q.addEventListener('focus', () => { if (q.value.trim()) suggest(q.value) })
+  q.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { const hits = suggest(q.value); if (hits.length) { gSelect(hits[0], true); q.value = ''; sug.classList.remove('open') } }
+    else if (e.key === 'Escape') { sug.classList.remove('open'); q.blur() }
+  })
+  document.addEventListener('pointerdown', e => { if (!sug.contains(e.target) && e.target !== q) sug.classList.remove('open') })
+
+  // 工具条动作
+  layoutBtn.onclick = () => {
+    if (G.layout === 'force') { G.layout = 'layered'; gApplyLayered(); layoutBtn.textContent = '🗂 分层'; gKick(2) }
+    else { G.layout = 'force'; G.alpha = 1; G.data.nodes.forEach(n => { n.fx = null; n.fy = null }); layoutBtn.textContent = '🧲 力导向'; gKick(2) }
+  }
+  fitBtn.onclick = () => gFit()
+  resetBtn.onclick = () => { G.layout = 'force'; layoutBtn.textContent = '🧲 力导向'; G.view = { x: GEL.w / 2, y: GEL.h / 2, k: 1 }; G.alpha = 1; G.data.nodes.forEach(n => { n.fx = null; n.fy = null; n.vx = 0; n.vy = 0 }); G.solo = null; G.path = null; G.pathFrom = null; G.pathTo = null; G.sel = null; gPathInfo(); gRenderPanel(); gKick(2) }
+  labelBtn.onclick = () => { G.showLabels = !G.showLabels; labelBtn.classList.toggle('on', G.showLabels); gKick(1) }
+  orphanBtn.onclick = () => { G.showOrphans = !G.showOrphans; orphanBtn.textContent = G.showOrphans ? '🔗 孤儿显示中' : '🔗 孤儿已隐藏'; gKick(2) }
+  pathBtn.onclick = gComputePath
+  labelBtn.classList.add('on')
+
+  // canvas 交互
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top } }
+  const toWorld = (mx, my) => ({ x: (mx - G.view.x) / G.view.k, y: (my - G.view.y) / G.view.k })
+  const showTip = (n, px, py) => {
+    if (!n) { tip.classList.remove('open'); return }
+    const m = gNodeMeta(n.type)
+    tip.replaceChildren(
+      el('div', { class: 'tip-t' }, el('i', { style: 'background:' + m.color }), String(n.label == null ? n.id : n.label)),
+      el('div', { class: 'tip-s' }, (m.label || n.type) + ' · 度 ' + n.deg + ' · PR ' + (n.prS || 0).toFixed(3)),
+      el('div', { class: 'tip-h' }, '点击查看详情'))
+    tip.style.left = Math.min(GEL.w - 12, px + 14) + 'px'
+    tip.style.top = Math.min(GEL.h - 12, py + 14) + 'px'
+    tip.classList.add('open')
+  }
+  cv.addEventListener('wheel', e => {
+    e.preventDefault()
+    const p = pos(e), s = e.deltaY < 0 ? 1.12 : 0.89
+    const nk = Math.max(0.25, Math.min(4, G.view.k * s))
+    G.view.x = p.x - (p.x - G.view.x) * (nk / G.view.k)
+    G.view.y = p.y - (p.y - G.view.y) * (nk / G.view.k)
+    G.view.k = nk
+    gKick(1)
+  }, { passive: false })
+  cv.addEventListener('pointerdown', e => {
+    try { cv.setPointerCapture(e.pointerId) } catch {}
+    const p = pos(e)
+    G.pointers.set(e.pointerId, p)
+    if (G.pointers.size === 2) {
+      const pts = [...G.pointers.values()]
+      G.pinch = { d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1, k: G.view.k }
+      G.drag = null; G.pan = null
+      return
+    }
+    G.moved = 0
+    const n = gPick(p.x, p.y)
+    if (n) {
+      const w = toWorld(p.x, p.y)
+      G.drag = { n, dx: n.x - w.x, dy: n.y - w.y }
+      n.fx = n.x; n.fy = n.y
+      G.alpha = Math.max(G.alpha, 0.35)
+    } else G.pan = { x: p.x - G.view.x, y: p.y - G.view.y }
+    showTip(null)
+  })
+  cv.addEventListener('pointermove', e => {
+    const p = pos(e)
+    const had = G.pointers.has(e.pointerId)
+    G.pointers.set(e.pointerId, p)
+    if (G.pinch && G.pointers.size >= 2) {
+      const pts = [...G.pointers.values()]
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1
+      const nk = Math.max(0.25, Math.min(4, G.pinch.k * (d / G.pinch.d)))
+      const cx = (pts[0].x + pts[1].x) / 2, cy = (pts[0].y + pts[1].y) / 2
+      G.view.x = cx - (cx - G.view.x) * (nk / G.view.k)
+      G.view.y = cy - (cy - G.view.y) * (nk / G.view.k)
+      G.view.k = nk
+      gKick(1); return
+    }
+    if (G.drag) {
+      const w = toWorld(p.x, p.y)
+      G.drag.n.fx = w.x + G.drag.dx; G.drag.n.fy = w.y + G.drag.dy
+      G.moved += 2; G.alpha = Math.max(G.alpha, 0.4)
+      gKick(2); return
+    }
+    if (G.pan) { G.view.x = p.x - G.pan.x; G.view.y = p.y - G.pan.y; G.moved += 2; gKick(1); return }
+    if (!had) return
+    const n = gPick(p.x, p.y)
+    if (n !== G.hover) { G.hover = n; cv.style.cursor = n ? 'pointer' : 'grab'; showTip(n, p.x, p.y); gKick(1) }
+    else if (n) showTip(n, p.x, p.y)
+  })
+  const endPointer = e => {
+    const p = pos(e)
+    const moved = G.moved
+    G.pointers.delete(e.pointerId)
+    if (G.pinch) { if (G.pointers.size < 2) G.pinch = null; G.drag = null; G.pan = null; showTip(null); return }
+    if (G.drag) {
+      const n = G.drag.n
+      n.fx = null; n.fy = null
+      if (moved < 4) gSelect(n, false)
+      G.drag = null; gKick(1); return
+    }
+    if (G.pan) {
+      G.pan = null
+      if (moved < 4) {
+        const n = gPick(p.x, p.y)
+        if (n) gSelect(n, true)
+        else { G.sel = null; gRenderPanel() }
+        gKick(1)
+      }
+    }
+  }
+  cv.addEventListener('pointerup', endPointer)
+  cv.addEventListener('pointercancel', e => { G.pointers.delete(e.pointerId); G.drag = null; G.pan = null; G.pinch = null })
+  cv.addEventListener('pointerleave', () => { G.hover = null; showTip(null); gKick(1) })
+  cv.addEventListener('dblclick', () => gFit())
+
+  // 自适应：ResizeObserver + 窗口兜底
+  let ro = null
+  try {
+    ro = new ResizeObserver(() => { gSize(); gKick(2) })
+    ro.observe(cvWrap)
+  } catch { ro = null }
+  const onWinResize = () => { gSize(); gKick(2) }
+  addEventListener('resize', onWinResize)
+
+  gPathInfo()
+  gKick(3)
+  TEARDOWN = () => {
+    if (GRAF) { cancelAnimationFrame(GRAF); GRAF = 0 }
+    if (ro) ro.disconnect()
+    removeEventListener('resize', onWinResize)
+    GPENDING = 0
+    G.data = null; GEL.cv = null; GEL.ctx = null; GEL.panel = null
+  }
+}
+/** 适配画布：按当前可见节点包围盒设置视图（含 padding） */
+function gFit() {
+  if (!G.data) return
+  const ns = G.data.nodes.filter(gVisible)
+  if (!ns.length) return
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  ns.forEach(n => { minX = Math.min(minX, n.x); minY = Math.min(minY, n.y); maxX = Math.max(maxX, n.x); maxY = Math.max(maxY, n.y) })
+  const pad = 46
+  const w = Math.max(60, maxX - minX), h = Math.max(60, maxY - minY)
+  const k = Math.max(0.25, Math.min(4, Math.min((GEL.w - 2 * pad) / w, (GEL.h - 2 * pad) / h)))
+  G.view.k = k
+  G.view.x = GEL.w / 2 - (minX + maxX) / 2 * k
+  G.view.y = GEL.h / 2 - (minY + maxY) / 2 * k
+  gKick(2)
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   可观测视图（消费 /api/telemetry · /api/lifecycle · /api/capabilities · /api/workspaces）
+   每个分区独立降级：单接口失败只影响该卡片，绝不白屏
+   ═══════════════════════════════════════════════════════════════ */
+const OBS = { key: 'p95', dir: -1 }
+function obsAlerts(tel) {
+  if (tel && Array.isArray(tel.alerts) && tel.alerts.length) return tel.alerts
+  const out = []
+  if (!tel) return out
+  Object.entries(tel.endpoints || {}).forEach(([p, d]) => {
+    if (d.p95 > 500) out.push({ level: 'error', msg: p + ' p95 ' + d.p95 + 'ms 超过 500ms' })
+    else if (d.p95 > 200) out.push({ level: 'warn', msg: p + ' p95 ' + d.p95 + 'ms 超过 200ms' })
+    if (d.errRate > 0.01) out.push({ level: 'warn', msg: p + ' 错误率 ' + (d.errRate * 100).toFixed(1) + '% 超过 1%' })
+  })
+  if (tel.coverage != null && tel.coverage < 0.5) out.push({ level: 'info', msg: '端点覆盖率偏低 ' + Math.round(tel.coverage * 100) + '%' })
+  return out.slice(0, 12)
+}
+function obsHistogram(tel) {
+  if (tel && tel.histogram) return tel.histogram
+  if (!tel) return null
+  const vals = []
+  Object.values(tel.endpoints || {}).forEach(d => (d.series || []).forEach(v => vals.push(v)))
+  if (!vals.length) return null
+  vals.sort((a, b) => a - b)
+  const q = p => vals[Math.min(vals.length - 1, Math.floor(p / 100 * vals.length))]
+  return { p50: q(50), p90: q(90), p95: q(95), p99: q(99), max: vals[vals.length - 1] }
+}
+function obsLocalStages(caps, tel) {
+  const defs = (caps && Array.isArray(caps.lifecycle) && caps.lifecycle.length) ? caps.lifecycle : [
+    { stage: 'load', desc: '模块导入' }, { stage: 'apply', desc: 'apply(ctx) 执行' },
+    { stage: 'server-start', desc: 'HTTP 服务绑定' }, { stage: 'tools-register', desc: 'AI 工具注册' },
+    { stage: 'runtime-publish', desc: '信标写入' }, { stage: 'serve', desc: '稳态服务' }, { stage: 'cleanup', desc: '卸载' },
+  ]
+  const reached = {
+    load: true, apply: true, 'server-start': true,
+    'tools-register': ((caps && caps.tools) || []).length > 0,
+    'runtime-publish': true,
+    serve: ((tel && tel.activeEndpoints) || 0) > 0,
+    cleanup: false,
+  }
+  // 最后一个已达到的阶段为 current
+  let curIdx = 0
+  defs.forEach((s, i) => { if (reached[s.stage]) curIdx = i })
+  return defs.map((s, i) => ({ stage: s.stage, desc: s.desc, state: i < curIdx ? 'done' : i === curIdx ? 'current' : 'pending' }))
+}
+function obsLifeCard(life, caps, tel) {
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '♻️ 生命周期状态机'))
+  if (!life && !caps) { card.appendChild(notice('生命周期接口不可用，已用本地启发式降级')); }
+  const stages = (life && Array.isArray(life.stages) && life.stages.length) ? life.stages : obsLocalStages(caps, tel)
+  const stp = el('div', { class: 'stepper' })
+  stages.forEach((s, i) => {
+    const state = s.state || 'pending'
+    if (i > 0) stp.appendChild(el('div', { class: 'sline' + (state === 'done' || state === 'current' ? ' done' : '') }))
+    stp.appendChild(el('div', { class: 'step ' + state },
+      el('i', { class: 'dot' }, state === 'done' ? '✓' : state === 'current' ? '●' : ''),
+      el('div', { class: 'sbody' },
+        el('div', { class: 'sname' }, String(s.stage || ('阶段' + (i + 1)))),
+        el('div', { class: 'sdesc' }, String(s.desc || '')),
+        s.at ? el('div', { class: 'sat' }, new Date(s.at).toLocaleString()) : null)))
+  })
+  card.appendChild(stp)
+  const evs = (life && Array.isArray(life.events)) ? life.events : []
+  if (evs.length) {
+    const tl = el('div', { class: 'timeline' })
+    evs.slice(0, 12).forEach(ev => {
+      const detail = Object.keys(ev).filter(k => k !== 'ts' && k !== 'event').map(k => k + '=' + String(ev[k])).join(' ')
+      tl.appendChild(el('div', { class: 'tli' },
+        el('span', { class: 'tlt' }, ev.ts ? new Date(ev.ts).toLocaleTimeString() : '—'),
+        el('span', { class: 'tag' }, String(ev.event || 'event')),
+        el('span', { class: 'muted sm' }, detail)))
+    })
+    card.appendChild(el('div', { class: 'sub-h' }, '最近事件（最多 12 条）'))
+    card.appendChild(tl)
+  } else card.appendChild(el('div', { class: 'muted sm' }, '暂无生命周期事件（首次启动前为空）'))
+  return card
+}
+function obsRecon(caps, tel) {
+  if (caps && caps.reconciliation) return caps.reconciliation
+  const declared = ((caps && caps.endpoints) || []).map(e => e.path)
+  const consumed = new Set(Object.keys((tel && tel.endpoints) || {}))
+  return {
+    orphanEndpoints: (caps && caps.orphans) || [],
+    orphanViews: [],
+    unconsumedEndpoints: declared.filter(p => !consumed.has(p)),
+    missingProducers: [...consumed].filter(p => declared.indexOf(p) < 0).sort(),
+  }
+}
+function obsReconCard(caps, tel) {
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🧩 能力对账（注册 → 生产 → 消费）'))
+  if (!caps) { card.appendChild(notice('能力矩阵接口不可用，对账已降级为运行态推断')); }
+  const r = obsRecon(caps, tel)
+  const rows = [
+    ['孤儿端点', r.orphanEndpoints, '静态声明了但无任何消费者指向'],
+    ['孤儿视图', r.orphanViews, '视图无任何端点/入口指向'],
+    ['未触达端点', r.unconsumedEndpoints, '声明了但运行态从未被请求'],
+    ['缺失生产者', r.missingProducers, '被请求但未在能力清单声明（矩阵漂移信号）'],
+  ]
+  const table = el('table', { class: 'tel recon' })
+  table.appendChild(el('tr', {}, el('th', null, '类别'), el('th', null, '数量'), el('th', null, '明细')))
+  rows.forEach(([label, list, hint]) => {
+    const arr = Array.isArray(list) ? list : []
+    const cls = arr.length ? (label.indexOf('缺失') >= 0 || label.indexOf('孤儿') >= 0 ? 'bad' : 'warn') : 'ok'
+    table.appendChild(el('tr', {},
+      el('td', { title: hint }, el('span', { class: 'dotb ' + cls }), label),
+      el('td', { class: arr.length ? 'c-bad-t' : 'muted' }, String(arr.length)),
+      el('td', {}, el('div', { class: 'chips' }, arr.slice(0, 30).map(p => el('span', { class: 'pill' + (cls === 'ok' ? '' : ' ' + cls) }, String(p))))
+        , arr.length > 30 ? el('span', { class: 'muted sm' }, ` 等 ${arr.length} 项`) : null)))
+  })
+  card.appendChild(el('div', { class: 'tablewrap' }, table))
+  const declared = (caps && caps.endpoints) || []
+  if (declared.length) {
+    const consumed = new Set(Object.keys((tel && tel.endpoints) || {}))
+    const active = declared.filter(e => consumed.has(e.path)).length
+    card.appendChild(el('div', { class: 'muted sm', style: 'margin-top:8px' },
+      `端点总数 ${declared.length} · 运行态已触达 ${active} · 覆盖率 ${declared.length ? Math.round(active / declared.length * 100) : 0}%`))
+  }
+  return card
+}
+function obsPerfCard(tel) {
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '📊 端点性能（点击表头排序）'))
+  if (!tel) { card.appendChild(notice('遥测接口不可用，端点性能表已降级隐藏')); return card }
+  const rows = Object.entries(tel.endpoints || {}).map(([p, d]) => ({
+    path: p, count: d.count || 0, errors: d.errors || 0, errRate: d.errRate || 0,
+    p50: d.p50 || 0, p95: d.p95 || 0, lastActive: d.lastActive, series: d.series || [],
+  }))
+  if (!rows.length) { card.appendChild(notice('尚无遥测样本：先浏览几个视图再回来', 'info')); return card }
+  const cols = [['path', '端点'], ['count', '次数'], ['errors', '错误'], ['errRate', '错误率'], ['p50', 'p50'], ['p95', 'p95'], ['lastActive', '最近'], ['series', '趋势']]
+  const table = el('table', { class: 'tel perf' })
+  const thead = el('thead'), tbody = el('tbody')
+  table.append(thead, tbody)
+  const fmtLast = v => v == null ? '—' : v < 60 ? v + 's' : v < 3600 ? Math.round(v / 60) + 'm' : Math.round(v / 3600) + 'h'
+  const paintHead = () => {
+    const tr = el('tr')
+    cols.forEach(([k, label]) => {
+      const active = OBS.key === k
+      const th = el('th', { class: 'sortable' + (active ? ' on' : '') + (k === 'series' ? ' noselect' : ''), title: k === 'series' ? '延迟趋势' : '点击按此列排序' },
+        label, active ? el('span', { class: 'arrow' }, OBS.dir < 0 ? '▼' : '▲') : null)
+      if (k !== 'series') th.addEventListener('click', () => {
+        if (OBS.key === k) OBS.dir = -OBS.dir
+        else { OBS.key = k; OBS.dir = k === 'path' ? 1 : -1 }
+        paintHead(); paintBody()
+      })
+      tr.appendChild(th)
+    })
+    thead.replaceChildren(tr)
+  }
+  const cmp = (a, b) => {
+    const k = OBS.key
+    if (k === 'path') return OBS.dir * String(a.path).localeCompare(String(b.path))
+    let x = a[k], y = b[k]
+    if (k === 'lastActive') { x = x == null ? 1e9 : x; y = y == null ? 1e9 : y }
+    return OBS.dir * ((x || 0) - (y || 0))
+  }
+  const paintBody = () => {
+    tbody.replaceChildren(...[...rows].sort(cmp).map(r => el('tr', {},
+      el('td', { class: 'mono' }, r.path),
+      el('td', null, String(r.count)),
+      el('td', { style: 'color:' + (r.errors ? 'var(--bad)' : 'var(--muted)') }, String(r.errors)),
+      el('td', { style: 'color:' + (r.errRate > 0.01 ? 'var(--bad)' : r.errRate > 0 ? 'var(--warn)' : 'var(--muted)') }, (r.errRate * 100).toFixed(1) + '%'),
+      el('td', null, r.p50 + 'ms'),
+      el('td', { style: 'color:' + (r.p95 > 500 ? 'var(--bad)' : r.p95 > 200 ? 'var(--warn)' : 'inherit') }, r.p95 + 'ms'),
+      el('td', { class: 'muted' }, fmtLast(r.lastActive)),
+      el('td', null, spark(r.series)))))
+  }
+  paintHead(); paintBody()
+  card.appendChild(el('div', { class: 'tablewrap' }, table))
+  if (Array.isArray(tel.topSlow) && tel.topSlow.length) {
+    card.appendChild(el('div', { class: 'chips', style: 'margin-top:10px' },
+      el('span', { class: 'muted sm' }, '🐢 最慢端点（p95）：'),
+      tel.topSlow.slice(0, 6).map(s => el('span', { class: 'pill warn' }, s.path + ' · ' + s.p95 + 'ms'))))
+  }
+  return card
+}
+function obsAlertsCard(tel) {
+  const list = obsAlerts(tel)
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🚨 告警',
+    el('span', { class: 'src-tag' }, list.length ? list.length + ' 条' : '无告警')))
+  if (!tel) { card.appendChild(notice('遥测接口不可用，告警不可评估')); return card }
+  if (!list.length) { card.appendChild(el('div', { class: 'notice ok' }, '✅ 全部端点 p95 < 200ms 且错误率 < 1%')); return card }
+  const box = el('div', { class: 'alerts' })
+  list.forEach(a => box.appendChild(el('div', { class: 'alert ' + (a.level || 'info') },
+    el('span', { class: 'alert-lv' }, a.level === 'error' ? 'ERROR' : a.level === 'warn' ? 'WARN' : 'INFO'),
+    el('span', null, String(a.msg || '')))))
+  card.appendChild(box)
+  return card
+}
+function obsHistCard(hist) {
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '📈 全局延迟直方图（有序统计）'))
+  if (!hist) { card.appendChild(notice('暂无延迟样本', 'info')); return card }
+  const max = Math.max(hist.p99 || 0, hist.max || 0, 1)
+  ;[['p50', hist.p50], ['p90', hist.p90], ['p95', hist.p95], ['p99', hist.p99], ['max', hist.max]].forEach(([k, v]) => {
+    card.appendChild(el('div', { class: 'hbar' },
+      el('span', { class: 'hb-l' }, k),
+      el('div', { class: 'bar' }, el('i', { class: (v > 500 ? 'f-bad' : v > 200 ? 'f-warn' : 'f-ok'), style: `width:${Math.round((v || 0) / max * 100)}%` })),
+      el('span', { class: 'hb-v' }, String(v) + 'ms')))
+  })
+  return card
+}
+function obsWsCard(wss) {
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🗂️ 工作区隔离命名空间'))
+  if (!wss) { card.appendChild(notice('工作区接口不可用')); return card }
+  card.appendChild(el('div', { class: 'muted sm', style: 'margin-bottom:8px' }, '当前：' + WS))
+  const list = wss.workspaces || []
+  if (!list.length) { card.appendChild(el('div', { class: 'muted sm' }, '暂无命名空间数据')); return card }
+  list.forEach(w => card.appendChild(el('div', { class: 'nsrow' },
+    el('span', { class: 'ns-name', title: w.ns }, String(w.label || w.ns).slice(0, 26)),
+    el('span', { class: 'muted' }, 'D' + w.day),
+    el('span', null, w.answered + '题'),
+    el('div', { class: 'bar' }, el('i', { class: w.rate >= 80 ? 'f-ok' : w.rate >= 60 ? 'f-blue' : 'f-warn', style: `width:${w.rate}%` })),
+    el('span', { class: 'ns-rate' }, w.rate + '%'))))
+  return card
+}
+function obsCapsCard(caps, tel) {
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🗺️ 能力矩阵（端点 × 消费者）'))
+  if (!caps) { card.appendChild(notice('能力矩阵接口不可用')); return card }
+  const consumed = new Set(Object.keys((tel && tel.endpoints) || {}))
+  const list = caps.endpoints || []
+  if (!list.length) { card.appendChild(el('div', { class: 'muted sm' }, '能力清单为空')); return card }
+  const box = el('div', { class: 'caps' })
+  list.forEach(e => {
+    const on = consumed.has(e.path)
+    box.appendChild(el('div', { class: 'caprow' },
+      el('span', { class: 'cap-path', title: e.path }, e.path),
+      el('span', { class: 'cap-lb' }, String(e.label || '')),
+      el('span', { class: 'muted sm' }, (e.consumers || []).length + ' 消费者'),
+      el('span', { class: 'tag' + (on ? ' ok' : '') }, on ? '活跃' : '未触达')))
+  })
+  card.appendChild(box)
+  return card
+}
+function obsActionsCard(getData) {
+  const card = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🛠️ 管理动作'))
+  const btnRefresh = el('button', { class: 'btn p', onclick: () => { toast('正在刷新…', 'info', 1200); render() } }, '🔄 刷新')
+  const btnExport = el('button', { class: 'btn o', onclick: () => {
+    const d = getData()
+    const blob = new Blob([JSON.stringify({ generatedAt: new Date().toISOString(), ws: WS, ...d }, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = el('a', { href: url, download: 'kaogong-diagnose-' + Date.now() + '.json' })
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 3000)
+    toast('诊断快照已导出', 'ok', 1800)
+  } }, '📥 导出诊断 JSON')
+  const btnCopy = el('button', { class: 'btn o', onclick: () => {
+    const d = getData()
+    const tel = d.telemetry || {}, caps = d.capabilities || {}
+    const txt = [`dsh-kaogong v${(caps.plugin && caps.plugin.version) || '?'} · ws=${WS}`,
+      `uptime=${fmtDur(tel.uptimeSec)} requests=${tel.totalRequests} qps=${tel.qpsWindow}`,
+      `endpoints=${tel.activeEndpoints}/${tel.declaredEndpoints} coverage=${Math.round((tel.coverage || 0) * 100)}%`,
+      `alerts=${(tel.alerts || []).length}`].join('\n')
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => toast('能力摘要已复制', 'ok', 1600)).catch(() => toast('复制失败（浏览器未授权）', 'bad', 2000))
+    else toast('当前环境不支持剪贴板', 'warn', 2000)
+  } }, '📋 复制能力摘要')
+  card.appendChild(el('div', { class: 'obs-actions' }, btnRefresh, btnExport, btnCopy))
+  card.appendChild(el('div', { class: 'muted sm', style: 'margin-top:8px' }, '导出内容含遥测/能力矩阵/生命周期/命名空间快照，便于离线排障。'))
+  return card
+}
+async function vObs(wrap) {
+  const [telR, capsR, wsR, stR, lifeR] = await Promise.all([
+    apiSafe('/api/telemetry'), apiSafe('/api/capabilities'), apiSafe('/api/workspaces'),
+    apiSafe('/api/status'), apiSafe('/api/lifecycle'),
+  ])
+  const tel = telR.ok ? telR.data : null
+  const caps = capsR.ok ? capsR.data : null
+  const wss = wsR.ok ? wsR.data : null
+  const st = stR.ok ? stR.data : null
+  const life = lifeR.ok ? lifeR.data : null
+  const failed = [['遥测', telR], ['能力矩阵', capsR], ['工作区', wsR], ['状态', stR], ['生命周期', lifeR]]
+    .filter(([, r]) => !r.ok).map(([n, r]) => n + '（' + r.err + '）')
+  if (failed.length) {
+    wrap.appendChild(el('div', { class: 'card failcard' },
+      el('div', { class: 'ct' }, '⚠️ 部分接口不可用（已分区降级，页面仍可用）'),
+      el('div', { class: 'muted sm' }, failed.join(' · '))))
+  }
+  const hist = obsHistogram(tel)
+  const alerts = obsAlerts(tel)
+  // A. 概览 KPI
+  wrap.appendChild(el('div', { class: 'grid g4' },
+    kv0('运行时长', tel ? fmtDur(tel.uptimeSec) : st ? fmtDur(st.uptimeSec) : '—'),
+    kv0('总请求', tel ? tel.totalRequests : '—'),
+    kv0('QPS(60s)', tel ? tel.qpsWindow : '—'),
+    kv0('端点覆盖', tel ? Math.round((tel.coverage || 0) * 100) + '%' : '—'),
+    kv0('活跃/声明', tel ? tel.activeEndpoints + '/' + tel.declaredEndpoints : '—'),
+    kv0('p95 延迟', hist ? hist.p95 + 'ms' : '—'),
+    kv0('告警数', alerts.length),
+    kv0('服务 PID', st ? st.pid : '—')))
+  // B. 告警 + 直方图
+  const row1 = el('div', { class: 'grid g2' })
+  row1.append(obsAlertsCard(tel), obsHistCard(hist))
+  wrap.appendChild(row1)
+  // C. 生命周期
+  wrap.appendChild(obsLifeCard(life, caps, tel))
+  // D. 能力对账
+  wrap.appendChild(obsReconCard(caps, tel))
+  // E. 端点性能（排序表）
+  wrap.appendChild(obsPerfCard(tel))
+  // F/G. 能力矩阵 + 命名空间
+  const row2 = el('div', { class: 'grid g2' })
+  row2.append(obsCapsCard(caps, tel), obsWsCard(wss))
+  wrap.appendChild(row2)
+  // H. 管理动作
+  wrap.appendChild(obsActionsCard(() => ({ telemetry: tel, capabilities: caps, lifecycle: life, workspaces: wss, status: st })))
+  wrap.appendChild(el('div', { class: 'muted sm', style: 'text-align:right' }, '每 5 秒自动刷新 · 所有请求带 ?ws= 隔离键'))
+}
+function spark(series) {
+  const w = 90, h = 18, dpr = devicePixelRatio || 1, c = document.createElement('canvas')
+  c.width = w * dpr; c.height = h * dpr
+  c.style.cssText = `width:${w}px;height:${h}px;vertical-align:middle`
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0)
+  if (!series || series.length < 2) return c
+  const max = Math.max(...series, 1)
+  x.strokeStyle = '#6366f1'; x.lineWidth = 1; x.beginPath()
+  series.forEach((v, i) => { const px = i / (series.length - 1) * w, py = h - (v / max) * (h - 2) - 1; i ? x.lineTo(px, py) : x.moveTo(px, py) })
+  x.stroke(); return c
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   启动
+   ═══════════════════════════════════════════════════════════════ */
+;(async () => {
+  const st = await discover(); paintBeacon(st)
+  setInterval(async () => { if (!BASE) { const s = await discover(); paintBeacon(s); if (s) render() } }, 4000)
+  render()
+})()
+</script>
+</body>
+</html>

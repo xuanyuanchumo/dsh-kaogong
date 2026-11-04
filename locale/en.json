@@ -1,0 +1,10 @@
+{
+  "title": "Exam Study",
+  "guideDesc": "Offline question bank · 30-day plan · knowledge graph · observability dashboard (15 open-source repos)",
+  "loading": "Discovering local service (8400-8404)…",
+  "down": "Local study service not running",
+  "downHint": "It starts automatically when the Host plugin loads; hot-reload if it crashed",
+  "openExternal": "↗ Browser tab",
+  "retry": "↻",
+  "probe": "project"
+}

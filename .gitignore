@@ -1,0 +1,20 @@
+
+
+# T-022 构建产物
+node_modules/
+dist/
+
+# 一次性迁移脚本（T-022 之后不再需要，禁止再入库）
+_*.cjs
+_*.tmp
+
+# cycle-16 运行时数据（题库克隆/缓存/配置一律不入库；study-plan.md 是文档模板例外）
+data/.naoku.db
+data/.paper-index.json
+data/repos/
+data/repos-config.json
+data/progress/
+data/runtime.json
+data/lifecycle.jsonl
+.playwright-mcp/
+.npmrc.publish

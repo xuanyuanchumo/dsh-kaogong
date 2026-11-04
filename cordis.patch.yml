@@ -1,0 +1,6 @@
+# dsh-kaogong cordis patch — 考公备考整合插件
+# Host 插件 (index.js): 启动本地服务 + 注册AI工具
+# Client 插件 (client.js): 在 DSH Web GUI 注册「考公学习」会话视图
+- insert:
+    - id: kaogong
+      name: dsh-kaogong
