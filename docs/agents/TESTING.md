@@ -6,11 +6,11 @@
         ┌─────────────────────────────┐
    ⑤    │ 真机（沙箱 GUI 浏览器）      │  人工+Playwright，5–10 min
         ├─────────────────────────────┤
-   ④    │ render.test.mjs  42 断言     │  真实 React 18 + 真实 client.js，~8s
+   ④    │ render.test.mjs  50 断言     │  真实 React 18 + 真实 client.js，~8s
         ├─────────────────────────────┤
-   ③    │ smoke.test.mjs   204 断言    │  真实 server + 真实数据，~25s
+   ③    │ smoke.test.mjs   262 断言    │  真实 server + 真实数据，~25s
         ├─────────────────────────────┤
-   ②    │ npm run build（tsc 类型检查+编译+bundler 合并 12 模块）│  ~4s
+   ②    │ npm run build（tsc 类型检查+编译+bundler 合并 13 模块）│  ~4s
         └─────────────────────────────┘
 ```
 
@@ -18,7 +18,7 @@
 |---|---|---|---|
 | ② 类型 | `npm run build` | **TS 类型错误阻断**（含未定义标识符 R15）、编译产物、combo 合并终检 | 运行时行为 |
 | ③ 冒烟 | `node smoke.test.mjs` | 端点契约、真实数据解析、评分算法、边界/降级、静态守卫、**题库管理控制面（不真克隆）** | 浏览器渲染 |
-| ④ 渲染 | `node render.test.mjs` | combo 注册、**15 视图挂载**、hook 稳定性、降级检测、键盘行为、安装按钮真实发请求 | 真实网络/样式 |
+| ④ 渲染 | `node render.test.mjs` | combo 注册、**16 视图挂载**、hook 稳定性、降级检测、键盘行为、安装按钮真实发请求、**方法论视图 + 专题枢纽锚点（C18）** | 真实网络/样式 |
 | ⑤ 真机 | 沙箱 + 浏览器 | 视觉、交互、真实加载路径、**一键克隆端到端**（`KG_REPOS_DIR=空目录` 模拟安装态） | 自动化回归 |
 
 **关键教训**：② 通过 ≠ 能跑。T-022 后宿主编织 `dist/`，smoke 有「dist mtime >= src mtime」新鲜度门，忘记 build 会直接失败。R15（组件定义丢失）语法合法、smoke 绿、render 当时只点 3 个视图 → 到真机才炸。所以 ④ 必须覆盖**每一个导航视图**。
@@ -28,11 +28,55 @@
 ```bash
 cd dsh-kaogong
 npm run build              # tsc：类型检查 + 产出 dist + bundler 合并
-node smoke.test.mjs        # 必须 204/204
-node render.test.mjs       # 必须 42/42
+node smoke.test.mjs        # 必须 262/262
+node render.test.mjs       # 必须 50/50
 ```
 
 输出必须贴进交付说明。任一失败不得提交。
+
+## 二b、cycle-18 方法论测试基线（HS13 / C18 / 反向旅程）
+
+### 2b.1 smoke HS13-01..10（`smoke.test.mjs:394-791`，55 条 `check`）
+
+> 位置纪律（教训⑧+⑤）：本块在 §11 之后、**§12 崩溃安全（`server.close()`）之前**；块内无长阻塞（索引快照命中即返回）。
+> 计数口径：静态 `check('` 调用点 273 处（含依赖数据就绪的条件分支），运行态基线 **262**；其中 HS13 段 55 条。
+
+| 组 | 断言要点（真实断言，非 length>0） |
+|---|---|
+| **HS13-01** 目录树 | catalog HTTP 200；`meta.docCount=25`；三层结构（六模块+三策略+一示例）；声明数 ≡ 磁盘可用数（25/25、`degraded=false`、`missing=[]`）；25 篇逐篇 `chars/sections>0`、`present=true`；`orphans=[]` 且 `dirMismatch=[]` |
+| **HS13-02** 端点口径 | `CAPABILITIES.endpoints` 恰 6 条 `/api/huasheng13/*`（无缺无多）；无 `/kaogong` 前缀；运行态 `trace.declaration.allDeclared=true` + 6 条逐条 `declared`；六端点逐条真实可达；未知子路径 HTTP 200 `{error}` 不 5xx、不进端点对账但进 `telemetry.unmatched` |
+| **HS13-03** BM25 命中 | `q=截位直除` 首条 `ziliao-susuan`；分数降序且为正；`rawTotal ≡ results.length + filtered` 且裁剪真实生效；`confidence=high`、`phraseHit=true`、`coverage=1`；首条 `snippets` 非空、`terms` 为真实命中词 |
+| **HS13-04** 检索边界 | `假设分配` 命中 `ziliao-susuan` 且 high；`隔板法` 命中 `shuliang-guanxi`；空 `q` → `results=[]` 且不计 miss；生造词 `不存在的词` → `confidence=low`、`phraseHit=false`；**低置信度仍返回结果 + note**（提示而不过滤） |
+| **HS13-05** 单篇全文 | `doc?file=ziliao-fenxi` 的 `markdown` 含「ABRX」；元信息 `file/moduleId/chars/formulas/weight>1` 完整；未知 file → 200 `{error,known[]}`；缺 file → 200 `{error,hint}` |
+| **HS13-06** 覆盖矩阵 | 六模块齐备；`overall` 在 [0,1] 且为真实值 **0.9756**（≠1，yanyu 缺公式不凑绿）；逐模块 `coverage ∈ [0,1]` 且 `overall ≡ presentDims/expectedDims` 可复算；`dims.formula=false` 透传到常识/申论（不判假阴性）；`gaps` 如实列出 `yanyu-zhuanxiang 缺公式` |
+| **HS13-07** 配套练习 | 默认 `total=10 n=5 returned=5 hasMore=true`；`n=10` → `returned=10 hasMore=false` 且 `total` 恒为题库总量；题目形状（index 连续/stem 非空/options 带 key/含解析）；`answerIsLetter` 自洽（true ⇒ 答案 A–D；false ⇒ 文字作答）；数量关系 18 题全为文字作答；未知 file → 200 `{error,known}` |
+| **HS13-08** 白盒链路 | trace 六端点槽位 + `hits/p50/p95/lastAt/samples`；`searches` 四元组 + `hitRate=hit/total` 自洽；`docs.reads` 结构 + distinct；`recent` 字段类型正确；调用后 hits **单调递增**（search +1、doc +2）；`reads.ziliao-fenxi` 按 file 累计；环形容量透出（200 / 分槽 24） |
+| **HS13-09** 跨 ws 隔离 | A 有真实调用、B 全零，互不污染；两 ws 落到不同分槽；A 的历史在 B 访问后仍完整；无 ws 参数走独立 default 槽 |
+| **HS13-10** 静态守卫 | 语料在数据根 `root/huasheng13` 且**包内无 `assets/huasheng13`**；META 声明 25 篇逐条可解析（零断链）；磁盘 25 个 `.md` 全被 META 声明（无孤儿）；`examples/` 恰 5 篇；`zhenti-shili` 按磁盘事实在 `references/`；源码级端点口径守卫（manifest 含 6 条且无 `/kaogong` 前缀） |
+
+### 2b.2 render C18-01..08（`render.test.mjs:874-1008`）
+
+| 编号 | 断言 |
+|---|---|
+| C18-01 | 花生十三视图挂载 + 五分区 tab 齐备（`data-kg-hs13-tab` 属性锚定） |
+| C18-02 | 五分区逐区切换零降级（overview/catalog/search/practice/trace 全绿） |
+| C18-03 | 总览渲染六模块卡 + 覆盖率（`coverage.overall=0.9756` → 97.6%） |
+| C18-04 | 检索交互：输入「截位直除」→ 发请求 → 结果列表 + 置信度提示「精确命中」 |
+| C18-05 | 配套练习渲染题干（消费真实 `items`）且零降级 |
+| C18-06 | 白盒链路渲染 trace（端点命中/检索统计）且零降级 |
+| C18-07 | 专题枢纽「📖 方法论」分区 `data-kg-hub-tab=method` 可达、零降级，且与 hs13 数据域不混用 |
+| C18-08 | 白盒面板「📖 方法论链路」卡：三源齐请求 + 六模块热力条 + 覆盖率/命中率/p95 + 缺口如实展示 + 无 `role="alert"` |
+
+### 2b.3 反向旅程 `_tmp/journey-notinstalled.mjs`（15 条，本地 scratch）
+
+模拟「未安装 huasheng13」的干净数据根（`KG_REPOS_DIR` 指向空目录），验证诚实降级与装后自愈：
+
+1. 16 仓库登记；2. `present=0`；3. `requiredMissing` 含 `huasheng13`；4. `huasheng13.present=false`；5. **无 `builtin` 旁路字段**；
+6. `catalog.meta.degraded=true`；7. `available=0`；8. `declaredByAdapter=25`（声明规模不撒谎）；9. `error` 含「题库管理」安装引导；
+10. `doc` 未装时返回 `error` 而非空内容；11. `search` 返回空数组不崩；12. `coverage` 降级（`overall=0` 或 `degraded`）；
+13. 复制语料进数据根并越过 3s 重试窗口后 `degraded=false`（**自愈，无需重启**）；14. `available=25`；15. 检索恢复非空。
+
+> `_tmp/` 是本地 scratch（不进 npm 包、不入 git）；保留它作为真机反向验证脚本模板。下次做同类「未安装 → 装后恢复」验证时先跑它。
 
 ## 三、沙箱验证（改动 UI / 宿主交互时必做）
 
@@ -95,7 +139,7 @@ screenshots.json,.gitignore} _publish-kaogong/
 rm -rf _publish-kaogong/data _publish-kaogong/cordis.local.yml
 
 # 2) 卫生核验（机器证据，不靠记忆）
-npm pack --dry-run                       # 期望 ~320KB / ~54 文件，无数据无凭据
+npm pack --dry-run                       # 判据：无 data/、无 huasheng13 语料、无凭据；含 dist/docs/assets 图标与截图
 git -C _publish-kaogong ls-files | grep -E '^data/|\.env|token' # 必须空
 
 # 3) GitHub（SSH 优先：Windows 下 HTTPS 443 易被重置，SSH 22 稳定）
@@ -122,9 +166,10 @@ npm view dsh-kaogong version dist.fileCount --registry=https://registry.npmjs.or
 | GitHub topic `dsh-plugin` | ✅ |
 | peer 范围含**显式预发布分支**（否则静默排除所有 rc，用户 ERESOLVE） | ✅ 三段 `\|\|` |
 | npm 包 `repository` 回指该仓库（自动关联下载量；手写 `npm:` 键会被拒） | ✅ |
-| 描述**只说功能、必须属实**（写「51 端点」就得真有 51 个） | ✅ 数字取自 manifest 实测 |
-| 投稿方式：一个 PR 一个文件 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（README 由脚本生成，勿手改） | ⏳ 待提 PR |
-| 可选：`icon:` 指向 GitHub 托管位图（`assets/icon-180.png`）、本仓 `screenshots.json` 声明 1–8 张 | ✅ 两者齐备 |
+| 描述**只说功能、必须属实**（写「57 端点」就得真有 57 个） | ✅ 数字取自 manifest 实测（57 端点 / 6 工具 / 16 视图 / 16 仓库） |
+| 投稿方式：一个 PR 一个文件 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（README 由脚本生成，勿手改；单 PR ≤3 条） | ⏳ 待提 PR；条目草案见 [MARKETPLACE-ENTRY.md](./MARKETPLACE-ENTRY.md) |
+| category 取自实际功能（可用值：agi/ui/usage/theme/model/identity/session/memory/**tools**/wsl/browser/vision/voice/docs/skill/workflow/git/notify/dev/security/remote/market/fun） | ✅ `tools`（条目里**不得**手写 `npm:` 键，npm 关联由 registry 自动采集） |
+| 可选：`icon:` 指向 GitHub 托管位图（`assets/icon-180.png`）、本仓 `screenshots.json` 声明 1–8 张 | ✅ 两者齐备（4 张截图真实存在） |
 
 ## 六、ANIC 循环（L4 自主）
 

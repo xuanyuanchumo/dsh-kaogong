@@ -175,7 +175,13 @@ export function NativeReposView({ api }: any) {
     /* ③ 一键必选 */
     !requiredReady
       ? h(Card, { title: '🚀 一键安装必选包' },
-          h('div', { style: { fontSize: 12, color: '#64748b', marginBottom: 8 } }, '缺失必选：' + (sum.requiredMissing || []).join('、') + ' —— 合计约 363MB，装完即可用刷题/方法论/图推三大核心视图'),
+          h('div', { style: { fontSize: 12, color: '#64748b', marginBottom: 8 } },
+            '缺失必选：' + (sum.requiredMissing || []).join('、') + ' —— 装完即可用刷题 / 方法论 / 图推三大核心视图'),
+          // cycle-18：不再写死「合计约 363MB」——必选集随版本会变（本轮新增 huasheng13，
+          // 且 kaogong-skill 已降为推荐），硬编码体积必然漂移成谎报（R22 陈旧文案教训）。
+          // 各仓库体积已在下方分级卡片逐条显示，总览这里只给可执行指引。
+          h('div', { style: { fontSize: 10.5, color: '#94a3b8', marginBottom: 8 } },
+            '国内网络建议先在上方「镜像代理」填 https://gh-proxy.com/ 再安装；各仓库体积见下方分级列表。'),
           h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
             (sum.requiredMissing || []).map((k: string) => btn('⬇ ' + k, false, () => doInstall(k), { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '7px 16px' }))))
       : null,

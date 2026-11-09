@@ -1,7 +1,7 @@
 {
   "name": "dsh-kaogong",
-  "version": "1.12.0",
-  "description": "考公备考整合插件 — 一键式题库管理(必选/推荐/可选分级+镜像代理) · 离线可视化 · 双入口 · SRS错题本 · 专项刷题记忆 · 白盒可观测",
+  "version": "1.13.0",
+  "description": "考公备考整合插件 — 一键式题库管理(必选/推荐/可选分级+镜像代理) · 离线可视化 · 双入口 · SRS错题本 · 花生十三体系方法论(BM25检索+六模块覆盖) · 白盒可观测",
   "homepage": "https://github.com/xuanyuanchumo/dsh-kaogong#readme",
   "repository": {
     "type": "git",
@@ -79,6 +79,8 @@
     "exam",
     "civil-service",
     "srs",
+    "methodology",
+    "huasheng13",
     "offline-first"
   ],
   "license": "MIT",

@@ -28,6 +28,7 @@ import { makeDataApi, makeStudyPlan } from './dataApi.js'
 import { makePaperApi } from './paperApi.js'
 import { makeNaokuApi, initNaoku, resetNaoku } from './naokuApi.js'
 import { makeTuxingApi } from './tuxingApi.js'
+import { makeMethodologyApi } from './methodologyApi.js'
 import { resolveReposRoot } from './dataRoot.js'
 import { makeRepoManager } from './repoManager.js'
 
@@ -61,6 +62,10 @@ function buildDomains(root: string) {
     paperApi: makePaperApi({ repoRoot: root, store }),
     naokuApi: makeNaokuApi({ repoRoot: root, dataDir: DATA_DIR, store }),
     tuxingApi: makeTuxingApi({ repoRoot: root }),
+    // cycle-18 花生十三体系方法论域：语料走数据根（与其它题库统一由「题库管理」配置），
+    // 因此这里必须注入 repoRoot —— 数据根热切换时由 rebuildDomains 重建本域。
+    // store 用于 trace 计数器按 wsKey 分槽隔离（cycle-17 ㉙ 跨项目污染教训）。
+    methodologyApi: makeMethodologyApi({ pkgRoot: PKG_ROOT, repoRoot: root, dataDir: DATA_DIR, store }),
     studyPlan: makeStudyPlan(PLAN_FILE),
   }
   initNaoku(root, DATA_DIR).catch(() => {})
@@ -100,8 +105,25 @@ interface EpStat { count: number; errors: number; lat: number[]; lastTs?: number
 const telemetry: { endpoints: Record<string, EpStat>; requests: number[]; window: number } = { endpoints: {}, requests: [], window: 60_000 }
 const LAT_RING = 100
 
-function recordRequest(path: any, ms: any, isError: any): void {
-  const t = (telemetry.endpoints[path] = telemetry.endpoints[path] || { count: 0, errors: 0, lat: [] })
+/** cycle-18：未声明端点（404/Unknown API）的遥测只记聚合桶，不污染端点对账表。
+ *  为什么必须这样：`/api/capabilities` 的端点对账以 telemetry.endpoints 的键为
+ *  「运行态声明」，一旦某个从未声明过的路径（拼错、探针、扫描器）被记进来，
+ *  就会永久驻留成「影子端点」，让白盒面板与 smoke 口径守卫误判（v1.8 假阳性同族）。
+ *  端点维度只认**已声明**路径；未命中的请求计数进 `telemetry.unmatched`（仍可观测，但不参与对账）。 */
+const UNMATCHED_BUCKET = '__unmatched__'
+
+/** 已声明端点集合（由 CAPABILITIES 单一事实源派生，供遥测判「是否影子端点」） */
+const DECLARED_ENDPOINT_SET = new Set(CAPABILITIES.endpoints.map((e: any) => e.path))
+/** 是否为已声明端点；非 /api/* 路径（UI/静态）不参与端点对账，一律视为 matched */
+function isDeclaredEndpoint(path: any): boolean {
+  const p = String(path || '')
+  if (!p.startsWith('/api/')) return true
+  return DECLARED_ENDPOINT_SET.has(p)
+}
+
+function recordRequest(path: any, ms: any, isError: any, declared?: boolean): void {
+  const key = declared === false ? UNMATCHED_BUCKET : path
+  const t = (telemetry.endpoints[key] = telemetry.endpoints[key] || { count: 0, errors: 0, lat: [] })
   t.count++
   if (isError) t.errors++
   t.lat.push(Math.round(ms))
@@ -120,7 +142,10 @@ function telemetrySnapshot() {
   const now = Date.now()
   const inWindow = telemetry.requests.filter(ts => now - ts < telemetry.window).length
   const eps: any = {}
+  let unmatchedCount = 0, unmatchedErrors = 0
   for (const [path, t] of entries(telemetry.endpoints)) {
+    // cycle-18：未声明端点的请求只进聚合桶，不混入端点对账表（否则会成为永久「影子端点」）
+    if (path === UNMATCHED_BUCKET) { unmatchedCount = t.count; unmatchedErrors = t.errors; continue }
     const sorted = [...t.lat].sort((a, b) => a - b)
     eps[path] = {
       count: t.count, errors: t.errors,
@@ -162,6 +187,10 @@ function telemetrySnapshot() {
   if (totalReq > 0 && totalErr / totalReq > 0.01) {
     alerts.push({ level: 'warn', msg: `全局错误率 ${(totalErr / totalReq * 100).toFixed(1)}% 超过 1%` })
   }
+  // cycle-18：命中未声明端点的请求（拼错/扫描器/旧客户端）——有量就提示，但不进端点表
+  if (unmatchedCount > 0) {
+    alerts.push({ level: 'info', msg: `有 ${unmatchedCount} 次请求命中未声明端点（已聚合，未计入端点对账）` })
+  }
   // 稳定排序：error 在前，同级按消息字典序（避免 telemetry 插入序导致抖动）
   alerts.sort((a, b) => (a.level === b.level
     ? (a.msg < b.msg ? -1 : a.msg > b.msg ? 1 : 0)
@@ -178,6 +207,9 @@ function telemetrySnapshot() {
     histogram,
     topSlow,
     alerts,
+    // cycle-18：未声明端点请求的可观测余量（不含具体路径，避免影子端点回流；
+    // 有计数就说明「有人在打不存在的 API」——这个信号本身必须保留）
+    unmatched: { count: unmatchedCount, errors: unmatchedErrors },
   }
 }
 
@@ -363,7 +395,8 @@ async function handleApi(path, params, post, method, wsRaw, port) {
     const r = await repoManager.handle(path, params, post, method)
     if (r !== undefined) return r
   }
-  return domains.srsApi(path, params, post, method, wsRaw)
+  return domains.methodologyApi.handle(path, params, post, method, wsRaw)
+    ?? domains.srsApi(path, params, post, method, wsRaw)
     ?? domains.tuxingApi.handle(path, params)
     ?? domains.naokuApi.handle(path, params, post, method, wsRaw)
     ?? domains.paperApi.handle(path, params, post, method, wsRaw)
@@ -529,7 +562,7 @@ export function attachWebRoute(webServer, mountPath = '/kaogong') {
       // 遥测路径口径（v1.8.0 修复）：统一记「相对挂载点的逻辑路径」（/api/graph），
       // 与 CAPABILITIES.endpoints 声明口径一致。此前记 mountPath+rel（/kaogong/api/graph）
       // → 能力对账永远匹配不上 → 全部端点被判「未声明」，白盒面板失去意义（假阳性）。
-      recordRequest(rel, Date.now() - t0, status >= 400)
+      recordRequest(rel, Date.now() - t0, status >= 400, isDeclaredEndpoint(rel))
     }
     res.setHeader('Cache-Control', 'no-store')
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
@@ -580,7 +613,7 @@ function buildHttpServer(port) {
       const finish = (status, type, body) => {
         res.writeHead(status, { 'Content-Type': type })
         res.end(body)
-        recordRequest(path, Date.now() - t0, status >= 400)
+        recordRequest(path, Date.now() - t0, status >= 400, isDeclaredEndpoint(path))
       }
       if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); recordRequest(path, Date.now() - t0, false); return }
       if (path === '/' || path === '/index.html') {

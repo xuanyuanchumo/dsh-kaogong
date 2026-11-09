@@ -1,10 +1,10 @@
 # dsh-kaogong — 项目事实基线（ANIC 自举真源）
 
-考公备考整合插件：15 个开源仓库 → 离线可视化学习平台，DSH Web GUI **双入口**：左栏「考公学习」全屏沉浸面板 + 右侧 Sidebar 并排标签（引导页亦有入口）。
+考公备考整合插件：16 个开源仓库（含 cycle-18 新增方法论语料 huasheng13）→ 离线可视化学习平台，DSH Web GUI **双入口**：左栏「考公学习」全屏沉浸面板 + 右侧 Sidebar 并排标签（引导页亦有入口）。
 
 ## Commands
 - Build/类型门: `npm run build`（**tsc + scripts/bundle-client.mjs**：类型错误阻断 + 多文件产物拓扑序合并为宿主要求的单 combo）。**改完 .ts 必须 build（宿主编织的是 dist），改完任何 src/client/*.ts 也必须 build（client 产物是 bundler 合并的，裸 tsc 会把 dist/client/client.js 重写回裸 ESM → 宿主拒绝加载）**
-- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**204 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + cycle-13 省份维度 R-P/R-N + cycle-15 记忆 R-MEM/三布局/流动粒子/白盒三件套 + **cycle-16/17 题库管理 R-P-01..06（/api/repos* 控制面+数据根四级解析+崩溃安全静态守卫+跨工作区缓存分槽隔离）**）+ `node render.test.mjs`（**42 断言**，真实 React 18 + 真实 client.js 集成渲染，含专题枢纽/省份 chips/白盒流动图/图谱升级包/记忆跳回/**C16 题库面板「关于本项目」卡与安装请求**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
+- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**262 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + cycle-13 省份维度 R-P/R-N + cycle-15 记忆 R-MEM/三布局/流动粒子/白盒三件套 + **cycle-16/17 题库管理 R-P-01..06（/api/repos* 控制面+数据根四级解析+崩溃安全静态守卫+跨工作区缓存分槽隔离）**）+ `node render.test.mjs`（**50 断言**，真实 React 18 + 真实 client.js 集成渲染，含专题枢纽/省份 chips/白盒流动图/图谱升级包/记忆跳回/**C16 题库面板「关于本项目」卡与安装请求**/**C18 方法论五分区+检索交互+obs 方法论链路卡**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
 - **沙箱验证（禁主力直测）**: `node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`（token 行取 URL；插件崩只崩沙箱）
 - 热更新重载: `plugin_manager set_plugin include:kaogong enabled=false → true`（fiber 重挂载）
 - 安装/重装: `plugin_manager remove_bundle dsh-kaogong → install_bundle <绝对路径>`
@@ -81,7 +81,7 @@
 - **⑪（记忆域设计取舍）**：记忆存 **progress.memory[kind]** 而非 localStorage——跟随 `?ws=` 命名空间天然隔离、跨设备（同工作区）一致、且复用既有 saveProgress 原子写；题目**整对象入记忆**（≤8KB 校验）保证「跳回原题」字面成立（SRS 抽题是随机的，靠 kind+重抽无法复现原题）。12-kind LRU 防历史 kind 残留膨胀；kind 白名单防键污染/原型链。
 
 ## cycle-16 事故与教训（v1.11.0 一键式题库管理 + 发布）
-- **⑫（发布根本问题）npm 包不含题库数据**：15 仓库合计 ~2.2GB 且各有上游版权，绝不能随包分发；原 `REPO_ROOT=上级目录` 是开发态假设，安装态下数据全缺。解法=**数据根四级解析**（env `KG_REPOS_DIR` > `data/repos-config.json` > 开发态上级（含任一登记仓库才识别）> `data/repos` 托管默认）+ 题库管理面板一键克隆。**凡「路径」进运行期，一律做成可配置事实源，禁止模块加载期硬编码位置。**
+- **⑫（发布根本问题）npm 包不含题库数据**：16 仓库合计 ~2.2GB 且各有上游版权，绝不能随包分发；原 `REPO_ROOT=上级目录` 是开发态假设，安装态下数据全缺。解法=**数据根四级解析**（env `KG_REPOS_DIR` > `data/repos-config.json` > 开发态上级（含任一登记仓库才识别）> `data/repos` 托管默认）+ 题库管理面板一键克隆。**凡「路径」进运行期，一律做成可配置事实源，禁止模块加载期硬编码位置。**
 - **⑬（动态根的重建模式）**：数据根变更不能散落改七个域文件的闭包捕获——采用**域工厂重建**：`buildDomains(root)` 集中装配（各域 makeXxxApi 签名零改动），`rebuildDomains()` 换根 + 三级缓存失效（resetPaperIndex / resetNaoku / graphCache 归零），安装/删除/换根全部走 `onRootChanged` 回调。**新增跨域共享可变前提时，先答「谁持有、谁重建、谁失效」三问再动手。**
 - **⑭（spawn 崩溃安全同族）**：git 子进程的 `proc.on('error')`（git 不存在/权限）与 `close` 非零码都必须收敛为 job failed——与 cycle-0 的 listen EADDRINUSE 同族教训：**一切外部异步错误必须挂回受控 Promise/状态，绝不 uncaughtException 击杀宿主**。另 `GIT_TERMINAL_PROMPT=0` 防 git 在无 TTY 环境弹凭据提示永久挂起。
 - **⑮（发布卫生）**：`data/.naoku.db`（147MB，GitHub 单文件 100MB 红线）与 progress/runtime/lifecycle 曾入 git 跟踪——发布前 `git rm --cached` + gitignore + **独立干净快照目录**（_publish-kaogong，无 data/.dsh/.cycles/.git）初始化发布仓。npm pack 311KB 是「包卫生」的机器证据。教训：**运行时产物从第一天就 gitignore；发布走干净快照，不在开发仓打 tag 直推。**
@@ -95,3 +95,14 @@
 - **㉑（R22 工具输出陈旧）**：`kaogong_launch` 手写「7 视图」模板，实际 15 视图——声明与呈现漂移。**面向模型/用户的文案也从事实源渲染**：views/tools/endpoints 计数取 `/api/capabilities`，repoRoot/pid 取 `/api/status`，数据就绪取 `/api/repos`。这是「声明 vs 运行态同源」纪律（v1.8 遥测事故）在呈现层的推论。
 - **㉒（市场 peer 预发布陷阱）**：`>=0.2.0-rc.2 <0.4.0-0` 看似宽，node-semver 规则下**静默排除所有 rc**（预发布只匹配同 tuple 且带预发布标签的比较符）→ 用户装 rc 版宿主 ERESOLVE。修法：每段带预发布分支 `|| >=0.2.1-rc.0 <0.3.0-0 ||`。awesome-dsh-plugin 贡献规范明文要求，CI 检查 `dsh.bundle` 声明（只声明 `dsh.client` 不可安装是最常见被拒原因）。
 - **㉓（GitHub 推送通道）**：Windows 上 HTTPS 443 直连 github.com 会被重置（`Recv failure: Connection was reset`），SSH 22 端口稳定——发布仓 remote 一律 SSH（`git@github.com:…`）；Contents API 兜底适合单文件热修（注意 API 提交与本地分支会分叉，推送前先 `fetch + rebase origin/main`）。
+
+## cycle-18 契约与教训（v1.13.0 花生十三体系方法论适配库 + 统一题库管理）
+- **㉔（语料一律走「题库管理」，禁止内置旁路）**：方法论语料曾先被做成「随 npm 包分发（assets/huasheng13）」，被用户明确否决——**本插件不内置任何题库/语料数据**，一切数据由「📦 题库管理」统一下载到数据根。语料位 = `<数据根>/huasheng13/{references,examples}`（上游 `WangJunqing-coder/huasheng13-skill`，336KB，`REPOS_META.huasheng13` tier=required）。判据守卫：smoke 断言 `assets/` 下不得存在 huasheng13、`package.json files` 不得列语料。**凡「某类数据要不要进包」的问题，答案恒为「不进」，否则更新/卸载语义分裂。**
+- **㉕（HUASHENG13_META 是目录单一事实源）**：六模块/策略层/示例 + `root`（相对数据根）+ `dims`（维度适用性）全部只在此登记；adapter 解析、server 端点、UI 渲染三方消费。**新增语料四步**：放文件到数据根 → 登记 META → 索引快照 fixtureHash 自动失效 → 加 smoke 断言。
+- **㉖（R23 覆盖矩阵假阴性）**：早期统一按「文档/表格/公式/示例」四维打分，致常识判断 0.33、申论 0.67——**这两个模块本来就不考公式**。修法 `dims:{formula,table,example}` 按模块声明适用维度，不适用维度**不进分母、不产生 gap 文案**。教训：**度量口径必须先问「这个维度对该对象是否成立」，否则面板会对健康模块持续告警**（与 v1.8 遥测假阳性同族）。`yanyu 0.889` 是真实缺口，如实保留不凑绿。
+- **㉗（R24 影子端点污染遥测对账）**：任何未声明路径被 `recordRequest` 记成运行态端点后会永久驻留成「影子端点」，让 `/api/capabilities` 对账与 smoke 口径守卫误判。修法：`isDeclaredEndpoint()` 派生自 CAPABILITIES，未声明路径只进 `__unmatched__` 聚合桶（另开 `telemetry.unmatched` 保留可观测余量）。教训：**测试里靠「调整断言顺序」规避污染 = 掩盖而非根治**；顺序可以掩盖，机制才能保证。
+- **㉘（R25 陈旧文案是用户可见缺陷）**：架构变更后「合计约 363MB」「方法论无需安装」「内置语料」「15 仓库」「4 个 AI 工具」等表述残留——白盒面板与工具输出会把它当真。**规矩：任何架构变更必须同一波次全仓 grep 检查文案（含 manifest 内的中文 desc/lifecycle），并把体积类数字改成「由事实源动态渲染」而非写死。**
+- **㉙（R26 拆分脚本禁做括号平衡推断）**：把 markdown 链外提时用「朴素花括号计数」定位函数边界，被正则字面量里的 `{}`（`/{1,6}/`、`/[.*+?^${}()|[\]\\]/`）骗过 → 函数被截断、源文件语法损坏。**规矩：拆分脚本必须以「顶层声明行号」为切点（列 0 的 `function`/`const` 行），禁止用括号/引号平衡推断；重构前先确认可恢复路径（本次靠 `dist/` 上一版产物无损恢复，且 `strict:false` + `removeComments:false` 让产物可回填）。**
+- **㉚（R27 编辑器的 EOL 会污染历史）**：Windows 上 `open(p,'w')` 把 LF 文件写成 CRLF，导致 `manifest.ts` 整文件 1644 行「全改」。**规矩：脚本改文件用 `newline=''`/二进制模式保持原 EOL；提交前用 `git diff --numstat` 查「整文件改写」型异常（增删都接近文件总行数即 EOL 翻转）。**
+- **㉛（入口纪律·用户明确要求）**：方法论**不设独立一级导航**，入口 = 「🎯 专题 → 📖 方法论」分区（`data-kg-hub-tab=method`），该分区内主视图即花生十三体系（`data-kg-hs13-root`）；原 kaogong-skill 十主题降为默认折叠「另见」区。**新增业务视图一律先问「该不该进一级导航」，本插件倾向收敛进专题枢纽**；render 断言按属性锚定（`data-kg-hs13-tab` / `data-kg-hub-tab`），禁按文本匹配（「花生十三体系」与「方法论」标签会撞名）。
+- **㉜（检索噪声的正确处理）**：中文 bigram 下任何中文串都会产生命中，实测**噪声分数反而高于真实短查询**（「数量」1.68 vs「不存在的词」4.79）→ 阈值过滤会误杀真实查询。正解 = **只裁尾**（`score < max(1.0, top×0.15)` 且**永留首条**）+ 三档 `confidence`/`phraseHit` 提示，**低置信度结果不丢弃**。教训：**给「相关性」建模前先实测分数分布，别用直觉阈值。**

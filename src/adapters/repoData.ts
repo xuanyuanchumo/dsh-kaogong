@@ -11,6 +11,7 @@ import { join } from 'node:path'
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 export const REPOS = {
+  huasheng13:             '花生十三体系方法论 25 篇（六模块技巧库，方法论视图主数据源）',
   xingcezhenti:           '515套卷58890题行测真题库（按模块分目录，配图本地化）',
   kaogongzhentizhengliu:  '22375篇考点重组深度标注笔记（推理链/最快解法/易错点）',
   GongkaoNaoku:           'SM-2间隔重复刷题引擎（27506题去重，Python零依赖）',

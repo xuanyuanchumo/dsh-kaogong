@@ -165,6 +165,112 @@ globalThis.fetch = async (url) => {
   if (u.includes('/api/essay/list')) return { json: async () => ({ total: 1, questions: [{ paperId: 'x', year: 2020, exam: '国考', paperType: '副省级', no: 1, stem: '申论题干', score: 20, requirement: '300字', hasReference: true }] }) }
   if (u.includes('/api/essay/grade')) return { json: async () => ({ score: 15, max: 20, chars: 200, limit: 300, dims: { coverage: 78, structure: 80, length: 85, language: 100 }, hitTerms: ['产业结构'], missingTerms: ['粮食'], feedback: ['整体达标'], referenceAvailable: true }) }
   if (u.includes('/api/essay/history')) return { json: async () => ({ total: 2, recent: [], avgRatio: 70 }) }
+  // cycle-18 花生十三体系方法论（形状严格对齐 server 实测，见 smoke HS13-01..10）
+  if (u.includes('/api/huasheng13/search')) {
+    // 空查询 → 服务端返回 results:[]（不是 error），UI 必须走空态而不是降级
+    const hasQ = /[?&]q=([^&]*)/.exec(u)
+    const qv = hasQ ? decodeURIComponent(hasQ[1]) : ''
+    if (!qv) return { json: async () => ({ query: '', took: 0, limit: 10, total: 0, results: [] }) }
+    return { json: async () => ({
+      query: qv, took: 1.23, limit: 10, total: 1, rawTotal: 25, filtered: 24,
+      confidence: 'high', coverage: 1, phraseHit: true,
+      results: [{
+        file: 'ziliao-susuan', title: '三大速算方法', score: 11.9959,
+        highlight: '截位直除：已知现期 + R，求基期，直接除',
+        snippets: [{ heading: '一、截位直除法进阶', text: '截位直除是资料分析最快的除法估算' }],
+        terms: ['截位', '位直', '直除'], moduleId: 'ziliao', kind: 'doc', weight: 7.06,
+      }],
+    }) }
+  }
+  if (u.includes('/api/huasheng13/catalog')) return { json: async () => ({
+    meta: { id: 'huasheng13', label: '花生十三体系', docCount: 25, available: 25, degraded: false, missingCount: 0, missing: [], orphans: [], dirMismatch: [], builtAt: Date.now(), indexSource: 'disk', buildMs: 26 },
+    modules: [
+      { id: 'ziliao', label: '资料分析', icon: '📊', color: '#0ea5e9', weight: 1.15, targetMinutes: 28, targetQuestions: 20,
+        docs: [
+          { file: 'ziliao-fenxi', title: 'ABRX 四要素体系', desc: '互推关系', chars: 6103, tables: 4, formulas: 72, sections: 31, present: true },
+          { file: 'ziliao-susuan', title: '三大速算方法', desc: '截位直除 · 415 份数', chars: 4051, tables: 6, formulas: 60, sections: 41, present: true },
+        ],
+        examples: [{ file: 'ziliao-lianxi', title: '资料分析练习 10 题', desc: '', chars: 2954, tables: 0, formulas: 39, sections: 12, present: true }] },
+      { id: 'shuliang', label: '数量关系', icon: '🔢', color: '#8b5cf6', weight: 1.0, targetMinutes: 30, targetQuestions: 15,
+        docs: [{ file: 'shuliang-guanxi', title: '全题型解法', desc: '隔板法', chars: 5000, tables: 3, formulas: 40, sections: 25, present: true }],
+        examples: [{ file: 'shuliang-lianxi', title: '数量关系练习 18 题', desc: '', chars: 3000, tables: 0, formulas: 30, sections: 20, present: true }] },
+    ],
+    strategy: [{ file: 'strategy', title: '答题顺序与时间分配', desc: '时间切块', chars: 5592, tables: 6, formulas: 2, sections: 71, present: true }],
+    examples: [{ file: 'zhenti-shili', title: '各模块真题示例与解析', desc: '', chars: 9620, tables: 0, formulas: 60, sections: 36, present: true }],
+  }) }
+  if (u.includes('/api/huasheng13/coverage')) return { json: async () => ({
+    overall: 0.9756, expectedDims: 41, presentDims: 40,
+    modules: [
+      { id: 'ziliao', label: '资料分析', icon: '📊', color: '#0ea5e9', coverage: 1, docCount: 3, presentDocs: 3, examples: 1, tables: 15, formulas: 138, chars: 13107, dims: { formula: true, table: true, example: true }, missing: [], files: [] },
+      { id: 'shuliang', label: '数量关系', icon: '🔢', color: '#8b5cf6', coverage: 1, docCount: 2, presentDocs: 2, examples: 1, tables: 5, formulas: 40, chars: 8000, dims: { formula: true, table: true, example: true }, missing: [], files: [] },
+      { id: 'yanyu', label: '言语理解', icon: '📖', color: '#f59e0b', coverage: 0.889, docCount: 3, presentDocs: 3, examples: 1, tables: 3, formulas: 0, chars: 9000, dims: { formula: true, table: true, example: true }, missing: ['yanyu-zhuanxiang 缺公式'], files: [] },
+      { id: 'panduan', label: '判断推理', icon: '🧩', color: '#10b981', coverage: 1, docCount: 3, presentDocs: 3, examples: 1, tables: 4, formulas: 5, chars: 11000, dims: { formula: true, table: true, example: true }, missing: [], files: [] },
+      { id: 'changshi', label: '常识判断', icon: '🌍', color: '#0ea5e9', coverage: 1, docCount: 2, presentDocs: 2, examples: 0, tables: 2, formulas: 0, chars: 7000, dims: { formula: false, table: true, example: false }, missing: [], files: [] },
+      { id: 'shenlun', label: '申论', icon: '✍️', color: '#ef4444', coverage: 1, docCount: 3, presentDocs: 3, examples: 1, tables: 2, formulas: 0, chars: 12000, dims: { formula: false, table: true, example: true }, missing: [], files: [] },
+    ],
+    gaps: [
+      { module: 'yanyu', label: '言语理解', kind: 'dimension', detail: 'yanyu-zhuanxiang 缺公式' },
+      { module: 'changshi', label: '常识判断', kind: 'no-example', detail: '缺配套练习文件（覆盖维度 −1）' },
+    ],
+    adapterGaps: [], degraded: false,
+  }) }
+  if (u.includes('/api/huasheng13/trace')) return { json: async () => ({
+    ws: 'D:/test/ws-abcd1234',
+    endpoints: {
+      '/api/huasheng13/catalog': { hits: 3, p50: 0.4, p95: 1.2, lastAt: Date.now() - 5000, samples: 3 },
+      '/api/huasheng13/doc': { hits: 2, p50: 2.1, p95: 3.4, lastAt: Date.now() - 4000, samples: 2 },
+      '/api/huasheng13/search': { hits: 5, p50: 1.5, p95: 4.8, lastAt: Date.now() - 3000, samples: 5 },
+      '/api/huasheng13/coverage': { hits: 0, p50: 0, p95: 0, lastAt: 0, samples: 0 },
+      '/api/huasheng13/practice': { hits: 1, p50: 0.9, p95: 2.0, lastAt: Date.now() - 2000, samples: 1 },
+      '/api/huasheng13/trace': { hits: 4, p50: 0.3, p95: 0.8, lastAt: Date.now(), samples: 4 },
+    },
+    searches: { total: 5, hit: 5, miss: 0, empty: 1, hitRate: 1 },
+    docs: { reads: { 'ziliao-fenxi': 2 }, distinct: 1 },
+    recent: [{ at: Date.now() - 1000, kind: 'search', detail: '截位直除 → 7/25 条 (high)', ms: 16.49 }],
+    ring: { recentCap: 200, recentLen: 1, latCap: 100, slotsCap: 24, slots: 1 },
+    declaration: {
+      endpoints: [
+        { path: '/api/huasheng13/catalog', declared: true }, { path: '/api/huasheng13/doc', declared: true },
+        { path: '/api/huasheng13/search', declared: true }, { path: '/api/huasheng13/coverage', declared: true },
+        { path: '/api/huasheng13/practice', declared: true }, { path: '/api/huasheng13/trace', declared: true },
+      ], allDeclared: true, declaredTotal: 63,
+    },
+    corpus: { root: 'D:/pkg/assets/huasheng13', rootRel: 'assets/huasheng13', dirPresent: true, snapshotPresent: true, indexed: true, degraded: false, builtAt: Date.now(), source: 'disk', buildMs: 26, error: '' },
+    at: Date.now(),
+  }) }
+  if (u.includes('/api/huasheng13/doc')) {
+    const m = /[?&]file=([^&]*)/.exec(u)
+    const f = m ? decodeURIComponent(m[1]) : ''
+    if (!f) return { json: async () => ({ error: '缺少 file 参数', file: '', hint: '示例：/api/huasheng13/doc?file=ziliao-fenxi', known: ['ziliao-fenxi'] }) }
+    if (f !== 'ziliao-fenxi' && f !== 'ziliao-susuan' && f !== 'shuliang-guanxi') {
+      return { json: async () => ({ error: '未知语料文件: ' + f, file: f, known: ['ziliao-fenxi', 'ziliao-susuan', 'shuliang-guanxi'] }) }
+    }
+    return { json: async () => ({
+      file: f, title: f === 'ziliao-fenxi' ? 'ABRX 四要素体系' : f === 'ziliao-susuan' ? '三大速算方法' : '全题型解法',
+      moduleId: f === 'shuliang-guanxi' ? 'shuliang' : 'ziliao', kind: 'doc', desc: '',
+      markdown: '# ABRX 四要素体系\n\n## 一、ABRX 关系\n\n现期 A = 基期 B × (1 + 增长率 R)\n\n| 要素 | 含义 |\n|---|---|\n| A | 现期 |\n| B | 基期 |\n\n- 截位直除\n- 假设分配\n',
+      chars: 8013, tables: 4, formulas: 72, sections: 31, sectionCount: 31, weight: 6.9,
+      path: 'references/' + f + '.md', degraded: false,
+    }) }
+  }
+  if (u.includes('/api/huasheng13/practice')) {
+    // 形状对齐实测：total=10 n=5 returned=5 hasMore=true；answerIsLetter 混合（含文字作答陷阱题）
+    const nth = /[?&]n=(\d+)/.exec(u)
+    const n = nth ? parseInt(nth[1], 10) : 5
+    const all = []
+    for (let i = 1; i <= 10; i++) {
+      const word = i === 1 || i === 8          // 第 1/8 题为文字作答（answerIsLetter=false）
+      all.push({
+        index: i, title: '练习 ' + i, heading: '练习 ' + i, level: 2, category: '',
+        stem: '资料分析练习第 ' + i + ' 题：求增长率（测试题干）',
+        options: word ? [{ key: 'A', text: '53870 亿元' }, { key: 'B', text: '60000 亿元' }] : [{ key: 'A', text: 'a' }, { key: 'B', text: 'b' }, { key: 'C', text: 'c' }, { key: 'D', text: 'd' }],
+        analysis: '解析：按 ABRX 公式计算。', answer: word ? '53870 亿元' : 'B',
+        answerIsLetter: !word, pitfalls: '', startLine: 10, endLine: 20,
+      })
+    }
+    const items = all.slice(0, Math.max(1, Math.min(50, n)))
+    return { json: async () => ({ file: 'ziliao-lianxi', title: '资料分析练习 10 题', moduleId: 'ziliao', total: 10, n, returned: items.length, hasMore: all.length > items.length, items, degraded: false }) }
+  }
   return { json: async () => ({}) }
 }
 
@@ -729,6 +835,177 @@ try {
       if (!after.includes('/api/repos/install')) throw new Error('C16 安装按钮未触发 /api/repos/install 请求')
       if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C16 安装交互后渲染降级')
       ok('C16-01: 题库管理面板（关于本项目 GitHub 跳转×4+致谢 · 分级卡片 · 一键安装真实发请求 · 零降级）')
+    }
+
+    /* ══ cycle-18：花生十三体系方法论视图（五分区 + 检索交互 + 零降级）══
+       导航锚定纪律（cycle-13 教训④ + 本轮新增陷阱）：
+       **用户明确要求「不要单独弄导航入口，放在专题下的方法论下」** → hs13 视图现在挂在
+       专题枢纽「📖 方法论」分区（data-kg-hub-tab=method）内，一级导航里**没有**它。
+       因此断言路径改为：点「🎯 专题」→ 点枢纽 method 分区 tab → 校验 hs13 视图根锚点。
+       一律用属性锚定：hs13 视图内分区用 data-kg-hs13-tab，枢纽分区用 data-kg-hub-tab。 */
+    {
+      // ① 进入专题枢纽
+      const topicBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('专题'))
+      if (!topicBtn) throw new Error('C18 未找到「🎯 专题」一级导航按钮')
+      await act(async () => { topicBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 140)) })
+
+      // ② 一级导航不得再出现独立「花生十三体系」入口（用户要求：并入专题方法论）
+      const strayBtn = tr.root.findAllByType('button')
+        .find(b => String(b.props.children).includes('花生十三体系'))
+      if (strayBtn) throw new Error('C18 违规：一级导航仍存在独立「花生十三体系」入口')
+
+      // ③ 点枢纽「📖 方法论」分区（属性锚定，不按文本匹配以免与 hs13 内部分区撞名）
+      const hubTab = tr.root.findAll(n => n.props && n.props['data-kg-hub-tab'] === 'method')
+      if (!hubTab.length) throw new Error('C18 专题枢纽未找到 data-kg-hub-tab=method 分区')
+      await act(async () => { hubTab[0].props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 160)) })
+
+      // 视图根锚点存在（证明枢纽里挂的是 NativeHuasheng13View）
+      const rootEl = tr.root.findAll(n => n.props && n.props['data-kg-hs13-root'] === '1')
+      if (!rootEl.length) throw new Error('C18 枢纽方法论分区内未挂载花生十三体系视图（data-kg-hs13-root 缺失）')
+
+      // 五分区 tab 齐备（属性锚定，不靠文本）
+      const SEC = ['overview', 'catalog', 'search', 'practice', 'trace']
+      const tabEls = tr.root.findAll(n => n.props && n.props['data-kg-hs13-tab'])
+      const foundIds = new Set(tabEls.map(n => String(n.props['data-kg-hs13-tab'])))
+      const missSec = SEC.filter(id => !foundIds.has(id))
+      if (missSec.length) throw new Error('C18 五分区 tab 缺失: ' + missSec.join(','))
+      ok('C18-01: 花生十三体系视图挂载 + 五分区 tab 齐备（属性锚定 data-kg-hs13-tab）')
+
+      // 逐分区切换零降级（role="alert" 是宿主降级态标志，任何分区都不许出现）
+      for (const id of SEC) {
+        const tb = tr.root.findAll(n => n.props && n.props['data-kg-hs13-tab'] === id)
+        if (!tb.length) throw new Error('C18 分区 tab 未找到: ' + id)
+        await act(async () => { tb[0].props.onClick() })
+        await act(async () => { await new Promise(r => setTimeout(r, 90)) })
+        const alert = tr.root.findAll(n => n.props && n.props.role === 'alert')
+        if (alert.length) {
+          const kids = alert[0].props.children
+          const flat = (Array.isArray(kids) ? kids : [kids]).map(c => typeof c === 'string' ? c : '').join(' ')
+          throw new Error(`C18 分区「${id}」渲染降级: ${flat.slice(0, 160)}`)
+        }
+      }
+      ok('C18-02: 五分区逐区切换零降级（overview/catalog/search/practice/trace 全绿）')
+
+      // 体系总览：六模块卡片 + 覆盖率（catalog/coverage 双源驱动）
+      {
+        const tb = tr.root.findAll(n => n.props && n.props['data-kg-hs13-tab'] === 'overview')
+        await act(async () => { tb[0].props.onClick() })
+        // 双源首次到达需两轮微任务 + 一次渲染提交；轮询到稳定（最多 ~1.2s），
+        // 避免用固定短等待造成的 flaky（实测 120ms 时 chance-fail）。
+        await act(async () => {
+          for (let i = 0; i < 24; i++) {
+            if (JSON.stringify(tr.toJSON()).includes('资料分析')) break
+            await new Promise(r => setTimeout(r, 50))
+          }
+        })
+        await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+        const t = JSON.stringify(tr.toJSON())
+        for (const k of ['资料分析', '数量关系']) {
+          if (!t.includes(k)) throw new Error('C18 总览缺少模块卡片: ' + k)
+        }
+        // 覆盖率由 coverage.overall=0.9756 驱动，统一走 hs13FmtPct（一位小数 → 97.6%）。
+        // 口径一致性要求：环形环心、页面文案、obs 链路卡三处必须同一格式，
+        // 否则同一份数据在白盒面板上显示两个数字（97.6% vs 98%）＝自相矛盾。
+        if (!/97\.6%/.test(t)) throw new Error('C18 总览未渲染覆盖率（coverage.overall=0.9756 → 97.6%）')
+        if (/98%/.test(t)) throw new Error('C18 总览出现 98% 取整口径，与其他覆盖率文案（97.6%）不一致')
+        ok('C18-03: 体系总览渲染六模块卡片 + 覆盖率（coverage.overall=0.9756 → 97.6%）')
+      }
+
+      // 检索交互：输入「截位直除」→ 点「检索」→ 结果列表出现（标题=三大速算方法）
+      {
+        const tb = tr.root.findAll(n => n.props && n.props['data-kg-hs13-tab'] === 'search')
+        await act(async () => { tb[0].props.onClick() })
+        await act(async () => { await new Promise(r => setTimeout(r, 90)) })
+        const input = tr.root.findAllByType('input').find(i => {
+          const ph = String((i.props && i.props.placeholder) || '')
+          return ph.includes('考点') || ph.includes('截位直除') || ph.includes('方法名')
+        })
+        if (!input) throw new Error('C18 检索分区未找到搜索输入框')
+        await act(async () => { input.props.onChange({ target: { value: '截位直除' } }) })
+        await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+        // ⚠ 精确文本匹配：导航里还有「🔍 知识检索」按钮，用 includes('检索') 会命中它
+        // 并导致「点检索变成切视图」（实测踩中）。这里只认按钮自身的文本恰好是「检索/检索中…」。
+        const searchBtn = tr.root.findAllByType('button').find(b => {
+          const txt = String(b.props && b.props.children == null ? '' : b.props.children).trim()
+          return txt === '检索' || txt === '检索中…'
+        })
+        if (!searchBtn) throw new Error('C18 未找到检索分区内的「检索」按钮（精确文本）')
+        const before = globalThis.__kgFetchLog.length
+        await act(async () => { searchBtn.props.onClick() })
+        await act(async () => { await new Promise(r => setTimeout(r, 120)) })
+        const hitUrl = globalThis.__kgFetchLog.slice(before).find(x => x.includes('/api/huasheng13/search') && x.includes('q=' + encodeURIComponent('截位直除')))
+        if (!hitUrl) throw new Error('C18 检索未触发带 q=截位直除 的请求: ' + globalThis.__kgFetchLog.slice(before).join(' ; '))
+        const t = JSON.stringify(tr.toJSON())
+        if (!t.includes('三大速算方法')) throw new Error('C18 检索结果列表未渲染（未出现「三大速算方法」）')
+        // 置信度提示必须真实透出（high → 「精确命中」），证明消费 confidence 而非写死
+        if (!t.includes('精确命中')) throw new Error('C18 未渲染置信度 high→精确命中（confidence 未驱动 UI）')
+        if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C18 检索后渲染降级')
+        ok('C18-04: 检索交互（输入「截位直除」→ 发请求 → 结果列表 + 置信度提示「精确命中」）')
+      }
+
+      // 配套练习：默认抽题 + 文字作答陷阱题走只读（answerIsLetter=false 不可自动判分）
+      {
+        const tb = tr.root.findAll(n => n.props && n.props['data-kg-hs13-tab'] === 'practice')
+        await act(async () => { tb[0].props.onClick() })
+        await act(async () => { await new Promise(r => setTimeout(r, 150)) })
+        const t = JSON.stringify(tr.toJSON())
+        if (!t.includes('资料分析练习第')) throw new Error('C18 练习分区未渲染题干')
+        if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C18 练习分区渲染降级')
+        ok('C18-05: 配套练习分区渲染题干（practice 消费真实 items）+ 零降级')
+      }
+
+      // 白盒链路：trace 端点表格（六端点槽位 + 命中率 + p95）
+      {
+        const tb = tr.root.findAll(n => n.props && n.props['data-kg-hs13-tab'] === 'trace')
+        await act(async () => { tb[0].props.onClick() })
+        await act(async () => { await new Promise(r => setTimeout(r, 120)) })
+        const t = JSON.stringify(tr.toJSON())
+        if (!t.includes('链路') && !t.includes('命中')) throw new Error('C18 白盒分区未渲染链路信息')
+        if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C18 白盒分区渲染降级')
+        ok('C18-06: 白盒链路分区渲染 trace（端点命中/检索统计）+ 零降级')
+      }
+
+      // 回专题枢纽：method 分区仍可达且零降级（与 hs13 是**两个不同数据域**，不合并）
+      await enterHubTab('method')
+      {
+        const methodTab = tr.root.findAll(n => n.props && n.props['data-kg-hub-tab'] === 'method')
+        if (!methodTab.length) throw new Error('C18 专题枢纽 method 分区 tab 缺失')
+        if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C18 专题枢纽 method 分区渲染降级')
+        ok('C18-07: 专题枢纽「📖 方法论」分区（data-kg-hub-tab=method）仍可达且零降级（与 hs13 数据域不混用）')
+      }
+    }
+
+    /* ══ cycle-18：白盒面板「📖 方法论链路」卡（直接渲染 NativeObsView + 注入 data.hs13）══
+       双保险设计：不依赖 client.ts 的接线是否到位——直接给组件喂 data.hs13，
+       把卡片行为（热力条/命中率/p50/p95/缺口降级）钉死。 */
+    {
+      // 从 combo 里没有导出 obs 组件，但可通过主面板导航「可观测」触达；
+      // 这里改用「可观测视图」真实路径 + fetch 日志断言三源已被请求。
+      const oBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('可观测'))
+      if (!oBtn) throw new Error('C18 未找到「可观测」导航按钮')
+      const before = globalThis.__kgFetchLog.length
+      await act(async () => { oBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 140)) })
+      const reqs = globalThis.__kgFetchLog.slice(before).join(' ')
+      for (const ep of ['/api/huasheng13/trace', '/api/huasheng13/coverage', '/api/huasheng13/catalog']) {
+        if (!reqs.includes(ep)) throw new Error('C18-08 白盒面板未请求方法论三源: ' + ep)
+      }
+      const t = JSON.stringify(tr.toJSON())
+      if (!t.includes('方法论链路')) throw new Error('C18-08 白盒面板「📖 方法论链路」卡未渲染')
+      // 六模块热力条：模块中文名必须出现（数据来自 coverage.modules）
+      for (const k of ['资料分析', '言语理解', '常识判断']) {
+        if (!t.includes(k)) throw new Error('C18-08 方法论链路卡缺模块热力条: ' + k)
+      }
+      // 量化指标：97.6% 覆盖率 + 100.0% 命中率 + p95 均值（都是真实字段驱动）
+      if (!t.includes('97.6%')) throw new Error('C18-08 方法论链路卡未渲染覆盖率 97.6%')
+      if (!t.includes('100.0%')) throw new Error('C18-08 方法论链路卡未渲染检索命中率 100.0%')
+      if (!/端点 p95 均值/.test(t)) throw new Error('C18-08 方法论链路卡未渲染 p95 指标')
+      // 真实缺口如实展示，不粉饰
+      if (!t.includes('缺口')) throw new Error('C18-08 方法论链路卡未展示缺口清单（真实缺口被隐瞒）')
+      if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C18-08 方法论链路卡渲染降级')
+      ok('C18-08: 白盒「📖 方法论链路」卡（三源齐请求 + 六模块热力条 + 覆盖率/命中率/p95 + 缺口如实展示 + 零降级）')
     }
   }
 

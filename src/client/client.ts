@@ -29,6 +29,8 @@ import { NativeExamView, NativePapersView, NativeTopicsView, NativeEssayView } f
 import { NativeGraphView } from './graph-view.js'
 import { NativeObsView } from './obs-view.js'
 import { NativeReposView } from './repos-view.js'
+// cycle-18 花生十三体系方法论（消费 /api/huasheng13/*，自管数据视图）
+import { NativeHuasheng13View } from './huasheng13-view.js'
 
 ;(window as any).__ModuleLoader__.load({
   id: 'dsh-kaogong',
@@ -119,7 +121,7 @@ import { NativeReposView } from './repos-view.js'
       React.useEffect(() => {
         if (!channel) return
         // v1.6：自管数据视图（papers/topics/essay）由子组件自行 fetch，父不介入
-        if (view === 'papers' || view === 'topics' || view === 'essay' || view === 'exam' || view === 'practice' || view === 'deepbank' || view === 'tuxing' || view === 'repos') { setData(null); return }
+        if (view === 'papers' || view === 'topics' || view === 'essay' || view === 'exam' || view === 'practice' || view === 'deepbank' || view === 'tuxing' || view === 'repos' || view === 'huasheng13') { setData(null); return }
         let cancelled = false
         setErr(null)
         ;(async () => {
@@ -156,11 +158,30 @@ import { NativeReposView } from './repos-view.js'
                 api('/lifecycle').catch(() => null),
                 api('/workspaces').catch(() => null),
               ])
+              /**
+               * cycle-18：方法论链路三源，**必须与上面那组分开 await**——
+               * 合并成一个 Promise.all 会让目录树（首次调用可能触发索引构建）拖慢
+               * 整个白盒面板首屏；分开则各卡片独立到达、互不等待。
+               *
+               * 为什么不交给 obs-view 自己 fetch：obs 卡拿不到 api 闭包里的 channel.base
+               * 与 wsKey，自取只能落 default 命名空间 → 把「default 的检索命中率」当成
+               * 当前工作区展示，正是 cycle-17 ㉙ 跨项目污染事故的同族错误。故由父层带
+               * ?ws= 取好再透传。
+               * 每个请求都 .catch(()=>null)：方法论链路故障绝不能让 obs 面板整体降级。
+               */
+              const [hs13Trace, hs13Coverage, hs13Catalog] = await Promise.all([
+                api('/huasheng13/trace').catch(() => null),
+                api('/huasheng13/coverage').catch(() => null),
+                api('/huasheng13/catalog').catch(() => null),
+              ])
               if (!cancelled) setData({
                 kind: 'obs', tel, caps,
                 life: life || (caps && caps.lifecycle) || null,
                 workspaces: (wss && wss.workspaces) || [],
                 insight: { essay: eh, exam: xh },
+                // cycle-18 方法论消费链路：obs-view 的「📖 方法论链路」卡只读这里
+                // （形状固定 { trace, coverage, catalog }；任一为 null 即该块卡片级降级）
+                hs13: { trace: hs13Trace, coverage: hs13Coverage, catalog: hs13Catalog },
               })
             }
           } catch (e) { if (!cancelled) setErr(String((e && e.message) || e)) }
@@ -177,6 +198,9 @@ import { NativeReposView } from './repos-view.js'
       // cycle-13 导航精简（用户明确要求）：移除「刷题 / 深度题库 / 图形推理 / 申论」四个一级入口，
       // 这四项全部收敛进「专题」页的练习枢纽分区（papers-view.ts NativeTopicsView）；
       // 路由可达性保留：setView('practice'/'deepbank'/'tuxing'/'essay') 仍有效（下方视图分发未删）。
+      // cycle-18：花生十三体系同理不外挂一级入口（用户明确要求「不要单独弄导航入口，
+      // 放在专题下的方法论下即可」）——它的入口在专题枢纽「📖 方法论」分区内；
+      // view==='huasheng13' 的分发保留，用于深链与枢纽内跳转。
       const NAV_GROUPS: Array<{ id: string; label: string; items: Array<[string, string]> }> = [
         { id: 'learn', label: '学习', items: [['dashboard', '📊 仪表盘'], ['exam', '⏱ 模考']] },
         { id: 'bank', label: '题库', items: [['papers', '📚 真题卷'], ['topics', '🎯 专题']] },
@@ -207,10 +231,11 @@ import { NativeReposView } from './repos-view.js'
           view === 'deepbank' ? h(NativeDeepBankView, { key: 'dp' + tick, api, initialModule: viewParams.module || '', initialCategory: viewParams.category || '' }) : null,
           view === 'tuxing' ? h(NativeTuxingView, { key: 'tx' + tick, api }) : null,
           view === 'repos' ? h(NativeReposView, { key: 'rp' + tick, api }) : null,
+          view === 'huasheng13' ? h(NativeHuasheng13View, { key: 'hs13' + tick, api, initialSection: viewParams.section || '' }) : null,
           view === 'topics' ? h(NativeTopicsView, { key: 'tp' + tick, api, onGo: (v, params) => setView(v, params || {}), initialModule: viewParams.module || '' }) : null,
           view === 'essay' ? h(NativeEssayView, { key: 'es' + tick + JSON.stringify(viewParams), api, initialType: viewParams.type || '' }) : null,
           // 父 effect 管理数据的视图
-          view !== 'papers' && view !== 'topics' && view !== 'essay' && view !== 'exam' && view !== 'practice' && view !== 'deepbank' && view !== 'tuxing' && view !== 'repos' && !data && !err ? h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' })) : null,
+          view !== 'papers' && view !== 'topics' && view !== 'essay' && view !== 'exam' && view !== 'practice' && view !== 'deepbank' && view !== 'tuxing' && view !== 'repos' && view !== 'huasheng13' && !data && !err ? h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' })) : null,
           // R9：子视图经组件挂载，key=view+tick → 切换即干净重挂载，父 hook 链恒定
           data && data.kind === 'dashboard' ? h(NativeDashboardView, { key: 'd' + tick, data }) : null,
           data && data.kind === 'wrongbook' ? h(NativeWrongbookView, { key: 'w' + tick, data: data.wb }) : null,

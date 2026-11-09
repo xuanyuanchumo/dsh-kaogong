@@ -528,6 +528,139 @@ function ObsLifeRing(props: any) {
     h('span', { style: { fontSize: 10, color: '#64748b' } }, done + '/' + total + ' 阶段'))
 }
 
+/* ═══ cycle-18 方法论链路卡（消费 /api/huasheng13/* 三源；无 hook、纯渲染） ═══
+   数据形状由 client.ts 的 obs 分支透传：data.hs13 = { trace, coverage, catalog }，
+   三者**各自可独立为 null**（父层每个请求单独 .catch）→ 本卡按块级降级，
+   任一缺失只让对应子块显示「未就绪」，绝不整卡消失、绝不 role="alert"。
+
+   为什么不在本组件内自己 fetch：obs-view 拿不到 api 闭包里的 channel.base 与 wsKey，
+   自取只能落 default 命名空间 → 会把「default 的检索命中率」当成当前工作区展示，
+   正是 cycle-17 ㉙ 跨项目污染事故的同族错误（见 client.ts L166-170 注释）。
+   ⚠ 顶层命名一律 Obs13* 前缀（combo 单作用域，教训⑨）。 */
+
+/** 覆盖率热力条配色：绿≥95% / 琥珀≥85% / 橙≥60% / 红<60%（与全站 SLO 语义一致） */
+const OBS13_HEAT = (cov: any): string => {
+  const v = typeof cov === 'number' && isFinite(cov) ? cov : 0
+  return v >= 0.95 ? '#10b981' : v >= 0.85 ? '#f59e0b' : v >= 0.6 ? '#f97316' : '#ef4444'
+}
+
+/** 数值兜底（接口字段全部可选，绝不把 NaN 带进 style） */
+const obs13Num = (v: any): number => {
+  const n = typeof v === 'number' ? v : parseFloat(String(v == null ? '' : v))
+  return isFinite(n) ? n : 0
+}
+
+/** 覆盖率百分比文案：0.9756 → 97.6% */
+const obs13Pct = (v: any): string => (obs13Num(v) * 100).toFixed(1) + '%'
+
+/** 毫秒文案：保留 1 位小数，0 → '0.0' */
+const obs13Ms = (v: any): string => obs13Num(v).toFixed(1)
+
+/** 六模块覆盖率热力条：横排等宽格，色阶取 OBS13_HEAT，缺失模块显示灰色占位 */
+function Obs13HeatBar(props: any) {
+  const mods: any[] = Array.isArray(props && props.modules) ? props.modules : []
+  // 六模块契约（顺序固定，避免接口少给模块时布局塌陷）
+  const IDS = ['ziliao', 'shuliang', 'yanyu', 'panduan', 'changshi', 'shenlun']
+  const byId = new Map<string, any>()
+  for (const m of mods) if (m && m.id) byId.set(String(m.id), m)
+  return h('div', { style: { display: 'flex', gap: 5, flexWrap: 'wrap' } },
+    IDS.map(id => {
+      const m = byId.get(id) || null
+      const cov = m ? obs13Num(m.coverage) : 0
+      const col = m ? OBS13_HEAT(cov) : '#cbd5e1'
+      return h('div', {
+        key: 'obs13h' + id,
+        title: m ? `${m.label || id}：覆盖 ${obs13Pct(cov)}（文档 ${obs13Num(m.docCount)} 篇）` : `${id}：覆盖数据未就绪`,
+        style: {
+          flex: '1 1 72px', minWidth: 64, borderRadius: 8, padding: '6px 7px',
+          background: 'color-mix(in srgb, ' + col + ' 14%, transparent)',
+          border: '1px solid color-mix(in srgb, ' + col + ' 38%, transparent)',
+        },
+      },
+      h('div', { style: { fontSize: 10, color: '#475569', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
+        String((m && m.label) || id)),
+      h('div', { style: { height: 5, background: 'rgba(148,163,184,.25)', borderRadius: 3, overflow: 'hidden', marginTop: 4 } },
+        h('i', { style: { display: 'block', height: '100%', width: Math.round(Math.max(0, Math.min(1, cov)) * 100) + '%', background: col, borderRadius: 3 } })),
+      h('div', { style: { fontSize: 10, color: col, fontWeight: 800, marginTop: 3 } }, m ? obs13Pct(cov) : '—'))
+    }))
+}
+
+/** 顶部三枚量化指标（覆盖率 / 检索命中率 / p95）——缺失即 '—'，不臆造 0 值 */
+function Obs13Stat(props: any) {
+  return h('div', {
+    style: {
+      background: 'var(--surface-card,#fff)', borderRadius: 10, padding: '9px 11px',
+      border: '1px solid rgba(148,163,184,.18)', minWidth: 78,
+    },
+  },
+  h('div', { style: { fontSize: 17, fontWeight: 800, color: props.color || 'var(--text-primary,#0f172a)', lineHeight: 1.2 } },
+    props.v == null ? '—' : props.v),
+  h('div', { style: { fontSize: 10, color: '#64748b', marginTop: 2 } }, props.l))
+}
+
+/**
+ * 「📖 方法论链路」卡：六模块覆盖热力条 + 检索命中率 + 端点 p50/p95。
+ * @param props.hs13 { trace, coverage, catalog } —— 三者可各自为 null
+ */
+function ObsMethodologyCard(props: any) {
+  const hs: any = (props && props.hs13) || {}
+  const trace: any = hs.trace || null
+  const covRaw: any = hs.coverage || null
+  const cat: any = hs.catalog || null
+
+  const mods: any[] = covRaw && Array.isArray(covRaw.modules) ? covRaw.modules : []
+  const overall = covRaw && typeof covRaw.overall === 'number' ? covRaw.overall : null
+  const s: any = (trace && trace.searches) || null
+  const hitRate = s && typeof s.hitRate === 'number' ? s.hitRate : null
+  const eps: any = (trace && trace.endpoints) || {}
+  // 方法论域平均 p50/p95：只统计「真实被调用过」的端点（hits>0），否则 0 值会把均值拉平到失真
+  const called = Object.keys(eps).map(k => eps[k]).filter(e => e && (e.hits || 0) > 0)
+  const avg = (pick: string): number | null => called.length
+    ? called.reduce((acc, e) => acc + obs13Num(e[pick]), 0) / called.length
+    : null
+  const p50 = avg('p50'), p95 = avg('p95')
+  const docCount = cat && cat.meta && typeof cat.meta.docCount === 'number' ? cat.meta.docCount : null
+  const avail = cat && cat.meta && typeof cat.meta.available === 'number' ? cat.meta.available : null
+  const degraded = !!(cat && cat.meta && cat.meta.degraded)
+
+  // 三块独立降级提示（各自只影响自己那行）
+  const miss = (what: string) => h('div', { style: { fontSize: 11, color: '#94a3b8', padding: '6px 0' } },
+    what + '未就绪（/api/huasheng13/' + (what === '覆盖矩阵' ? 'coverage' : what === '链路追踪' ? 'trace' : 'catalog') + ' 未返回）—— 服务可用，仅该块降级')
+
+  return h('div', { style: OBS_GLASS },
+    h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 } },
+      h('div', { style: { fontWeight: 800, fontSize: 13.5 } }, '📖 方法论链路'),
+      h('span', { style: { ...G_TAG, fontSize: 10 } }, '消费端 /api/huasheng13/*'),
+      docCount != null
+        ? h('span', { style: { ...G_TAG, fontSize: 10 } }, `语料 ${avail == null ? docCount : avail}/${docCount} 篇`)
+        : null,
+      degraded ? h('span', { style: { ...G_TAG, fontSize: 10, background: 'rgba(245,158,11,.16)', color: '#b45309' } }, '语料降级') : null),
+
+    // ① 量化三指标
+    h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 11 } },
+      h(Obs13Stat, { v: overall == null ? null : obs13Pct(overall), l: '六模块覆盖率', color: overall == null ? undefined : OBS13_HEAT(overall) }),
+      h(Obs13Stat, { v: hitRate == null ? null : obs13Pct(hitRate), l: '检索命中率', color: hitRate == null ? undefined : OBS13_HEAT(hitRate) }),
+      h(Obs13Stat, { v: p95 == null ? null : obs13Ms(p95) + 'ms', l: '端点 p95 均值' }),
+      h(Obs13Stat, { v: p50 == null ? null : obs13Ms(p50) + 'ms', l: '端点 p50 均值' }),
+      h(Obs13Stat, { v: s ? String(obs13Num(s.total)) : null, l: '检索次数' })),
+
+    // ② 六模块覆盖率热力条
+    mods.length
+      ? Obs13HeatBar({ modules: mods })
+      : miss('覆盖矩阵'),
+
+    // ③ 口径说明 + 缺口清单（真实缺口如实展示，不粉饰）
+    (covRaw && Array.isArray(covRaw.gaps) && covRaw.gaps.length)
+      ? h('div', { style: { fontSize: 10.5, color: '#b45309', marginTop: 8, lineHeight: 1.7 } },
+          '缺口 ' + covRaw.gaps.length + ' 项：' +
+          covRaw.gaps.slice(0, 3).map((g: any) => String(g.label || g.module) + '·' + String(g.detail || '')).join('；'))
+      : null,
+    !mods.length && !trace ? h('div', {}, miss('链路追踪')) : null,
+    h('div', { style: { fontSize: 10, color: '#94a3b8', marginTop: 8, lineHeight: 1.7 } },
+      '覆盖率 = presentDims / expectedDims（常识/申论不考公式，不把不考公式的模块判缺失）· ' +
+      '命中率 = hit/total（空查询不进分母）· p50/p95 仅统计真实被调用过的端点。'))
+}
+
 /** ③ 吞吐×延迟四象限散点（无 hook；rows=NativeObsView 对账行，按 path 字典序确定性渲染） */
 function ObsScatter(props: any) {
   const rows: any[] = Array.isArray(props && props.rows) ? props.rows : []
@@ -848,6 +981,9 @@ export function NativeObsView(props) {
                     e.pid ? h('span', null, 'pid ' + e.pid) : null)))
               : null)
         : h('div', { style: { fontSize: 12, color: '#94a3b8' } }, '生命周期端点未就绪（/api/lifecycle 未返回 stages）—— 服务可用，仅该卡片降级')),
+
+    /* ── C2 cycle-18 方法论链路（六模块覆盖热力条 + 检索命中率 + p50/p95） ── */
+    h(ObsMethodologyCard, { hs13: (data && data.hs13) || null }),
 
     /* ── D 能力对账 + E 端点性能表（共用一张表，一屏看全；W2c 三态灯列） ── */
     h(ObsGlassCard, { title: '🧩 能力对账 × 端点性能（注册 → 生产 → 消费）', accent: '#6366f1' },

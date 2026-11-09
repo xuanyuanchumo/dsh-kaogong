@@ -123,7 +123,17 @@ check('端点覆盖统计', typeof tel.coverage === 'number')
 
 // ── 9. 能力矩阵与命名空间 ──
 const caps = await J(`${B}/api/capabilities`)
-check('能力矩阵 5 工具', caps.tools?.length === 5, `${caps.tools?.length}`)
+// cycle-18 新增 kaogong_ai_method（内置花生十三体系接进模型增强链路）→ 基础 5 + 1 = 6。
+// 断言改为「计数 ≡ 名称去重后集合大小」+ 关键工具在场，既守住不重复登记，也不因合法新增而假红。
+{
+  const toolNames = (caps.tools || []).map(t => t && t.name)
+  check('能力矩阵工具计数自洽（6 个且名称唯一，含 cycle-18 方法论检索工具）',
+    toolNames.length === 6 && new Set(toolNames).size === 6 &&
+    toolNames.indexOf('kaogong_ai_method') >= 0 &&
+    ['kaogong_ai_tutor', 'kaogong_ai_plan', 'kaogong_ai_shenlun', 'kaogong_ai_essay_review']
+      .every(n => toolNames.indexOf(n) >= 0),
+    `count=${toolNames.length} [${toolNames.join(',')}]`)
+}
 check('能力矩阵端点≥14', caps.endpoints?.length >= 14, `${caps.endpoints?.length}`)
 check('双入口声明（左沉浸+右并排）', caps.entries?.length === 2 && caps.entries.some(e => e.kind === 'left-immersive') && caps.entries.some(e => e.kind === 'right-docked'), JSON.stringify(caps.entries || []))
 check('双通道声明（同源优先）', caps.channels?.length === 2 && caps.channels.find(c => c.id === 'same-origin')?.preferred === true, JSON.stringify(caps.channels || []))
@@ -258,6 +268,13 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   const fs = await import('node:fs')
   const readSrc = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf-8')
   // ① 运行时：默认空 → POST 写入 → GET 回读（PROJ_A 命名空间；产物文件由结尾清理段回收）
+  // 幂等前置（cycle-18 实测坑）：PROJ_A 的 progress 文件若因**上轮中途崩溃**残留，
+  // 会让「记忆默认为空」这条断言假红（本轮实证：上一轮崩在后续 §，cleanup 没跑到）。
+  // 测试必须自己保证初始态，不能依赖上次运行是否干净收尾。
+  {
+    const p = new URL('./data/progress/PROJ_A-54357955.json', import.meta.url)
+    try { if (fs.existsSync(p)) fs.rmSync(p) } catch { /* 只读文件系统等：交给断言如实报 */ }
+  }
   const MA = `${B}/api/memory?ws=PROJ_A`
   const m0 = await J(MA)
   check('SMOKE-MEM-01 记忆默认为空对象', m0 && typeof m0.memory === 'object' && Object.keys(m0.memory).length === 0, JSON.stringify(m0).slice(0, 80))
@@ -300,9 +317,17 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
 {
   const fs = await import('node:fs')
   const readSrc = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf-8')
-  // ① 状态总览：结构完整 + 15 仓库全登记 + tier 词表合法
+  // ① 状态总览：结构完整 + 全仓库登记 + tier 词表合法（cycle-18：huasheng13 纳入统一管理 → 16）
   const rs = await J(`${B}/api/repos`)
-  check('SMOKE-RP-01 /api/repos 结构（root/repos/summary/git）', rs && typeof rs.root === 'string' && Array.isArray(rs.repos) && rs.repos.length === 15 && typeof rs.git === 'boolean' && rs.summary && rs.summary.total === 15, JSON.stringify(rs).slice(0, 140))
+  check('SMOKE-RP-01 /api/repos 结构（root/repos/summary/git）', rs && typeof rs.root === 'string' && Array.isArray(rs.repos) && rs.repos.length === 16 && typeof rs.git === 'boolean' && rs.summary && rs.summary.total === 16, JSON.stringify(rs).slice(0, 140))
+  // cycle-18：方法论语料必须作为「必选」被统一管理（不是内置旁路）
+  {
+    const hs = (rs.repos || []).find(r => r.key === 'huasheng13')
+    check('SMOKE-RP-01c huasheng13 纳入题库管理且 tier=required（统一配置，无内置旁路）',
+      !!hs && hs.tier === 'required' && hs.builtin === undefined &&
+      String(hs.upstream).includes('WangJunqing-coder/huasheng13-skill'),
+      JSON.stringify(hs || {}).slice(0, 180))
+  }
   const tiers = new Set(rs.repos.map(r => r.tier))
   check('SMOKE-RP-01 tier 词表=required/recommended/optional 且必选≥3', [...tiers].every(t => ['required', 'recommended', 'optional'].includes(t)) && tiers.size === 3 && rs.repos.filter(r => r.tier === 'required').length >= 3, [...tiers].join(','))
   check('SMOKE-RP-01 每仓库含 upstream 真实 GitHub 地址', rs.repos.every(r => typeof r.upstream === 'string' && r.upstream.startsWith('https://github.com/')))
@@ -351,6 +376,420 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   check('SMOKE-RP-05 client 接线题库管理视图（分发+自管数据名单）', clientSrc.includes('h(NativeReposView') && clientSrc.includes("view === 'repos'"))
   const rvSrc = readSrc('./src/client/repos-view.ts')
   check('SMOKE-RP-05 combo 顶层名纪律（rp/Rp/RP 前缀或 Native*View 视图惯例，教训⑨）', !/^(?:function|const|class)\s+(?!rp|Rp|RP|NativeReposView)[A-Za-z_$]/m.test(rvSrc))
+}
+
+// ── cycle-18 花生十三体系方法论（/api/huasheng13/* 六端点端到端 + 白盒链路 + 静态守卫）──
+// 位置纪律（教训⑧+⑤）：本块有运行时 fetch，必须落在 §11b 长阻塞（真题卷索引重建）**之前**、
+// §12 崩溃安全（server.close()）**之前**；块内不触发任何长阻塞操作（索引快照随包分发，命中即返回）。
+// 断言口径全部来自实测（不照抄任务书旧口径）：
+//   · catalog meta.docCount=25 = META 声明篇数，与磁盘 available 分开计
+//   · search 带尾部裁剪(rawTotal/filtered) 与三档置信度(confidence/phraseHit)，**低置信度结果不丢弃**
+//   · practice 的 n 是「本次抽取上限」，total 才是题库总量 → 断言 returned/hasMore 而非 items.length
+//   · coverage overall 是真实值 0.9756（yanyu 缺公式是真实缺口，绝不凑绿断言 1.0）
+{
+  const HS = 'PROJ_HS_A'          // 独立命名空间，避免与 PROJ_A/PROJ_P 的计数互相污染
+  const HB = `${B}/api/huasheng13`
+  const H = (p, ws) => `${HB}${p}${p.includes('?') ? '&' : '?'}ws=${encodeURIComponent(ws || HS)}`
+
+  // ═══ HS13-01 目录树：25 篇语料 + 六模块/三策略/一示例三层结构 ═══
+  {
+    const r = await fetch(H('/catalog'))
+    const c = await r.json()
+    check('HS13-01 /api/huasheng13/catalog 返回 200 且 meta.docCount=25',
+      r.status === 200 && c.meta && c.meta.docCount === 25,
+      `status=${r.status} docCount=${c.meta && c.meta.docCount}`)
+    check('HS13-01 目录三层结构完整（六模块 + 三策略 + 一示例）',
+      Array.isArray(c.modules) && c.modules.length === 6 &&
+      Array.isArray(c.strategy) && c.strategy.length === 3 &&
+      Array.isArray(c.examples) && c.examples.length === 1,
+      `modules=${(c.modules || []).length} strategy=${(c.strategy || []).length} examples=${(c.examples || []).length}`)
+    // docCount 是「声明数」，available 是「磁盘真实可用数」——两者必须分开，否则语料缺失会被掩盖
+    check('HS13-01 声明数 ≡ 磁盘可用数（25/25，degraded=false 且 missing 为空）',
+      c.meta.available === 25 && c.meta.missingCount === 0 &&
+      Array.isArray(c.meta.missing) && c.meta.missing.length === 0 && c.meta.degraded === false,
+      `available=${c.meta.available} missingCount=${c.meta.missingCount} degraded=${c.meta.degraded}`)
+    // 目录树扁平化后必须恰好 25 个实体，且每篇都有真实解析统计（chars/sections>0、present=true）
+    const flat = []
+    for (const m of (c.modules || [])) {
+      for (const d of (m.docs || [])) flat.push(d)
+      for (const e of (m.examples || [])) flat.push(e)
+    }
+    for (const s of (c.strategy || [])) flat.push(s)
+    for (const e of (c.examples || [])) flat.push(e)
+    const leafBad = flat.filter(d => !(d.present === true && d.chars > 0 && d.sections > 0))
+    check('HS13-01 目录树 25 篇实体且逐篇含真实解析统计（chars/sections>0、present=true）',
+      flat.length === 25 && leafBad.length === 0,
+      `flat=${flat.length} 异常=${leafBad.map(d => d.file).join(',') || '无'}`)
+    // 磁盘与 META 双向零漂移（多出的文件记 orphans，错放目录记 dirMismatch）
+    check('HS13-01 磁盘与 META 双向零漂移（orphans=[] 且 dirMismatch=[]）',
+      Array.isArray(c.meta.orphans) && c.meta.orphans.length === 0 &&
+      Array.isArray(c.meta.dirMismatch) && c.meta.dirMismatch.length === 0,
+      `orphans=${JSON.stringify(c.meta.orphans)} dirMismatch=${JSON.stringify(c.meta.dirMismatch)}`)
+  }
+
+  // ═══ HS13-02 端点口径守卫：六端点与 CAPABILITIES 声明逐字一致（v1.8 白盒假阳性事故固化）═══
+  {
+    const caps = await J(`${B}/api/capabilities`)
+    const declared = (caps.endpoints || []).map(e => e.path).filter(p => String(p).indexOf('/api/huasheng13/') === 0)
+    const EXPECT = [
+      '/api/huasheng13/catalog', '/api/huasheng13/doc', '/api/huasheng13/search',
+      '/api/huasheng13/coverage', '/api/huasheng13/practice', '/api/huasheng13/trace',
+    ]
+    check('HS13-02 CAPABILITIES 恰声明 6 个 /api/huasheng13/* 端点（无缺无多）',
+      declared.length === 6 && EXPECT.every(p => declared.indexOf(p) >= 0),
+      `declared=${declared.length} [${declared.join(',')}]`)
+    // 逻辑路径口径：绝不能带挂载前缀（/kaogong/api/...），否则能力对账 100% 失配
+    check('HS13-02 端点路径为相对挂载点的逻辑路径（无 /kaogong 前缀）',
+      declared.every(p => p.charAt(0) === '/' && p.indexOf('/kaogong') !== 0),
+      declared.join(','))
+    // 声明 vs 运行态对账：trace 自己给出的 declaration 必须全绿
+    const tr = await J(H('/trace'))
+    check('HS13-02 运行态自证：trace.declaration.allDeclared=true 且 6 条逐条 declared',
+      tr.declaration && tr.declaration.allDeclared === true &&
+      Array.isArray(tr.declaration.endpoints) && tr.declaration.endpoints.length === 6 &&
+      tr.declaration.endpoints.every(d => d.declared === true) &&
+      EXPECT.every(p => tr.declaration.endpoints.some(d => d.path === p)),
+      `allDeclared=${tr.declaration && tr.declaration.allDeclared}`)
+    // 六端点真实可达（200 + 非 Unknown API）：任何一条路由漏挂都会在此暴露
+    const six = [
+      ['/catalog', x => Array.isArray(x.modules)],
+      ['/doc?file=ziliao-fenxi', x => typeof x.markdown === 'string' && x.markdown.length > 0],
+      ['/search?q=ABRX', x => Array.isArray(x.results)],
+      ['/coverage', x => Array.isArray(x.modules)],
+      ['/practice?file=ziliao-lianxi', x => Array.isArray(x.items)],
+      ['/trace', x => !!x.endpoints],
+    ]
+    let routeBad = ''
+    for (const pair of six) {
+      const rr = await fetch(H(pair[0]))
+      const bb = await rr.json()
+      if (rr.status !== 200 || !pair[1](bb) || /Unknown API/.test(String(bb.error || ''))) routeBad += pair[0] + ' '
+    }
+    check('HS13-02 六端点逐条真实可达（HTTP 200 且非 Unknown API）', routeBad === '', routeBad || 'ok')
+    // 未知子路径必须回落为受控 {error}（HTTP 200，不 5xx、不崩），且**不得污染端点对账**。
+    //
+    // 历史：早期 `recordRequest` 直接以实际到达的 path 记遥测，于是任何未声明路径（拼错、
+    // 探针、扫描器）都会永久驻留成「影子端点」，让后面的「运行态端点路径口径与 manifest
+    // 一致」误判（v1.8 白盒假阳性同族）。当时的权宜之计是把这个探针挪到口径断言之后。
+    // **现在根因已在 http.ts 根治**：未声明路径只进 `__unmatched__` 聚合桶（不参与端点对账），
+    // 并额外透出 `telemetry.unmatched` 供观测 → 本探针回到 HS13-02 原位，
+    // 判定依据从「靠测试顺序规避」升级为「机制保证」（见下方对 unmatched 的正向断言）。
+    {
+      const rj = await fetch(`${HB}/__no_such_sub__?ws=${encodeURIComponent(HS)}`)
+      const bj = await rj.json()
+      check('HS13-02 未知子路径受控回落（HTTP 200 + {error}，不 5xx 不崩）',
+        rj.status === 200 && !!(bj && bj.error) && /Unknown API/.test(String(bj.error)),
+        `${rj.status} ${String((bj && bj.error) || '').slice(0, 70)}`)
+      // 机制保证：未声明路径既不能出现在端点对账表里，又要能在聚合桶里被看见
+      const telNow = await J(`${B}/api/telemetry`)
+      const epKeys = Object.keys(telNow.endpoints || {})
+      check('HS13-02 未声明路径不污染端点对账（不进 telemetry.endpoints，仅记 __unmatched__ 聚合桶）',
+        !epKeys.some(k => /huasheng13\/__no_such_sub__/.test(k)) &&
+        epKeys.every(k => !/__no_such_sub__/.test(k)),
+        `命中的影子键=${epKeys.filter(k => /__no_such_sub__/.test(k)).join(',') || '无'}`)
+      check('HS13-02 未声明请求仍可观测（telemetry.unmatched.count>0，不因聚合而丢失）',
+        !!telNow.unmatched && telNow.unmatched.count > 0,
+        `unmatched=${JSON.stringify(telNow.unmatched)}`)
+    }
+  }
+
+  // ═══ HS13-03 BM25 检索命中（含尾部裁剪与置信度的真实口径）═══
+  {
+    const s = await J(H('/search?q=' + encodeURIComponent('截位直除')))
+    const r0 = (s.results || [])[0]
+    check('HS13-03 检索「截位直除」命中且首条= ziliao-susuan（三大速算方法）',
+      Array.isArray(s.results) && s.results.length > 0 &&
+      r0.file === 'ziliao-susuan' && r0.moduleId === 'ziliao',
+      `top=${r0 && r0.file} total=${s.total}`)
+    check('HS13-03 BM25 分数降序且为正（top-1 严格最高）',
+      s.results.length >= 2 && s.results.every(x => x.score > 0) &&
+      s.results.every((x, i) => i === 0 || s.results[i - 1].score >= x.score),
+      (s.results || []).map(x => x.score).slice(0, 4).join('>'))
+    check('HS13-03 尾部裁剪口径自洽（rawTotal ≡ results.length + filtered）且裁剪真实生效',
+      s.rawTotal === s.results.length + s.filtered && s.rawTotal === 25 && s.filtered > 0,
+      `rawTotal=${s.rawTotal} results=${s.results.length} filtered=${s.filtered}`)
+    check('HS13-03 置信度 high + phraseHit=true + coverage=1（整串真实落在语料里）',
+      s.confidence === 'high' && s.phraseHit === true && s.coverage === 1,
+      `confidence=${s.confidence} phraseHit=${s.phraseHit} coverage=${s.coverage}`)
+    check('HS13-03 首条含命中高亮与切片（snippets 非空、terms 为真实命中词）',
+      !!r0 && typeof r0.highlight === 'string' && r0.highlight.length > 0 &&
+      Array.isArray(r0.snippets) && r0.snippets.length > 0 &&
+      Array.isArray(r0.terms) && r0.terms.length > 0 &&
+      r0.snippets.every(x => typeof x.text === 'string'),
+      `snippets=${r0 && r0.snippets && r0.snippets.length} terms=${r0 && r0.terms && r0.terms.join('/')}`)
+  }
+
+  // ═══ HS13-04 检索边界：能命中 / 空查询 / bigram 噪声不丢弃 ═══
+  {
+    const s2 = await J(H('/search?q=' + encodeURIComponent('假设分配')))
+    const t2 = (s2.results || [])[0]
+    check('HS13-04 检索「假设分配」命中 ziliao-susuan 且置信度 high',
+      Array.isArray(s2.results) && s2.results.length > 0 &&
+      t2.file === 'ziliao-susuan' && s2.confidence === 'high',
+      `top=${t2 && t2.file} confidence=${s2.confidence}`)
+    const s3 = await J(H('/search?q=' + encodeURIComponent('隔板法')))
+    const t3 = (s3.results || [])[0]
+    check('HS13-04 检索「隔板法」命中 shuliang-guanxi（数量关系全题型解法）',
+      Array.isArray(s3.results) && s3.results.length > 0 &&
+      t3.file === 'shuliang-guanxi' && s3.confidence === 'high',
+      `top=${t3 && t3.file} confidence=${s3.confidence}`)
+    // 空查询：不是「未命中」，返回空数组且不报错（也不计入命中率分母）
+    const s0 = await J(H('/search?q='))
+    check('HS13-04 空查询返回 results=[] 且不报错（不当成 miss）',
+      Array.isArray(s0.results) && s0.results.length === 0 && !s0.error && s0.total === 0,
+      `results=${(s0.results || []).length} error=${s0.error || '无'}`)
+    // bigram 噪声：置信度低但仍返回结果（server 特意设计：提示而不过滤，绝不丢结果）
+    const sn = await J(H('/search?q=' + encodeURIComponent('不存在的词')))
+    check('HS13-04 生造词「不存在的词」confidence=low 且 phraseHit=false（bigram 噪声如实暴露）',
+      sn.confidence === 'low' && sn.phraseHit === false,
+      `confidence=${sn.confidence} phraseHit=${sn.phraseHit}`)
+    check('HS13-04 低置信度仍返回结果 + 明确 note（提示而不过滤，绝不丢弃）',
+      Array.isArray(sn.results) && sn.results.length > 0 &&
+      typeof sn.note === 'string' && sn.note.indexOf('部分') >= 0,
+      `results=${(sn.results || []).length} note=${String(sn.note || '').slice(0, 40)}`)
+  }
+
+  // ═══ HS13-05 单篇全文 + 未知文件受控 ═══
+  {
+    const d = await J(H('/doc?file=ziliao-fenxi'))
+    check('HS13-05 doc?file=ziliao-fenxi 返回 markdown 且含「ABRX」',
+      typeof d.markdown === 'string' && d.markdown.length > 1000 && d.markdown.indexOf('ABRX') >= 0,
+      `len=${(d.markdown || '').length} 含ABRX=${String(d.markdown || '').indexOf('ABRX') >= 0}`)
+    check('HS13-05 doc 元信息完整（file/moduleId/chars/formulas/weight>1）',
+      d.file === 'ziliao-fenxi' && d.moduleId === 'ziliao' &&
+      d.chars > 0 && d.formulas > 0 && typeof d.weight === 'number' && d.weight > 1,
+      `file=${d.file} moduleId=${d.moduleId} chars=${d.chars} formulas=${d.formulas} weight=${d.weight}`)
+    // 未知文件：HTTP 200 + {error, known[]}，绝不 5xx、绝不崩
+    const r = await fetch(H('/doc?file=__not_exist__'))
+    const bad = await r.json()
+    check('HS13-05 未知 file 受控（HTTP 200 + {error} + known 全量清单，不崩）',
+      r.status === 200 && typeof bad.error === 'string' && bad.error.length > 0 &&
+      Array.isArray(bad.known) && bad.known.length === 25 && bad.known.indexOf('ziliao-fenxi') >= 0,
+      `${r.status} error=${String(bad.error || '').slice(0, 30)} known=${(bad.known || []).length}`)
+    // 缺 file 参数同样是受控降级（不是 500）
+    const r2 = await fetch(H('/doc'))
+    const d2 = await r2.json()
+    check('HS13-05 缺 file 参数受控降级（HTTP 200 + {error} + hint）',
+      r2.status === 200 && typeof d2.error === 'string' && typeof d2.hint === 'string',
+      `${r2.status} error=${String(d2.error || '').slice(0, 30)}`)
+  }
+
+  // ═══ HS13-06 覆盖矩阵：六模块全覆盖 + overall 真实值（不凑绿）═══
+  {
+    const c = await J(H('/coverage'))
+    const IDS = ['ziliao', 'shuliang', 'yanyu', 'panduan', 'changshi', 'shenlun']
+    check('HS13-06 覆盖矩阵六模块齐备（ziliao/shuliang/yanyu/panduan/changshi/shenlun）',
+      Array.isArray(c.modules) && c.modules.length === 6 &&
+      IDS.every(id => c.modules.some(m => m.id === id)),
+      `modules=${(c.modules || []).map(m => m.id).join(',')}`)
+    check('HS13-06 overall 在 [0,1] 且为真实值 0.9756（≠1：yanyu 缺公式是真实缺口，不凑绿）',
+      typeof c.overall === 'number' && c.overall >= 0 && c.overall <= 1 &&
+      Math.abs(c.overall - 0.9756) < 1e-9,
+      `overall=${c.overall}`)
+    // 逐模块 coverage 合法；overall = presentDims / expectedDims（口径可复算）
+    const allValid = c.modules.every(m => typeof m.coverage === 'number' && m.coverage >= 0 && m.coverage <= 1)
+    check('HS13-06 逐模块 coverage ∈ [0,1] 且 overall ≡ presentDims/expectedDims（口径可复算）',
+      allValid && c.expectedDims > 0 && c.presentDims > 0 &&
+      Math.abs(c.overall - c.presentDims / c.expectedDims) < 1e-3,
+      `overall=${c.overall} present/expected=${c.presentDims}/${c.expectedDims}=${(c.presentDims / c.expectedDims).toFixed(4)}`)
+    // 维度口径：常识/申论不考公式（dims.formula=false），分母不该强求 → 必须透传
+    const cs = c.modules.find(m => m.id === 'changshi') || {}
+    const sl = c.modules.find(m => m.id === 'shenlun') || {}
+    check('HS13-06 维度口径透传（常识/申论 dims.formula=false，不把不考公式的模块判为缺失）',
+      !!cs.dims && cs.dims.formula === false && !!sl.dims && sl.dims.formula === false,
+      `changshi.formula=${cs.dims && cs.dims.formula} shenlun.formula=${sl.dims && sl.dims.formula}`)
+    // 缺口清单必须如实包含 yanyu 缺公式（真实缺口，不许被抹掉）
+    check('HS13-06 缺口清单如实暴露 yanyu 缺公式（真实缺口不被抹平）',
+      Array.isArray(c.gaps) && c.gaps.some(g => g.module === 'yanyu' && /缺公式/.test(String(g.detail))),
+      `gaps=${(c.gaps || []).map(g => g.module + ':' + g.detail).slice(0, 3).join(' | ')}`)
+  }
+
+  // ═══ HS13-07 配套练习：total/n/returned/hasMore 四元组口径 ═══
+  {
+    // 默认 n=5：抽取上限生效，hasMore 必须为 true（不是「只返回 5 题」的 bug）
+    const d5 = await J(H('/practice?file=ziliao-lianxi'))
+    check('HS13-07 默认抽取上限生效（total=10 n=5 returned=5 hasMore=true）',
+      d5.total === 10 && d5.n === 5 && d5.returned === 5 &&
+      Array.isArray(d5.items) && d5.items.length === 5 && d5.hasMore === true,
+      `total=${d5.total} n=${d5.n} returned=${d5.returned} hasMore=${d5.hasMore}`)
+    // 显式 n=10：全量取出，hasMore 必须翻为 false
+    const d10 = await J(H('/practice?file=ziliao-lianxi&n=10'))
+    check('HS13-07 n=10 全量取出（returned=10 hasMore=false）且 total 恒为题库总量',
+      d10.total === 10 && d10.n === 10 && d10.returned === 10 &&
+      d10.items.length === 10 && d10.hasMore === false,
+      `total=${d10.total} returned=${d10.returned} hasMore=${d10.hasMore}`)
+    // 题目形状：index 连续、stem 非空、options 带 key（client 判分依赖 key）
+    const items = d10.items
+    check('HS13-07 题目形状完整（index 连续/stem 非空/options 带 key/含解析）',
+      items.every((it, i) => it.index === i + 1 && typeof it.stem === 'string' && it.stem.length > 0) &&
+      items.every(it => Array.isArray(it.options) && it.options.every(o => typeof o.key === 'string')) &&
+      items.filter(it => it.options.length > 0).every(it => it.options.every(o => typeof o.text === 'string')) &&
+      items.every(it => typeof it.analysis === 'string'),
+      `首题 options keys=${(items[0].options || []).map(o => o.key).join('')}`)
+    // 自动判分可行性口径：只有 A-D 字母答案可本地比对；文字作答题必须 answerIsLetter=false
+    const letters = items.filter(it => it.answerIsLetter === true)
+    const words = items.filter(it => it.answerIsLetter === false)
+    check('HS13-07 answerIsLetter 口径自洽（true ⇒ answer 为 A-D；false ⇒ 文字作答不可自动判分）',
+      letters.length > 0 && words.length > 0 &&
+      letters.every(it => /^[A-D]$/i.test(String(it.answer || '').trim())) &&
+      words.every(it => !/^[A-D]$/i.test(String(it.answer || '').trim())),
+      `字母题=${letters.length} 文字题=${words.length}（文字题答案例：${String((words[0] || {}).answer || '').slice(0, 12)}）`)
+    // 数量关系 18 题全为文字作答 → 绝不臆造「所有练习都能自动判分」
+    const sq = await J(H('/practice?file=shuliang-lianxi&n=50'))
+    check('HS13-07 数量关系 18 题全为文字作答（answerIsLetter 恒 false，不臆造字母答案）',
+      sq.total === 18 && sq.returned === 18 &&
+      sq.items.every(it => it.answerIsLetter === false),
+      `total=${sq.total} returned=${sq.returned} 字母题=${sq.items.filter(it => it.answerIsLetter).length}`)
+    // 未知 file 受控
+    const bx = await fetch(H('/practice?file=__nope__'))
+    const jx = await bx.json()
+    check('HS13-07 未知 file 受控（HTTP 200 + {error} + known，不崩）',
+      bx.status === 200 && typeof jx.error === 'string' && Array.isArray(jx.known),
+      `${bx.status} error=${String(jx.error || '').slice(0, 30)}`)
+  }
+
+  // ═══ HS13-08 白盒链路：字段完整 + 命中计数单调递增（真实计数，非伪造）═══
+  {
+    const hitsOf = (t, p) => (((t || {}).endpoints || {})[p] || {}).hits || 0
+    const t0 = await J(H('/trace'))
+    const searchBefore = hitsOf(t0, '/api/huasheng13/search')
+    const docBefore = hitsOf(t0, '/api/huasheng13/doc')
+    const covers = ['/api/huasheng13/catalog', '/api/huasheng13/doc', '/api/huasheng13/search',
+      '/api/huasheng13/coverage', '/api/huasheng13/practice', '/api/huasheng13/trace']
+    check('HS13-08 trace 六端点槽位齐备且字段完整（hits/p50/p95/lastAt/samples）',
+      !!t0.endpoints && Object.keys(t0.endpoints).length === 6 &&
+      covers.every(p => t0.endpoints[p] &&
+        typeof t0.endpoints[p].hits === 'number' &&
+        typeof t0.endpoints[p].p50 === 'number' &&
+        typeof t0.endpoints[p].p95 === 'number' &&
+        typeof t0.endpoints[p].lastAt === 'number' &&
+        typeof t0.endpoints[p].samples === 'number'),
+      `槽位=${Object.keys(t0.endpoints || {}).length}`)
+    check('HS13-08 searches 统计四元组齐备 + hitRate 口径自洽（hit/total）',
+      !!t0.searches && typeof t0.searches.total === 'number' && typeof t0.searches.hit === 'number' &&
+      typeof t0.searches.miss === 'number' && typeof t0.searches.empty === 'number' &&
+      typeof t0.searches.hitRate === 'number' &&
+      (t0.searches.total === 0 ? t0.searches.hitRate === 0
+        : Math.abs(t0.searches.hitRate - t0.searches.hit / t0.searches.total) < 1e-3),
+      JSON.stringify(t0.searches))
+    check('HS13-08 docs 读取统计结构完整（reads 对象 + distinct 计数）',
+      !!t0.docs && typeof t0.docs.distinct === 'number' && !!t0.docs.reads && typeof t0.docs.reads === 'object',
+      `distinct=${t0.docs && t0.docs.distinct}`)
+    check('HS13-08 recent 链路事件字段齐备（at/kind/detail/ms 全为原生类型）',
+      Array.isArray(t0.recent) && t0.recent.length > 0 &&
+      t0.recent.every(x => typeof x.at === 'number' && typeof x.kind === 'string' &&
+        typeof x.detail === 'string' && typeof x.ms === 'number'),
+      `recent=${(t0.recent || []).length} 末条=${JSON.stringify((t0.recent || []).slice(-1)[0]).slice(0, 90)}`)
+    // 单调性：真实调用后计数必然增加（「注册→生产→消费」三态证据，不是页面装饰）
+    await J(H('/search?q=' + encodeURIComponent('ABRX')))
+    await J(H('/doc?file=ziliao-fenxi'))
+    await J(H('/doc?file=ziliao-fenxi'))
+    const t1 = await J(H('/trace'))
+    check('HS13-08 命中计数单调递增（search +1、doc +2：trace 记录的是真实调用）',
+      hitsOf(t1, '/api/huasheng13/search') === searchBefore + 1 &&
+      hitsOf(t1, '/api/huasheng13/doc') === docBefore + 2,
+      `search ${searchBefore}→${hitsOf(t1, '/api/huasheng13/search')} doc ${docBefore}→${hitsOf(t1, '/api/huasheng13/doc')}`)
+    check('HS13-08 全文读取按 file 分键累计（reads.ziliao-fenxi 计数真实累加）',
+      !!t1.docs && !!t1.docs.reads && typeof t1.docs.reads['ziliao-fenxi'] === 'number' &&
+      t1.docs.reads['ziliao-fenxi'] >= 2,
+      `reads=${JSON.stringify(t1.docs && t1.docs.reads).slice(0, 80)}`)
+    // 环形缓冲容量必须真实透出（白盒要能看到「会不会丢历史」）
+    check('HS13-08 环形缓冲容量透出（recent 上限 200 / recentLen ≤ 上限 / 分槽上限）',
+      !!t1.ring && t1.ring.recentCap === 200 && t1.ring.recentLen <= t1.ring.recentCap &&
+      typeof t1.ring.slotsCap === 'number' && t1.ring.slots >= 1,
+      JSON.stringify(t1.ring))
+  }
+
+  // ═══ HS13-09 跨工作区隔离：trace / 计数 / 文档读取互不污染（cycle-17 ㉙ 同族守卫）═══
+  {
+    const WA = 'PROJ_HS_ISO_A', WB = 'PROJ_HS_ISO_B'
+    await J(H('/doc?file=ziliao-fenxi', WA))
+    await J(H('/doc?file=ziliao-fenxi', WA))
+    await J(H('/search?q=ABRX', WA))
+    const ta = await J(H('/trace', WA))
+    const tb = await J(H('/trace', WB))
+    check('HS13-09 跨工作区计数隔离（A 有真实调用、B 全零，互不污染）',
+      ta.endpoints['/api/huasheng13/doc'].hits === 2 &&
+      ta.endpoints['/api/huasheng13/search'].hits === 1 &&
+      ta.searches.total === 1 && ta.docs.distinct === 1 &&
+      tb.endpoints['/api/huasheng13/doc'].hits === 0 &&
+      tb.endpoints['/api/huasheng13/search'].hits === 0 &&
+      tb.searches.total === 0 && tb.docs.distinct === 0 && tb.recent.length === 0,
+      `A doc=${ta.endpoints['/api/huasheng13/doc'].hits} search=${ta.searches.total} | B doc=${tb.endpoints['/api/huasheng13/doc'].hits} search=${tb.searches.total}`)
+    check('HS13-09 两个工作区落到不同分槽（wsKey 归一后不相同）',
+      typeof ta.ws === 'string' && typeof tb.ws === 'string' && ta.ws !== tb.ws,
+      `A=${ta.ws} B=${tb.ws}`)
+    // 隔离不是靠「清空」实现的：回头再看 A，它的历史仍在（分槽独立而非互斥）
+    const ta2 = await J(H('/trace', WA))
+    check('HS13-09 A 的历史在 B 访问后仍完整保留（分槽独立，不是互相清空）',
+      ta2.endpoints['/api/huasheng13/doc'].hits === 2 && ta2.searches.total === 1 &&
+      ta2.recent.length > 0,
+      `A doc=${ta2.endpoints['/api/huasheng13/doc'].hits} recent=${ta2.recent.length}`)
+    // 无 ws 参数（default 槽）同样不得串到 A/B
+    const td = await J(`${HB}/trace`)
+    check('HS13-09 无 ws 参数走独立 default 槽（不串到 A/B 的计数）',
+      td.searches.total !== ta.searches.total && td.endpoints['/api/huasheng13/doc'].hits !== 2,
+      `default search=${td.searches.total} doc=${td.endpoints['/api/huasheng13/doc'].hits}`)
+  }
+
+  // ═══ HS13-10 静态守卫：磁盘 25 文件逐一对齐 META 声明 ═══
+  {
+    const fs = await import('node:fs')
+    const { join } = await import('node:path')
+    const { HUASHENG13_META } = await import('./dist/shared/manifest.js')
+    // cycle-18 决策：语料**不随包分发**，与其它题库一样放在**数据根**下，
+    // 由「📦 题库管理」统一下载配置。因此这里必须按数据根定位，不能按包根。
+    const { resolveReposRoot } = await import('./dist/server/dataRoot.js')
+    const { REPOS } = await import('./dist/adapters/repoData.js')
+    const ROOT = resolveReposRoot(Object.keys(REPOS)).root
+    const PKG = process.cwd()   // 包根（用于源码级静态守卫读取 src/**）
+    const DIR = join(ROOT, String(HUASHENG13_META.root || 'huasheng13'))
+    check('HS13-10 语料位于数据根（非包内）：root/huasheng13 存在', fs.existsSync(DIR), DIR)
+    check('HS13-10 包内不得再携带方法论语料（统一走题库管理）',
+      !fs.existsSync(join(process.cwd(), 'assets', 'huasheng13')),
+      join(process.cwd(), 'assets', 'huasheng13'))
+    // META 声明的每一条 → 真实文件必须存在（声明 → 实体，零断链）
+    const declared = []
+    for (const m of (HUASHENG13_META.modules || [])) {
+      for (const d of (m.docs || [])) declared.push(['references', d.file])
+      for (const e of (m.examples || [])) declared.push(['examples', e.file])
+    }
+    for (const s of (HUASHENG13_META.strategy || [])) declared.push(['references', s.file])
+    for (const e of (HUASHENG13_META.examples || [])) declared.push(['references', e.file])
+    const missing = declared.filter(x => !fs.existsSync(join(DIR, x[0], x[1] + '.md')))
+    check('HS13-10 META 声明的 25 篇逐条可解析到实体文件（零断链）',
+      declared.length === 25 && missing.length === 0,
+      `declared=${declared.length} 缺失=${missing.map(x => x.join('/')).join(',') || '无'}`)
+    // 反向：磁盘上的 .md 必须全部被 META 声明（多出的孤立文件会变成「搜不到的死语料」）
+    const onDisk = []
+    for (const dir of ['references', 'examples']) {
+      const p = join(DIR, dir)
+      if (!fs.existsSync(p)) continue
+      for (const f of fs.readdirSync(p)) if (/\.md$/.test(f)) onDisk.push([dir, f.replace(/\.md$/, '')])
+    }
+    const declaredKey = new Set(declared.map(x => x[0] + '/' + x[1]))
+    const orphans = onDisk.filter(x => !declaredKey.has(x[0] + '/' + x[1]))
+    check('HS13-10 磁盘 25 个 .md 全部被 META 声明（无孤立死语料）',
+      onDisk.length === 25 && orphans.length === 0,
+      `onDisk=${onDisk.length} 孤立=${orphans.map(x => x.join('/')).join(',') || '无'}`)
+    // 目录归属：examples 只放练习（「## 练习 N」分块），references 放方法论正文
+    const exampleIds = declared.filter(x => x[0] === 'examples').map(x => x[1])
+    check('HS13-10 练习文件目录归属正确（examples 恰 5 篇：ziliao/shuliang/yanyu/panduan/shenlun 各一）',
+      exampleIds.length === 5 &&
+      ['ziliao-lianxi', 'shuliang-lianxi', 'yanyu-lianxi', 'panduan-lianxi', 'shenlun-lianxi']
+        .every(f => exampleIds.indexOf(f) >= 0),
+      `examples=${exampleIds.join(',')}`)
+    // zhenti-shili 物理在 references/（manifest 已按磁盘事实声明，不是 examples/）
+    check('HS13-10 zhenti-shili 按磁盘事实落在 references/（不臆造目录）',
+      fs.existsSync(join(DIR, 'references', 'zhenti-shili.md')) &&
+      !fs.existsSync(join(DIR, 'examples', 'zhenti-shili.md')),
+      'references/zhenti-shili.md 存在且 examples/ 下无同名文件')
+    // 静态：端点声明必须仍无挂载前缀（源码级，防「运行时被改写」绕过对账）
+    const mSrc = fs.readFileSync(join(PKG, 'src/shared/manifest.ts'), 'utf-8')
+    check('HS13-10 源码级端点口径守卫（manifest 声明 /api/huasheng13/* 且无 /kaogong 前缀）',
+      /path: '\/api\/huasheng13\/(catalog|doc|search|coverage|practice|trace)'/.test(mSrc) &&
+      mSrc.indexOf("path: '/kaogong/api/huasheng13") < 0)
+  }
 }
 
 // ── 11b. v1.6 真题卷 / 专题 / 申论评改（真实数据端到端）──
@@ -532,6 +971,13 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   const runtimeForeign = Object.keys(tel.endpoints).filter(p => !declaredPaths.has(p) && p.startsWith('/api/'))
   check('运行态端点路径口径与 manifest 一致', runtimeForeign.length === 0,
     '未匹配: ' + runtimeForeign.slice(0, 4).join(','))
+  // cycle-18：未声明端点已聚合进 __unmatched__（根因修复在 http.ts），
+  // 既不能混入端点对账表，也要保留可观测性。这里守的是**反面**：
+  // 聚合机制不能把「已声明端点」也一并吞掉（否则整个对账表会静默变空，比假阳性更危险）。
+  check('未声明端点聚合不影响已声明端点计数（端点对账表仍非空且无聚合桶泄漏）',
+    Object.keys(tel.endpoints).some(k => k === '/api/status' || k === '/api/capabilities' || k === '/api/telemetry') &&
+    !Object.keys(tel.endpoints).some(k => /__unmatched__/.test(k)),
+    `leaked=${Object.keys(tel.endpoints).filter(k => /__unmatched__/.test(k)).join(',') || '无'}`)
 }
 
 // ── v1.8.0 前端静态守卫（新交互能力的形态约束）──

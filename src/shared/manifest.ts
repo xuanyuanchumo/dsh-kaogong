@@ -18,7 +18,7 @@ const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 // ── 能力清单（与 index.js / client.js / ui 实际注册保持同步）──
 export const CAPABILITIES = {
-  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.12.0', mode: 'offline-first' },
+  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.13.0', mode: 'offline-first' },
 
   // 宿主 UI 双入口（client 半注册；图谱与可观测面板消费此声明）
   entries: [
@@ -37,7 +37,7 @@ export const CAPABILITIES = {
     { stage: 'load', desc: '模块导入' },
     { stage: 'apply', desc: 'apply(ctx) 执行' },
     { stage: 'server-start', desc: 'HTTP 服务绑定/端口发现' },
-    { stage: 'tools-register', desc: '4 个 AI 工具注册' },
+    { stage: 'tools-register', desc: '6 个 AI 工具注册' },
     { stage: 'runtime-publish', desc: 'runtime.json 信标写入' },
     { stage: 'serve', desc: '稳态服务' },
     { stage: 'cleanup', desc: 'effect 卸载关闭服务' },
@@ -94,6 +94,16 @@ export const CAPABILITIES = {
     { path: '/api/repos/remove', label: '题库删除', consumers: ['ui:repos'] },
     { path: '/api/repos/browse', label: '题库目录浏览', consumers: ['ui:repos'] },
     { path: '/api/repos/config', label: '数据根与镜像配置', consumers: ['ui:repos'] },
+    // ── cycle-18 花生十三体系方法论适配库 ──
+    // 语料与其它题库同等对待：**不随包分发**，由「📦 题库管理」统一下载到数据根
+    // （数据根/huasheng13，20 references + 5 examples ≈ 336KB，上游 huasheng13-skill）。
+    // 未安装时这组端点必须返回 degraded=true + 明确引导，绝不崩、也绝不假装有内容。
+    { path: '/api/huasheng13/catalog', label: '方法论目录树', consumers: ['ui:huasheng13', 'ui:topics', 'tool:kaogong_ai_tutor'] },
+    { path: '/api/huasheng13/doc', label: '单篇方法论全文', consumers: ['ui:huasheng13', 'tool:kaogong_ai_tutor', 'tool:kaogong_ai_shenlun'] },
+    { path: '/api/huasheng13/search', label: '方法论全文检索(BM25)', consumers: ['ui:huasheng13', 'ui:search', 'tool:kaogong_ai_tutor'] },
+    { path: '/api/huasheng13/coverage', label: '六模块×体系覆盖矩阵', consumers: ['ui:huasheng13', 'ui:observability'] },
+    { path: '/api/huasheng13/practice', label: '方法论配套练习抽取', consumers: ['ui:huasheng13'] },
+    { path: '/api/huasheng13/trace', label: '方法论消费链路追踪', consumers: ['ui:huasheng13', 'ui:observability'] },
     { path: '/api/graph', label: '图谱数据', consumers: ['ui:graph'] },
     // v1.8 交互式图谱三端点 + 生命周期状态机（白盒链路：client 视图消费）
     { path: '/api/graph/neighborhood', label: '图谱·k跳邻域', consumers: ['ui:graph'] },
@@ -112,6 +122,8 @@ export const CAPABILITIES = {
     { name: 'kaogong_ai_plan', class: 'optional-ai', depends: ['/api/progress'] },
     { name: 'kaogong_ai_shenlun', class: 'optional-ai', depends: ['/api/method'] },
     { name: 'kaogong_ai_essay_review', class: 'optional-ai', depends: ['/api/essay/grade', '/api/essay/article', '/api/method'] },
+    // cycle-18：方法论方法论检索工具——把内置花生十三体系接进模型增强链路
+    { name: 'kaogong_ai_method', class: 'optional-ai', depends: ['/api/huasheng13/search', '/api/huasheng13/doc', '/api/huasheng13/coverage'] },
   ],
 
   // 客户端 UI 视图（消费端）
@@ -128,19 +140,118 @@ export const CAPABILITIES = {
     { id: 'plan', label: '学习计划' },
     { id: 'search', label: '知识检索' },
     { id: 'method', label: '方法论' },
+    { id: 'huasheng13', label: '花生十三体系' },
     { id: 'graph', label: '知识图谱' },
     { id: 'repos', label: '题库管理' },
     { id: 'observability', label: '可观测' },
   ],
 
-  // 数据域（15 仓库 × 模块）
+  // 数据域（16 仓库 × 模块；cycle-18 起含 huasheng13 方法论语料）
   repos: [
-    'xingcezhenti', 'kaogongzhentizhengliu', 'GongkaoNaoku', 'AdministrativeAptitudeTest',
+    'huasheng13', 'xingcezhenti', 'kaogongzhentizhengliu', 'GongkaoNaoku', 'AdministrativeAptitudeTest',
     'NovaForge', 'kaogong-skill', 'sakib', 'developer2gwy', 'gwy-zhenti', 'Exam_Database',
     'qiuzhao-epi-bank', 'xingce-app', 'gk-tuxing', 'civil-exam-agent', 'yunduanqiqu',
   ],
   modules: ['政治理论', '常识判断', '言语理解与表达', '数量关系', '判断推理', '资料分析'],
   methodTopics: ['行测', '申论', '职测', '综应', '公基', '公文', '面试', '时政', '报考', '复盘'],
+}
+
+// ── cycle-18 花生十三体系方法论适配库 · 静态事实源 ──
+// 上游：WangJunqing-coder/huasheng13-skill（MIT 内容，公开教学体系整理）
+// 设计要点：语料由「📦 题库管理」统一下载到数据根（root 字段=相对路径），本表是「目录结构」的
+// 单一事实源——server 解析器 + client 视图 + 覆盖矩阵三方共用，禁止任何一侧再写字面量。
+//
+// 六模块 ↔ 语料文件映射（modules[].docs 顺序即 UI 展示顺序 = 学习优先级）
+//
+// 维度适用性（dims）：决定覆盖矩阵「按什么维度考核这个模块」。
+// 为什么必须有：早期用统一三维（文档/表格/公式/示例）打分，导致常识判断与申论
+// 因为「没有公式」被判 33%/67% —— 但这两个模块本来就不考公式，这是**假阴性**，
+// 会让白盒面板对健康模块持续告警（等同于 v1.8 遥测假阳性事故的同族错误）。
+// 规则：公式维度只在「有速算/公式体系」的模块计入；常识/申论不计公式，改计示例与表格。
+export const HUASHENG13_META = {
+  id: 'huasheng13',
+  label: '花生十三体系',
+  upstream: 'https://github.com/WangJunqing-coder/huasheng13-skill',
+  attestation: '内容基于花生十三公开教学体系整理；速算方法为公考培训行业通用方法，非独家版权。',
+  // 模块 → 语料（六模块对应行测六大题型；strategy/beikao 为跨模块策略层）
+  modules: [
+    {
+      id: 'ziliao', label: '资料分析', icon: '📊', color: '#0ea5e9',
+      weight: 1.15, targetMinutes: 28, targetQuestions: 20,
+      docs: [
+        { file: 'ziliao-fenxi',   title: 'ABRX 四要素体系', desc: '现期/基期/增长率/增长量的互推关系与全部子题型公式' },
+        { file: 'ziliao-susuan',  title: '三大速算方法',     desc: '截位直除 · 415 份数 · 假设分配，附分数比较与首尾数法' },
+        { file: 'ziliao-zonghe',  title: '综合分析题专项',   desc: '题型分类 · 常见陷阱 · 提速与蒙题策略' },
+      ],
+      examples: [{ file: 'ziliao-lianxi', title: '资料分析练习 10 题' }],
+    },
+    {
+      id: 'shuliang', label: '数量关系', icon: '🔢', color: '#f59e0b',
+      weight: 1.0, targetMinutes: 10, targetQuestions: 7,
+      docs: [
+        { file: 'shuliang-guanxi',  title: '全题型解法',   desc: '工程/行程/利润/排列组合/概率/容斥/最值/年龄/几何/溶液/牛吃草' },
+        { file: 'shuliang-gongshi', title: '公式速查手册', desc: '十三类题型全部公式，考前一页速查' },
+      ],
+      examples: [{ file: 'shuliang-lianxi', title: '数量关系练习 18 题' }],
+    },
+    {
+      id: 'yanyu', label: '言语理解', icon: '💬', color: '#10b981',
+      weight: 0.6, targetMinutes: 35, targetQuestions: 40,
+      docs: [
+        { file: 'yanyu-lianjie',    title: '逻辑填空与片段阅读', desc: '语境分析 · 中心理解 · 细节判断 · 语句排序 · 篇章阅读' },
+        { file: 'yanyu-ciyu',       title: '高频成语实词辨析',   desc: '200+ 成语分类 · 易混辨析 · 固定搭配' },
+        { file: 'yanyu-zhuanxiang', title: '专项突破',           desc: '一空/两空题 · 标题填入 · 语句衔接' },
+      ],
+      examples: [{ file: 'yanyu-lianxi', title: '言语理解练习 15 题' }],
+    },
+    {
+      id: 'panduan', label: '判断推理', icon: '🧩', color: '#8b5cf6',
+      weight: 0.7, targetMinutes: 35, targetQuestions: 40,
+      docs: [
+        { file: 'panduan-tuili',  title: '图形·定义·类比·逻辑', desc: '四类题型规律体系与翻译推理公式' },
+        { file: 'panduan-guilv',  title: '规律速查手册',        desc: '图形规律优先级 · 定义要素 · 类比关系 · 逻辑公式' },
+        { file: 'panduan-tuxing', title: '图形推理专项',        desc: '位置/样式/数量/属性规律 · 立体图形 · 训练方法' },
+      ],
+      examples: [{ file: 'panduan-lianxi', title: '判断推理练习 18 题' }],
+    },
+    {
+      id: 'changshi', label: '常识判断', icon: '🌍', color: '#14b8a6',
+      weight: 0.5, targetMinutes: 9, targetQuestions: 20,
+      // 常识不考公式：考核维度=文档齐备 + 表格（考点清单）+ 时政素材
+      dims: { formula: false, table: true, example: false },
+      docs: [
+        { file: 'changshi-panduan', title: '常识排除法体系', desc: '政治/法律/经济/历史/文化/地理/科技/时政' },
+        { file: 'shizheng-redian',  title: '时政热点积累',   desc: '重要会议 · 重大战略 · 新质生产力 · 科技成就' },
+      ],
+      examples: [],
+    },
+    {
+      id: 'shenlun', label: '申论', icon: '✍️', color: '#ec4899',
+      weight: 1.0, targetMinutes: 150, targetQuestions: 5,
+      // 申论是写作科目：不考公式；考核文档齐备 + 素材/规范表 + 配套练习
+      dims: { formula: false, table: true, example: true },
+      docs: [
+        { file: 'shenlun',         title: '申论全题型',   desc: '单一题 · 综合分析 · 提出对策 · 公文写作 · 大作文' },
+        { file: 'shenlun-biaoda',  title: '规范表达与金句', desc: '口语转规范 · 政府工作用语 · 论证素材' },
+        { file: 'shenlun-sucai',   title: '申论素材库',     desc: '经济/乡村/民生/生态/文化/科技/治理主题素材' },
+      ],
+      examples: [{ file: 'shenlun-lianxi', title: '申论练习 13 题' }],
+    },
+  ],
+  // 跨模块策略层（不属于单一题型，但决定总得分，单独成区）
+  strategy: [
+    { file: 'strategy',      title: '答题顺序与时间分配', desc: '模块顺序 · 时间切块 · 选做蒙题 · 套题复盘模板' },
+    { file: 'beikao-jihua',  title: '备考三阶段计划',     desc: '30/60/90 天 · 在职/全职 · 各模块提分策略' },
+    { file: 'cuoti-muban',   title: '错题本与复盘方法',   desc: '通用+分模块模板 · 复盘方法 · 数字化管理' },
+  ],
+  // 真题示例库（跨模块）。注意：上游语料实际落在 references/ 下，
+  // 曾误声明为 examples/ → 适配层靠 candidateDirs 兜底才不会丢档，
+  // 但那会把契约偏差伪装成正常（漏掉一篇只表现在计数上）。
+  // 现按磁盘事实声明，与 数据根/huasheng13/references/zhenti-shili.md 一致。
+  examples: [{ file: 'zhenti-shili', title: '各模块真题示例与解析', dir: 'references' }],
+  // 语料放置根（**相对数据根**，与其它仓库一致：数据根/huasheng13/{references,examples}）；
+  // server 解析器按数据根定位，client 不直接读盘。数据根由「📦 题库管理」统一配置。
+  root: 'huasheng13',
 }
 
 // ── cycle-16 本插件自身元数据（题库管理面板「关于本项目」卡片的单一事实源）──
@@ -154,17 +265,20 @@ export const SELF_META = {
   issues: 'https://github.com/xuanyuanchumo/dsh-kaogong/issues',
   npm: 'https://www.npmjs.com/package/dsh-kaogong',
   license: 'MIT',
-  desc: '考公备考整合插件（DSH 宿主原生面板）— 15 开源仓库一键式整合 · 离线可视化',
+  desc: '考公备考整合插件（DSH 宿主原生面板）— 16 个开源仓库一键式整合 · 离线可视化',
 }
 
 // ── cycle-16 原始题库注册表（题库管理面板的单一事实源）──
-// tier: required=必选（核心刷题/方法论/图推三视图的硬依赖）· recommended=推荐（真题卷/模考/深度题库）·
-//       optional=可选（增强素材，按需拉取避免一次下载过大）。
-// upstream: 上游 GitHub 仓库（无 .git 后缀，repoManager 拼接）；size: 上游 pack 体积近似（git count-objects 实测）。
+// tier: required=必选 · recommended=推荐 · optional=可选（按需拉取避免一次下载过大）。
+// 原则（用户明确要求）：**本插件不内置任何题库/语料数据**，一切数据一律由「📦 题库管理」
+// 统一下载配置到数据根。花生十三体系语料也不例外——它只是又多了一个被管理的上游仓库，
+// 不允许出现「随包分发/内置」这类旁路（否则数据来源分裂、更新与卸载语义不再统一）。
+// upstream: 上游 GitHub 仓库（无 .git 后缀，repoManager 拼接）；size: 上游 pack 体积近似。
 // 致敬上游：全部题目数据与解析成果归各仓库作者所有，本插件只做整合与可视化。
 export const REPOS_META: any = {
+  huasheng13:             { tier: 'required',    size: '336KB', upstream: 'https://github.com/WangJunqing-coder/huasheng13-skill', desc: '花生十三体系方法论 25 篇（方法论视图硬依赖·必选）' },
   xingcezhenti:           { tier: 'required',    size: '341MB', upstream: 'https://github.com/ERRRC/xingcezhenti',           desc: '515套卷58890题行测真题库（刷题视图硬依赖）' },
-  'kaogong-skill':        { tier: 'required',    size: '3MB',   upstream: 'https://github.com/KeWang0622/kaogong-skill',     desc: '考公AI技能包·方法论10主题（方法论视图硬依赖）' },
+  'kaogong-skill':        { tier: 'recommended', size: '3MB',   upstream: 'https://github.com/KeWang0622/kaogong-skill',     desc: '考公AI技能包·方法论10主题（专题「另见」区，非硬依赖）' },
   'gk-tuxing':            { tier: 'required',    size: '19MB',  upstream: 'https://github.com/Cha551/gk-tuxing',             desc: '图形推理真题354道逐题解析（图推视图硬依赖）' },
   'gwy-zhenti':           { tier: 'recommended', size: '626MB', upstream: 'https://github.com/ProfessorZhi/gwy-zhenti',      desc: '国考省考真题1683套（真题卷/模考/申论评改依赖）' },
   GongkaoNaoku:           { tier: 'recommended', size: '120MB', upstream: 'https://github.com/jangviktor-web/GongkaoNaoku',  desc: '深度题库27506题五维标注（深度题库视图依赖）' },
