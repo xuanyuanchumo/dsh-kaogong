@@ -254,7 +254,79 @@ export function apply(ctx) {
       return { text: lines.filter(Boolean).join('\n') }
     },
   })
-  runtime.tools = 5
+  // cycle-18 花生十三体系方法论检索：把内置 25 篇语料接进模型增强链路。
+  // 与 kaogong_ai_tutor 的分工：tutor 走 /api/search（跨仓库知识检索），
+  // 本工具专走 /api/huasheng13/*（内置方法论，**不依赖任何题库安装**）。
+  ctx.tools.register({
+    name: 'kaogong_ai_method',
+    description: '【可选·需模型】花生十三体系方法论检索：在内置 25 篇方法论语料（六模块 + 策略层）里按 BM25 检索，返回命中片段、覆盖矩阵与原文，供模型讲解解题方法与速算技巧。完全离线，不依赖题库安装。',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '检索关键词，如「截位直除」「ABRX」「翻译推理」「申论大作文」' },
+        file: { type: 'string', description: '可选：直接取某篇全文（如 ziliao-fenxi），给了 file 就忽略 query' },
+        limit: { type: 'number', description: '返回条数上限，默认 5' },
+        workspace: { type: 'string', description: '工作区路径（隔离）' },
+      },
+    },
+    output: textOutput,
+    async execute(args) {
+      const limit = Math.min(20, Math.max(1, Math.floor(Number(args.limit) || 5)))
+      const lines: string[] = ['## 📖 花生十三体系方法论', '']
+
+      // 目录与覆盖：让模型知道「体系里有什么、哪里是缺口」
+      let cov: any = null
+      try { cov = await callApi('/api/huasheng13/coverage', args.workspace) } catch {}
+      if (cov && Array.isArray(cov.modules)) {
+        const pct = (v: any) => Math.round((Number(v) || 0) * 100) + '%'
+        lines.push(`### 六模块覆盖（总覆盖 ${pct(cov.overall)}）`)
+        for (const m of cov.modules) {
+          lines.push(`- ${m.icon || '·'} **${m.label}** ${pct(m.coverage)} · ${m.docCount} 篇 · 目标 ${m.targetMinutes} 分钟/${m.targetQuestions} 题`)
+        }
+        if (cov.gaps && cov.gaps.length) lines.push('', '**已知缺口**: ' + cov.gaps.join('；'))
+        lines.push('')
+      }
+
+      if (args.file) {
+        let doc: any = null
+        try { doc = await callApi('/api/huasheng13/doc?file=' + encodeURIComponent(args.file), args.workspace) } catch {}
+        if (doc && !doc.error && doc.markdown) {
+          lines.push(`### 全文：${doc.title || args.file}`, '', doc.markdown.slice(0, 8000))
+        } else {
+          lines.push(`⚠️ 未取到语料「${args.file}」：${(doc && doc.error) || '服务未就绪'}`)
+        }
+        return { text: lines.join('\n') }
+      }
+
+      const q = String(args.query || '').trim()
+      if (!q) {
+        lines.push('请提供 query（检索词）或 file（语料 id）。可用语料见 /api/huasheng13/catalog。')
+        return { text: lines.join('\n') }
+      }
+
+      let found: any = null
+      try { found = await callApi('/api/huasheng13/search?q=' + encodeURIComponent(q) + '&limit=' + limit, args.workspace) } catch {}
+      const results = (found && found.results) || []
+      if (!results.length) {
+        lines.push(`未命中「${q}」。建议换用题型词（资料分析 / 判断推理 / 申论）或方法名（截位直除 / 415 份数 / 假设分配）。`)
+        return { text: lines.join('\n') }
+      }
+
+      // 置信度如实透出：low 表示只是 bigram 擦边命中，模型应据此降权
+      lines.push(`### 检索「${q}」（${results.length} 命中 · ${found.took || 0}ms · 置信度 ${found.confidence || '—'}${found.phraseHit === false ? ' · 未出现整串原文' : ''}）`, '')
+      for (const r of results.slice(0, limit)) {
+        lines.push(`#### ${r.title} \`${r.file}\`（score ${Number(r.score || 0).toFixed(2)}）`)
+        for (const s of (r.snippets || []).slice(0, 2)) {
+          if (s.heading) lines.push(`> ${s.heading}`)
+          lines.push(String(s.text || '').slice(0, 600), '')
+        }
+      }
+      lines.push('---', '请基于以上方法论原文讲解：题型识别 → 方法选择 → 速算过程 → 易错点。')
+      return { text: lines.join('\n') }
+    },
+  })
+
+  runtime.tools = 6
 
   // ── 卸载清理：只关本代自己 new 的 server（adopt 归原主）──
   // 路由注销不再需要手动处理：ctx.inject 子 fiber 随本 fiber 卸载，框架先跑其

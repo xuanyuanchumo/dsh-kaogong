@@ -6,6 +6,9 @@
 import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from './ui-kit.js'
 // cycle-13 专题枢纽：行测刷题 / 图形推理 / 深度题库 三个既有视图嵌入本页分区（R9：h() 挂载）
 import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
+// cycle-18：专题枢纽「📖 方法论」分区直接挂花生十三体系（语料由「📦 题库管理」安装到数据根）。
+// 依赖方向 papers-view → huasheng13-view 是单向的；bundler 会按拓扑序排布（不会成环）。
+import { NativeHuasheng13View } from './huasheng13-view.js'
 
     /* ══ v1.6 新增：真题卷 / 专题 / 申论评改（全部宿主原生渲染，组件自管数据）══ */
 
@@ -425,7 +428,7 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
         visited.tuxing ? wrap('tuxing', h(NativeTuxingView, { key: 'topic-tuxing', api })) : null,
         visited.deepbank ? wrap('deepbank', h(NativeDeepBankView, { key: 'topic-deepbank', api, initialModule: '', initialCategory: '' })) : null,
         visited.essay ? wrap('essay', h(NativeEssayView, { key: 'topic-essay', api, initialType: '' })) : null,
-        visited.method ? wrap('method', h(TopicMethodView, { key: 'topic-method', api })) : null)
+        visited.method ? wrap('method', h(TopicMethodHub, { key: 'topic-method-hub', api })) : null)
     }
 
     /**
@@ -531,6 +534,37 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
           h('div', { style: { fontSize: 11.5, color: '#64748b', marginBottom: 10 } },
             '从 GongkaoNaoku 27506 题的五维标注中精选带「母题思维 / 易错点」的真题，点击卡片展开题干与标注全文。'),
           pickCards))
+    }
+
+    /**
+     * 专题枢纽「📖 方法论」分区容器（cycle-18，用户明确要求）：
+     * 「不要单独弄一个导航入口，放在专题下的方法论下即可」。
+     *
+     * 结构 = 主区 + 折叠附区：
+     *  - 主区 = NativeHuasheng13View（花生十三体系，内置 25 篇语料，**零题库数据亦可用的底座**）
+     *  - 附区 = TopicMethodView（kaogong-skill 十主题 + 深度题库母题精选，**依赖外部仓库安装**）
+     *
+     * 为什么保留附区而不直接删：后者是既有已交付能力，删掉等于悄悄移除功能；
+     * 但两者数据域不同（huasheng13 六模块体系 vs 外部十主题仓库），混排会让读者以为是一套东西，
+     * 因此用默认折叠的「另见」区隔开，并标明各自的数据依赖。
+     *
+     * R9：真组件，hook 数恒定（1 个 useState 管折叠态），子视图经 h() 挂载。
+     */
+    export function TopicMethodHub({ api }) {
+      const [showLegacy, setShowLegacy] = React.useState(false)
+      return h('div', {},
+        h(NativeHuasheng13View, { key: 'hs13-in-hub', api, initialSection: 'overview' }),
+        h('div', { style: { marginTop: 14, borderTop: '1px dashed rgba(148,163,184,.35)', paddingTop: 12 } },
+          h('button', {
+            key: 'legacy-toggle',
+            className: 'kg-navbtn',
+            'data-kg-hub-legacy': '1',
+            onClick: () => setShowLegacy(v => !v),
+          }, (showLegacy ? '▾ ' : '▸ ') + '另见：kaogong-skill 十主题方法论 + 深度题库母题精选'),
+          h('div', { style: { fontSize: 11, color: '#94a3b8', margin: '4px 0 0' } },
+            '（这一部分是外部仓库内容：kaogong-skill 十主题 + GongkaoNaoku 母题精选；'
+            + '上方花生十三体系同样需要先在「📦 题库管理」安装必选包 huasheng13，未装时上方会显示安装引导）'),
+          showLegacy ? h(TopicMethodView, { key: 'topic-method-legacy', api }) : null))
     }
 
     /** 申论练习 + 离线评改 */
@@ -717,4 +751,4 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
               h('span', { style: { ...KV_TAG, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' } }, q.paperType),
               q.score ? h('span', { style: { fontSize: 10.5, color: '#64748b' } }, q.score + '分') : null),
             h('div', {}, (q.stem || '').slice(0, 110) + ((q.stem || '').length > 110 ? '…' : '')))) : null))
-    }
+    }

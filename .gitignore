@@ -11,6 +11,8 @@ _*.tmp
 # cycle-16 运行时数据（题库克隆/缓存/配置一律不入库；study-plan.md 是文档模板例外）
 data/.naoku.db
 data/.paper-index.json
+# cycle-18 方法论语法语料索引快照（与 .paper-index.json 同族：运行时可再生，不入库）
+data/.huasheng13-index.json
 data/repos/
 data/repos-config.json
 data/progress/
@@ -18,3 +20,6 @@ data/runtime.json
 data/lifecycle.jsonl
 .playwright-mcp/
 .npmrc.publish
+
+# 本轮临时验证脚本（不入户）
+_tmp/

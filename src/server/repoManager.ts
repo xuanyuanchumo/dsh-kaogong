@@ -114,14 +114,22 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
     return { state: j.state, action: j.action, url: j.url, startedAt: j.startedAt, finishedAt: j.finishedAt, error: j.error, log: j.log.slice(-30), elapsedSec: Math.round(((j.finishedAt || Date.now()) - j.startedAt) / 1000) }
   }
 
-  /** 单仓库状态（纯文件系统探测，无 spawn——status 端点必须快） */
+  /**
+   * 单仓库状态（纯文件系统探测，无 spawn——status 端点必须快）。
+   * cycle-18 决策：**不设内置/随包旁路**——一切题库数据（含方法论语料）都是
+   * 数据根下的外部克隆仓库，统一由本管理器安装/更新/删除。数据来源单一化，
+   * 才不会出现「有的能更新、有的不能删」这类语义分裂。
+   */
   function repoState(key: string, meta: any, root: string) {
     const dir = join(root, key)
     const present = existsSync(dir)
     const isGit = present && existsSync(join(dir, '.git'))
     let files = 0
     if (present) { try { files = readdirSync(dir).filter(f => f !== '.git').length } catch { /* 损坏目录 */ } }
-    return { key, tier: meta.tier, size: meta.size, desc: meta.desc, upstream: meta.upstream, present, isGit, files, job: jobView(key) }
+    return {
+      key, tier: meta.tier, size: meta.size, desc: meta.desc, upstream: meta.upstream,
+      present, isGit, files, job: jobView(key),
+    }
   }
 
   function statusSnapshot() {
@@ -137,8 +145,10 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
       self: SELF_META,   // 本插件自身元数据（面板「关于本项目」卡片消费；单一事实源在 manifest）
       git: null, // 异步探测结果单独字段（见下）
       repos: list,
-      summary: { total: list.length, present: presentN, requiredMissing, running: runningCount(),
-        tiers: { required: byTier.required || 0, recommended: byTier.recommended || 0, optional: byTier.optional || 0 } },
+      summary: {
+        total: list.length, present: presentN, requiredMissing, running: runningCount(),
+        tiers: { required: byTier.required || 0, recommended: byTier.recommended || 0, optional: byTier.optional || 0 },
+      },
     }
   }
 

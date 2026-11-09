@@ -2,7 +2,7 @@
   "skill": "ai-native-iteration-cycle",
   "version": "2.6.1",
   "fileCount": 69,
-  "generatedAt": "2026-11-03T09:11:58.422Z",
+  "generatedAt": "2026-11-09T03:56:58.486Z",
   "files": [
     {
       "path": "assets/config/config.example.yml",
@@ -106,8 +106,8 @@
     },
     {
       "path": "assets/templates/task-list.md",
-      "size": 1748,
-      "sha256": "aab1391feb3b665e0e7d945ace55943c2c46a6f304231a8498b5fffb7aac7779"
+      "size": 1766,
+      "sha256": "7ee7bd9e21ab5f55619ff5490c4ff312826ff6b4c2a3ebf5ed1ac9630ef4dc88"
     },
     {
       "path": "assets/templates/test-report.md",
@@ -221,8 +221,8 @@
     },
     {
       "path": "scripts/fact-base-verify.mjs",
-      "size": 3040,
-      "sha256": "f7c44b79da6c7b5aaea6bfc9fa9856f9d6e78a12a405da939bfe19bd5f219f90"
+      "size": 13361,
+      "sha256": "80e56a6e74ea12e27bbdfd6c14f0378ac059c5b26372a5698e4ed6f5555eef62"
     },
     {
       "path": "scripts/gate-check.mjs",
@@ -241,8 +241,8 @@
     },
     {
       "path": "scripts/init-cycle.mjs",
-      "size": 5602,
-      "sha256": "003532a73a5e8331e165965749179183f90d69dfaabb233dbed6ded3f20d3f8a"
+      "size": 7212,
+      "sha256": "c20de5c3374a98ddaaef4510632fa14709da3513d495c01e56ad9d5838476020"
     },
     {
       "path": "scripts/init-workflow.mjs",
@@ -301,8 +301,8 @@
     },
     {
       "path": "scripts/lib/merkle-hash.mjs",
-      "size": 9046,
-      "sha256": "f062184e7d6468b45f0cadde4c126e4acc4441a06cd31ef34ab100a745c78736"
+      "size": 10266,
+      "sha256": "ec203f41fdd6f8fdc4a5d25be423db2193e6dfb980f4b3c42cf40a72e401d0f0"
     },
     {
       "path": "scripts/lib/tasks.mjs",

@@ -8,7 +8,7 @@
 | 能力 | 入口 | 本项目用法 | 关键约束（踩过的坑） |
 |---|---|---|---|
 | **同源 HTTP 路由** | `ctx.inject(['webServer'], cb)` → `ws.register({kind:'prefix', path:'/kaogong', handler})` | 面板内所有 API 走同源 `/kaogong/api/*`，无 CORS | webServer 是**懒到达**服务；`ctx.get()` 首启拿不到，`ctx.on('webServer')` 不是事件 → 必须 `ctx.inject`（R10） |
-| **工具注册** | `ctx.tools.register({name, description, parameters, output, execute})` | 5 个工具：`kaogong_launch` / `ai_tutor` / `ai_plan` / `ai_shenlun` / `ai_essay_review` | `output: {schema, render}` 是宿主强制项，缺了注册失败 |
+| **工具注册** | `ctx.tools.register({name, description, parameters, output, execute})` | 6 个工具：`kaogong_launch` / `ai_tutor` / `ai_plan` / `ai_shenlun` / `ai_essay_review` / **`ai_method`**（v1.13，花生十三体系检索） | `output: {schema, render}` 是宿主强制项，缺了注册失败 |
 | **左栏面板席位** | `sidebar.panellist.register({id, order, label()})` + `main` keyed slot | 左栏「📚 考公学习」全屏面板 | 图标 svg 根必须带 `data-dsh-panel-entry=<panelId>`；**不要自己绑 click**（shell 事件委托，自绑会双触发） |
 | **右侧标签席位** | `sidebarRightTabs.register({id,kind,priority,keepMounted,title,guide})` + `sidebar.right.pane.tab` keyed slot | 右侧「考公学习」并排标签 | 双注册必须**同 id**；`guide` 字段必须是函数不是字符串 |
 | **Client Slots** | `ctx.slots.register()` | 上述两种席位的落点 | slot 是类型化 React 组合；功能插件**不得 import 其他插件的组件** |

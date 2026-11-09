@@ -11,7 +11,7 @@ client 半就是 React 18 应用：
 ```js
 const React = require('react')          // 宿主模块表提供，无需打包
 const h = React.createElement
-// 15 个视图全部是函数组件，用 hooks：
+// 16 个视图全部是函数组件，用 hooks：
 const [view, setView] = React.useState('dashboard')
 React.useEffect(() => { /* fetch */ }, [view])
 React.useCallback(...) / React.useRef(...) / React.useMemo(...)
@@ -41,10 +41,10 @@ React.useCallback(...) / React.useRef(...) / React.useMemo(...)
 
 | TS 能拦住的问题 | 本项目的替代防线 |
 |---|---|
-| 未定义标识符（如 R15 的 `NativeDeepBankView is not defined`） | `node --check`（语法通过但引用未定义查不出）→ **靠 render.test 真挂载每个视图**（R15 后已覆盖全部 15 视图） |
+| 未定义标识符（如 R15 的 `NativeDeepBankView is not defined`） | `node --check`（语法通过但引用未定义查不出）→ **靠 render.test 真挂载每个视图**（R15 后已覆盖全部 16 视图） |
 | prop 形状不匹配（R12 的 `props.data.metrics` 读到 undefined） | **render.test mock 全端点真实形状 + 每次切换断言无 `role="alert"`** |
 | 字符串枚举拼错（如 `view === 'deepbank'`） | smoke 静态断言 + 真机点击验证 |
-| 后端响应结构漂移 | smoke 端到端断言（204 条，跑真实 server + 真实数据） |
+| 后端响应结构漂移 | smoke 端到端断言（262 条，跑真实 server + 真实数据） |
 
 这些防线**能覆盖大部分类型错误**，但确实不如编译器早——R15 就是漏到了真机才发现（因为 render 测试当时只点了 3 个视图）。
 
@@ -84,6 +84,8 @@ smoke 增加「dist 时间戳 >= src 时间戳」新鲜度门
 | 工具函数 null 防御 | `Object.entries(p \|\| {})`（R4） |
 | 深嵌套三元禁止 | 用「提前 return + 分块构造」（R13 括号错配事故） |
 | 新增视图必须加 render 断言 | R14/R15：漏测即漏检 |
+| **顶层名必须带模块前缀** | combo 合并后共享单一作用域，裸词撞名 = 重复声明 SyntaxError（教训⑨）。已用前缀：graph 系 `graph*/KG_*`、study 系 `kg*/Kg*`、obs 系 `Obs*/sup*`、repos 系 `rp*/Rp*/RP_*`、**方法论系 `hs13*/Hs13*`**（`hs13Num/hs13FmtPct/Hs13CatalogCard/HS13_SECTIONS` 等） |
+| **导航不得新增一级入口** | 用户明确要求：新功能收敛进 `🎯 专题` 枢纽分区（分区按钮用 `data-kg-hub-tab` 锚定），不往一级导航加项。方法论 = 专题 → `📖 方法论`（`data-kg-hub-tab="method"`）；视图 id 可保留深链 |
 
 **推荐写法（分块构造）**：
 
@@ -118,6 +120,8 @@ function MyView({ api }) {
 - 发布走**独立干净快照目录**（无 `data/`、`.dsh/`、`.cycles/`、开发仓 git 历史）；`npm pack --dry-run` 是包卫生的机器证据。
 - GitHub 推送优先 **SSH**（Windows 下 HTTPS 443 易被重置，22 端口稳定）。
 - 市场投稿 = 一个 YAML 文件（`data/plugins/<owner>__<repo>.yml`）；仓库需 topic `dsh-plugin`、`dsh.bundle` 声明、真实代码、描述数字与代码核对属实。
+- 条目字段只用 `url/name/category/description{en,zh}/icon/tarball`；**不得手写 `npm:` 键**（registry 自动关联，写了会被校验拒绝）；`description.en` 必填，含 `: ` 时必须加引号；category 选贴合功能的（本项目 `tools`）。
+- 截图声明在**本仓** `screenshots.json`（1–8 张、相对路径、不跳出插件目录）；`icon` 必须是 GitHub 托管的位图（SVG/第三方图床会被拒）。
 
 ### 2.4 适配器纪律
 
@@ -125,6 +129,7 @@ function MyView({ api }) {
 - 慢操作必须有缓存：磁盘快照（paperData）、进程内 TTL（60s）、目录列表缓存（naokuImage）。
 - 大文件/大目录遍历用递归限深 + 目录名过滤（跳 `.git`/`node_modules`/`_` 前缀）。
 - 平台依赖能力（`node:sqlite`）必须**动态 import + 优雅降级**，不能顶层 import（否则旧 Node 整插件加载失败）。
+- **语料一律走数据根，不随包**：方法论语料在 `<数据根>/huasheng13`（`repoRoot/META.root`），与其它 15 仓库同一条安装/更新/删除链路；包内 `assets/` 只放图标与截图。新增语料的四步法（放文件 → 登记 `HUASHENG13_META` → fixtureHash 快照失效 → 加 smoke 断言）见 [METHODOLOGY.md](./METHODOLOGY.md) §5。
 
 ## 三、数据契约纪律
 
