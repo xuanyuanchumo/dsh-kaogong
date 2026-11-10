@@ -1175,6 +1175,39 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   const pkg = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
   check('peerDependencies 声明 dsh 范围', !!pkg.peerDependencies?.['@deepseek-ai/dsh'], JSON.stringify(pkg.peerDependencies || {}))
   check('engines.dsh 声明', !!pkg.engines?.dsh, JSON.stringify(pkg.engines || {}))
+  // R28（cycle-18 修：awesome-dsh-plugin PR #13534 维护者实测取证）：
+  //   `dsh.bundle.patch` 指向的文件**必须在 npm 包内**，否则按市场条目 npm 安装拿到的
+  //   bundle 缺 patch → 插件装了等于没装。1.11.0/1.12.0/1.13.0 三个 tarball 都缺它。
+  //   同时反向守卫：本地调试 overlay（含绝对路径）绝不许入包，否则会把作者机器的路径
+  //   注入到别人环境。判据一律从 package.json 自身派生，不写死文件名（同源纪律）。
+  {
+    const filesList = Array.isArray(pkg.files) ? pkg.files : []
+    const norm = (s) => String(s).replace(/^\.\//, '')
+    const patchRel = norm(pkg.dsh?.bundle?.patch || '')
+    check('R28 dsh.bundle.patch 已声明且白名单覆盖（npm 安装可用）',
+      !!patchRel && (filesList.length === 0 || filesList.some(f => norm(f) === patchRel || patchRel.startsWith(norm(f) + '/'))),
+      `patch=${patchRel || '(未声明)'} files=[${filesList.join(',')}]`)
+    check('R28 本地调试 overlay 不得入包（含绝对路径会污染他人环境）',
+      !filesList.some(f => /cordis\.local\.yml$/.test(String(f))),
+      `files=${JSON.stringify(filesList)}`)
+    // 同族守卫：随包模板（学习计划）必须入包，否则 npm 安装态「学习计划」视图直接缺内容
+    // （server 侧 PLAN_FILE = <pkg>/data/study-plan.md，包内没有就是 404 内容）
+    check('R28 随包模板 data/study-plan.md 在白名单内',
+      filesList.some(f => norm(f) === 'data/study-plan.md'),
+      `files=${JSON.stringify(filesList)}`)
+    // pack 清单实测：直接问 npm 要 tarball 内容，验证「声明 → 实体」零断链
+    try {
+      const { execFileSync } = await import('node:child_process')
+      const dry = String(execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: process.cwd(), encoding: 'utf8' }))
+      const names = (JSON.parse(dry.slice(dry.indexOf('[')))[0].files || []).map(f => f.path)
+      check('R28 npm pack 实测含 cordis.patch.yml', names.includes(patchRel), `含 patch=${names.includes(patchRel)} 共 ${names.length} 文件`)
+      check('R28 npm pack 实测不含语料与调试 overlay',
+        !names.some(n => /huasheng13\/.*\.md$/.test(n)) && !names.some(n => /cordis\.local\.yml$/.test(n)),
+        `语料/overlay 命中=${names.filter(n => /huasheng13\/.*\.md$|cordis\.local\.yml$/.test(n)).join(',') || '无'}`)
+    } catch (e) {
+      check('R28 npm pack 实测（可执行环境依赖）', false, String(e && e.message).slice(0, 120))
+    }
+  }
   // 版本三锚点一致（cycle-13 收口教训：W3 升 package.json 漏改 manifest → 沙箱 banner 仍报 1.8.0）
   {
     const mSrc = fs.readFileSync(new URL('./src/shared/manifest.ts', import.meta.url), 'utf-8')
