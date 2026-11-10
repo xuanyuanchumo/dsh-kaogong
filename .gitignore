@@ -24,3 +24,4 @@ data/lifecycle.jsonl
 # 本轮临时验证脚本（不入户）
 _tmp/
 .npmrc
+_tmp-*
