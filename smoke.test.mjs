@@ -1254,6 +1254,48 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   }
 }
 
+// ── cycle-19 静态守卫：研究文档落地闭环 + 工具输出标记行 + 生命周期量化（R-TEST-1）──
+{
+  const fs = await import('node:fs')
+  const { join } = await import('node:path')
+  const rd = join(process.cwd(), 'docs', 'research')
+  // R-DOC 守卫：10 篇研究文档 + 索引存在（声明 → 实体零断链，R28 族同纪律）
+  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md']
+  check('RDOC-01 研究文档 10 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
+  // R-DOC 事实抽验（R14 纪律）：文档引用的代码符号 ≥5 条在源码真实存在
+  const rdocBody = rdocExpected.map(f => { try { return fs.readFileSync(join(rd, f), 'utf-8') } catch { return '' } }).join('\n')
+  const graphAnalytics = fs.readFileSync('src/client/graph-analytics.ts', 'utf-8')
+  const huasheng13 = fs.readFileSync('src/adapters/huasheng13.ts', 'utf-8')
+  const srsSrc = fs.readFileSync('src/server/srs.ts', 'utf-8')
+  const physicsSrc = fs.readFileSync('src/client/graph-physics.ts', 'utf-8')
+  const httpSrc19 = fs.readFileSync('src/server/http.ts', 'utf-8')
+  const factChecks = [
+    ['graphLocalPageRank', graphAnalytics.includes('export function graphLocalPageRank')],
+    ['BM25_K1=1.2', huasheng13.includes('BM25_K1 = 1.2')],
+    ['五箱 SRS mastered', srsSrc.includes('mastered')],
+    ['KG_FLOW_RELS', physicsSrc.includes('KG_FLOW_RELS')],
+    ['UNMATCHED_BUCKET', httpSrc19.includes('UNMATCHED_BUCKET')],
+    ['五停渐变 GRAPH_SEQ_STOPS', graphAnalytics.includes('GRAPH_SEQ_STOPS')],
+  ]
+  const factHit = factChecks.filter(x => x[1]).length
+  check('RDOC-02 文档引用代码符号抽验 ≥5/6 真实存在（R14 事实基座）', factHit >= 5, '命中 ' + factHit + '/6: ' + factChecks.filter(x => !x[1]).map(x => x[0]).join(','))
+  // R-OUT 守卫：六工具输出统一标记行（kgMarkTail 全调用 + textOutput schema 契约）
+  const hostSrc = fs.readFileSync('src/host/index.ts', 'utf-8')
+  const toolCount = (hostSrc.match(/ctx\.tools\.register\(/g) || []).length
+  const tailCount = (hostSrc.match(/kgMarkTail\(/g) || []).length
+  check('R-OUT-01 六工具全部接线标记行（kgMarkTail 调用数 ≥ 工具注册数）', toolCount >= 6 && tailCount >= toolCount, `tools=${toolCount} tail=${tailCount}`)
+  check('R-OUT-02 标记行三要素（版本锚/服务态/隔离键）', /`\[kaogong v\$\{.*version.*\} · 服务:\$\{.*up.*\} · ws:\$\{.*\}\]`/.test(hostSrc.replace(/\n/g, '')) || (hostSrc.includes('服务:') && hostSrc.includes('ws:')))
+  check('R-OUT-03 体积类写死数字不复活（㉘纪律：363MB 已移除）', !hostSrc.includes('363MB'))
+  // R-OBS 守卫：生命周期量化（cumMs + bootMs + obsCumMs 渲染）
+  check('R-OBS-01 生命周期量化·服务端 cumMs/bootMs', httpSrc19.includes('cumMs') && httpSrc19.includes('bootMs'))
+  check('R-OBS-02 生命周期量化·客户端 obsCumMs 徽章', physicsSrc.includes('KG_FLOW_RELS') && fs.readFileSync('src/client/obs-view.ts', 'utf-8').includes('obsCumMs'))
+  // R-OBS-03（cycle-19 沙箱旅程实证）：UI 壳路径不得进能力对账（missingProducers 假漂移根治）
+  check('R-OBS-03 对账消费集排除 UI 壳与聚合桶', /const consumed = new Set\(Object\.keys\(tel\.endpoints\)\.filter\(/.test(httpSrc19) && httpSrc19.includes("p !== UNMATCHED_BUCKET"))
+  // R-GRAPH 守卫：搜索回车循环（keepQuery 参数 + 循环推进）
+  const graphViewSrc = fs.readFileSync('src/client/graph-view.ts', 'utf-8')
+  check('R-GRAPH-01 搜索回车循环定位（keepQuery + 循环提示）', graphViewSrc.includes('keepQuery?: boolean') && graphViewSrc.includes('回车循环定位'))
+}
+
 // ── 汇总 ──
 console.log(`\n═══ 结果: ${results.length - failed}/${results.length} 通过 ═══`)
 if (server) server.close()

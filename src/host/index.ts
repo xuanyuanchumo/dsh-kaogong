@@ -21,9 +21,16 @@ const MOUNT_PATH = '/kaogong'   // 宿主同源路由前缀（与 client 半的�
 const runtime = { port: null, server: null, adopted: false, boot: 'pending', tools: 0, mounted: false }
 
 // 工具输出契约：canonical JSON {text} → 模型内容块
+// cycle-19 R-OUT-1（dsh-ops host-contract 技巧落地）：统一「正文 + 标记行」结构化卡片。
+// 标记行 = 尾部 `[kaogong v<x.y.z> · 服务:up|down · ws:<ns>]`，让模型与用户一眼可辨
+// 「数据来自哪代服务、是否降级、哪个命名空间」——陈旧显示治理（㉑纪律）的呈现层加固。
 const textOutput = {
   schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
   render(_args, value) { return [{ type: 'text', text: value.text }] },
+}
+/** 尾部状态标记行：`---` 分隔 + 反引号标记行（版本锚/服务态/隔离键三要素） */
+function kgMarkTail(version: any, up: boolean, ws?: string): string {
+  return `\n---\n\`[kaogong v${version || '?'} · 服务:${up ? 'up' : 'down'} · ws:${ws || 'default'}]\``
 }
 
 function base() { return `http://127.0.0.1:${runtime.port || PREFERRED_PORT}` }
@@ -108,10 +115,12 @@ export function apply(ctx) {
       if (up && repos) {
         const miss = (repos.summary && repos.summary.requiredMissing) || []
         lines.push('', `### 题库数据：${repos.summary.present}/${repos.summary.total} 仓库就绪`)
-        if (miss.length) lines.push(`⚠️ 必选缺失：${miss.join('、')} —— 打开「📦 题库管理」一键安装必选包（约 363MB，国内可先配 gh-proxy 镜像）`)
+        if (miss.length) lines.push(`⚠️ 必选缺失：${miss.join('、')} —— 打开「📦 题库管理」一键安装必选包（国内可先配 gh-proxy 镜像）`)
         else lines.push('✅ 必选/推荐数据齐备')
       }
       if (up && status.progress) lines.push('', `**当前进度**：第${status.progress.day}天 · ${status.progress.answered}题 · 正确率${status.progress.rate}%`)
+      // R-OUT-1 标记行：版本锚（单一事实源 CAPABILITIES）/服务态/隔离键三要素
+      lines.push(kgMarkTail(caps && caps.plugin && caps.plugin.version, up, args.workspace))
       return { text: lines.join('\n') }
     },
   })
@@ -140,6 +149,7 @@ export function apply(ctx) {
         '\n### 相关知识', search.results?.length ? search.results.slice(0, 3).map(r => `**${r.file}**\n${r.snippet}`).join('\n\n') : '（无命中）',
       ]
       if (args.error_pattern) lines.push(`\n### 错误模式\n${args.error_pattern}\n请针对该模式给出可执行的改进建议。`)
+      lines.push(kgMarkTail(CAPABILITIES.plugin.version, !!method.content, args.workspace))
       return { text: lines.join('\n') }
     },
   })
@@ -163,6 +173,7 @@ export function apply(ctx) {
         }
         lines.push(`\n最薄弱: ${sorted[0][0]}，建议今天重点训练并复盘错题。`)
       } else lines.push('暂无练习记录，建议从「判断推理」或「言语理解」开始。')
+      lines.push(kgMarkTail(CAPABILITIES.plugin.version, p.day !== undefined, args.workspace))
       return { text: lines.join('\n') }
     },
   })
@@ -188,6 +199,7 @@ export function apply(ctx) {
         '\n### 方法论参考', method.content ? method.content.slice(0, 4000) : '（服务未就绪）',
         '\n请批改：1.采分点 2.结构 3.语言 4.参考要点 5.改进建议',
       ]
+      lines.push(kgMarkTail(CAPABILITIES.plugin.version, !!method.content, args.workspace))
       return { text: lines.join('\n') }
     },
   })
@@ -251,6 +263,7 @@ export function apply(ctx) {
         '4. 参考要点补充（列出应写而未写的）',
         '5. 提分建议（按优先级，可执行）',
       ]
+      lines.push(kgMarkTail(CAPABILITIES.plugin.version, !!(baseline && !baseline.error), args.workspace))
       return { text: lines.filter(Boolean).join('\n') }
     },
   })
@@ -301,6 +314,7 @@ export function apply(ctx) {
       const q = String(args.query || '').trim()
       if (!q) {
         lines.push('请提供 query（检索词）或 file（语料 id）。可用语料见 /api/huasheng13/catalog。')
+        lines.push(kgMarkTail(CAPABILITIES.plugin.version, false, args.workspace))
         return { text: lines.join('\n') }
       }
 
@@ -309,6 +323,7 @@ export function apply(ctx) {
       const results = (found && found.results) || []
       if (!results.length) {
         lines.push(`未命中「${q}」。建议换用题型词（资料分析 / 判断推理 / 申论）或方法名（截位直除 / 415 份数 / 假设分配）。`)
+        lines.push(kgMarkTail(CAPABILITIES.plugin.version, !!found, args.workspace))
         return { text: lines.join('\n') }
       }
 
@@ -322,6 +337,7 @@ export function apply(ctx) {
         }
       }
       lines.push('---', '请基于以上方法论原文讲解：题型识别 → 方法选择 → 速算过程 → 易错点。')
+      lines.push(kgMarkTail(CAPABILITIES.plugin.version, results.length > 0, args.workspace))
       return { text: lines.join('\n') }
     },
   })

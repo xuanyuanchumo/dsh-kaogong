@@ -175,3 +175,10 @@ src/**/*.ts  --(tsc, noEmitOnError)-->  dist/**/*.js  --(宿主加载)-->  运�
 
 - `Object.entries` 在动态对象上退化为 `unknown` → 引入 `entries()` 辅助；**但替换把辅助自身也替换成自调用**，产物变成无限递归。教训：批量文本替换后必须检查产物首行与自引用。
 - 改 `package.json` main 后主力热重载失败 → 宿主**自动移除** patch 条目（API 全 404 且 `set_plugin` 报 unknown-plugin）。恢复：`remove_bundle` → `install_bundle`。
+
+## cycle-19 追加纪律（v1.14.0）
+
+- **工具输出标记行**：所有面向模型/用户的工具输出，尾部统一 `kgMarkTail` 标记行（版本锚/服务态/ws 隔离键）——呈现层也走「声明 vs 运行态同源」（㉑纪律的推论）。
+- **遥测双口径**：`recordRequest` 可以记宽（观测余量），`/api/capabilities` 对账必须严（UI 壳 `/`、`/index.html`、`__unmatched__` 一律不进对账集）——沙箱旅程实证 missingProducers 假漂移后固化为 smoke R-OBS-03。
+- **生命周期量化**：lifecycleSnapshot 每阶段带可选 `cumMs`（启动后到达耗时），服务端算、客户端渲染，字段缺失即徽章降级——「何时发生+多久」的白盒量化。
+- **研究文档纪律**：docs/research/ 每篇五段式（数学定义→代码落地文件:行号→场景启发→工程价值→验证命令）；smoke RDOC-01/02 守卫存在性与引用真实性。

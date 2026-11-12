@@ -25,3 +25,4 @@ data/lifecycle.jsonl
 _tmp/
 .npmrc
 _tmp-*
+pnpm-lock.yaml

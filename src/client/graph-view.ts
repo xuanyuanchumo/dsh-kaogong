@@ -285,17 +285,21 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       function toggleEdge(rel: any) {
         setHiddenEdges((prev: any) => { const next = new Set(prev); if (next.has(rel)) next.delete(rel); else next.add(rel); return next })
       }
-      function pickSearchResult(id: any) {
-        setSearchQ('')
-        setSearchHit(0)
+      function pickSearchResult(id: any, keepQuery?: boolean) {
+        // cycle-19 R-GRAPH-1：keepQuery=true 时保留搜索词——「回车循环」体验：
+        // 连按 Enter 逐个命中循环定位（searchHit 推进），Esc 或点结果项才收起面板。
+        if (!keepQuery) { setSearchQ(''); setSearchHit(0) }
         locate(id)
       }
       function onSearchKey(ev: any) {
         const k = ev && ev.key
         if (k === 'Enter') {
           if (ev.preventDefault) ev.preventDefault()
-          const hit = searchMatches[searchHit] || searchMatches[0]
-          if (hit) pickSearchResult(hit.id)
+          if (!searchMatches.length) return
+          // 回车循环：首回定位第 1 命中，后续回车按序循环（keepQuery 保留下拉与上下文）
+          const nextIdx = searchHit < searchMatches.length - 1 ? searchHit + 1 : 0
+          setSearchHit(nextIdx)
+          pickSearchResult(searchMatches[nextIdx].id, true)
         } else if (k === 'ArrowDown') {
           if (ev.preventDefault) ev.preventDefault()
           setSearchHit((i: any) => Math.min(searchMatches.length - 1, i + 1))
@@ -592,7 +596,12 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                   onClick: () => pickSearchResult(mm.id),
                 },
                   h('span', { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, mm.label),
-                  h('span', { style: { fontFamily: 'monospace', fontSize: 9.5, color: '#94a3b8' } }, shortId(mm.id)))))
+                  h('span', { style: { fontFamily: 'monospace', fontSize: 9.5, color: '#94a3b8' } }, shortId(mm.id)))),
+                // R-GRAPH-1 循环提示行：回车循环命中数（≥2 时才显示，避免噪音）
+                searchMatches.length > 1
+                  ? h('div', { style: { padding: '4px 10px', fontSize: 9.5, color: '#94a3b8', borderTop: '1px dashed rgba(148,163,184,.2)' } },
+                      '回车循环定位 ' + (searchHit + 1) + '/' + searchMatches.length + ' · Esc 收起')
+                  : null)
             : searchQ ? h('div', { style: { fontSize: 11, color: '#94a3b8', marginTop: 4 } }, '无匹配节点') : null),
         // ③ W2b 图例卡（可折叠）：节点类型（色点+图标+label+计数+点击显隐）+
         //    边类型过滤（色点+label+计数+点击显隐）+ 孤儿开关 + 着色模式图例联动
