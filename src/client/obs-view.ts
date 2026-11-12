@@ -52,6 +52,16 @@ const OBS_STATE_RANK: any = { red: 0, amber: 1, ok: 2, gray: 3 }
 /** 生命周期阶段兜底顺序（life.stages 缺席时仍可画泳道；与 CAPABILITIES.lifecycle 一致） */
 const OBS_STAGE_ORDER: string[] = ['load', 'apply', 'server-start', 'tools-register', 'runtime-publish', 'serve', 'cleanup']
 
+/** cycle-19 R-OBS-1：毫秒人读化（<1s 显示 ms，<60s 显示 s，否则显示 m 分秒）——量化徽章用 */
+function obsCumMs(ms: any): string {
+  const v = Number(ms)
+  if (!isFinite(v) || v < 0) return ''
+  if (v < 1000) return Math.round(v) + 'ms'
+  if (v < 60000) return (v / 1000).toFixed(1) + 's'
+  const m = Math.floor(v / 60000), s = Math.round((v % 60000) / 1000)
+  return m + 'm' + (s ? s + 's' : '')
+}
+
 /** 事件→阶段映射（客户端镜像 server 的 STAGE_EVENTS 反查表；无法映射归「其他」行）。
  *  注意 server 表里 server-listen 同时喂 server-start 与 runtime-publish 两阶段；
  *  泳道计数取**首个匹配阶段**，避免同一事件在两行被双计。 */
@@ -954,21 +964,31 @@ export function NativeObsView(props) {
       h(Stat, { v: (hist.p95 || 0) + 'ms', l: '全局 p95', color: (hist.p95 || 0) > 200 ? '#f59e0b' : '#10b981' }),
       h(Stat, { v: (hist.max || 0) + 'ms', l: '最慢样本' })),
 
-    /* ── C 生命周期状态机 + W2c 事件泳道 + cycle-15 完成度环 ── */
-    h(ObsGlassCard, { title: '🔁 生命周期状态机', accent: '#0ea5e9', extra: h(ObsLifeRing, { life }) },
+    /* ── C 生命周期状态机 + W2c 事件泳道 + cycle-15 完成度环 + cycle-19 启动耗时量化 ── */
+    h(ObsGlassCard, {
+      title: '🔁 生命周期状态机',
+      accent: '#0ea5e9',
+      extra: h('span', { style: { display: 'inline-flex', gap: 6, alignItems: 'center' } },
+        typeof life.bootMs === 'number'
+          ? h('span', { style: Object.assign({}, G_TAG, { background: 'rgba(14,165,233,.12)', color: '#0369a1', fontFamily: 'monospace' }) }, '启动 ' + obsCumMs(life.bootMs))
+          : null,
+        h(ObsLifeRing, { life })),
+    },
       stages.length
         ? h('div', null,
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap', marginBottom: 12 } },
               stages.map((s, i) => {
                 const c = stageColor(s.state)
+                const cum = obsCumMs(s.cumMs)   // cycle-19 R-OBS-1：阶段到达耗时徽章（缺字段即空串降级）
                 return h('div', { key: String(s.stage), style: { display: 'flex', alignItems: 'center' } },
                   h('div', {
-                    title: String(s.desc || '') + (s.at ? ' · ' + new Date(s.at).toLocaleTimeString() : ''),
+                    title: String(s.desc || '') + (s.at ? ' · ' + new Date(s.at).toLocaleTimeString() : '') + (cum ? ' · 启动后 ' + cum : ''),
                     style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 20, background: c.bg, color: c.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' },
                   },
                     h('i', { style: { width: 7, height: 7, borderRadius: '50%', background: c.dot, display: 'inline-block' } }),
                     String(s.stage),
-                    s.state === 'done' ? ' ✓' : s.state === 'current' ? ' ●' : ''),
+                    s.state === 'done' ? ' ✓' : s.state === 'current' ? ' ●' : '',
+                    cum ? h('span', { style: { fontWeight: 500, fontSize: 9.5, opacity: .75, fontFamily: 'monospace' } }, cum) : null),
                   i < stages.length - 1 ? h('span', { key: 'ar' + i, style: { color: '#cbd5e1', margin: '0 3px', fontSize: 11 } }, '→') : null)
               })),
             h(ObsLaneHeat, { life }),

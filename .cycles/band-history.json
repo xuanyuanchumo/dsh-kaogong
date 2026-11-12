@@ -1,19 +1,5 @@
 [
   {
-    "timestamp": "2026-11-03T02:55:17.694Z",
-    "totalScore": 824,
-    "avgScore": 68.66666666666667,
-    "fileCount": 12,
-    "overBudgetCount": 2
-  },
-  {
-    "timestamp": "2026-11-03T02:55:25.827Z",
-    "totalScore": 824,
-    "avgScore": 68.66666666666667,
-    "fileCount": 12,
-    "overBudgetCount": 2
-  },
-  {
     "timestamp": "2026-11-03T02:56:05.165Z",
     "totalScore": 818,
     "avgScore": 62.92307692307692,
@@ -346,6 +332,20 @@
     "timestamp": "2026-11-09T06:47:44.876Z",
     "totalScore": 2835,
     "avgScore": 78.75,
+    "fileCount": 36,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-12T23:08:00.777Z",
+    "totalScore": 2835,
+    "avgScore": 78.75,
+    "fileCount": 36,
+    "overBudgetCount": 0
+  },
+  {
+    "timestamp": "2026-11-12T23:24:08.920Z",
+    "totalScore": 2853,
+    "avgScore": 79.25,
     "fileCount": 36,
     "overBudgetCount": 0
   }

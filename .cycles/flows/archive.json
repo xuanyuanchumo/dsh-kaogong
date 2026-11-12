@@ -229,8 +229,20 @@
       "from": "RUNNING",
       "to": "DONE",
       "at": "2026-11-09T03:58:45.414Z"
+    },
+    {
+      "trigger": "run",
+      "from": "DONE",
+      "to": "RUNNING",
+      "at": "2026-11-12T23:05:41.132Z"
+    },
+    {
+      "trigger": "success",
+      "from": "RUNNING",
+      "to": "DONE",
+      "at": "2026-11-12T23:05:41.132Z"
     }
   ],
-  "updatedAt": "2026-11-09T03:58:45.414Z",
+  "updatedAt": "2026-11-12T23:05:41.132Z",
   "ledgerHead": null
 }

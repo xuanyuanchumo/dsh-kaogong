@@ -114,9 +114,13 @@ const UNMATCHED_BUCKET = '__unmatched__'
 
 /** 已声明端点集合（由 CAPABILITIES 单一事实源派生，供遥测判「是否影子端点」） */
 const DECLARED_ENDPOINT_SET = new Set(CAPABILITIES.endpoints.map((e: any) => e.path))
-/** 是否为已声明端点；非 /api/* 路径（UI/静态）不参与端点对账，一律视为 matched */
+/** 是否为已声明端点；非 /api/* 路径（UI/静态）不参与端点对账，一律视为 matched。
+ *  cycle-19 旅程修正：UI 壳路径（'/' 与 '/index.html'）同样不进端点对账——
+ *  它们是页面壳而非能力端点，混进对账表会成为「消费 ∧ ¬声明」假漂移（本轮沙箱旅程实证）。 */
 function isDeclaredEndpoint(path: any): boolean {
   const p = String(path || '')
+  // UI 壳路径（SPA 页面本身）不是能力端点：不进对账、也不该进 unmatched 桶（纯壳流量）
+  if (p === '/' || p === '/index.html') return true
   if (!p.startsWith('/api/')) return true
   return DECLARED_ENDPOINT_SET.has(p)
 }
@@ -272,7 +276,30 @@ function lifecycleSnapshot() {
   stages.forEach((s, i) => {
     s.state = i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'pending'
   })
-  return { stages, events: events.slice().reverse(), current: stages[currentIdx].stage }
+  // cycle-19 R-OBS-1 生命周期量化：给每阶段补「从启动到该阶段最近一次事件的耗时」。
+  // 口径说明：lifecycle.jsonl 只记事件时间戳，无显式 duration——这里用
+  // 「阶段 at − 进程首事件 ts」得到自启动起的累计耗时（cumMs），白盒时间线把它渲染为
+  // 「启动后 X ms 到达此阶段」的量化徽章。字段可选：无时间戳 → 不带 cumMs，UI 降级。
+  const firstTs = events.length && events[0] && events[0].ts
+    ? Date.parse(events[0].ts) : NaN
+  for (const s of stages) {
+    if (s.at && !isNaN(firstTs)) {
+      const t = Date.parse(s.at)
+      if (!isNaN(t) && t >= firstTs) s.cumMs = Math.max(0, t - firstTs)
+    }
+  }
+  // 最近一次重启（最新 server-listen/server-adopt 事件）距首事件的启动耗时，供面板头部展示
+  let bootMs: number | null = null
+  const firstTsOk = typeof firstTs === 'number' && isFinite(firstTs)
+  if (firstTsOk) {
+    const bootEv = events.filter((e: any) => e && (e.event === 'server-listen' || e.event === 'server-adopt' || e.event === 'server-listen-probe'))
+    if (bootEv.length) {
+      const last = bootEv[bootEv.length - 1]
+      const t0 = firstTs as number, t1 = Date.parse(String(last.ts))
+      if (!isNaN(t1) && t1 >= t0) bootMs = Math.max(0, t1 - t0)
+    }
+  }
+  return { stages, events: events.slice().reverse(), current: stages[currentIdx].stage, bootMs }
 }
 
 // ══ 图谱快照（5s TTL 缓存；节点/边/指标/健康度）══
@@ -467,7 +494,9 @@ function coreApi(path, params, post, method, wsRaw, port) {
   if (path === '/api/telemetry') return telemetrySnapshot()
   if (path === '/api/capabilities') {
     const tel = telemetrySnapshot()
-    const consumed = new Set(Object.keys(tel.endpoints))
+    // cycle-19 旅程修正：对账消费集排除 UI 壳路径与聚合桶——「/」「/index.html」是页面壳
+    // 而非能力端点，混进对账会成假漂移（missingProducers 误报「/」，沙箱实证）。
+    const consumed = new Set(Object.keys(tel.endpoints).filter(p => p !== '/' && p !== '/index.html' && p !== UNMATCHED_BUCKET))
     const declared = new Set(CAPABILITIES.endpoints.map(e => e.path))
     // 静态对账：以「不含运行时数据的纯声明图」求入度，孤儿=声明了却无人指向
     const staticGraph = buildGraph({})

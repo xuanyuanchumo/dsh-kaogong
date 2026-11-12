@@ -9,12 +9,14 @@
 ```yaml
 url: https://github.com/xuanyuanchumo/dsh-kaogong
 name: xuanyuanchumo/dsh-kaogong
-category: tools
+category: usage
 description:
-  en: 'Offline civil-service exam workspace: 58,890 practice questions, 1,683 real exam papers, five-box spaced repetition, offline essay grading, an interactive knowledge graph, a 25-article six-module methodology library with BM25 search, and a white-box observability panel; the 16 upstream data repositories (including the 336KB methodology corpus) are installed on demand, and the package ships no exam data.'
-  zh: '离线考公备考工作台：58,890 道刷题、1,683 套真题卷、五箱间隔复习、申论离线评改、可交互知识图谱、25 篇六模块方法论（BM25 检索）与白盒可观测面板；16 个上游数据仓库（含 336KB 方法论语料）按需安装，插件包不携带题库数据。'
+  en: 'Civil-service exam study platform: on-demand question banks, five-box SRS wrong-book, 1,683 real exam papers with mock exams, offline essay grading, a 25-article six-module methodology library with BM25 search, an interactive knowledge graph, and a white-box observability panel; the 16 upstream data repositories (including the 336KB methodology corpus) are installed on demand, and the package ships no exam data.'
+  zh: '离线考公备考平台：一键式题库管理、五箱 SRS 错题本、1,683 套真题卷与整卷模考、申论离线评改、25 篇六模块方法论（BM25 检索）、可交互知识图谱与白盒可观测面板；16 个上游数据仓库（含 336KB 方法论语料）按需安装，插件包不携带题库数据。'
 icon: https://raw.githubusercontent.com/xuanyuanchumo/dsh-kaogong/main/assets/icon-180.png
 ```
+
+> cycle-19 修订：category 由 `tools` 调整为 `usage`（学习/使用类工具，与「usage=学习类」定位更贴）；机器校验脚本 `docs/marketplace/xuanyuanchumo__dsh-kaogong.yml`（六项结构断言全过：url/name/category/引号描述/icon）。
 
 字段纪律（contributing.md 明文）：
 

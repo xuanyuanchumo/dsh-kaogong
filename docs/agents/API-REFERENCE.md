@@ -1,4 +1,4 @@
-# API 参考（v1.13.0 · 57 端点 · 与 src/shared/manifest.ts 逐条同步）
+# API 参考（v1.14.0 · 57 端点 · 与 src/shared/manifest.ts 逐条同步）
 
 > 所有端点前缀：宿主通道 `/kaogong/api/*`，独立端口通道 `/api/*`（两侧都接受带前缀路径）。
 > 隔离参数：`?ws=<workspace>`（缺省为 `default`；服务端 slug+sha1-8 命名空间分文件）。
@@ -117,9 +117,9 @@
 | `/api/graph/neighborhood?node=&depth=1..3` | GET | k 跳邻域子图（未知节点→`{error}` 200） |
 | `/api/graph/path?from=&to=` | GET | 无向 BFS 最短路（路径分析） |
 | `/api/graph/impact?node=` | GET | 反向可达影响面 |
-| `/api/lifecycle` | GET | 生命周期状态机：`{stages[{stage,desc,state,at}], events[≤50 倒序], current}`（lifecycle.jsonl 环形 300 合成） |
+| `/api/lifecycle` | GET | 生命周期状态机：`{stages[{stage,desc,state,at,cumMs?}], events[≤50 倒序], current, bootMs?}`（lifecycle.jsonl 环形 300 合成；**v1.14** 增每阶段 `cumMs`=启动后到达耗时、顶层 `bootMs`=本次启动耗时，可选字段缺失即 UI 徽章降级） |
 | `/api/telemetry` | GET | 遥测：`{uptimeSec,qpsWindow,totalRequests,endpoints{path:{count,errors,errRate,p50,p95,lastActive,series[≤100]}},unmatched,coverage,histogram{p50..max},topSlow[10],alerts[]}`（**路径口径=相对挂载点逻辑路径**，v1.8 假阳性事故固化） |
-| `/api/capabilities` | GET | 能力矩阵 + 对账：`{...CAPABILITIES, runtime, orphans, reconciliation{orphanEndpoints,orphanViews,unconsumedEndpoints,missingProducers}, lifecycle}` |
+| `/api/capabilities` | GET | 能力矩阵 + 对账：`{...CAPABILITIES, runtime, orphans, reconciliation{orphanEndpoints,orphanViews,unconsumedEndpoints,missingProducers}, lifecycle}`（**v1.14**：对账消费集排除 UI 壳 `/`、`/index.html` 与 `__unmatched__` 桶——壳路径不再产生假漂移） |
 
 ## 九、题库管理（repoManager · v1.11 一键式安装 · v1.12 增 self · v1.13 16 仓库）
 
@@ -146,6 +146,7 @@
 | `kaogong_ai_shenlun` | 可选 AI | 申论批改素材（method + 题目 + 作答 + **huasheng13/doc**） |
 | `kaogong_ai_essay_review` | 可选 AI | 深度点评：先调离线 grade/article 基线分再交模型；参数 `{paperId?, no?, question?, answer, mode?:'essay'|'article', workspace?}` |
 | `kaogong_ai_method` | 可选 AI | **v1.13 新增**：花生十三体系方法论检索；消费 `/api/huasheng13/search` + `/doc` + `/coverage`（不依赖题库安装检查，但仍需数据根已装 huasheng13） |
+| （全体工具） | 输出契约 | **v1.14**：六工具输出统一「正文 + 尾部标记行」`[kaogong vX.Y.Z · 服务:up|down · ws:<ns>]`（`kgMarkTail`，版本锚/服务态/隔离键三要素；dsh-ops host-contract 卡片模式落地） |
 
 ## 十一、视图清单（16）
 

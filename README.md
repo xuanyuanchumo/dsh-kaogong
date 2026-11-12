@@ -1,9 +1,9 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.13.1
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.14.0
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
-[![tests](https://img.shields.io/badge/tests-smoke%20267%20%C2%B7%20render%2050-10b981)](#-开发与验证)
+[![tests](https://img.shields.io/badge/tests-smoke%20276%20%C2%B7%20render%2050-10b981)](#-开发与验证)
 
 > **一句话**：把 **16 个**优秀开源考公仓库整合为 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）宿主内的**原生**学习平台 ——
 > 刷题 / SRS 错题本 / 真题卷 / 整卷模考 / 申论评改 / **花生十三体系方法论** / 可交互知识图谱 / 白盒可观测，**完全离线可用**。
@@ -28,6 +28,7 @@
 - [📖 花生十三体系方法论](#-花生十三体系方法论)
 - [🗂 数据根与题库管理](#-数据根与题库管理)
 - [🏗 架构](#-架构)
+- [📐 数学模型研究文档](docs/research/README.md)
 - [❓ 故障排查（FAQ）](#-故障排查faq)
 - [🙏 致敬上游](#-致敬上游全部数据与成果归原作者)
 - [🧪 开发与验证](#-开发与验证)
@@ -330,7 +331,7 @@ src/
 
 ```bash
 npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 14 模块为宿主单 combo
-node smoke.test.mjs  # 267 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
+node smoke.test.mjs  # 276 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
                      # 三布局/流动粒子/白盒三件套/题库管理 R-P-01..06/
                      # 方法论 HS13-01..10 六端点+降级语义+跨 ws 隔离/
                      # 打包卫生 R28: bundle patch 与随包模板必须入包、语料与调试 overlay 不得入包）
