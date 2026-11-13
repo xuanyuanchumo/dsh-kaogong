@@ -1,10 +1,10 @@
-# API 参考（v1.14.0 · 57 端点 · 与 src/shared/manifest.ts 逐条同步）
+# API 参考（v1.15.0 · 60 端点 · 与 src/shared/manifest.ts 逐条同步）
 
 > 所有端点前缀：宿主通道 `/kaogong/api/*`，独立端口通道 `/api/*`（两侧都接受带前缀路径）。
 > 隔离参数：`?ws=<workspace>`（缺省为 `default`；服务端 slug+sha1-8 命名空间分文件）。
 > **本文件与 `src/shared/manifest.ts` CAPABILITIES.endpoints 必须同步**（能力对账以 manifest 为准，孤儿/漂移会被白盒面板点亮）。
 > 错误约定：业务性失败返回 `{error: '…'}` 且 **HTTP 200**（UI 卡片级降级，绝不 5xx 冒泡）；仅基础设施异常才 500。
-> 计数基线：`CAPABILITIES.endpoints = 57`、`tools = 6`、`views = 16`、`REPOS_META = 16`（导入 manifest 实测；cycles 旧文档里的 51/5/15 已过期）。
+> 计数基线：`CAPABILITIES.endpoints = 60`、`tools = 6`、`views = 16`、`REPOS_META = 16`（导入 manifest 实测；cycles 旧文档里的 51/5/15 已过期）。
 
 ## 一、核心信标与统计（coreApi）
 
@@ -126,12 +126,16 @@
 | 端点 | 方法 | 说明 |
 |---|---|---|
 | `/api/repos` | GET | 总览：`{root, rootSource, mirror, git(bool 探测), self(SELF_META), repos[16]{key,tier,size,desc,upstream,present,isGit,files,job}, summary{total,present,requiredMissing,running,tiers}}`；**无 builtin 字段**（统一管理） |
+> **cycle-20 字段增补**：`/api/repos` 增 `previousRoot`/`previousRootRepos`（旧根快照，G4）、`diskFreeMB`（可用空间，null=不可探测）、`recentJobs`（最近 5 条作业）、`summary.health{ok,empty,half-clone,no-git,absent}`（健康巡检）；每仓库增 `health`（健康态词表）与 `lastCommitAt`（最近更新时间戳，null=不可读）。
 | `/api/repos/install` | POST | `{key}` → 无仓库 `git clone --depth 1`；有 `.git` `pull --ff-only`；非 git 目录拒绝覆盖；并发上限 2；镜像前缀自动拼接；**windowsHide 静默子进程**（v1.12 修控制台闪现）。装 huasheng13 后方法论域 3s 内自愈 |
 | `/api/repos/job?key=` | GET | 作业状态 `{state:running|done|failed|canceled, action, url, log[], elapsedSec, error}` |
 | `/api/repos/cancel` | POST | SIGTERM 在途作业 |
 | `/api/repos/remove` | POST | 删除本地数据目录（学习进度不受影响；作业中拒绝；删除 huasheng13 → 方法论端点回到 degraded） |
 | `/api/repos/browse?key=&sub=` | GET | 目录浏览（≤300 条目；`isInside` 路径穿越防线） |
 | `/api/repos/config` | POST | `{root?, mirror?}` 持久化数据根/镜像（原子写 repos-config.json；root='' 回自动解析）；变更后域重建（含 methodologyApi）+ 三级缓存失效 |
+| `/api/repos/install-batch` | POST | **cycle-20**：一键批量安装（缺省=全部必选；服务端队列化，并发 2，完成即补位）→ `{ok, batchId, batch}` |
+| `/api/repos/batch?id=` | GET | 批量安装批次进度 → `{batch:{id,state,items[{key,state,error}],done,total}}` |
+| `/api/repos/jobs?limit=` | GET | 作业归档（环形 20）→ `{total, jobs[{key,action,state,error,elapsedSec,logTail}]}` |
 
 数据根解析优先级：env `KG_REPOS_DIR` > `data/repos-config.json` > 开发态上级（含任一登记仓库）> `data/repos` 托管默认。
 分级：**必选 3**（huasheng13 336KB / xingcezhenti 341MB / gk-tuxing 19MB）、**推荐 3**（kaogong-skill 3MB / gwy-zhenti 626MB / GongkaoNaoku 120MB）、**可选 10**（体积见 `/api/repos` 面板分级列表，不在文档写死合计值）。

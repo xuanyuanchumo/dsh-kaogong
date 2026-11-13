@@ -2,7 +2,7 @@
 
 > 债务清单同步 `.cycles/tech-debt/backlog.md`。每轮迭代收口时更新状态。
 
-## 当前状态（v1.13.0 / cycle-18）
+## 当前状态（v1.15.0 / cycle-20）
 
 | 维度 | 数据 |
 |---|---|
@@ -14,10 +14,11 @@
 | 方法论练习 | 74 题（32 题字母答案可自动判分 / 42 题文字作答走自评） |
 | 仓库 | 16（必选 3：huasheng13 / xingcezhenti / gk-tuxing；推荐 3：kaogong-skill / gwy-zhenti / GongkaoNaoku；可选 10） |
 | 视图 | 16 个原生 React 视图（含 huasheng13；方法论入口在专题枢纽内，不占一级导航） |
-| 端点 | 57 个（cycle-18 新增 `/api/huasheng13/*` 6 个） |
+| 端点 | **60 个**（cycle-18 加 `/api/huasheng13/*` 6；cycle-20 加 `/api/repos/{install-batch,batch,jobs}` 3） |
 | 工具 | 6 个（1 离线 + 5 可选 AI，含 `kaogong_ai_method`；输出全部实时取自能力矩阵） |
-| 断言 | smoke 262 + render 50 |
-| 数据根 | 四级可配置（env/config/开发态上级/托管默认）+ 一键克隆分级 |
+| 断言 | smoke **293** + render **51** |
+| 数据根 | 四级可配置（env/config/开发态上级/托管默认）+ 一键克隆分级（**cycle-20**：批量队列 / 半成品死锁解除 / 健康巡检 / 旧根提示 / 配置校验） |
+| 研究文档 | `docs/research/` 10 篇（PageRank / BM25 / SRS / FR / LRU / Brandes / Merkle / SPC / 参考插件 / 桑基） |
 | 发布 | GitHub（SSH）+ npm + 市场合规齐备（条目草案见 [MARKETPLACE-ENTRY.md](./MARKETPLACE-ENTRY.md)） |
 
 ## cycle-18 已交付（v1.13.0）
@@ -87,6 +88,9 @@
 | — | spawn windowsHide 控制台闪现修复（R21）+ 工具输出实时化（R22） | cycle-17 |
 | — | 花生十三体系方法论适配库（6 端点 / BM25 / 覆盖矩阵 / 74 题 / 专题入口） | cycle-18 |
 | — | 方法论语料统一走数据根（必选 huasheng13，REPOS_META 16，kaogong-skill 降推荐） | cycle-18 |
+| — | 研究文档体系 docs/research 10 篇 + 工具输出标记行 + 生命周期量化 + UI 壳对账修复 | cycle-19 |
+| — | P0 根治：门禁裸 tsc 覆写 combo（R11 第三次复发）+ assert-combo 产物守卫 | cycle-20 |
+| — | 题库管理流程优化（半成品死锁解除 / 批量安装队列 / 作业历史 / 健康巡检 / 旧根提示 / 配置校验 / 浏览口径） | cycle-20 |
 
 ## 演进原则
 
