@@ -130,17 +130,24 @@ globalThis.fetch = async (url) => {
     lifecycle: { stages: [{ stage: 'serve', desc: '稳态', state: 'current' }], events: [], current: 'serve' },
   }) }
   if (u.includes('/api/wrong')) return { json: async () => ({ wrong: [], summary: { open: 0, mastered: 0 } }) }
+  // cycle-20 题库管理：批量安装端点必须先于 /api/repos 匹配（否则被通配吞掉）
+  if (u.includes('/api/repos/install-batch')) return { json: async () => ({ ok: true, batchId: 'b1-test', batch: { id: 'b1-test', state: 'running', items: [{ key: 'xingcezhenti', state: 'running', error: null }], done: 0, total: 1 } }) }
+  if (u.includes('/api/repos/batch')) return { json: async () => ({ batch: { id: 'b1-test', state: 'done', items: [{ key: 'xingcezhenti', state: 'done', error: null }], done: 1, total: 1 } }) }
+  if (u.includes('/api/repos/jobs')) return { json: async () => ({ total: 1, jobs: [{ key: 'gwy-zhenti', action: 'clone', state: 'failed', error: '网络中断', elapsedSec: 12 }] }) }
   // cycle-16 题库管理面板数据源（self 元数据驱动「关于本项目」卡；repos 分级卡片）
   if (u.includes('/api/repos')) return { json: async () => ({
     root: 'D:/demo/repos', rootSource: 'auto', mirror: '', git: true,
+    previousRoot: 'D:/old/repos', previousRootRepos: 3,
+    diskFreeMB: 51200,
+    recentJobs: [{ key: 'gwy-zhenti', action: 'clone', state: 'failed', error: '网络中断', elapsedSec: 12 }],
     self: { name: 'dsh-kaogong', version: '1.11.0', repo: 'https://github.com/xuanyuanchumo/dsh-kaogong', homepage: 'https://github.com/xuanyuanchumo/dsh-kaogong#readme', releases: 'https://github.com/xuanyuanchumo/dsh-kaogong/releases', issues: 'https://github.com/xuanyuanchumo/dsh-kaogong/issues', npm: 'https://www.npmjs.com/package/dsh-kaogong', license: 'MIT', desc: '考公备考整合插件' },
     repos: [
-      { key: 'xingcezhenti', tier: 'required', size: '341MB', desc: '行测真题', upstream: 'https://github.com/ERRRC/xingcezhenti', present: false, isGit: false, files: 0, job: null },
-      { key: 'kaogong-skill', tier: 'required', size: '3MB', desc: '方法论', upstream: 'https://github.com/KeWang0622/kaogong-skill', present: true, isGit: true, files: 16, job: { state: 'done', action: 'clone', log: ['ok'] } },
-      { key: 'gwy-zhenti', tier: 'recommended', size: '626MB', desc: '真题卷', upstream: 'https://github.com/ProfessorZhi/gwy-zhenti', present: false, isGit: false, files: 0, job: null },
-      { key: 'sakib', tier: 'optional', size: '1MB', desc: '文档库', upstream: 'https://github.com/vsakib/sakib', present: false, isGit: false, files: 0, job: null },
+      { key: 'xingcezhenti', tier: 'required', size: '341MB', desc: '行测真题', upstream: 'https://github.com/ERRRC/xingcezhenti', present: false, isGit: false, files: 0, health: 'absent', lastCommitAt: null, job: null },
+      { key: 'kaogong-skill', tier: 'required', size: '3MB', desc: '方法论', upstream: 'https://github.com/KeWang0622/kaogong-skill', present: true, isGit: true, files: 16, health: 'ok', lastCommitAt: Date.now() - 86400000, job: { state: 'done', action: 'clone', log: ['ok'] } },
+      { key: 'gwy-zhenti', tier: 'recommended', size: '626MB', desc: '真题卷', upstream: 'https://github.com/ProfessorZhi/gwy-zhenti', present: true, isGit: false, files: 3, health: 'no-git', lastCommitAt: null, job: null },
+      { key: 'sakib', tier: 'optional', size: '1MB', desc: '文档库', upstream: 'https://github.com/vsakib/sakib', present: false, isGit: false, files: 0, health: 'absent', lastCommitAt: null, job: null },
     ],
-    summary: { total: 15, present: 1, requiredMissing: ['xingcezhenti'], running: 0, tiers: { required: 3, recommended: 2, optional: 10 } },
+    summary: { total: 15, present: 2, requiredMissing: ['xingcezhenti'], running: 0, tiers: { required: 3, recommended: 2, optional: 10 }, health: { ok: 1, empty: 0, 'half-clone': 0, 'no-git': 1, absent: 13 } },
   }) }
   // cycle-15 专项刷题记忆：GET 返回全局记忆仓库（POST 由视图静默回写，响应不参与断言）
   if (u.includes('/api/memory')) {
@@ -825,16 +832,44 @@ try {
       // 上游仓库链接逐卡存在（致敬跳转）
       if (!t.includes('https://github.com/ERRRC/xingcezhenti')) throw new Error('C16 上游仓库跳转缺失')
       if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C16 题库面板渲染降级')
-      // 安装按钮真实触达 POST /repos/install（fetch 日志断言）
+      // cycle-20：一键必选改为「批量按钮」（真·一键，服务端队列化）；
+      // 单仓库安装按钮仍在分级卡片里，两者都必须真实触发请求。
       const before = globalThis.__kgFetchLog.length
-      const installBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('⬇ xingcezhenti'))
-      if (!installBtn) throw new Error('C16 一键安装必选按钮缺失')
+      const allBtns = tr.root.findAllByType('button')
+      const batchBtn = allBtns.find(b => String(b.props.children).includes('一键安装全部必选'))
+      if (!batchBtn) throw new Error('C21 一键批量安装按钮缺失')
+      await act(async () => { batchBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+      const afterBatch = globalThis.__kgFetchLog.slice(before).join(' ')
+      if (!afterBatch.includes('/api/repos/install-batch')) throw new Error('C21 批量按钮未触发 /api/repos/install-batch 请求')
+      const installBtn = allBtns.find(b => String(b.props.children).includes('⬇ 安装'))
+      if (!installBtn) throw new Error('C16 单仓库安装按钮缺失')
+      const before2 = globalThis.__kgFetchLog.length
       await act(async () => { installBtn.props.onClick() })
       await act(async () => { await new Promise(r => setTimeout(r, 80)) })
-      const after = globalThis.__kgFetchLog.slice(before).join(' ')
+      const after = globalThis.__kgFetchLog.slice(before2).join(' ')
       if (!after.includes('/api/repos/install')) throw new Error('C16 安装按钮未触发 /api/repos/install 请求')
       if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C16 安装交互后渲染降级')
-      ok('C16-01: 题库管理面板（关于本项目 GitHub 跳转×4+致谢 · 分级卡片 · 一键安装真实发请求 · 零降级）')
+      ok('C16-01: 题库管理面板（关于本项目 GitHub 跳转×4+致谢 · 分级卡片 · 批量一键+单仓库安装真实发请求 · 零降级）')
+
+      /* ══ cycle-20：题库管理流程优化 UI 区块（G2 批次 / G3 作业历史 / G4 旧根 / G6 健康）══ */
+      for (const k of ['一键安装全部必选', '最近作业', '可用空间', '健康仓库']) {
+        if (!t.includes(k)) throw new Error('C21 题库面板新区块缺失: ' + k)
+      }
+      // G4 旧根提示：mock 提供 previousRoot + previousRootRepos=3 → 必须出现「仍有 3 个仓库」+ 切回按钮
+      if (!t.includes('仍有 3 个仓库')) throw new Error('C21 旧数据根提示缺失（用户无法感知数据未丢）')
+      const backBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('切回旧根'))
+      if (!backBtn) throw new Error('C21 切回旧根按钮缺失')
+      // G6 健康徽章：mock 的 gwy-zhenti health='no-git' → 必须出现「缺 .git」徽章
+      if (!t.includes('缺 .git')) throw new Error('C21 健康巡检徽章缺失（no-git 未显式标记）')
+      // G3 作业历史：默认折叠 → 先点「展开历史」，再断言失败原因可见（验证真实交互路径）
+      const jobsToggle = tr.root.findAllByType('button').find(b => String(b.props.children).includes('展开历史'))
+      if (!jobsToggle) throw new Error('C21 作业历史展开开关缺失')
+      await act(async () => { jobsToggle.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const t2 = JSON.stringify(tr.toJSON())   // 展开后需重新取文本快照（t 是展开前的 const）
+      if (!t2.includes('网络中断')) throw new Error('C21 作业历史失败原因未显示')
+      ok('C21-01: 题库面板新流程区块（批量一键 · 作业历史 · 旧根提示 · 健康徽章 · 可用空间）零降级')
     }
 
     /* ══ cycle-18：花生十三体系方法论视图（五分区 + 检索交互 + 零降级）══

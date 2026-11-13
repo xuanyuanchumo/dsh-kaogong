@@ -1,9 +1,9 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.14.0
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.15.0
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
-[![tests](https://img.shields.io/badge/tests-smoke%20276%20%C2%B7%20render%2050-10b981)](#-开发与验证)
+[![tests](https://img.shields.io/badge/tests-smoke%20293%20%C2%B7%20render%2051-10b981)](#-开发与验证)
 
 > **一句话**：把 **16 个**优秀开源考公仓库整合为 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）宿主内的**原生**学习平台 ——
 > 刷题 / SRS 错题本 / 真题卷 / 整卷模考 / 申论评改 / **花生十三体系方法论** / 可交互知识图谱 / 白盒可观测，**完全离线可用**。
@@ -45,7 +45,7 @@
 
 # 2) 刷新 GUI → 点左栏「📚 考公学习」→ 进入「📦 题库管理」
 
-# 3) 点「🚀 一键安装必选包」→ 完成后即可刷题 / 查方法论
+# 3) 点「🚀 一键安装全部必选」→ 完成后即可刷题 / 查方法论
 ```
 
 国内网络建议先在「题库管理 → 镜像代理」填 `https://gh-proxy.com/` 再安装，克隆速度显著提升。
@@ -102,7 +102,7 @@ plugin_manager install_bundle <克隆目录>/dsh-kaogong
 
 1. 打开左栏「📚 考公学习」→ **📦 题库管理**
 2. （国内网络）在「镜像代理」填 `https://gh-proxy.com/` 并保存
-3. 点「🚀 一键安装必选包」，或逐项安装：
+3. 点「🚀 **一键安装全部必选**」（服务端队列化，并发 2 自动补位，可看批次进度条），也可逐项安装：
 
 | 级 | 仓库 | 体积 | 装完可用的功能 |
 |---|---|---|---|
@@ -115,6 +115,17 @@ plugin_manager install_bundle <克隆目录>/dsh-kaogong
 | 可选 | 其余 9 个 | 见面板列表 | 检索增强 / PDF 试卷 / 笔记模板 / 面试素材 |
 
 > 体积以面板分级列表为准（单一事实源 `REPOS_META`），本文不写死合计值，避免漂移。
+
+**面板自带的故障恢复能力**（cycle-20）：
+
+| 能力 | 行为 |
+|---|---|
+| 半成品自动清理 | clone 中断留下的空目录会被自动清理并重装（不会卡在「目录已存在拒绝覆盖」） |
+| 作业历史 | 「🕘 最近作业」保留失败原因与耗时，上次为什么失败一目了然 |
+| 健康巡检 | 空仓库 / 缺 `.git` / 半成品会被显式徽章标记，不再混在「已安装」里 |
+| 旧根提示 | 切换数据根后提示「旧根仍有 N 个仓库（数据未删除）」+ 一键切回 |
+| 空间与可写预检 | 面板显示可用磁盘空间；安装前校验数据根可写与上游地址形状 |
+| 配置校验 | 数据根须为绝对路径、镜像须为 http(s)，非法输入不落盘 |
 
 装完即可用。未装对应数据时相关视图会**诚实降级并给出安装引导**，不会白屏、不会假报成功。
 
@@ -331,11 +342,11 @@ src/
 
 ```bash
 npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 14 模块为宿主单 combo
-node smoke.test.mjs  # 276 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
+node smoke.test.mjs  # 293 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
                      # 三布局/流动粒子/白盒三件套/题库管理 R-P-01..06/
                      # 方法论 HS13-01..10 六端点+降级语义+跨 ws 隔离/
                      # 打包卫生 R28: bundle patch 与随包模板必须入包、语料与调试 overlay 不得入包）
-node render.test.mjs # 50 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
+node render.test.mjs # 51 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
                      # 含 C18-01..08 方法论五分区 + 专题枢纽锚点 + 白盒链路卡）
 npm run test:all     # 上面两步一起跑
 ```

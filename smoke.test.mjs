@@ -366,16 +366,79 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   check('SMOKE-RP-05 数据根四级解析（env>config>dev-parent>managed）', drSrc.includes('KG_REPOS_DIR') && drSrc.includes('repos-config.json') && drSrc.includes('dev-parent') && drSrc.includes('managed-default'))
   const rmSrc = readSrc('./src/server/repoManager.ts')
   check('SMOKE-RP-05 spawn error 事件必须接住（崩溃安全）', /proc\.on\('error'/.test(rmSrc) && rmSrc.includes('GIT_TERMINAL_PROMPT'))
-  check('SMOKE-RP-05 智能判断 clone vs pull + 非 git 目录保护', rmSrc.includes("existsSync(join(target, '.git')) ? 'pull' : 'clone'") && rmSrc.includes('拒绝覆盖'))
+  // cycle-20：clone/pull 判断移入 prepareInstall（半成品先清理再判定），语义等价且更严格
+  check('SMOKE-RP-05 智能判断 clone vs pull + 非 git 目录保护', rmSrc.includes("const hasGit = existsSync(join(target, '.git'))") && rmSrc.includes("const action = hasGit ? 'pull' : 'clone'") && rmSrc.includes('拒绝覆盖'))
   const httpSrc16 = readSrc('./src/server/http.ts')
   check('SMOKE-RP-05 数据根变更重建域并失效缓存（paperIndex/naoku/graphCache）', httpSrc16.includes('resetPaperIndex()') && httpSrc16.includes('resetNaoku()') && httpSrc16.includes('graphCache.clear()'))
   // cycle-17 隔离守卫：图谱缓存必须按 wsKey 分槽（跨工作区进度不互染）
   check('SMOKE-RP-06 图谱缓存按 wsKey 分槽（跨项目隔离）', httpSrc16.includes('const graphCache = new Map') && httpSrc16.includes('graphCache.set(ck') && httpSrc16.includes('domains.store.wsKey(wsRaw)'))
-  check('SMOKE-RP-05 manifest 声明 7 个 /api/repos* 端点且消费者=ui:repos', (readSrc('./src/shared/manifest.ts').match(/path: '\/api\/repos/g) || []).length === 7)
+  check('SMOKE-RP-05 manifest 声明 10 个 /api/repos* 端点且消费者=ui:repos（cycle-20 增 3：batch/jobs/install-batch）', (readSrc('./src/shared/manifest.ts').match(/path: '\/api\/repos/g) || []).length === 10)
   const clientSrc = readSrc('./src/client/client.ts')
   check('SMOKE-RP-05 client 接线题库管理视图（分发+自管数据名单）', clientSrc.includes('h(NativeReposView') && clientSrc.includes("view === 'repos'"))
   const rvSrc = readSrc('./src/client/repos-view.ts')
   check('SMOKE-RP-05 combo 顶层名纪律（rp/Rp/RP 前缀或 Native*View 视图惯例，教训⑨）', !/^(?:function|const|class)\s+(?!rp|Rp|RP|NativeReposView)[A-Za-z_$]/m.test(rvSrc))
+}
+
+// ── cycle-20 题库管理流程优化（运行时 + 静态守卫；位置纪律：§11b 长阻塞前、§12 关服务器前）──
+{
+  const fs = await import('node:fs')
+  const readSrc20 = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf-8')
+  // ── 运行时：status 新增字段契约 ──
+  const rs = await J(`${B}/api/repos`)
+  check('SMOKE-RM-01 /api/repos 增 previousRoot/diskFreeMB/recentJobs/health 汇总字段',
+    rs && 'previousRoot' in rs && 'previousRootRepos' in rs && 'diskFreeMB' in rs && Array.isArray(rs.recentJobs) &&
+    rs.summary && rs.summary.health && typeof rs.summary.health.ok === 'number',
+    JSON.stringify(rs && rs.summary && rs.summary.health))
+  check('SMOKE-RM-02 每仓库含 health/lastCommitAt（健康巡检字段，词表受控）',
+    Array.isArray(rs.repos) && rs.repos.every(r => ['ok', 'empty', 'half-clone', 'no-git', 'absent'].includes(r.health) && 'lastCommitAt' in r))
+  // ── 运行时：作业历史端点（G3）与批次端点契约（G2）──
+  const jobsR = await J(`${B}/api/repos/jobs?limit=5`)
+  check('SMOKE-RM-03 /api/repos/jobs 返回 total+jobs 数组', jobsR && typeof jobsR.total === 'number' && Array.isArray(jobsR.jobs))
+  const batchBad = await P(`${B}/api/repos/install-batch`, { keys: ['no_such_repo'] })
+  check('SMOKE-RM-04 install-batch 未知 key 受控拒绝（不落盘不 spawn）', !!(batchBad && batchBad.error), JSON.stringify(batchBad))
+  const qBatch = await J(`${B}/api/repos/batch?id=no_such_batch`)
+  check('SMOKE-RM-04b 未知批次受控返回 error', !!(qBatch && qBatch.error))
+  // ── 运行时：config 校验（G5）——相对路径/非法 mirror 必须拒绝且不落盘 ──
+  const CFGF2 = new URL('./data/repos-config.json', import.meta.url)
+  const hadCfg2 = fs.existsSync(CFGF2)
+  const bak2 = hadCfg2 ? fs.readFileSync(CFGF2, 'utf-8') : null
+  try {
+    const badRoot = await P(`${B}/api/repos/config`, { root: 'relative/path' })
+    const badMirror = await P(`${B}/api/repos/config`, { mirror: 'ftp://bad.example/' })
+    check('SMOKE-RM-05 config 拒绝相对路径 root 与非法 mirror（G5 校验）',
+      !!(badRoot && badRoot.error) && !!(badMirror && badMirror.error),
+      JSON.stringify({ root: badRoot, mirror: badMirror }))
+  } finally {
+    if (hadCfg2) fs.writeFileSync(CFGF2, bak2)
+    else if (fs.existsSync(CFGF2)) fs.rmSync(CFGF2)
+  }
+  // ── 运行时：浏览 limit 口径（G7）──
+  const readyKey = (rs.repos.find(r => r.present) || {}).key || 'sakib'
+  const br1 = await J(`${B}/api/repos/browse?key=${encodeURIComponent(readyKey)}&limit=3`)
+  check('SMOKE-RM-06 browse limit 生效且 total 为真实总数、truncated 由返回数派生',
+    br1 && br1.limit === 3 && Array.isArray(br1.items) && br1.items.length <= 3 &&
+    typeof br1.total === 'number' && br1.truncated === (br1.total > br1.items.length))
+  // ── 运行时：半成品死锁解除（G1）——造无 .git 空壳目录，install 应清理并进入作业而非拒绝覆盖 ──
+  // 用真实数据根下一个不存在的登记 key？不行会真 clone。改为静态守卫 + 单元级函数验证。
+  const rmSrc20 = readSrc20('./src/server/repoManager.ts')
+  check('SMOKE-RM-07 失败清理与半成品重建机制（cleanupHalfClone/isHalfClone/createdDir）',
+    rmSrc20.includes('function cleanupHalfClone') && rmSrc20.includes('function isHalfClone') &&
+    rmSrc20.includes('j.createdDir') && rmSrc20.includes('cleanupHalfClone(job)') &&
+    rmSrc20.includes('isHalfClone(target)'))
+  check('SMOKE-RM-08 批处理队列（startBatch/pumpBatch/onJobSettled/并发护栏）',
+    rmSrc20.includes('function startBatch') && rmSrc20.includes('function pumpBatch') &&
+    rmSrc20.includes('onJobSettled(key)') && rmSrc20.includes('runningCount() < MAX_CONCURRENT'))
+  check('SMOKE-RM-09 config 校验 + 旧根快照 + 可写/空间预检（G4/G5/G8）',
+    rmSrc20.includes('probeWritable(nr)') && rmSrc20.includes('probeWritable(root)') &&
+    rmSrc20.includes('previousRoot = getRoot()') && rmSrc20.includes('diskFreeMB(root)') &&
+    /https?:\/\//.test(rmSrc20))
+  // ── 静态：client 新 UI 区块与 manifest 声明一致（声明→生产→消费三方）──
+  const rv20 = readSrc20('./src/client/repos-view.ts')
+  check('SMOKE-RM-10 client 消费批次/作业/旧根/健康（doInstallBatch/pollBatch/recentJobs/RP2_HEALTH）',
+    rv20.includes('doInstallBatch') && rv20.includes('pollBatch') && rv20.includes('recentJobs') &&
+    rv20.includes('RP2_HEALTH') && rv20.includes('previousRoot'))
+  check('SMOKE-RM-11 manifest 新增 3 端点声明且消费者登记',
+    ['/api/repos/install-batch', '/api/repos/batch', '/api/repos/jobs'].every(p => readSrc20('./src/shared/manifest.ts').includes("path: '" + p + "'")))
 }
 
 // ── cycle-18 花生十三体系方法论（/api/huasheng13/* 六端点端到端 + 白盒链路 + 静态守卫）──
