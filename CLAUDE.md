@@ -115,3 +115,9 @@
 - **㊲（文档引用也是声明·断言也要对准事实）**：smoke RDOC 抽验文档引用的代码符号（R14 事实基座）；R-GRAPH-01 首跑失败因断言字符串与实际函数签名不符——**断言与源码签名漂移和「文档与代码漂移」同罪**，守卫自己也要被验证。
 - **㊳（npm publish 的 cwd 陷阱）**：`npm publish` 在错误 cwd（如宿主 profile 根）执行会读到别的 package.json（version 无 version 字段 → semver.parse(null).prerelease 抛 TypeError）。修法：发布脚本显式 `process.chdir(发布仓根)` 再 spawn npm。**教训：子进程工具的「当前目录」是隐式参数，必须显式固定并写进脚本，不能依赖调用环境的 cwd。**
 - **㊴（研究文档落地纪律）**：docs/research/ 每篇五段式（数学定义→代码落地文件:行号→中文场景启发→工程价值→可运行验证）；「只写有落地的」是硬门槛——smoke RDOC-01/02 守卫存在性与引用真实性，杜绝空谈型文档。
+
+## cycle-20 P0 事故（v1.14.0 后热修：R11 第三次复发）
+- **㊵（门禁裸 tsc 覆写 combo → 插件启动失败/宿主崩溃）**：cycle-19 收口时 `gate-check --record` 的 G3 执行 `.cycles/config.yml` 里 `build_commands: ["npx tsc"]`，**绕过 npm scripts** 把 `dist/client/client.js` 从 combo factory 重写回裸 ESM（7 处行首 `import`）；主力 profile 是 `link:` 到开发仓，宿主下次启动（13:44）读到裸 ESM → 组合加载器 `SyntaxError: Unexpected token 'export'` → Client 半不激活（"插件启动失败"），异常未隔离时可能拖垮宿主。**这是 R11 的第三次复发（v1.4 裸 ESM、cycle-13 eval-runner 预热竞态、本次门禁），教训②「先 tsc 的 npm scripts 必须接 bundler」只覆盖了 npm scripts，没覆盖「任何直接调 tsc 的外部工具」。**
+  **根治三层**：① `.cycles/config.yml` 的 `build_cmd`/`G3.build_commands` 全部改 `npm run build`（门禁不再裸 tsc），smoke `R11-GUARD-01` 静态守卫禁裸 tsc 回归；② 新增 `scripts/assert-combo.mjs` 产物形态硬守卫（行首 import/export + load 头 + return{inject,apply}），挂到 build/prepack/prepare/test/test:render/test:all 末尾与 `postbuild`——**只判不修，构建期发现污染必须响亮失败**；`prepare` 带 `--fix`（安装期可自愈）；③ smoke `R11-GUARD-02/03/04` 守卫「所有产出脚本接 bundler+守卫 / 守卫存在 / 当前 combo 形态」。
+  **发布物影响面取证**：npm tarball `dsh-kaogong@1.14.0` 的 `dist/client/client.js` 行首 import=0（prepack/prepare 接了 bundler）——**已发布包是好的，无需回滚**；坏产物只在本地开发仓，link: 才让它进宿主。
+  **规矩（写入硬性纪律）**：**凡「构建命令」写进任何配置（门禁/CI/Makefile/编辑器任务），必须与 package.json 的 npm scripts 同源，禁止复制裸编译命令**；宿主用 `link:` 的开发仓时，产物形态就是宿主启动的先验条件——构建污染 = 启动事故。`smoke.test.mjs` 的 `readClientBundle()` 自愈只保护测试读取窗口，不保护宿主启动窗口，两者不可互替。

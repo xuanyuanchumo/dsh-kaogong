@@ -914,9 +914,59 @@
       "stdout": "=== Organization Review ===\nProject: D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\n\nAutonomy Level: L4\nCircuit Breaker: OK (0/3)\nTotal Cycles: 1\n\nGate Summary:\n  Passed: 77\n  Failed: 25\n\nCycle Reviews:\n  cycle-19: FAIL | E1=3, E3=4, E5=6, E7=8, E2=3, E4=5, E6=7, E8=4\n\nScore Statistics:\n  Average: 5.00\n  Min: 3.00 | Max: 8.00\n\n=== End of Review ===\n",
       "stderr": "",
       "durationMs": 140
+    },
+    {
+      "flowId": "gate-check-2026-11-13T06:16:19.994Z-45",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--gate",
+        "G3",
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-13T06:16:19.994Z",
+      "cycle": "cycle-19",
+      "phase": "plan",
+      "gate": "G3",
+      "attribution": {
+        "at": "2026-11-13T06:16:19.994Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-13T06:16:24.303Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G3: Build passed: npm run build §cycle-19 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 PASS recorded (hash 2cc0ffedbbba5086...)\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 4294
+    },
+    {
+      "flowId": "gate-check-2026-11-13T06:31:34.174Z-46",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--gate",
+        "all",
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-13T06:31:34.174Z",
+      "cycle": "cycle-19",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-13T06:31:34.174Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-13T06:31:40.108Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-19 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[PASS] G1: All 14 tasks completed §cycle-19\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 unchanged, not re-recorded\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-19\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 unchanged, not re-recorded\n[PASS] G3: Build passed: npm run build §cycle-19 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 5926
     }
   ],
-  "counter": 44,
+  "counter": 46,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

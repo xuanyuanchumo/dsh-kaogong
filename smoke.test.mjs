@@ -1296,6 +1296,41 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('R-GRAPH-01 搜索回车循环定位（keepQuery + 循环提示）', graphViewSrc.includes('keepQuery?: boolean') && graphViewSrc.includes('回车循环定位'))
 }
 
+// ── cycle-20 P0 静态守卫：R11 复发根治（裸 tsc 覆写 combo → 插件启动失败/宿主崩溃）──
+{
+  const fs = await import('node:fs')
+  // ① config.yml 不得含任何裸 tsc 产物产出命令（G3/build_cmd）——门禁必须走 npm scripts
+  // 只看「配置项值」：以键名开头、值含 `npx tsc` 且不带 --noEmit 的行（注释以 # 开头不参与）
+  const cfg = fs.readFileSync('.cycles/config.yml', 'utf-8')
+  const rawTsc = cfg.split('\n').filter(l => /^\s*[a-zA-Z_]+:\s*\[?["']?npx tsc(?! --noEmit)/.test(l))
+  check('R11-GUARD-01 config.yml 无裸 tsc 产物命令（门禁走 npm run build 全链）',
+    rawTsc.length === 0 && cfg.includes('build_commands: ["npm run build"]') && cfg.includes('build_cmd: "npm run build"'),
+    rawTsc.join(' | ') || 'ok')
+  // ② 所有产出 dist 的 npm scripts 必须同时接 bundler 与 assert-combo
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'))
+  const emitters = ['build', 'prepack', 'prepare', 'test', 'test:render', 'test:all']
+  const badEmit = emitters.filter(k => {
+    const v = pkg.scripts[k] || ''
+    return !v.includes('bundle-client.mjs') || !v.includes('assert-combo.mjs')
+  })
+  check('R11-GUARD-02 全部产物产出脚本接 bundler + assert-combo 守卫', badEmit.length === 0, badEmit.join(',') || 'ok')
+  // ③ assert-combo 守卫自身存在且可执行（防「守卫被删」型回归）
+  check('R11-GUARD-03 assert-combo.mjs 守卫存在且含响亮失败判据',
+    fs.existsSync('scripts/assert-combo.mjs') &&
+    fs.readFileSync('scripts/assert-combo.mjs', 'utf-8').includes('process.exit(1)'))
+  // ③b R28 族：package.json scripts 引用的 scripts/*.mjs 必须进 files 白名单（源码安装 prepare 依赖）
+  const emitScripts = ['bundle-client.mjs', 'assert-combo.mjs']
+  const files = pkg.files || []
+  const missingScripts = emitScripts.filter(s => !files.includes('scripts') && !files.includes('scripts/' + s))
+  check('R11-GUARD-03b prepare/prepack 引用的 scripts/*.mjs 全部在 files 白名单内（R28 声明→实体）',
+    missingScripts.length === 0, missingScripts.join(',') || 'ok')
+  // ④ 当前 combo 产物形态（运行时再兜一次；构建期已由 assert-combo 硬拦）
+  const combo = fs.readFileSync('dist/client/client.js', 'utf-8')
+  check('R11-GUARD-04 当前 dist/client/client.js 为 combo factory 形态',
+    !/^import[ \t]/m.test(combo) && !/^export[ \t]/m.test(combo) &&
+    /window\.__ModuleLoader__\.load\(\{/.test(combo) && /return \{\s*inject: \[/.test(combo))
+}
+
 // ── 汇总 ──
 console.log(`\n═══ 结果: ${results.length - failed}/${results.length} 通过 ═══`)
 if (server) server.close()

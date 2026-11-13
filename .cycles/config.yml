@@ -8,9 +8,12 @@ macro_cycle:
   autonomy_level: L4
 
 build:
-  build_cmd: "npx tsc"
-  typecheck_cmd: "npx tsc --noEmit"
-  lint_cmd: "npx tsc --noEmit"
+  # cycle-20 P0 修复（R11 复发）：任何裸 `tsc` 都会把 dist/client/client.js 从 combo
+  # 重写回裸 ESM → 宿主 Web 组合加载器 SyntaxError → 插件启动失败/可能拖垮宿主。
+  # 全部产物产出命令一律走 npm scripts（已接 bundler），门禁绝不直接调 tsc。
+  build_cmd: "npm run build"
+  typecheck_cmd: "npm run typecheck"
+  lint_cmd: "npm run lint"
   test_cmd: "node smoke.test.mjs"
   coverage_cmd: "node --check src/server/http.js"
   e2e_cmd: "node smoke.test.mjs"
@@ -84,7 +87,8 @@ gates:
     journey_coverage: true   # 消费方 gate-check.mjs:224（声明的旅程 test_files 必须真实存在）
     # coverage_threshold/chaos_coverage 已移除：无消费者的装饰性门禁声明（诚实优先）
   G3:
-    build_commands: ["npx tsc"]
+    # cycle-20：禁止裸 tsc（R11 复发根因）——必须走全链接 bundler 的 npm script
+    build_commands: ["npm run build"]
 
 human_gates:
   intent_accept:

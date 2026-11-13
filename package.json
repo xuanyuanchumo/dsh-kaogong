@@ -30,6 +30,7 @@
   },
   "files": [
     "dist",
+    "scripts",
     "src/shared/types.ts",
     "locale",
     "docs",
@@ -59,14 +60,15 @@
     }
   },
   "scripts": {
-    "build": "tsc && node scripts/bundle-client.mjs",
+    "build": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs",
     "version:bump": "node scripts/bump-version.mjs",
     "typecheck": "tsc --noEmit",
-    "prepack": "tsc && node scripts/bundle-client.mjs",
-    "prepare": "tsc && node scripts/bundle-client.mjs",
-    "test": "tsc && node scripts/bundle-client.mjs && node smoke.test.mjs",
-    "test:render": "tsc && node scripts/bundle-client.mjs && node render.test.mjs",
-    "test:all": "tsc && node scripts/bundle-client.mjs && node smoke.test.mjs && node render.test.mjs",
+    "prepack": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs",
+    "prepare": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs --fix",
+    "postbuild": "node scripts/assert-combo.mjs",
+    "test": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node smoke.test.mjs",
+    "test:render": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node render.test.mjs",
+    "test:all": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node smoke.test.mjs && node render.test.mjs",
     "lint": "tsc --noEmit"
   },
   "keywords": [
