@@ -144,14 +144,19 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
 {
   const W = '?ws=PROJ_S'
   // 取一道"干净"错题：循环抽题直到 stem 不在错题本（同文件重复题会致签名计数>1，flaky 根因）
+  // cycle-29 加固：空响应/错误响应防御——抽题器偶发 {error} 时跳过本轮而非裸崩（.questions[0]）
   let q1 = null, wrongAns = null
   for (let i = 0; i < 6; i++) {
-    const cand = (await J(`${B}/api/questions?module=常识判断&count=1`)).questions[0]
+    const qr = await J(`${B}/api/questions?module=常识判断&count=1`)
+    const cand = qr && Array.isArray(qr.questions) && qr.questions.length ? qr.questions[0] : null
+    if (!cand) continue   // 端点级 error/空（数据根未就绪等）→ 跳过，循环末尾统一判失败
     const existing = (await J(`${B}/api/wrong${W}`)).wrong.find(w => w.stem === cand.stem)
     if (!existing || existing.wrongCount === 0) { q1 = cand; break }
     // 撞重复题：把它从错题本清掉再重测
     if (existing) await P(`${B}/api/wrong/remove${W}`, { sig: existing.sig })
   }
+  // cycle-29：6 轮全部空响应 = 服务端抽题不可用（真实缺陷），响亮失败而非 undefined 解引用裸崩
+  if (!q1) throw new Error('SRS 前置抽题 6 轮均空响应（/api/questions 常识判断）——检查数据根与题库文件')
   wrongAns = 'A' === q1.correctAnswer ? 'B' : 'A'
   await P(`${B}/api/check${W}`, { question: q1, answer: wrongAns })  // 故意答错
   const wb1 = await J(`${B}/api/wrong${W}`)
@@ -1595,6 +1600,36 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   // R-GRAPH 守卫：搜索回车循环（keepQuery 参数 + 循环推进）
   const graphViewSrc = fs.readFileSync('src/client/views/graph-view.tsx', 'utf-8')
   check('R-GRAPH-01 搜索回车循环定位（keepQuery + 循环提示）', graphViewSrc.includes('keepQuery?: boolean') && graphViewSrc.includes('回车循环定位'))
+
+  // ── cycle-29 静态守卫（C29）：工具展示契约 + 图谱子图按需加载 ──
+  const hostSrc29 = fs.readFileSync('src/host/index.ts', 'utf-8')
+  // C29-01 P0 命令窗口根治：6 工具全部声明 presentCall/presentResult 展示契约
+  //（宿主 asar 实测 148 处 presentCall 引用 = 完整支持；未声明则回退 generic 兜底卡片）
+  const cardCalls = (hostSrc29.match(/\.\.\.kgToolCard/g) || []).length
+  check('C29-01 工具展示契约：presentCall/presentResult 工厂存在且 6 工具全部接线',
+    hostSrc29.includes('function kgToolCard') && hostSrc29.includes('presentCall') && hostSrc29.includes('presentResult') && cardCalls === 6,
+    '接线数=' + cardCalls + '（应为 6）')
+  // C29-02 展示投影必须纯函数（never throw）：异常收敛 undefined 保留宿主兜底
+  check('C29-02 展示投影纯函数防御（try/catch 收敛 undefined，绝不抛到渲染期）',
+    (hostSrc29.match(/catch \{ return undefined \}/g) || []).length >= 2)
+  check('C29-03 展示卡片隐藏隔离键 workspace（不进卡片正文）', hostSrc29.includes("k === 'workspace'"))
+  // C29-04 图谱子图按需加载：消费服务端已声明端点 /api/graph/neighborhood + /api/graph/impact
+  check('C29-04 图谱子图：neighborhood/impact 端点 UI 消费闭环（loadSubgraph 双通道）',
+    graphViewSrc.includes('loadSubgraph') && graphViewSrc.includes('/graph/neighborhood') && graphViewSrc.includes('/graph/impact'))
+  // C29-05 子图模式面包屑：返回全图 + 全图统计口径不变的提示文案
+  check('C29-05 子图面包屑：返回全图按钮 + 口径提示（统计面板仍按全图）',
+    graphViewSrc.includes('返回全图') && graphViewSrc.includes('子图模式') && graphViewSrc.includes('仍按全图口径'))
+  // C29-06 引擎装配换源：activeNodes/activeEdges 成为引擎唯一数据源（子图/全图同构）
+  check('C29-06 引擎装配换源：activeNodes/activeEdges 喂引擎（子图与全图同构）',
+    graphViewSrc.includes('nodes: activeNodes, edges: activeEdges') && graphViewSrc.includes('[raw, activeNodes, activeEdges]'))
+  // C29-07 详情抽屉子图入口：1跳/2跳邻域 + 影响面三按钮可达
+  check('C29-07 抽屉子图入口：1跳/2跳邻域 + 影响面三按钮',
+    graphViewSrc.includes('1跳邻域') && graphViewSrc.includes('2跳邻域') && graphViewSrc.includes('影响面'))
+  // C29-08 manifest 工具声明与 host 接线数对齐（6 个 optional-ai 工具单一事实源不漂移）
+  const manifestSrc29 = fs.readFileSync('src/shared/manifest.ts', 'utf-8')
+  const manifestTools29 = (manifestSrc29.match(/name: 'kaogong_/g) || []).length
+  check('C29-08 manifest 工具声明数 = host 接线数（6）', manifestTools29 === 6 && cardCalls === 6,
+    'manifest=' + manifestTools29)
 
 
   // ── cycle-26 静态守卫（C26）：行测材料双形态 + 真题卷加载死循环根治 ──

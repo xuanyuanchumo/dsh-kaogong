@@ -76,7 +76,7 @@ globalThis.fetch = async (url) => {
   // R12：以下三类端点的真实形状必须 mock 到，否则 prop 形状缺陷测不出
   // v1.8.0：图谱 mock 必须带 nodes/edges（否则 canvas 分支不执行，新图谱逻辑测不到），
   // 且包含 nodeMeta/analytics/layout 以覆盖「服务端字段优先」路径。
-  if (u.includes('/api/graph/neighborhood')) return { json: async () => ({ center: 'plugin:kaogong', depth: 1, nodes: [], edges: [], stats: { nodes: 0, edges: 0 } }) }
+  if (u.includes('/api/graph/neighborhood')) return { json: async () => ({ center: 'plugin:kaogong', depth: 1, nodes: [{ id: 'plugin:kaogong', type: 'plugin', label: 'dsh-kaogong' }, { id: 'endpoint:/api/stats', type: 'endpoint', label: '学习统计' }], edges: [{ source: 'plugin:kaogong', target: 'endpoint:/api/stats', rel: 'produces', w: 1 }], stats: { nodes: 2, edges: 1 } }) }
   if (u.includes('/api/graph/path')) return { json: async () => ({ found: true, path: ['view:graph', 'plugin:kaogong', 'view:dashboard'], length: 2 }) }
   if (u.includes('/api/graph/impact')) return { json: async () => ({ node: 'plugin:kaogong', dependents: ['plugin:kaogong'], count: 1 }) }
   if (u.includes('/api/graph')) return { json: async () => ({
@@ -771,6 +771,26 @@ try {
       }
       if (!combo3.includes('masteryMap')) throw new Error('RENDER-G-17 tooltip 掌握率穿线缺失')
       ok('RENDER-G-17: 图谱直达业务（view/module/method → setView）+ tooltip 掌握率接线在产物中')
+    }
+
+    // C29-01（cycle-29 P1）图谱子图按需加载：详情抽屉三按钮 + 面包屑 + loadSubgraph 取数链在产物中。
+    // canvas stub 下无法真实点选节点，按 G-13/G-17 证据链模式验证「UI 面在产物、数据面在 mock」：
+    // neighborhood mock 已升级为非空子图（2 节点 1 边），loadSubgraph 消费路径真实可达。
+    {
+      if (!combo3.includes('1跳邻域') || !combo3.includes('2跳邻域') || !combo3.includes('影响面')) {
+        throw new Error('C29-01 抽屉子图按钮缺失（1跳/2跳邻域/影响面）')
+      }
+      if (!combo3.includes('子图模式') || !combo3.includes('返回全图') || !combo3.includes('仍按全图口径')) {
+        throw new Error('C29-01 子图面包屑缺失（模式标签/返回按钮/口径提示）')
+      }
+      if (!combo3.includes('loadSubgraph') || !combo3.includes('graph/neighborhood') || !combo3.includes('graph/impact')) {
+        throw new Error('C29-01 子图取数链缺失（loadSubgraph/neighborhood/impact）')
+      }
+      // 影响面派生子图必须走 nodeIndex 补标签（不臆造节点元数据）
+      if (!combo3.includes('dependents') || !combo3.includes('idSet')) {
+        throw new Error('C29-01 影响面子图派生链缺失（dependents→nodeIndex）')
+      }
+      ok('C29-01: 图谱子图按需加载（neighborhood/impact 消费闭环 + 面包屑返回全图）齐备')
     }
 
     // G-14 导出 PNG 按钮存在且可点（canvas stub 下 toBlob 缺失 → 守卫静默，不抛错）

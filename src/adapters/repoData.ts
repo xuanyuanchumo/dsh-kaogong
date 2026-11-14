@@ -173,7 +173,10 @@ export function getRandomQuestions(repoRoot, moduleName, count = 1) {
   const dirName = XINGCE_MODULES[moduleName]
   if (!dirName) return { error: `未知模块。可用: ${Object.keys(XINGCE_MODULES).join(', ')}` }
   const modulePath = join(repoRoot, 'xingcezhenti', dirName)
-  const files = safeReadDir(modulePath).filter(f => f.endsWith('.md'))
+  // cycle-29（flaky 根治）：排除非题库文件——六个模块目录各有一个 README.md（6/2962=0.2%），
+  // 解析恒为 0 题 → 抽中即返回 error，消费方 `.questions[0]` 裸崩（smoke 并行预热窗口实测崩一次）。
+  // 判据：文件名含 README/说明/目录 → 直接跳过；保留全部试卷文件。
+  const files = safeReadDir(modulePath).filter(f => f.endsWith('.md') && !/README|说明|目录/i.test(f))
   if (files.length === 0) return { error: `模块 ${moduleName} 无题文件` }
   const randomFile = files[Math.floor(Math.random() * files.length)]
   const questions = parseQuestions(join(modulePath, randomFile), 30)

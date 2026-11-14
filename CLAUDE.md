@@ -167,3 +167,9 @@
 - **（C28-材料段终止条件）**：`parseGroupMaterials` 原终止条件只看下一个 H2——浙江 2026 A 类卷「材料 1」后**无 H2**，段文本吞到文末（20000 字截断），把**后续全部题干 + `<details>` 答案解析**吞进组材料（用户报「44 题材料过度+答案出来了」）。修法：终止条件取「下一个 H2 ∪ 下一个题头（`### 第 N 题`）」更近者。**教训：凡「段边界」解析，终止集必须含同级标题、更深层标题、题头三类；只认同级=默认尾部无界。守卫 C28-01 固化。**
 - **（C28-专题四区复用）**：专题刷题（practice）对齐模考四区没有新造组件——QwPaperMode 扩展 `mode:'practice'`（题目区=判分交互，材料/切换/答题卡三区同构）；practice 的抽题队列即「整卷」（同卷资料分析题组连续抽取）。**教训：新模式先问「与既有 mode 差异是什么」——practice 与 exam 只差判分态来源（selected/right/revealed 由宿主持有 vs answers[q.no]），容器层零分支。**
 - **（C28-组归属引用链）**：位置扫描只能定「组起点」不能定「组终点」——浙江卷 MAT1（篇章材料，真实 44-45 两题）与 MAT2 间隔 60 题普通题，材料 1 被误划给 44-105。**引用链判据**：材料指纹（滑窗 2-4 字 n-gram top24，均匀贪心切分会把「良渚古城遗址」切成不相交块导致子词匹配失败）逐题匹配题干+解析（首题命中≥2 开组、后续≥1 维持、命中 0 断链）。双卷对照固化：篇章 2 题组、资料分析 5 题组均精确。**教训：文本段→对象的归属不能只看位置邻近，「内容引用」才是语义边界；指纹必须滑窗覆盖子词。**
+
+## cycle-29 事故与教训（v1.26.0 工具展示契约 + 子图按需加载）
+- **（C29-bundler 的 export 剥皮不认 `export async function`）**：外提 graph-subgraph.ts 引入 `export async function` 新形态，bundler 的 collectExports/topLevelDecls 正则只认 `function|class|const|let|var` → export 关键字漏剥进 combo → 终检「产物含行首 export」响亮失败（smoke 332/350 假红窗口）。**教训：基建（bundler/守卫）的形态识别白名单 = 它必须认识的所有语法形态；给基建喂新形态前先查它的正则认识不认识。终检守卫这次抓住了（响亮失败而非静默污染），验证了 assert-combo 存在的意义。**
+- **（C29-展示契约纯函数纪律）**：presentCall/presentResult 是宿主反复调用的纯投影（live streaming + session-log replay 两路），必须 total（绝不抛错、只依赖入参）；异常一律 catch 收敛 undefined = 保留宿主兜底渲染。守卫 C29-02 固化。
+- **（C29-子图引擎换源同构）**：子图模式不造第二套渲染——activeNodes/activeEdges 成为 createGraphEngine 唯一数据源，子图/全图同一装配路径（C28 教训「容器层零分支」的推广）。统计面板/图例保持全图口径（subData 不参与 metrics 计算），面包屑明示口径避免「数字对不上」的假漂移感知。
+- **（C29-复杂度预算治理走固定拆法）**：graph-view.tsx 加子图逻辑后 216 > 180 → 外提 graph-subgraph.ts（fetch/normalize/derive 三纯函数，参数穿线）；http.ts 204 → 外提 graphQuery.ts（graphSnapshot 参数注入）。带回 Status: WARNING（无超预算文件）。复用 cycle-13 教训①的固定拆法，不发明新拆法。

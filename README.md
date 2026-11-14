@@ -1,4 +1,4 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.25.0
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.26.0
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)

@@ -75,21 +75,23 @@ function topLevelDecls(src) {
   for (const line of src.split('\n')) {
     const indent = (line.match(/^ */) || [''])[0].length
     if (indent !== 0 && indent !== 4) continue
-    const m = line.match(/^(?:export )?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)/)
+    const m = line.match(/^(?:export )?(?:async )?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)/)
     if (m) names.push(m[1])
   }
   return names
 }
 
 // export 剥皮：内联前缀去掉 `export `；`export { A, B }` 整行删除；返回改写体 + 导出名
+// cycle-29：同时剥 `export async function`（新形态——graph-subgraph 外提引入 async 导出）；
+// 收集名用 lookahead 兼容 async：`export async function f` 与 `export function f` 同形。
 function collectExports(src) {
   const names = new Set()
-  for (const m of src.matchAll(/^[ \t]*export\s+(?:(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)|\{([^}]*)\})/gm)) {
+  for (const m of src.matchAll(/^[ \t]*export\s+(?:(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)|\{([^}]*)\})/gm)) {
     if (m[1]) names.add(m[1])
     else for (const n of m[2].split(',').map(s => s.trim()).filter(Boolean)) names.add(n)
   }
   const body = src
-    .replace(/^[ \t]*export (?=(?:function|class|const|let|var)\s+[A-Za-z_$][\w$]*)/gm, '')
+    .replace(/^[ \t]*export (?=(?:async\s+)?(?:function|class|const|let|var)\s+[A-Za-z_$][\w$]*)/gm, '')
     .replace(/^[ \t]*export \{[^}]*\};?[ \t]*\n?/gm, '')
   return { body, names: [...names] }
 }
