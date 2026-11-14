@@ -1295,7 +1295,16 @@
       "timestamp": "2026-11-14T08:42:49.877Z",
       "previousHash": "e3cb4fee087d0ffd9a6f9adbb8f47d19091531bb3198239b05a15b787d579d51",
       "hash": "0e9c29faf99aac3e764e4c14d9b9e51454a06bcbd14b3f0552eb7e718f21c57f"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "PASS",
+      "detail": "Zero failures, zero errors (cycle-26b二报修复测试报告.md) §cycle-26 [Q2:PASS]",
+      "timestamp": "2026-11-14T09:04:26.729Z",
+      "previousHash": "0e9c29faf99aac3e764e4c14d9b9e51454a06bcbd14b3f0552eb7e718f21c57f",
+      "hash": "468aaf53087c29cbd591837622cda2d18c81c705310f0fd76d33a9179573284b"
     }
   ],
-  "chainHead": "0e9c29faf99aac3e764e4c14d9b9e51454a06bcbd14b3f0552eb7e718f21c57f"
+  "chainHead": "468aaf53087c29cbd591837622cda2d18c81c705310f0fd76d33a9179573284b"
 }

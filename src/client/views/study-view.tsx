@@ -327,6 +327,10 @@ function KgMemBanner(props: KgMemBannerProps) {
                 paperFile: q.paperFile,
                 module: q.module || module,
                 type: q.type || (q.fromWrongBook ? '错题回炉' : ''),
+                // cycle-26 D-1b：专题刷题链路的资料分析题组材料（repoData groupMaterial，同组多题共享；
+                // 有则渲染——>500 字自动折叠，含 kgimg:// 图占位经 RichText 出图）
+                material: q.groupMaterial || '',
+                materialRef: q.groupMaterial ? '题组材料' : '',
                 stem: q.stem,
                 options: q.options,
                 answer: q.correctAnswer || q.answer,

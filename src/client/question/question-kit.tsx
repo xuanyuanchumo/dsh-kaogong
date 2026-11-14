@@ -126,9 +126,11 @@ export function QwTypeTag({ q }: QwTypeTagProps) {
 /* ══════════════ 3 材料（受控折叠） ══════════════ */
 
 /** QwMaterial props：受控（collapsed/onToggle 由宿主持有，保 smoke 材料折叠契约）或自治
- *  （无 onToggle 时组件内自持折叠态，长材料 >500 字默认折叠——browse 模式题组材料形态） */
-interface QwMaterialProps { text: string; ref?: string; collapsed?: boolean; onToggle?: () => void }
-export function QwMaterial({ text, ref: materialRef, collapsed, onToggle }: QwMaterialProps) {
+ *  （无 onToggle 时组件内自持折叠态，长材料 >500 字默认折叠——browse 模式题组材料形态）。
+ *  ⚠ matRef（勿名 ref）：ref 是 React 保留 prop——经 createElement 传字符串 ref 会在
+ *  DOM 提交期抛错使整卡进 ErrorBoundary（cycle-26 实测「整卷面板渲染降级」根因）。 */
+interface QwMaterialProps { text: string; matRef?: string; collapsed?: boolean; onToggle?: () => void }
+export function QwMaterial({ text, matRef: materialRef, collapsed, onToggle }: QwMaterialProps) {
   /* ── R9：hooks 全顶部；自治模式才用的 useState（受控模式下恒 false，hook 链恒定） ── */
   const [selfCollapsed, setSelfCollapsed] = React.useState(null as boolean | null)
   const body = String(text || '')
@@ -340,8 +342,8 @@ export function QwQuestionCard({ q, mode = 'single', interactive, selected, righ
           <QwTypeTag q={q} />
         </div>
       </div>
-      {/* 3 材料（受控折叠） */}
-      <QwMaterial text={q.material} ref={q.materialRef} collapsed={matCollapsed} onToggle={matOnToggle} />
+      {/* 3 材料（受控折叠；matRef 为材料副标题——ref 是 React 保留 prop，禁用作 prop 名） */}
+      <QwMaterial text={q.material} matRef={q.materialRef} collapsed={matCollapsed} onToggle={matOnToggle} />
       {/* 4 题干 */}
       <QwStem q={q} />
       {/* 5 选项 */}
