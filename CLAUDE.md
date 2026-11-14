@@ -181,3 +181,7 @@
 ## cycle-30 事故与教训（v1.27.0 真题卷交互回归）
 - **（C30-重构降级陷阱：换容器时交互语义静默丢失）**：cycle-27 把真题卷整卷浏览收敛进 QwPaperMode mode="browse" 只读态（interactive=false、onSelect=undefined），v1.17 前的答案选择交互在重构中被**静默降级**——smoke/render 全绿（守卫锚定的是「形态存在」不是「行为等价」），直到用户回归才暴露。**修法「自答对照」**：browse 选项可点记录自选（宿主 browseSel/browseReveal 双 useState）→ 主动「对照答案」揭示卷面 correctAnswer（绿/红判色 + 解析段展开）→ 重做入口；答题卡四态经 browseAnswers 同步。守卫 C30-01..05 + RENDER-PP-30 全旅程（点选→揭示→解析→重做）固化。**教训：重构「收敛只读视图」时必须对照旧实现枚举行为面（交互/数据/快捷键），行为回归测试（render 真点击断言）不能只测渲染形态；用户可感知的交互丢失与功能损坏同罪。**
 - **（C30-卷面答案双源兜底）**：真题卷行测题答案在 `correctAnswer`（parseQuestion 从 `<details>` 提取），申论/个别卷在 `answer` 字段——消费方双源判定（correctAnswer 优先 + answer 字母形态兜底 `/^[A-D]$/`），数据形状差异在 UI 层防御。沙箱实证浙江 A 类卷 120/120 题带答案。
+
+## cycle-30b 教训（v1.27.0 T-027/T-031 清偿）
+- **（C30b-排程算法不造新轮子）**：智能排程弱度复用 SRS 同源模型 1/(rate+0.15)（教训⑤的推广：同一业务语义的权重公式全仓只有一个事实源）；积压放大 (1+backlogShare) 是正交修正项而非新模型。**确定性纪律**：无 Math.random/Date.now（同输入两次输出深相等，SMOKE-SCHED-02 运行时固化）；题量分配 softmax 守恒（Σsuggested=30，SMOKE-SCHED-04）——「分配类」算法必须有守恒断言，否则浮点漂移让 UI 数字自相矛盾。
+- **（C30b-静态与动态解耦）**：排程不改动 30 天日历结构（阶段/天数是模板事实源 study-plan.md），只重排每日「训练侧重标注+建议题量」——静态计划与动态画像分离，可解释（primaryRate/backlog 全透出）可回退（不写盘，刷新即重算）。旧 SPA（ui/index.html）与原生视图共用 /api/plan/schedule（四步纪律 manifest→server→UI→smoke；UI 先落旧 SPA 兜底通道）。

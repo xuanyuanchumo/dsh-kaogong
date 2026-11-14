@@ -82,6 +82,9 @@ export const CAPABILITIES = {
     { path: '/api/tuxing/q', label: '图形推理单题详情', consumers: ['ui:tuxing'] },
     { path: '/api/tuxing-img', label: '图形推理配图', consumers: ['ui:tuxing'] },
     { path: '/api/plan', label: '学习计划', consumers: ['ui:plan'] },
+    // cycle-30（T-027 清偿）：学习计划智能排程——按「剩余天数 + 模块正确率 + 错题积压」
+    // 加权重排 30 天日历的任务侧重；纯函数（输入 progress + plan 结构，输出排序建议）
+    { path: '/api/plan/schedule', label: '学习计划·智能排程', consumers: ['ui:plan', 'tool:kaogong_ai_plan'] },
     { path: '/api/search', label: '知识检索', consumers: ['ui:search', 'tool:kaogong_ai_tutor'] },
     // cycle-13：专题枢纽方法论分区消费（ui:topics）——声明口径与实际消费方一致
     { path: '/api/method', label: '方法论', consumers: ['ui:method', 'ui:topics', 'tool:kaogong_ai_tutor', 'tool:kaogong_ai_shenlun'] },

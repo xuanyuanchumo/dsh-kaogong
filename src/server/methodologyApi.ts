@@ -25,7 +25,7 @@
  * degraded；「题库一个都没装」不是 degraded —— 这是本域与 /api/method（依赖外部
  * kaogong-skill 仓库）的本质区别。题库为空时本域必须照常返回全部语料。
  */
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CAPABILITIES, HUASHENG13_META } from '../shared/manifest.js'
@@ -847,6 +847,22 @@ export function makeMethodologyApi(options: any = {}) {
         source: idxSlot && idxSlot.idx ? String(idxSlot.idx.source || '') : 'none',
         buildMs: idxSlot && idxSlot.idx ? num(idxSlot.idx.buildMs) : 0,
         error: idxSlot ? idxSlot.error : '',
+        // cycle-30（T-031 清偿）：语料更新提示——磁盘目录 mtime 探测（题库管理 pull 后
+        // 语料文件 mtime 会刷新）+ 上游 repo 信息，方法论视图据此显示「语料版本/更新时间」
+        // 与「去题库管理更新」入口链接（不重复造安装器，T-031 硬门槛）。
+        diskMtime: (() => { try { return statSync(corpusDir).mtimeMs } catch { return 0 } })(),
+        upstream: String(META.upstream || ''),
+        updateHint: (() => {
+          try {
+            const st = statSync(corpusDir)
+            const ageDays = Math.floor((Date.now() - st.mtimeMs) / 86400000)
+            return {
+              lastChangedDaysAgo: ageDays,
+              lastChangedAt: new Date(st.mtimeMs).toISOString().slice(0, 10),
+              stale: ageDays > 30,
+            }
+          } catch { return null }
+        })(),
       },
       at: Date.now(),
     }

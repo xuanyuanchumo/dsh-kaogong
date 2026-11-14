@@ -33,6 +33,7 @@ import { makeMethodologyApi } from './methodologyApi.js'
 import { resolveReposRoot, USER_DATA_ROOT, PROGRESS_DIR_USER, migratePkgData, dataLocationReport } from './dataRoot.js'
 import { makeRepoManager } from './repoManager.js'
 import { makeHistoryApi } from './historyApi.js'
+import { schedulePlan } from './planSchedule.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
@@ -492,6 +493,13 @@ function coreApi(path, params, post, method, wsRaw, port) {
     return { ...p, ws: domains.store.wsKey(wsRaw), rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
   }
   if (path === '/api/graph') return graphSnapshot(wsRaw)
+  // cycle-30（T-027 清偿）：学习计划智能排程——计划结构 + 作答画像 + 错题积压 →
+  // 每日侧重标注 + 题量分配（纯函数；错误收敛 {error} 200，不冒泡）
+  if (path === '/api/plan/schedule') {
+    const plan = domains.studyPlan('all')
+    const p = domains.store.loadProgress(wsRaw)
+    return schedulePlan(plan, p.byModule, p.wrongBook)
+  }
   // v1.8 图查询三端点（未知节点 → {error} 且 200，不让异常冒泡）
   if (path === '/api/graph/neighborhood' || path === '/api/graph/path' || path === '/api/graph/impact') {
     return graphQuery(path, params, wsRaw)
