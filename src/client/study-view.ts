@@ -639,6 +639,13 @@ function KgMemBanner(props: any) {
           h(SourceBadge, { source: q.source || 'naoku', exam: q.exam, year: q.year, region: q.region,
             extra: q.kadian ? h('span', { style: { ...KV_TAG, background: 'rgba(99,102,241,.12)', color: '#6366f1' } }, '🎯 ' + String(q.kadian).slice(0, 18)) : null }),
           h('div', { style: { display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' } }, headerTags),
+          // cycle-23 P0（用户二报）：深度题库材料块——资料分析统计图表/言语理解文段材料
+          // 由服务端 material 字段单发（与 stem 字段分离），UI 在题干上方组装渲染。
+          q.material ? h('div', { style: { marginBottom: 10, padding: 12, background: 'rgba(148,163,184,.07)', borderRadius: 10, borderLeft: '3px solid rgba(148,163,184,.5)' } },
+            h('div', { style: { display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' } },
+              h('span', { style: { ...KV_TAG, background: 'rgba(14,165,233,.12)', color: '#0ea5e9' } }, '📄 材料'),
+              q.materialRef ? h('span', { style: { fontSize: 10.5, color: '#64748b' } }, String(q.materialRef).slice(0, 40)) : null),
+            h(RichText, { text: q.material, fontSize: 12.5, maxHeight: '38vh' })) : null,
           h(RichText, { text: q.stem, fontSize: 13.5, maxHeight: '30vh' }),
           optRows,
           h('div', { style: { display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' } }, actionBtn),

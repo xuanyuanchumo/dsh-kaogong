@@ -1288,6 +1288,35 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
     // 运行时：深度题库就绪时，抽判断推理题验证题干/选项/解析三处占位
     const nk22 = await J(`${B}/api/naoku/status`)
     if (nk22.ready) {
+      // ═══ SMOKE-C23 cycle-23（用户二报：资料分析/言语理解渲染异常 + 材料缺失）═══
+      // 根因：① naoku SELECT 漏取 material（资料分析 99.6%/言语 36% 有材料）；
+      // ② img_refs 全量追加进题干 → 内联图重复渲染 + 解析公式图污染题干。
+      {
+        const nkSrc23 = fs.readFileSync(new URL('./src/adapters/naoku.ts', import.meta.url), 'utf-8')
+        check('SMOKE-C23-01 naoku SELECT 补 material/material_ref（资料分析材料不再缺失）',
+          nkSrc23.includes('material,material_ref') && nkSrc23.includes("material: materialText"),
+          'naoku.ts 缺 material 字段链路')
+        // img_refs 追加移除：naoku.ts 不得再调 imageMarkdown 拼题干（300 题抽检 refs basename
+        // 100% 已内联于 stem/options/analysis/material，追加 = 重复渲染）。
+        // （imgRefs 透传字段保留——原始 refs 仍下发供诊断；断言只盯「拼接进 stem」的旧模式）
+        check('SMOKE-C23-02 naoku 移除 img_refs 追加（杜绝重复渲染与解析公式图污染题干）',
+          !nkSrc23.includes('imageMarkdown') && !nkSrc23.includes("+ imageMarkdown") && !nkSrc23.includes("imgMarkdown"),
+          'naoku.ts 仍有 img_refs 拼接残留')
+        // 运行时：资料分析/言语理解抽题必须带材料（材料缺失=不可作答）
+        let matN = 0, zlTotal = 0, yyMat = 0, yyTotal = 0
+        for (const mod of ['资料分析', '言语理解与表达']) {
+          const d23 = await J(`${B}/api/naoku/questions?module=${encodeURIComponent(mod)}&count=6&ws=${CX22}`)
+          for (const q of (d23.questions || [])) {
+            if (mod === '资料分析') { zlTotal++; if (q.material) matN++ }
+            else { yyTotal++; if (q.material) yyMat++ }
+          }
+        }
+        check('SMOKE-C23-03 深度题库资料分析抽题带材料字段（材料覆盖率 ≥80%，全库实测 99.6%）',
+          zlTotal > 0 && matN / zlTotal >= 0.8, `资料分析 ${matN}/${zlTotal} 带材料 · 言语 ${yyMat}/${yyTotal}`)
+        check('SMOKE-C23-04 material 与 stem 字段分离（服务端不拼接，UI 组装——SRS 快照历史可复现）',
+          nkSrc23.includes('stem: stemText') && !nkSrc23.includes('materialText + NL + stemText'),
+          'naoku.ts 拼接残留 → 双重渲染风险')
+      }
       // 跨模块抽样（选项含图集中在 资料分析619/数量512/判断推理167）：每模块抽 8 题 × 3 模块
       let optImg = 0, anaImg = 0, stemImg = 0, qN = 0
       let firstImgQ = null
@@ -1325,6 +1354,10 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
         }
       }
     } else {
+      check('SMOKE-C23-01 naoku material 链路（node:sqlite 不可用，降级跳过）', true)
+      check('SMOKE-C23-02 naoku img_refs 追加移除（降级跳过）', true)
+      check('SMOKE-C23-03 深度题库跨模块抽题（node:sqlite 不可用，降级跳过）', true)
+      check('SMOKE-C23-04 material 与 stem 字段分离（降级跳过）', true)
       check('SMOKE-IMG22-03 深度题库跨模块抽题（node:sqlite 不可用，降级跳过）', true)
       check('SMOKE-IMG22-04 /api/kg-img 解析内联占位服务（降级跳过）', true)
     }

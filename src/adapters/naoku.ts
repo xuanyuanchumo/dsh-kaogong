@@ -11,7 +11,6 @@
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { imageMarkdown } from './naokuImage.js'
 
 const NL = String.fromCharCode(10)
 let db = null
@@ -127,28 +126,42 @@ export function naokuQuestions({ module, category, kadian, count = 1, random = t
   if (kadian) { where.push('kadian LIKE ?'); args.push('%' + kadian + '%') }
   const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
   const order = random ? 'ORDER BY RANDOM()' : 'ORDER BY id'
-  const rows = safeAll(`SELECT id,qid,module,category,kadian,region,year,paper,stem,options,answer,analysis,reasoning,fastest,pitfalls,mother,has_image,img_refs,qtype FROM questions ${w} ${order} LIMIT ?`, [...args, Math.min(20, count)])
-  return rows.map(r => ({
-    id: 'naoku-' + r.id,
-    number: null,
-    module: r.module || '',
-    type: r.category || r.qtype || '',
-    kadian: r.kadian || '',
-    region: r.region || '', year: r.year || '', exam: r.paper || '',
-    stem: stripHtmlKeepImg(r.stem || '') + (repoRoot && r.img_refs ? (NL + imageMarkdown(repoRoot, r.img_refs, mountPath)) : ''),
-    options: parseOptions(r.options),
-    correctAnswer: (r.answer || '').trim().toUpperCase() || null,
-    analysis: stripHtmlKeepImg(r.analysis || ''),
-    reasoning: stripHtmlKeepImg(r.reasoning || ''),
-    fastest: stripHtmlKeepImg(r.fastest || ''),
-    pitfalls: stripHtmlKeepImg(r.pitfalls || ''),
-    mother: stripHtmlKeepImg(r.mother || ''),
-    hasImage: !!r.has_image,
-    imgRefs: r.img_refs || '',
-    source: 'naoku',
-    // cycle-21 出处标注：exam 即卷名（GongkaoNaoku paper 字段），kadian 是知识点锚
-    paperFile: r.paper || '',
-  }))
+  // cycle-23 P0（用户二报「资料分析/言语理解渲染异常」）：SELECT 补 material/material_ref——
+  // 数据实证：资料分析 3636/3649（99.6%）、言语理解 2505/6957（36%）题带 material
+  // （统计图表 <img src=/90-图片/题目图/…> 与文字材料段），旧 SELECT 漏取 → 无材料不可作答。
+  // 同时移除 img_refs 追加（cycle-21 引入）：300 题抽检 img_refs 的 basename 100% 已内联于
+  // stem/options/analysis/material——追加=重复渲染（图形推理题干图双份）+解析公式图污染题干。
+  const rows = safeAll(`SELECT id,qid,module,category,kadian,region,year,paper,stem,options,answer,analysis,reasoning,fastest,pitfalls,mother,material,material_ref,has_image,img_refs,qtype FROM questions ${w} ${order} LIMIT ?`, [...args, Math.min(20, count)])
+  return rows.map(r => {
+    const materialText = stripHtmlKeepImg(r.material || '')
+    const stemText = stripHtmlKeepImg(r.stem || '')
+    return {
+      id: 'naoku-' + r.id,
+      number: null,
+      module: r.module || '',
+      type: r.category || r.qtype || '',
+      kadian: r.kadian || '',
+      region: r.region || '', year: r.year || '', exam: r.paper || '',
+      // cycle-23 P0：材料与题干**字段分离**（服务端不拼接）——SRS 错题快照存 stem，若拼接则
+      // 旧快照带材料新快照不带（历史不可复现）+ UI 独立材料块会双重渲染；组装职责归 UI。
+      stem: stemText,
+      options: parseOptions(r.options),
+      correctAnswer: (r.answer || '').trim().toUpperCase() || null,
+      analysis: stripHtmlKeepImg(r.analysis || ''),
+      reasoning: stripHtmlKeepImg(r.reasoning || ''),
+      fastest: stripHtmlKeepImg(r.fastest || ''),
+      pitfalls: stripHtmlKeepImg(r.pitfalls || ''),
+      mother: stripHtmlKeepImg(r.mother || ''),
+      hasImage: !!r.has_image,
+      imgRefs: r.img_refs || '',
+      source: 'naoku',
+      // cycle-21 出处标注：exam 即卷名（GongkaoNaoku paper 字段），kadian 是知识点锚
+      paperFile: r.paper || '',
+      // cycle-23 P0：材料原文与材料标题透出（UI 渲染材料块 + 材料标题徽章；无材料为空串不渲染）
+      material: materialText,
+      materialRef: String(r.material_ref || '').trim(),
+    }
+  })
 }
 
 /** 知识点检索：从 kadian 字段找「考什么 + 怎么想」 */
@@ -163,29 +176,37 @@ export function searchKadian(keyword, limit = 20) {
 }
 
 /** cycle-21（issue #3）：题干关键词全文搜索（补录候选）——DB LIKE 全量（非前 60 条截取），
- *  排除「已删/破损」行；与 naokuQuestions 同一映射链路（imageMarkdown 由调用方注入 repoRoot 时拼接）。 */
+ *  排除「已删/破损」行；与 naokuQuestions 同一映射链路（cycle-23 P0 同步：补 material、
+ *  移除 img_refs 追加——300 题抽检 refs basename 100% 内联覆盖，追加=重复渲染）。 */
 export function searchQuestionsByStem(keyword, limit = 12, repoRoot = null, mountPath = '/kaogong') {
   if (!db) return []
   const kw = String(keyword || '').trim()
   if (!kw) return []
   const rows = safeAll(
-    `SELECT id,qid,module,category,kadian,region,year,paper,stem,options,answer,analysis,has_image,img_refs,qtype
+    `SELECT id,qid,module,category,kadian,region,year,paper,stem,options,answer,analysis,material,material_ref,has_image,img_refs,qtype
      FROM questions WHERE stem LIKE ? ORDER BY year DESC, id ASC LIMIT ?`,
     ['%' + kw.replace(/[%_]/g, m => '\\' + m) + '%', Math.min(50, limit)])
-  return rows.map(r => ({
-    id: 'naoku-' + r.id,
-    number: null,
-    module: r.module || '',
-    type: r.category || r.qtype || '',
-    kadian: r.kadian || '',
-    region: r.region || '', year: r.year || '', exam: r.paper || '',
-    stem: stripHtmlKeepImg(r.stem || '') + (repoRoot && r.img_refs ? (NL + imageMarkdown(repoRoot, r.img_refs, mountPath)) : ''),
-    options: parseOptions(r.options),
-    correctAnswer: (r.answer || '').trim().toUpperCase() || null,
-    analysis: stripHtmlKeepImg(r.analysis || ''),
-    hasImage: !!r.has_image,
-    source: 'naoku',
-  }))
+  return rows.map(r => {
+    const materialText = stripHtmlKeepImg(r.material || '')
+    const stemText = stripHtmlKeepImg(r.stem || '')
+    return {
+      id: 'naoku-' + r.id,
+      number: null,
+      module: r.module || '',
+      type: r.category || r.qtype || '',
+      kadian: r.kadian || '',
+      region: r.region || '', year: r.year || '', exam: r.paper || '',
+      // cycle-23 P0：材料与题干**字段分离**（同 naokuQuestions；组装职责归 UI）
+      stem: stemText,
+      options: parseOptions(r.options),
+      correctAnswer: (r.answer || '').trim().toUpperCase() || null,
+      analysis: stripHtmlKeepImg(r.analysis || ''),
+      hasImage: !!r.has_image,
+      source: 'naoku',
+      material: materialText,
+      materialRef: String(r.material_ref || '').trim(),
+    }
+  })
 }
 
 /** 取某知识点下的题（供「专题」按知识点刷题） */

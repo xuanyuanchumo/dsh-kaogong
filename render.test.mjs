@@ -179,11 +179,22 @@ globalThis.fetch = async (url) => {
   if (u.includes('/api/tuxing/cats')) return { json: async () => ({ ready: true, total: 354, cats: [{ cat: 'shuliang', name: '数量规律', count: 40 }] }) }
   if (u.includes('/api/tuxing/list')) return { json: async () => ({ total: 2, questions: [{ no: 1, catName: '数量规律', ans: 'A', imgUrl: '' }, { no: 2, catName: '数量规律', ans: 'B', imgUrl: '' }] }) }
   if (u.includes('/api/naoku/status')) return { json: async () => ({ ready: true, stats: { total: 27506, kadianCoverage: 100, fastestCoverage: 90, withImage: 10647 } }) }
-  if (u.includes('/api/naoku/questions') || u.includes('/api/naoku/practice')) return { json: async () => ({ questions: [
-    // cycle-22 C22-IMG：选项/解析带 kgimg:// 占位——驱动 RichText 出图渲染与图片化选项行
-    { module: '判断推理', stem: '深度题库抽题', options: { A: 'a', B: '【图:kgimg://90-图片/题目图/mock-opt-b.png】', C: 'c', D: 'd' }, correctAnswer: 'A', kadian: '考点X', analysis: '解析含图：【图:kgimg://90-图片/公式图/formula-mock.png】请注意变化。' },
-    { module: '资料分析', stem: '资料分析题', options: { A: '甲', B: '乙', C: '丙', D: '丁' }, correctAnswer: 'D', kadian: '比重', analysis: '纯文字解析' },
-  ] }) }
+  if (u.includes('/api/naoku/questions') || u.includes('/api/naoku/practice')) return { json: async () => {
+    // cycle-23 C23-MAT：mock 按 module 参数过滤——点「资料分析」抽题 → 返回带 material 的题
+    // 语法纪律：json 必须单层（曾因双层嵌套 r.json() 返回内层响应对象 → draw 拿 {} → 题卡消失）
+    const qs = [
+      // cycle-22 C22-IMG：选项/解析带 kgimg:// 占位——驱动 RichText 出图渲染与图片化选项行
+      { module: '判断推理', stem: '深度题库抽题', options: { A: 'a', B: '【图:kgimg://90-图片/题目图/mock-opt-b.png】', C: 'c', D: 'd' }, correctAnswer: 'A', kadian: '考点X', analysis: '解析含图：【图:kgimg://90-图片/公式图/formula-mock.png】请注意变化。' },
+      // cycle-23 C23-MAT：资料分析题带材料（统计图表占位）——驱动深度题库材料块渲染
+      { module: '资料分析', stem: '2022年彩票月销售额最大的月份是：', options: { A: '甲', B: '乙', C: '丙', D: '丁' }, correctAnswer: 'D', kadian: '比重',
+        material: '【图:kgimg://90-图片/题目图/mock-material.png】2022年全国彩票销售情况如下：', materialRef: '6425570 2018-2023年国家铁路旅客运输', analysis: '纯文字解析' },
+    ]
+    let want = ''
+    try { want = decodeURIComponent((u.match(/[?&]module=([^&]*)/) || [])[1] || '') } catch { want = '' }
+    const filtered = want ? qs.filter(q => q.module === want) : qs
+    // 无命中模块（如 C15 记忆恢复后的「数量关系」）回退全量，保持 C22-IMG 抽到判断推理题
+    return { questions: filtered.length ? filtered : qs }
+  } }
   // cycle-21 W2 学习画像：stats.mastery（模块正确率）mock——驱动「掌握度」着色模式与图例
   if (u.includes('/api/stats')) return { json: async () => ({
     days: [{ date: '2026-11-14', answered: 10, correct: 6, rate: 60 }], streak: 1, day: 1,
@@ -877,7 +888,11 @@ try {
       const nextBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('下一题'))
       if (!nextBtn) throw new Error('C22-IMG 深度题库「下一题」按钮缺失')
       await act(async () => { nextBtn.props.onClick() })
-      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      // 抽题是 async：轮询等待题干出现（最多 500ms），消除固定 60ms 的时序脆弱
+      for (let i = 0; i < 25; i++) {
+        if (JSON.stringify(tr.toJSON()).includes('深度题库抽题')) break
+        await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+      }
       const revealBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('查看答案'))
       if (!revealBtn) throw new Error('C22-IMG 新题「查看答案」按钮缺失')
       await act(async () => { revealBtn.props.onClick() })
@@ -888,6 +903,20 @@ try {
       const srcs22 = imgs22.map(i => String(i.props.src || '')).join('|')
       if (!srcs22.includes('/api/kg-img?p=')) throw new Error('C22-IMG 深度题库解析占位未渲染为 /api/kg-img 出图（src=' + srcs22.slice(0, 120) + '）')
       ok('C22-IMG: 深度题库解析 kgimg:// 占位 → RichText 渲染 <img src=/api/kg-img?p=…>')
+      // C23-MAT（cycle-23 用户二报）：切「资料分析」模块按钮 → 抽题（mock 返回带 material 的题）
+      // → 材料块渲染：徽章「📄 材料」+ materialRef 文本 + 材料图占位出 <img src=/api/kg-img?p=…>
+      const zlBtn23 = tr.root.findAllByType('button').find(b => String(b.props.children) === '资料分析')
+      if (!zlBtn23) throw new Error('C23-MAT 「资料分析」模块按钮缺失')
+      await act(async () => { zlBtn23.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      const json23 = tr.toJSON()
+      const s23 = JSON.stringify(json23)
+      if (!s23.includes('📄 材料')) throw new Error('C23-MAT 深度题库材料块徽章缺失（material 未渲染）')
+      if (!s23.includes('2018-2023年国家铁路旅客运输')) throw new Error('C23-MAT 材料标题 materialRef 未渲染')
+      const imgs23 = []
+      collectImgs(json23, imgs23)
+      if (!imgs23.some(i => String(i.props.src || '').includes('mock-material'))) throw new Error('C23-MAT 材料图占位未渲染出 <img>（src=' + imgs23.map(i => i.props.src).slice(0, 3) + '）')
+      ok('C23-MAT: 深度题库资料分析材料块（徽章+材料标题+材料图 RichText 出图）')
     }
 
     /* ══ cycle-16：题库管理面板（关于本项目 GitHub 跳转 + 分级卡片 + 零降级）══ */
