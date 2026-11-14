@@ -185,3 +185,6 @@
 ## cycle-30b 教训（v1.27.0 T-027/T-031 清偿）
 - **（C30b-排程算法不造新轮子）**：智能排程弱度复用 SRS 同源模型 1/(rate+0.15)（教训⑤的推广：同一业务语义的权重公式全仓只有一个事实源）；积压放大 (1+backlogShare) 是正交修正项而非新模型。**确定性纪律**：无 Math.random/Date.now（同输入两次输出深相等，SMOKE-SCHED-02 运行时固化）；题量分配 softmax 守恒（Σsuggested=30，SMOKE-SCHED-04）——「分配类」算法必须有守恒断言，否则浮点漂移让 UI 数字自相矛盾。
 - **（C30b-静态与动态解耦）**：排程不改动 30 天日历结构（阶段/天数是模板事实源 study-plan.md），只重排每日「训练侧重标注+建议题量」——静态计划与动态画像分离，可解释（primaryRate/backlog 全透出）可回退（不写盘，刷新即重算）。旧 SPA（ui/index.html）与原生视图共用 /api/plan/schedule（四步纪律 manifest→server→UI→smoke；UI 先落旧 SPA 兜底通道）。
+
+## cycle-30 发布段教训（v1.27.0）
+- **（C30-npm publish 成功后的 E404 误判）**：vault_run 首次 `npm publish` 实际成功，但认证通道 `npm view` 短暂返回 `latest: 1.26.0`（registry 副本传播延迟）→ 误判失败并重试 publish → 报 `You cannot publish over the previously published versions: 1.27.0` + 前一次重试报 `PUT 404`。**正确判定顺序：`cannot publish over` 是「已发布成功」的机器证据（409 语义）；404/陈值都可能是传播延迟。教训：发布成功判定 = ① `+ pkg@ver` 输出 ② 重试时出现 `cannot publish over` ③ 认证通道 view 复验（三者任一即成功，传播延迟等 30s+ 再验）。
