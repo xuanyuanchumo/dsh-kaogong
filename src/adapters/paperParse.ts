@@ -197,10 +197,48 @@ export function parsePaperText(content, meta) {
     while ((mm = reMat.exec(content)) !== null) matRanges.push({ no: +mm[1], at: mm.index, after: mm.index + mm[0].length })
     for (let i = 0; i < matRanges.length; i++) {
       const rangeEnd = i + 1 < matRanges.length ? matRanges[i + 1].at : content.length
-      // 该材料段之后、下一材料段之前的全部题号共享此材料
-      const nos = qPositions.filter(q => q.at > matRanges[i].after && q.at < rangeEnd).map(q => q.no)
       const text = groupMats.get(matRanges[i].no) || ''
-      if (!nos.length || !text) continue
+      if (!text) continue
+      // cycle-28c 归属修正（用户三报：浙江卷材料 1 被划给 44-105 共 62 题）：
+      // 位置扫描只能定「组起点」，不能定「组终点」——篇章材料（2 题）与资料分析材料（5 题）
+      // 之后可能隔着大量无材料普通题才到下一个材料段。**引用链判据**：材料组内的题，
+      // 其题干或解析必然引用材料正文关键词（实测 44/45 命中 3-4 词、106-110 命中 2-4 词；
+      // 组外题命中 0）。从材料后第一题起逐题检测，引用链断开即组结束——
+      // 关键词 = 材料正文切分出的 ≥2 字词元（去停用位），取前 12 个高频词做指纹。
+      const nosAll = qPositions.filter(q => q.at > matRanges[i].after && q.at < rangeEnd).map(q => q.no)
+      // 材料指纹（cycle-28c 修正）：均匀切分会把「良渚古城遗址」切成不相交长块，
+      // 题干引用的「良渚」子词匹配不上 → 45 题断链。改滑窗 2-4 字 n-gram 去重，
+      // 频次排序取 top 24（确定性：频次降序、首现位置次序）
+      const toks: string[] = []
+      const seenTok = new Set<string>()
+      for (let win = 4; win >= 2; win--) {
+        const reTok = new RegExp('[\\u4e00-\\u9fa5]{' + win + '}', 'g')
+        let tm2
+        while ((tm2 = reTok.exec(text)) !== null) {
+          const w = tm2[0]
+          if (!seenTok.has(w)) { seenTok.add(w); toks.push(w) }
+        }
+      }
+      const freq: Record<string, number> = {}
+      for (const w of toks) { let n = 0, idx = -1; while ((idx = text.indexOf(w, idx + 1)) > 0) n++; freq[w] = n }
+      const top = toks.sort((a, b) => (freq[b] - freq[a]) || (text.indexOf(a) - text.indexOf(b))).slice(0, 24)
+      const bodyOf = (no) => {
+        const at = qPositions.find(x => x.no === no)
+        if (!at) return ''
+        const nxt = qPositions.find(x => x.no > no)
+        return content.slice(at.at, nxt ? nxt.at : rangeEnd)
+      }
+      const hits = (body) => top.reduce((n, w) => n + (body.includes(w) ? 1 : 0), 0)
+      // 引用链：材料后第一题必须命中（≥2 词）——首题就不引用说明材料段解析异常，整组放弃；
+      // 后续题命中 ≥1 维持链路，命中 0 = 组结束
+      const nos: number[] = []
+      for (const no of nosAll) {
+        const h = hits(bodyOf(no))
+        if (!nos.length) { if (h >= 2) nos.push(no); else break }
+        else if (h >= 1) nos.push(no)
+        else break
+      }
+      if (!nos.length) continue
       for (const q of questions) {
         if (nos.includes(q.no)) { q.groupMaterial = text; q.groupMaterialNo = matRanges[i].no }
       }
