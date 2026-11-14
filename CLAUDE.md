@@ -173,3 +173,7 @@
 - **（C29-展示契约纯函数纪律）**：presentCall/presentResult 是宿主反复调用的纯投影（live streaming + session-log replay 两路），必须 total（绝不抛错、只依赖入参）；异常一律 catch 收敛 undefined = 保留宿主兜底渲染。守卫 C29-02 固化。
 - **（C29-子图引擎换源同构）**：子图模式不造第二套渲染——activeNodes/activeEdges 成为 createGraphEngine 唯一数据源，子图/全图同一装配路径（C28 教训「容器层零分支」的推广）。统计面板/图例保持全图口径（subData 不参与 metrics 计算），面包屑明示口径避免「数字对不上」的假漂移感知。
 - **（C29-复杂度预算治理走固定拆法）**：graph-view.tsx 加子图逻辑后 216 > 180 → 外提 graph-subgraph.ts（fetch/normalize/derive 三纯函数，参数穿线）；http.ts 204 → 外提 graphQuery.ts（graphSnapshot 参数注入）。带回 Status: WARNING（无超预算文件）。复用 cycle-13 教训①的固定拆法，不发明新拆法。
+
+## cycle-29 发布段教训（v1.26.0 发布链）
+- **（C29-发布仓与开发仓历史分叉治理）**：发布走 _publish-kaogong 独立干净快照（⑮纪律），开发仓 master 含 147MB naoku.db 历史段（cycle-14 入库、cycle-16 已 rm --cached 但历史仍在）→ pre-receive 拒推。**修法：git-filter-repo --invert-paths 剔除三个数据文件（2.17s 全历史重写）**；开发仓完整历史推 dev-history 保档，GitHub main 只留发布仓的干净快照线（单提交一版本）。git filter-branch 在 niugit（2.56.0.windows.4.niugit）下 tempdir 机制全形态失败（`fatal: not a git repository`——cd 到 MSYS 归一 tempdir 后 git 发现机制失效），**不再尝试，直接用 git-filter-repo**。
+- **（C29-npm publish 双通道验证）**：vault_run 注入 NPM_TOKEN 后 `npm publish` 成功（+ dsh-kaogong@1.26.0），但随后匿名 curl/npm view 查到 `latest: 1.15.0`（401 或 CDN 缓存陈值）≠ 发布失败——**必须带同一令牌通道复验**（vault_run npm view → latest: 1.26.0）。判定发布成败只用认证通道。
