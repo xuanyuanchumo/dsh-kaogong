@@ -6,6 +6,8 @@
  */
 
 import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow, SourceBadge } from '../ui-kit.js'
+// cycle-25：题目七段渲染接入统一组件域 question-kit（QwQuestionCard 组装器 + QwZoomHost 图片放大宿主）
+import { QwQuestionCard, QwZoomHost } from '../question/question-kit.js'
 
 /* ════════════ cycle-15 专项刷题记忆（/api/memory · 按工作区命名空间隔离）════════════
    三端同步契约：manifest 声明 /api/memory → server/srs.js memoryApi 实现 → 本视图族消费。
@@ -307,12 +309,36 @@ function KgMemBanner(props: KgMemBannerProps) {
             <span style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b' }}>{'本次 ' + stat.done + ' 题 · 对 ' + stat.right}</span>
             <span style={{ fontSize: 11.5, color: '#94a3b8' }}>{'队列 ' + (queueLen + 1)}</span>
           </div>
-          <Card>
-            {/* cycle-21：每题标明题库出处（xingcezhenti/naoku/SRS 回炉继承原出处） */}
-            <SourceBadge source={q.source} exam={q.exam} year={q.year} region={q.region} paperFile={q.paperFile}
-              extra={q.fromWrongBook ? <span style={{ ...KV_TAG, background: 'rgba(239,68,68,.12)', color: '#ef4444' }}>{'📕 错题回炉'}</span> : null} />
-            <RichText text={q.stem} fontSize={14.5} maxHeight={'34vh' as any} />
-          </Card>
+          {/* cycle-25：QwZoomHost 整卡图片可放大。本仓 JSX 工厂（classic/preact 签名）不把 JSX children 折叠进
+              attrs 类型校验（ui-kit Card 能用是因其 children? 可选），QwZoomHostProps.children 必填 → 显式传参 */}
+          <QwZoomHost children={
+            /* cycle-25：题目七段渲染接入 question-kit 统一组件域（0编号/1来源/2类型/4题干/5选项/6答案解析）。
+               字段映射以源码为准：练习链路题目对象是 number（非 no）+ correctAnswer（repoData/srs 双适配器一致）；
+               纯字母降级提示 / 判分反馈区（下一题/重答/去错题本）留在卡片之外，hooks 链不动。 */
+            <QwQuestionCard
+              mode="practice"
+              interactive
+              q={{
+                no: q.number,
+                source: q.source,
+                exam: q.exam,
+                year: q.year,
+                region: q.region,
+                paperFile: q.paperFile,
+                module: q.module || module,
+                type: q.type || (q.fromWrongBook ? '错题回炉' : ''),
+                stem: q.stem,
+                options: q.options,
+                answer: q.correctAnswer || q.answer,
+                analysis: q.analysis,
+              } as any}
+              selected={sel}
+              right={result ? (result.correctAnswer || result.answer || q.correctAnswer) : undefined}
+              revealed={!!result}
+              disabled={!!result}
+              onSelect={(L: string) => { if (!result) setSel(L) }}
+            />
+          } />
           {/* cycle-21：上游数据缺选项图的诚实降级提示（2728 题图形推理选项在源数据=A/B/C/D 字母） */}
           {/* + 旧错题回炉的历史数据提示（修复前入库的 stem 已被旧解析剥图，无法凭空恢复） */}
           {(lettersOnly && (stemHasImg || isTuxingType))
@@ -327,18 +353,12 @@ function KgMemBanner(props: KgMemBannerProps) {
                 {'ℹ 该题引用了图表但题干未携带配图（修复前入库的历史错题，或原文即文字题）——可到「📚 真题卷」查看原卷完整配图。'}
               </div>
             : null}
-          {entries(q.options || {}).map(([L, text]) => <OptionRow
-            {...{ key: L }} label={L} text={text}
-            state={!answered ? (L === sel ? 'chosen' : 'idle') : (L === q.correctAnswer ? 'right' : (L === sel ? 'wrong' : 'idle'))}
-            disabled={answered}
-            onClick={() => setSel(L)}
-          />)}
           {!answered ? (sel ? <button
             className="kg-navbtn on" disabled={busy}
             style={{ marginTop: 6, padding: '9px 22px', borderRadius: 10 }}
             onClick={submit}
           >{busy ? '判分中…' : '✅ 提交判分'}</button> : <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 6 }}>{'选择一个选项后提交'}</div>) : null}
-          {/* 判分反馈（v1.7 新增：这是此前缺失的关键环节） */}
+          {/* 判分反馈（v1.7 新增：这是此前缺失的关键环节；解析改由 QwQuestionCard 第 6 段呈现，此处保留对错结论与导航） */}
           {answered ? <Card title={correct ? '✅ 回答正确' : '❌ 回答错误'}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10, fontSize: 12.5, flexWrap: 'wrap' }}>
               <span style={{ color: correct ? '#10b981' : '#ef4444', fontWeight: 700 }}>{'你的答案 ' + sel}</span>
@@ -346,9 +366,8 @@ function KgMemBanner(props: KgMemBannerProps) {
               {result.wrongEvent ? <span style={{ ...KV_TAG, background: 'rgba(99,102,241,.12)', color: '#6366f1' }}>
                 {result.wrongEvent.type === 'mastered' ? '🎉 错题已掌握' : result.wrongEvent.type === 'promoted' ? '⬆ 升箱至 ' + result.wrongEvent.box : '📕 已入错题本'}</span> : null}
             </div>
-            {q.analysis ? <div style={{ marginTop: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>{'📖 解析'}</div>
-              <RichText text={q.analysis} maxHeight={260} /></div> : <div style={{ fontSize: 12, color: '#64748b' }}>{'该题无解析'}</div>}
+            {/* cycle-25：解析改由 QwQuestionCard 第 6 段呈现；无解析题的诚实占位保留（旧文案契约，render 提交后断言锚定） */}
+            {!q.analysis ? <div style={{ fontSize: 12, color: '#64748b' }}>{'该题无解析'}</div> : null}
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
               <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '8px 18px' }} onClick={() => draw(module, srs)}>{'下一题 →'}</button>
               <button style={KV_BTN} onClick={() => { setSel(null); setResult(null) }}>{'重答本题'}</button>

@@ -12,6 +12,18 @@ const React = require('react')
 export const h = React.createElement
 export { React }
 
+/**
+ * cycle-25：RichText 图片点击放大 context（question-kit 的 QwZoomHost Provider 写入 openZoom 函数）。
+ * 宿主视图在题目区外包 QwZoomHost 时，RichText 内 <img> 点击即弹全屏 Lightbox；
+ * 未包 Provider 时 _currentValue 为 null，img 保持纯静态（零破坏降级）。
+ */
+export const KgZoomCtx: any = (React as any).createContext(null)
+
+/** combo 单作用域事实（cycle-25）：question-kit.tsx 顶层的 QwZoomCtx 是 QwZoomHost Provider
+ *  实际写入的 context，合并 bundle 内对本模块可见；本文件独立类型检查时以 declare 占位
+ *  （tsc 零产物、bundler 不产生新顶层名，无重名风险）。运行时经 typeof 守卫安全回落。 */
+declare const QwZoomCtx: any
+
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
@@ -91,7 +103,17 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
                 alt={pt.alt || '题目配图'} loading="lazy"
 
-                style={{ maxWidth: '100%', maxHeight: 320, display: 'block', margin: '10px 0', borderRadius: 8, border: '1px solid rgba(148,163,184,.25)' }}
+                /* cycle-25：QwZoomHost 内时点击弹全屏 Lightbox（React legacy context 稳定字段 _currentValue）。
+                   双源读取：QwZoomCtx（question-kit Provider 实际写入源）优先，KgZoomCtx 兜底（未来切换消费面）；
+                   都未挂 Provider 时为 null → 纯静态，零破坏。其余样式/逻辑不变。 */
+                onClick={(e: any) => {
+                  e.stopPropagation()
+                  const openZoom = (typeof QwZoomCtx !== 'undefined' && QwZoomCtx && (QwZoomCtx as any)._currentValue)
+                    || (KgZoomCtx as any)._currentValue
+                  if (typeof openZoom === 'function') openZoom(pt.src, pt.alt)
+                }}
+
+                style={{ maxWidth: '100%', maxHeight: 320, display: 'block', margin: '10px 0', borderRadius: 8, border: '1px solid rgba(148,163,184,.25)', cursor: typeof (KgZoomCtx as any)._currentValue === 'function' || (typeof QwZoomCtx !== 'undefined' && typeof (QwZoomCtx as any)?._currentValue === 'function') ? 'zoom-in' : undefined }}
 
                 onError={(e: any) => { if (e && e.target) { e.target.style.display = 'none' } }}
 
@@ -224,4 +246,4 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
         }
         return this.props.children
       }
-    }
+    }

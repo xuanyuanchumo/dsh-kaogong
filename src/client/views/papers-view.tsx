@@ -9,6 +9,8 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
 // cycle-18：专题枢纽「📖 方法论」分区直接挂花生十三体系（语料由「📦 题库管理」安装到数据根）。
 // 依赖方向 papers-view → huasheng13-view 是单向的；bundler 会按拓扑序排布（不会成环）。
 import { NativeHuasheng13View } from './huasheng13-view.js'
+// cycle-25：题目渲染接入统一组件域（QwQuestionCard 七段卡 / QwExamNavigator 答题卡 / QwZoomHost 图片放大宿主）
+import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/question-kit.js'
 
     /* ══ v1.6 新增：真题卷 / 专题 / 申论评改（全部宿主原生渲染，组件自管数据）══ */
 
@@ -22,6 +24,8 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
       const [left, setLeft] = React.useState(0)
       const [report, setReport] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
+      // cycle-25：答题卡标记旗 Set<no>——七段卡旗标与答题卡黄点共享（state 全部在组件顶部声明，不受 R9 跨渲染约束）
+      const [flags, setFlags] = React.useState(() => new Set())
 
       React.useEffect(() => {
         api('/papers?subject=行测').then(d => setPapers(d)).catch(() => setPapers({ papers: [] }))
@@ -48,6 +52,7 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
           if (d.error) return
           setExam(d)
           setAnswers({})
+          setFlags(new Set())   // cycle-25：开新卷清空标记旗（flags 随卷走）
           setIdx(0)
           setLeft(d.durationSec || 7200)
           setReport(null)
@@ -115,47 +120,39 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
       if (exam) {
         const q = exam.questions[idx]
         if (!q) return <div className="kg-load">{'题目加载异常'}</div>
-        const answeredCount = Object.keys(answers).length
-        const optRows = entries(q.options || {}).map(([L, txt]) => {
-          const chosen = answers[q.no] === L
-          return (
-            <div
-              key={L}
-              style={{
-                display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 12px',
-                border: '2px solid ' + (chosen ? '#6366f1' : 'rgba(148,163,184,.3)'),
-                background: chosen ? 'rgba(99,102,241,.08)' : 'transparent',
-                borderRadius: 10, marginTop: 8, cursor: 'pointer', fontSize: 13, lineHeight: 1.6,
-              }}
-              onClick={() => setAnswers(a => ({ ...a, [q.no]: L }))}
-            >
-              <div style={{ width: 24, height: 24, borderRadius: '50%', background: chosen ? '#6366f1' : 'rgba(148,163,184,.15)', color: chosen ? '#fff' : 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 }}>{L}</div>
-              {/* cycle-22：选项含图占位 → RichText 渲染出图（真题卷链路选项本就走 markdown 重写，此处兜底统一） */}
-              {String(txt || '').includes('![') ? <div style={{ flex: 1, minWidth: 0 }}><RichText text={txt} fontSize={13} /></div> : <div style={{ flex: 1 }}>{txt}</div>}
-            </div>
-          )
-        })
+        {/* cycle-25：QwZoomHost 整卡图片可放大。本仓 JSX 工厂（classic/preact 签名）不把 JSX children 折叠进
+            attrs 类型校验（ui-kit Card 能用是因其 children? 可选），QwZoomHostProps.children 必填 → 显式传参 */}
         return (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800, color: left < 300 ? '#ef4444' : 'var(--text-primary,#0f172a)' }}>{'⏱ ' + fmt(left)}</span>
-              <span style={KV_TAG}>{exam.subject + ' ' + exam.year}</span>
-              <span style={{ fontSize: 12, color: '#64748b' }}>{'已答 ' + answeredCount + '/' + exam.questionCount}</span>
-              <button
-                style={{ ...KV_BTN, marginLeft: 'auto', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 0, padding: '6px 16px' }}
-                disabled={busy} onClick={doSubmit}
-              >{busy ? '交卷中…' : '交卷'}</button>
+          <QwZoomHost children={
+            <div>
+              {/* 顶部状态条：倒计时/卷源/交卷保留（「已答 x/y」由答题卡头部统计承担，避免双事实源） */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800, color: left < 300 ? '#ef4444' : 'var(--text-primary,#0f172a)' }}>{'⏱ ' + fmt(left)}</span>
+                <span style={KV_TAG}>{exam.subject + ' ' + exam.year}</span>
+                <button
+                  style={{ ...KV_BTN, marginLeft: 'auto', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 0, padding: '6px 16px' }}
+                  disabled={busy} onClick={doSubmit}
+                >{busy ? '交卷中…' : '交卷'}</button>
+              </div>
+              {/* 答题卡跳转：网格四态（未答灰/已答蓝/标记黄/当前描边）+ 进度统计；flags 由宿主 useState 持有 */}
+              <QwExamNavigator questions={exam.questions} answers={answers} flags={flags} current={idx} onJump={(i) => setIdx(i)} />
+              {/* 统一七段卡（exam 做题态）：选项三态交互 + 标记旗（旗逻辑在 question-kit 内部） */}
+              <QwQuestionCard
+                mode="exam"
+                q={{ no: q.no, type: q.type, exam: exam.subject, year: exam.year, stem: q.stem, options: q.options, flagged: flags.has(q.no) }}
+                interactive
+                selected={answers[q.no]}
+                onSelect={(L) => setAnswers(a => ({ ...a, [q.no]: L }))}
+                onToggleFlag={() => setFlags(f => { const n = new Set(f); n.has(q.no) ? n.delete(q.no) : n.add(q.no); return n })}
+              />
+              {/* 上下题按钮行保留（render.test 按钮文本锚点） */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                <button style={KV_BTN} disabled={idx === 0} onClick={() => setIdx(i => Math.max(0, i - 1))}>{'← 上一题'}</button>
+                <button style={KV_BTN} disabled={idx >= exam.questions.length - 1} onClick={() => setIdx(i => Math.min(exam.questions.length - 1, i + 1))}>{'下一题 →'}</button>
+                <span style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b' }}>{(idx + 1) + ' / ' + exam.questions.length}</span>
+              </div>
             </div>
-            <Card title={'第 ' + q.no + ' 题 · ' + (q.type || '')}>
-              <RichText text={q.stem} fontSize={13} />
-              {optRows}
-            </Card>
-            <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
-              <button style={KV_BTN} disabled={idx === 0} onClick={() => setIdx(i => Math.max(0, i - 1))}>{'← 上一题'}</button>
-              <button style={KV_BTN} disabled={idx >= exam.questions.length - 1} onClick={() => setIdx(i => Math.min(exam.questions.length - 1, i + 1))}>{'下一题 →'}</button>
-              <span style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b' }}>{(idx + 1) + ' / ' + exam.questions.length}</span>
-            </div>
-          </div>
+            } />
         )
       }
 
@@ -277,20 +274,15 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
               })}
             </Card> : null}
             <Card title="📝 题目与参考答案">
-              {(detail.questions || []).map(q =>
-                <div key={q.no} style={{ borderBottom: '1px solid rgba(148,163,184,.18)', paddingBottom: 12, marginBottom: 12 }}>
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                    <span style={KV_TAG}>{'第 ' + q.no + ' 题'}</span>
-                    {q.score ? <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{q.score + ' 分'}</span> : null}
-                  </div>
-                  <div style={{ marginBottom: 6, fontWeight: 500 }}><RichText text={q.stem} fontSize={13} /></div>
-                  {q.requirement ? <div style={{ fontSize: 11.5, color: '#f59e0b', marginBottom: 6 }}>{'作答要求：' + q.requirement}</div> : null}
-                  {q.relatedMaterials ? <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{'关联：' + q.relatedMaterials}</div> : null}
-                  {q.reference ? <details style={{ fontSize: 12, lineHeight: 1.75 }}>
-                    <summary style={{ cursor: 'pointer', color: '#6366f1', fontWeight: 600, fontSize: 12 }}>{'▸ 参考答案（粉笔题库）'}</summary>
-                    <div style={{ marginTop: 8, padding: 10, background: 'rgba(148,163,184,.08)', borderRadius: 8 }}><RichText text={q.reference} /></div>
-                  </details> : null}
-                </div>)}
+              {/* cycle-25：题目列表接入统一组件域（QwQuestionCard browse 只读，不传 interactive）；QwZoomHost 整卡图片可放大。
+                  本仓无 @types/react（classic JSX 仅按 props 接口校验 attrs，不折叠 children/key）→ children 显式传参、key 走 kit 内 as any 展开惯例 */}
+              <QwZoomHost children={(detail.questions || []).map(q =>
+                <QwQuestionCard
+                  {...({ key: q.no } as any)}
+                  mode="browse"
+                  q={{ no: q.no, score: q.score, stem: q.stem, requirement: q.requirement, reference: q.reference }}
+                />)}
+              />
             </Card>
           </div>
         )
@@ -789,8 +781,11 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
               {cur.score ? <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{cur.score + ' 分'}</span> : null}
             </div>
             <Card title={'第 ' + cur.no + ' 题'}>
-              <div style={{ marginBottom: 8, fontWeight: 500 }}><RichText text={cur.stem} fontSize={13.5} /></div>
-              {cur.requirement ? <div style={{ fontSize: 11.5, color: '#f59e0b', marginBottom: 6 }}>{'作答要求：' + cur.requirement}</div> : null}
+              {/* cycle-25：题干/作答要求接入统一组件域（QwQuestionCard browse 只读） */}
+              <QwQuestionCard
+                mode="browse"
+                q={{ no: cur.no, score: cur.score, stem: cur.stem, requirement: cur.requirement }}
+              />
               {cur.relatedMaterials ? <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: '#64748b', marginTop: 4 }}>
                 <span>{'关联材料：'}</span>
                 {parseMatNos(cur.relatedMaterials).length

@@ -125,6 +125,20 @@ function visit(name, path) {
 visit(entryId, [])
 if (order[order.length - 1] !== entryId) fail('entry 不在拓扑序末位: ' + order.join(' → '))
 
+/* ── 幂等守卫（cycle-25 缺陷根治）：bundler 的输入必须是 tsc 裸 ESM 产物。
+ * 对「上一次合并后的 combo」二次运行会把 __kgM 注册表当模块体再包一层 → 尾部锚点失配。
+ * 历史上 npm scripts 总是先 tsc（产物必被重写为裸 ESM）掩盖了此缺陷；
+ * smoke 0a 自愈（检出裸 ESM 窗口后重跑 bundler）与手动重跑会踩中。判定依据：
+ * 行首 import 是裸 ESM 必有（与 smoke 0a 同判据），combo 产物必无。 ── */
+const rawEntrySrc = modules.get(entryId).src
+if (!/^import /m.test(rawEntrySrc)) {
+  console.log('[bundle-client] 检测到产物已是合并形态（无行首 import）——本次跳过重复合并（幂等）')
+  // 终检 + 正常退出：形态守卫复用 assert 语义，保证「跳过」不代表「不验证」
+  if (/^export /m.test(rawEntrySrc)) fail('产物含行首 export（异常形态，拒绝静默通过）')
+  if (!/window\.__ModuleLoader__\.load\(\{/.test(rawEntrySrc)) fail('产物丢失 load 头（异常形态）')
+  process.exit(0)
+}
+
 /* ── entry factory 头尾定位（以 entry 现有 factory 头尾为准包裹，不发明新结构） ── */
 const entryMod = modules.get(entryId)
 const openToken = 'factory(require) {'

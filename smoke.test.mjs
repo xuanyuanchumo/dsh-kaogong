@@ -1645,13 +1645,48 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('C24-05 tsconfig jsx=react（classic runtime；禁 react-jsx 自动 import）',
     /"jsx": "react"/.test(fs.readFileSync('tsconfig.json', 'utf-8')) && !/"jsx": "react-jsx"/.test(fs.readFileSync('tsconfig.json', 'utf-8')))
   check('C24-06 React 引入纪律：.tsx 禁 import React（唯一 require 在 ui-kit）',
-    (() => { for (const dir of ['src/client', 'src/client/views']) {
+    (() => { for (const dir of ['src/client', 'src/client/views', 'src/client/question']) {
+
         for (const f of fs.readdirSync(dir)) {
           if (!f.endsWith('.tsx')) continue
           const s = fs.readFileSync(dir + '/' + f, 'utf-8')
           if (/^import\s+React\s/m.test(s)) return false
           if (f !== 'ui-kit.tsx' && s.includes("require('react')")) return false
         } } return true })())
+
+
+  // ── cycle-25 统一题目渲染域守卫（C25）：七段结构 + 答题卡 + 图片放大 ──
+
+  const kitSrc = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+
+  const lbSrc = fs.readFileSync('src/client/question/question-lightbox.tsx', 'utf-8')
+
+  check('C25-01 七段齐备：question-kit 含编号/来源/类型/材料/题干/选项/答案七段组件',
+
+    ['QwNumberBadge', 'QwSourceMeta', 'QwTypeTag', 'QwMaterial', 'QwStem', 'QwOptions', 'QwAnswerDims', 'QwQuestionCard'].every(n => kitSrc.includes('function ' + n)))
+
+  check('C25-02 答题卡：QwExamNavigator 含网格跳转与四态（未答/已答/标记/当前）',
+
+    /function QwExamNavigator/.test(kitSrc) && kitSrc.includes('onJump') && kitSrc.includes('flags && flags.has'))
+
+  check('C25-03 图片放大：QwLightbox 含滚轮缩放/拖拽/ESC 三交互',
+
+    /function QwLightbox/.test(lbSrc) && lbSrc.includes('wheelZoom') && lbSrc.includes('dragStart') && lbSrc.includes('Escape'))
+
+  check('C25-04 接入面：practice/exam/papers/essay 消费 QwQuestionCard',
+
+    (() => { const sv = fs.readFileSync('src/client/views/study-view.tsx', 'utf-8')
+
+      const pv = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+
+      return /QwQuestionCard/.test(sv) && /QwExamNavigator/.test(pv) && (pv.match(/QwQuestionCard/g) || []).length >= 3 })())
+
+  check('C25-05 材料折叠契约保留：papers-view 源码内 collapsedMats/toggleMat/jumpToMaterial 仍在',
+
+    (() => { const pv = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+
+      return (pv.match(/collapsedMats/g) || []).length >= 6 && (pv.match(/toggleMat/g) || []).length >= 4 && /jumpToMaterial/.test(pv) })())
+
 }
 
 // ── 汇总 ──

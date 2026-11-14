@@ -37,3 +37,10 @@
 | T-24-13 | ui-kit 样式 token 化：~200 处硬编码色值 + 5 种圆角混用（ui-radius.md 先角色后档位） | 体验债 | 语义 CSS 变量（--kg-accent/--kg-border/--kg-surface）+ 明暗联动 | cycle-25 |
 | T-24-14 | obs-view 1101 行单文件巨型视图（八区块） | 架构债 | 卡片级拆分 obs/cards/*.tsx，与复杂度预算 180 联动 | cycle-25 |
 | T-24-15 | ui/index.html 1514 行独立 SPA 与 client.tsx 重复实现同一界面 | 架构债 | 降级为极简跳转页（R25 文案漂移同族根治） | cycle-26 |
+
+## cycle-25 登记（2026-11-14）
+
+| ID | 描述 | 类别 | 处置建议 | 登记循环 |
+|---|---|---|---|---|
+| T-25-09 | NativeTuxingView/NativeDeepBankView 尚未接入 QwQuestionCard（qw-practice 缩围遗留） | 体验债 | cycle-26 首项：deepbank 映射 dims 五维齐备可直转；tuxing 题干是 imgUrl 独立图需 kit 支持外置题图段 | cycle-25 |
+| T-25-10 | QwZoomHost 未包 exam/papers/essay 已接入视图的部分深层 RichText（材料段图暂不放大） | 体验债 | 富材料链路验证后扩大 QwZoomHost 包裹面 | cycle-26 |
