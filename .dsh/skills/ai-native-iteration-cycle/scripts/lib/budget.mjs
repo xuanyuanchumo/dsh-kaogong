@@ -136,9 +136,25 @@ export function timeoutFromConfig(configContent, kind) {
  *     超时无效（重试同一超只会再超时，还每轮烧掉一整个预算）。
  * 判据按**证据强度**排序：code ETIMEDOUT（最强，跨平台）> killed > SIGTERM+无退出码。
  * 真实测试失败形态是 `{ status: <数字退出码>, signal: null }`，与之不相交。
+ *
+ * cycle-113（真机 20/20 复现实证，dsh-codegraph-visualizer flow-tracker 取证）：
+ *   ENOBUFS 错误形态实测 `{ name:'Error', code:'ENOBUFS', signal:'SIGTERM',
+ *   status:null }` —— signal 与 status 两个维度的值与超时形态**逐字段相同**，
+ *   落进 SIGTERM 分支被判成超时。真机症状：120s 预算在 ~59s 被杀、20 次
+ *   auto-fix-loop 全部 exit 2 且全部记成 test-command-timeout——实耗只占预算
+ *   49% 却被记超时，自相矛盾被 flow-tracker 的 durationMs 直接戳穿。根因：
+ *   execSync 默认 maxBuffer=1MB，大测试套件（如 pnpm run test 全量 vitest）
+ *   的输出塞满缓冲区即被 kill。**ENOBUFS 必须在所有 timeout 判据之前短路**：
+ *   code 字段是 spawnSync 错误里证据最强的维度（ETIMEDOUT/ENOBUFS 互斥），
+ *   两者都会带 signal:'SIGTERM'/status:null，只看 signal+status 必然混淆。
+ *   auto-fix-loop 的 runCommand 在本修前对 ENOBUFS 无独立分支——
+ *   isBufferOverflowError 分支（:86）因超时分支先吞掉 ENOBUFS 而是死代码。
  */
 export function isTimeoutError(err) {
   if (!err || typeof err !== 'object') return false;
+  // ENOBUFS 最优先：它的 signal/status 维度与超时形态逐字段相同（都是
+  // SIGTERM + null），若放在后面会被任何 SIGTERM 判据吞掉（真机 20/20 实证）。
+  if (err.code === 'ENOBUFS') return false;
   if (err.code === 'ETIMEDOUT') return true;
   if (err.killed === true) return true;
   // SIGTERM 且无数字退出码：非零退出码一定不是超时（进程正常终止过）；

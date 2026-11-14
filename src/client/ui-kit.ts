@@ -41,20 +41,27 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
      */
     export function RichText(props) {
       const src = String(props.text || '')
+      // cycle-21（issue #1）：xingcezhenti 题图占位 `【图:kgimg://90-图片/题目图/x.png】`
+      // 先改写为 markdown 形式（与既有 ![]() 渲染共用一条链路）——URL 指向 /api/kg-img?p=。
+      // 占位在落盘数据（进度/错题本）中保持中立形态：不含端口/挂载点，换挂载/换端口不失效。
+      const withImgs = src.replace(/【图:kgimg:\/\/([^\]】]+)】/g, (_f, rel) =>
+        `![](kgimg://${rel})`)
       const parts: any[] = []
       const re = /!\[([^\]]*)\]\(([^)]+)\)/g
       let last = 0, m, n = 0
-      while ((m = re.exec(src)) !== null) {
-        if (m.index > last) parts.push({ t: 'text', k: 't' + (n++), v: src.slice(last, m.index) })
+      while ((m = re.exec(withImgs)) !== null) {
+        if (m.index > last) parts.push({ t: 'text', k: 't' + (n++), v: withImgs.slice(last, m.index) })
         parts.push({ t: 'img', k: 'i' + (n++), alt: m[1], src: m[2] })
         last = m.index + m[0].length
       }
-      if (last < src.length) parts.push({ t: 'text', k: 't' + (n++), v: src.slice(last) })
+      if (last < withImgs.length) parts.push({ t: 'text', k: 't' + (n++), v: withImgs.slice(last) })
       const mh = props.maxHeight
       return h('div', { style: { fontSize: props.fontSize || 12.5, lineHeight: 1.85, maxHeight: mh || 'none', overflowY: mh ? 'auto' : 'visible' } },
         parts.map(pt => pt.t === 'img'
           ? h('img', {
-              key: pt.k, src: pt.src, alt: pt.alt || '题目配图', loading: 'lazy',
+              key: pt.k,
+              src: /^kgimg:\/\//.test(pt.src) ? MOUNT_PATH + '/api/kg-img?p=' + encodeURIComponent(pt.src.replace(/^kgimg:\/\//, '')) : pt.src,
+              alt: pt.alt || '题目配图', loading: 'lazy',
               style: { maxWidth: '100%', maxHeight: 320, display: 'block', margin: '10px 0', borderRadius: 8, border: '1px solid rgba(148,163,184,.25)' },
               onError: (e) => { if (e && e.target) { e.target.style.display = 'none' } },
             })
@@ -110,12 +117,16 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
     }
     export function OptionRow({ label, text, state, onClick, disabled }) {
       const st = optionStyle(state)
+      // cycle-22：选项可携带配图占位（资料分析公式图/数学运算图/判断推理选项图）——
+      // 含 kgimg:// 占位的选项文本走 RichText 渲染出图，纯文本走原链路（零变化）。
+      const hasImg = typeof text === 'string' && text.includes('kgimg://')
+      const body = hasImg ? h(RichText, { text, fontSize: 13 }) : text
       return h('div', {
         style: { display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 12px', border: '2px solid ' + st.border, background: st.bg, borderRadius: 10, marginTop: 8, cursor: disabled ? 'default' : 'pointer', fontSize: 13, lineHeight: 1.6 },
         onClick: disabled ? undefined : onClick,
       },
         h('div', { style: { width: 24, height: 24, borderRadius: '50%', background: st.badge, color: st.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 } }, label),
-        h('div', { style: { flex: 1 } }, text))
+        h('div', { style: { flex: 1, minWidth: 0 } }, body))
     }
     /** 五维标注块：kind ∈ analysis/kadian/reasoning/fastest/pitfalls/mother */
     export const DIM_META = {
@@ -139,6 +150,27 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
       if (!list.length) return null
       return h('div', { style: { display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' } },
         list.map((it, i) => h('span', { key: i, style: { ...KV_TAG, ...(it.style || {}) } }, it.text)))
+    }
+
+    /**
+     * cycle-21：题库出处徽章（用户要求「每道题标明出处」）
+     * 统一映射四库来源 → 中文标签；exam/year/paperFile 存在时拼接「卷名 · 年份」。
+     * 无出处信息（旧错题等）整行不渲染（不臆造来源）。
+     */
+    export const KG_SOURCE_META = {
+      xingcezhenti: { label: '题库·真题', color: '#6366f1' },
+      naoku: { label: '深度题库', color: '#8b5cf6' },
+      'gk-tuxing': { label: '图形推理专项', color: '#0ea5e9' },
+      gwy_zhenti: { label: '真题卷', color: '#14b8a6' },
+    }
+    export function SourceBadge({ source, exam, year, region, paperFile, extra }) {
+      const meta = KG_SOURCE_META[source]
+      const vol = [exam || paperFile, year, region].filter(Boolean)
+      if (!meta && !vol.length && !extra) return null
+      return h('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, fontSize: 10.5 } },
+        meta ? h('span', { style: { ...KV_TAG, background: meta.color + '14', color: meta.color } }, '📌 ' + meta.label) : null,
+        vol.length ? h('span', { style: KV_TAG, title: vol[0] }, vol.join(' · ')) : null,
+        extra || null)
     }
 
     /** 渲染错误边界（R9 纵深）：子树抛错降级提示条，绝不白屏宿主 GUI */

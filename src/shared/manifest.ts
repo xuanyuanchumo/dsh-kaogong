@@ -18,7 +18,7 @@ const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 // ── 能力清单（与 index.js / client.js / ui 实际注册保持同步）──
 export const CAPABILITIES = {
-  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.15.0', mode: 'offline-first' },
+  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.17.0', mode: 'offline-first' },
 
   // 宿主 UI 双入口（client 半注册；图谱与可观测面板消费此声明）
   entries: [
@@ -63,6 +63,8 @@ export const CAPABILITIES = {
     { path: '/api/essay/history', label: '申论历史', consumers: ['ui:essay', 'ui:dashboard'] },
     { path: '/api/essay/article', label: '大作文分档评估', consumers: ['ui:essay'] },
     { path: '/api/paper-img', label: '题目配图服务', consumers: ['ui:papers', 'ui:practice', 'ui:deepbank'] },
+    // cycle-22：kg-img 占位配图服务补登记（cycle-21 起服务端已实现、RichText 已消费，但漏声明 → 能力对账假漂移）
+    { path: '/api/kg-img', label: '题库占位配图服务(kgimg://)', consumers: ['ui:practice', 'ui:deepbank', 'ui:topics'] },
     { path: '/api/paper/exam/start', label: '整卷模考开始', consumers: ['ui:exam'] },
     { path: '/api/paper/exam/submit', label: '整卷模考交卷', consumers: ['ui:exam'] },
     { path: '/api/paper/exam/history', label: '模考历史', consumers: ['ui:exam', 'ui:dashboard'] },
@@ -73,6 +75,8 @@ export const CAPABILITIES = {
     { path: '/api/naoku-img', label: '深度题库配图服务', consumers: ['ui:deepbank', 'ui:practice'] },
     { path: '/api/naoku/papers', label: '考点→试卷反查', consumers: ['ui:papers', 'ui:topics'] },
     { path: '/api/naoku/categories', label: '考点清单', consumers: ['ui:papers', 'ui:deepbank'] },
+    // cycle-21 数据外置白盒端点（issue #2）：用户数据根位置 / 迁移状态 / 包内残留透出
+    { path: '/api/data-location', label: '数据位置白盒', consumers: ['ui:repos', 'ui:observability'] },
     { path: '/api/tuxing/cats', label: '图形推理规律分类', consumers: ['ui:tuxing'] },
     { path: '/api/tuxing/list', label: '图形推理抽题', consumers: ['ui:tuxing'] },
     { path: '/api/tuxing/q', label: '图形推理单题详情', consumers: ['ui:tuxing'] },
@@ -108,6 +112,11 @@ export const CAPABILITIES = {
     { path: '/api/huasheng13/coverage', label: '六模块×体系覆盖矩阵', consumers: ['ui:huasheng13', 'ui:observability'] },
     { path: '/api/huasheng13/practice', label: '方法论配套练习抽取', consumers: ['ui:huasheng13'] },
     { path: '/api/huasheng13/trace', label: '方法论消费链路追踪', consumers: ['ui:huasheng13', 'ui:observability'] },
+    // cycle-21 纸质练习历史补录（issue #3 第一阶段）：搜索现有题库 / 补录历史对错 / 批次撤销
+    { path: '/api/history/search', label: '题干关键词搜索(补录候选)', consumers: ['ui:deepbank'] },
+    { path: '/api/history/entries', label: '纸质补录(逐题/批量)', consumers: ['ui:deepbank'] },
+    { path: '/api/history/undo', label: '补录批次撤销', consumers: ['ui:deepbank'] },
+    { path: '/api/history/batches', label: '补录批次台账', consumers: ['ui:deepbank'] },
     { path: '/api/graph', label: '图谱数据', consumers: ['ui:graph'] },
     // v1.8 交互式图谱三端点 + 生命周期状态机（白盒链路：client 视图消费）
     { path: '/api/graph/neighborhood', label: '图谱·k跳邻域', consumers: ['ui:graph'] },

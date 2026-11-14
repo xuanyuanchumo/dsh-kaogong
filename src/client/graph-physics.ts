@@ -461,12 +461,19 @@ import { graphHash, graphClamp, graphShade, GRAPH_NODE_META, GRAPH_EDGE_META } f
               const m = metaOf(n.type, nodeMeta)
               const line1 = String(n.label || n.id)
               const line2 = (m.icon || '•') + ' ' + (m.label || n.type) + ' · 度 ' + n.deg + (n.pinned ? ' · 已钉住' : '')
+              // cycle-22 P1：tooltip 第三行——模块/端点/视图节点叠加掌握率（与「掌握度」着色模式同口径）
+              const mst = o && o.masteryMap && (n.type === 'module' || n.type === 'endpoint' || n.type === 'view')
+                ? (o.masteryMap[String(n.label || '')] || o.masteryMap[String(n.id || '')]) : null
+              const line3 = mst && typeof mst.rate === 'number'
+                ? '🎯 掌握率 ' + mst.rate + '%' + (typeof mst.answered === 'number' ? ' · ' + mst.answered + ' 题' : '')
+                : ''
               ctx.font = '700 11.5px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif'
               const w1 = ctx.measureText(line1).width
               ctx.font = '11px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif'
               const w2 = ctx.measureText(line2).width
-              const bw = Math.min(W - 12, Math.max(w1, w2) + 18)
-              const bh = 38
+              const w3 = line3 ? ctx.measureText(line3).width : 0
+              const bh = line3 ? 52 : 38
+              const bw = Math.min(W - 12, Math.max(w1, w2, w3) + 18)
               let bx = hoverPos.x + 12, by = hoverPos.y + 12
               if (bx + bw > W - 6) bx = Math.max(6, hoverPos.x - bw - 12)
               if (by + bh > H - 6) by = Math.max(6, hoverPos.y - bh - 12)
@@ -484,6 +491,10 @@ import { graphHash, graphClamp, graphShade, GRAPH_NODE_META, GRAPH_EDGE_META } f
               ctx.fillStyle = 'rgba(203,213,225,.95)'
               ctx.font = '11px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif'
               ctx.fillText(line2, bx + 9, by + 21)
+              if (line3) {
+                ctx.fillStyle = mst.rate >= 75 ? '#34d399' : mst.rate >= 50 ? '#fbbf24' : '#f87171'
+                ctx.fillText(line3, bx + 9, by + 36)
+              }
             }
           }
         } catch { /* 渲染期任何异常都不得扩散到 React 树 */ }

@@ -58,37 +58,96 @@ export function parseQuestions(filePath, maxQ = 20) {
     const m = line.match(/^([^:]+):\s*"?(.*?)"?\s*$/)
     if (m) meta[m[1].trim()] = m[2]
   }
+  // cycle-21（issue #1 用户旅程实证）：资料分析等题「根据上图」的图在**材料块**里
+  // （`## 材料 N` 段，全库 1479 个含图材料块），不在题块内。材料图归属用
+  // matImgTable（offset → 图片列表）在题块循环里按「最近前置材料段」附给题干。
   const blocks = content.split(/\n#{2,3}\s*第\s*(\d+)\s*题/)
+  // cycle-21：每个题块前的原文偏移 → 用于「该题前面最近的有图材料段」归属
+  // split 带捕获组时 blocks[i] 与 blocks[i+1] 配对；偏移需在 split 前算好（这里用逐块 index 推算）
+  const qOffsets: number[] = []
+  {
+    const re = /\n#{2,3}\s*第\s*(\d+)\s*题/g
+    let om: RegExpExecArray | null
+    while ((om = re.exec(content)) !== null) qOffsets.push(om.index)
+  }
+  // 有图材料段的位置表（offset → 图片占位数组）
+  const matImgTable: Array<{ at: number, imgs: string[] }> = []
+  {
+    const mr = /\n##\s*材料[^\n]*\n([\s\S]*?)(?=\n#{2,3}\s*第\s*\d+\s*题|\n##\s*材料|\n##\s*题目|$)/g
+    let em: RegExpExecArray | null
+    while ((em = mr.exec(content)) !== null) {
+      const segImgs: string[] = []
+      const ir2 = /<img[^>]*\ssrc=["']([^"']+)["'][^>]*\/?>/gi
+      let im2: RegExpExecArray | null
+      while ((im2 = ir2.exec(em[1])) !== null) {
+        const rel = String(im2[1] || '').replace(/\\/g, '/').replace(/^(\.\.\/)+/, '')
+        if (rel && !/^https?:/i.test(rel)) segImgs.push(rel)
+      }
+      if (segImgs.length) matImgTable.push({ at: em.index, imgs: segImgs })
+    }
+  }
   const questions: any[] = []
+  // cycle-21（issue #1）：图片占位化。xingcezhenti 卷内图片以 <img src="../90-图片/…"> 引用，
+  // 旧实现 `<[^>]+>→''` 直接剥掉 = 判断推理/资料分析题干图与公式图全部丢失（不可作答）。
+  // 修复：先把 img 标签转成**中立占位** `kgimg://<相对 xingcezhenti 的路径>`
+  // （落盘/存储与端口、挂载点无关；前端 RichText 渲染时才改写为 /api/kg-img?p= 绝对 URL），
+  // 再剥其余 HTML 标签。占位文本形态 `【题图】` 由前端渲染层处理，落盘数据保持可读。
+  const IMG_PLACEHOLDER_RE = /<img[^>]*\ssrc=["']([^"']+)["'][^>]*\/?>/gi
+  const neutralizeImages = (s) => String(s || '')
+    .replace(IMG_PLACEHOLDER_RE, (_full, src) => {
+      const rel = String(src || '').replace(/\\/g, '/')
+      if (!rel || /^https?:/i.test(rel)) return _full                       // 外链原样保留
+      // ../90-图片/题目图/x.png → 90-图片/题目图/x.png（相对 xingcezhenti 的规范路径）
+      const norm = rel.replace(/^(\.\.\/)+/, '')
+      return `【图:kgimg://${norm}】`
+    })
+  const stripHtmlKeepImg = (s) => neutralizeImages(s).replace(/<[^>]+>/g, '').trim()
   for (let i = 1; i < blocks.length && questions.length < maxQ; i += 2) {
     const qNum = parseInt(blocks[i])
     const block = blocks[i + 1] || ''
     const typeMatch = block.match(/<sub>qid\s*\d+\s*[·・]\s*(.+?)<\/sub>/)
     const qType = typeMatch ? typeMatch[1].trim() : '未知'
+    // cycle-21：材料图归属——该题块偏移之前「最近的有图材料段」的图，附在题干尾部
+    // （语义：资料分析题读图作答；题块自身已有图时材料图放在其后不重复附）
+    let matImgs: string[] = []
+    {
+      const at = qOffsets[(i - 1) / 2] != null ? qOffsets[(i - 1) / 2] : -1
+      for (const t of matImgTable) { if (t.at < at) matImgs = t.imgs; else break }
+    }
     const subEnd = block.indexOf('</sub>')
     const optionsStart = block.search(/\n-\s*\*\*A\*\*/)
     let stem = ''
     if (subEnd >= 0 && optionsStart >= 0) {
-      stem = block.slice(subEnd + 6, optionsStart).trim().replace(/<p>/g, '\n').replace(/<\/p>/g, '').replace(/<[^>]+>/g, '').trim()
+      stem = block.slice(subEnd + 6, optionsStart).trim().replace(/<p>/g, '\n').replace(/<\/p>/g, '')
+      stem = stripHtmlKeepImg(stem)
     } else if (subEnd < 0 && optionsStart >= 0) {
-      stem = block.slice(0, optionsStart).replace(/<[^>]+>/g, '').trim()
+      stem = stripHtmlKeepImg(block.slice(0, optionsStart))
     }
     const options: any = {}
     const optPattern = /-\s*\*\*([A-D])\*\*\.\s*(.+?)(?:\s*✅)?(?:\n|$)/g
     let m2
-    while ((m2 = optPattern.exec(block)) !== null) options[m2[1]] = m2[2].replace(/<[^>]+>/g, '').trim()
+    while ((m2 = optPattern.exec(block)) !== null) options[m2[1]] = stripHtmlKeepImg(m2[2])
     let correctAnswer = null
     const am = block.match(/\*\*答案\*\*[：:]\s*([A-D])/)
     if (am) correctAnswer = am[1]
     let analysis = ''
     const anm = block.match(/\*\*官方解析\*\*\n([\s\S]*?)(?:\n---|\n## |\n### |$)/)
-    if (anm) analysis = anm[1].replace(/<[^>]+>/g, '').trim()
-    if (stem && Object.keys(options).length > 0) {
+    if (anm) analysis = stripHtmlKeepImg(anm[1])
+    // cycle-21：题块自身无图且存在前置材料图 → 材料图占位附题干尾（「根据上图」可作答）
+    const finalStem = (matImgs.length && !String(stem).includes('kgimg://'))
+      ? String(stem) + '\n' + matImgs.map(rel => '【图:kgimg://' + rel + '】').join('\n')
+      : stem
+    if (finalStem && Object.keys(options).length > 0) {
+      // cycle-21：题库出处标注（用户要求「每道题标明出处」）——
+      // source=数据库名（xingcezhenti），exam/year/region 已由 frontmatter 提供；
+      // paperFile 记卷文件名（去 .md），供 UI「查看原卷」与补录指纹稳定锚定。
+      const paperFile = (filePath.split(/[\\/]/).pop() || '').replace(/\.md$/, '')
       questions.push({
         id: `${meta.模块 || '未知'}-${qNum}-${Math.random().toString(36).slice(2, 6)}`,
         number: qNum, type: qType, module: meta.模块 || '未知',
         exam: meta.试卷 || '', region: meta.地区 || '', year: meta.年份 || '',
-        stem, options, correctAnswer, analysis,
+        source: 'xingcezhenti', paperFile,
+        stem: finalStem, options, correctAnswer, analysis,
       })
     }
   }

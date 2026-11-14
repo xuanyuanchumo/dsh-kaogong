@@ -5,7 +5,7 @@
  * 练题流程收敛到左栏「考公学习」面板（对话窗口回归纯对话）。
  */
 
-import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow } from './ui-kit.js'
+import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow, SourceBadge } from './ui-kit.js'
 
 /* ════════════ cycle-15 专项刷题记忆（/api/memory · 按工作区命名空间隔离）════════════
    三端同步契约：manifest 声明 /api/memory → server/srs.js memoryApi 实现 → 本视图族消费。
@@ -225,6 +225,17 @@ function KgMemBanner(props: any) {
 
       const answered = !!result
       const correct = answered && result.isCorrect
+      // cycle-21（issue #1 用户旅程）：上游数据形态限制——2728 道图形推理题的选项
+      // 在数据源里就是纯字母 A/B/C/D（选项图未随上游收录）。选项为纯字母时：
+      // · 题干带图 或 题型是图形推理 → 选项图缺失提示（图形推理选项必然是图，不依赖 stem 占位）
+      // · 旧错题回炉（图片修复前入库，stem 已被旧解析剥图）→ 历史数据提示
+      // cycle-22：选项占位计数——含 kgimg:// 的选项不算「纯字母」（选项配图已恢复，不再误报降级提示）
+      const optsVals = entries(q.options || {}).map(([L, t]) => String(t || '').trim())
+      const optImgCount = optsVals.filter(v => v.includes('kgimg://')).length
+      const lettersOnly = optsVals.length >= 4 && optsVals.every(v => /^[A-D]$/.test(v))
+      const stemHasImg = String(q.stem || '').includes('kgimg://')
+      const isTuxingType = /图形推理/.test(String(q.type || '')) && lettersOnly
+      const legacyNoImg = !stemHasImg && /上图|如图|统计图|所示/.test(String(q.stem || ''))
       return h('div', { style: { maxWidth: 780 } },
         h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' } },
           h('button', { style: KV_BTN, onClick: () => setModule('') }, '← 模块'),
@@ -233,7 +244,23 @@ function KgMemBanner(props: any) {
           q.fromWrongBook ? h('span', { style: { ...KV_TAG, background: 'rgba(239,68,68,.12)', color: '#ef4444' } }, '📕 错题回炉·箱' + q.box) : null,
           h('span', { style: { marginLeft: 'auto', fontSize: 11.5, color: '#64748b' } }, '本次 ' + stat.done + ' 题 · 对 ' + stat.right),
           h('span', { style: { fontSize: 11.5, color: '#94a3b8' } }, '队列 ' + (queueLen + 1))),
-        h(Card, null, h(RichText, { text: q.stem, fontSize: 14.5, maxHeight: '34vh' })),
+        h(Card, null,
+          // cycle-21：每题标明题库出处（xingcezhenti/naoku/SRS 回炉继承原出处）
+          h(SourceBadge, { source: q.source, exam: q.exam, year: q.year, region: q.region, paperFile: q.paperFile,
+            extra: q.fromWrongBook ? h('span', { style: { ...KV_TAG, background: 'rgba(239,68,68,.12)', color: '#ef4444' } }, '📕 错题回炉') : null }),
+          h(RichText, { text: q.stem, fontSize: 14.5, maxHeight: '34vh' })),
+        // cycle-21：上游数据缺选项图的诚实降级提示（2728 题图形推理选项在源数据=A/B/C/D 字母）
+        // + 旧错题回炉的历史数据提示（修复前入库的 stem 已被旧解析剥图，无法凭空恢复）
+        (lettersOnly && (stemHasImg || isTuxingType))
+          ? h('div', { style: { fontSize: 11.5, color: '#b45309', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 9, padding: '7px 10px', marginTop: 8 } },
+              optImgCount > 0
+                ? 'ℹ 该题选项配图已在题库数据源中收录 ' + optImgCount + ' 个，其余选项为纯字母——请结合题干图与解析推理作答。'
+                : 'ℹ 该题四个选项在题库数据源中为纯字母（选项配图未随上游收录）——请结合题干图与解析推理作答。')
+          : null,
+        legacyNoImg && !lettersOnly
+          ? h('div', { style: { fontSize: 11.5, color: '#64748b', background: 'rgba(148,163,184,.08)', border: '1px dashed rgba(148,163,184,.3)', borderRadius: 9, padding: '7px 10px', marginTop: 8 } },
+              'ℹ 该题引用了图表但题干未携带配图（修复前入库的历史错题，或原文即文字题）——可到「📚 真题卷」查看原卷完整配图。')
+          : null,
         entries(q.options || {}).map(([L, text]) => h(OptionRow, {
           key: L, label: L, text,
           state: !answered ? (L === sel ? 'chosen' : 'idle') : (L === q.correctAnswer ? 'right' : (L === sel ? 'wrong' : 'idle')),
@@ -273,6 +300,8 @@ function KgMemBanner(props: any) {
           h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' } },
             h('span', { style: tagStyle }, w.module),
             h('span', { style: tagStyle }, '错' + w.wrongCount + '次'),
+            // cycle-21：错题条目也标出处（入库时快照的题库来源/卷名；旧数据无则不渲染）
+            (w.source || w.exam) ? h('span', { style: { ...tagStyle, background: 'rgba(99,102,241,.1)', color: '#4338ca' } }, '📌 ' + [w.exam || w.paperFile, w.year].filter(Boolean).join(' · ') || w.module) : null,
             h('span', { title: 'SRS 箱位 ' + w.box + '/5', style: { display: 'inline-flex', gap: 3 } }, Array.from({ length: 5 }, (_, i) => h('i', { key: i, style: { width: 7, height: 7, borderRadius: '50%', background: i < w.box ? (w.mastered ? '#10b981' : '#6366f1') : 'rgba(148,163,184,.3)' } }))),
             w.mastered ? h('span', { style: { color: '#10b981', fontSize: 11, fontWeight: 700 } }, '已掌握') : null),
           h('div', { style: { fontSize: 12.5, lineHeight: 1.65, maxHeight: 66, overflow: 'hidden' } }, w.stem))))
@@ -415,6 +444,8 @@ function KgMemBanner(props: any) {
       return h('div', {},
         header,
         h(Card, { title: '第 ' + q.no + ' 题 · ' + q.catName },
+          // cycle-21：图形推理题出处（gk-tuxing + 上游原始出处 src）
+          h(SourceBadge, { source: q.source || 'gk-tuxing', exam: q.src, paperFile: q.src ? String(q.src).replace(/\.md$/, '') : null }),
           h('img', {
             src: q.imgUrl, alt: '图形推理题',
             style: { maxWidth: '100%', maxHeight: 340, display: 'block', margin: '6px 0 14px', borderRadius: 10, border: '1px solid rgba(148,163,184,.25)', background: '#fff' },
@@ -578,7 +609,8 @@ function KgMemBanner(props: any) {
             onClick: () => { if (!revealed) setSel(L) },
           },
             h('div', { style: { width: 24, height: 24, borderRadius: '50%', background: badge, color: badgeColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 } }, L),
-            h('div', { style: { flex: 1 } }, txt))
+            // cycle-22：选项含图占位 → RichText 渲染出图（公式图/选项图不再剥掉）
+            String(txt || '').includes('kgimg://') ? h('div', { style: { flex: 1, minWidth: 0 } }, h(RichText, { text: txt, fontSize: 13 })) : h('div', { style: { flex: 1 } }, txt))
         })
 
         const actionBtn = revealed
@@ -603,6 +635,9 @@ function KgMemBanner(props: any) {
         }
 
         questionCard = h('div', {},
+          // cycle-21：深度题库题也标出处（naoku + 卷名/年份/考点）
+          h(SourceBadge, { source: q.source || 'naoku', exam: q.exam, year: q.year, region: q.region,
+            extra: q.kadian ? h('span', { style: { ...KV_TAG, background: 'rgba(99,102,241,.12)', color: '#6366f1' } }, '🎯 ' + String(q.kadian).slice(0, 18)) : null }),
           h('div', { style: { display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' } }, headerTags),
           h(RichText, { text: q.stem, fontSize: 13.5, maxHeight: '30vh' }),
           optRows,
@@ -622,6 +657,8 @@ function KgMemBanner(props: any) {
         statsRow,
         searchCard,
         tuxingCard,
+        // cycle-21 H5（issue #3）：纸质补录四步旅程（搜索→核对→补录→批次撤销）
+        h(KgHistoryImport, { api }),
         // cycle-15：记忆恢复横幅（未抽题时展示；恢复 = 直接回到上次的模块 + 原题）
         (!q && memLoaded && memData && memData.question && !memOff)
           ? h(KgMemBanner, {
@@ -636,4 +673,128 @@ function KgMemBanner(props: any) {
           h('div', { style: { display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' } }, moduleBtns),
           busy ? h('div', { style: { fontSize: 12, color: '#64748b' } }, '抽题中…') : null,
           questionCard))
+    }
+
+    /**
+     * 纸质刷题记录补录（cycle-21 H5 · issue #3 第一阶段）
+     * 四步旅程：① 题干关键词搜候选 → ② 展示题干/选项/来源供核对 →
+     * ③ 补录 对/错/结果未知（可选书名页码/原始日期）→ ④ 批次撤销（环形 30）。
+     * 纪律：历史补录不进「今日新刷」（服务端统计隔离）；重复补录=冲突提示；可整批撤销。
+     */
+    function KgHistoryImport({ api }) {
+      const [kw, setHikw] = React.useState('')
+      const [results, setHiResults] = React.useState(null)     // 搜索结果
+      const [picks, setHiPicks] = React.useState({})           // sig → {question, result}
+      const [srcNote, setHiSrc] = React.useState('')           // 书名/页码（可选）
+      const [happenedAt, setHiDate] = React.useState('')       // 原始作答日期（可选）
+      const [msg, setHiMsg] = React.useState(null)             // {ok, text}
+      const [batches, setHiBatches] = React.useState(null)
+      const [busy, setHiBusy] = React.useState(false)
+
+      const loadBatches = React.useCallback(() => {
+        api('/history/batches').then((d: any) => setHiBatches(d)).catch(() => setHiBatches(null))
+      }, [api])
+      React.useEffect(() => { loadBatches() }, [loadBatches])
+
+      const doSearch = async () => {
+        if (!kw.trim()) return
+        setHiBusy(true)
+        try {
+          const d = await api('/history/search?q=' + encodeURIComponent(kw.trim()) + '&limit=12')
+          setHiResults(d && d.list ? d : { list: [] })
+          setHiPicks({})
+        } catch (e: any) { setHiMsg({ ok: false, text: '搜索失败: ' + ((e && e.message) || e) }) }
+        finally { setHiBusy(false) }
+      }
+
+      const pick = (item: any, result: string) => {
+        setHiPicks((p: any) => {
+          const next = Object.assign({}, p)
+          if (result === 'none') delete next[item.contentSig]
+          else next[item.contentSig] = { question: item, result, contentSig: item.contentSig }
+          return next
+        })
+      }
+
+      const submit = async () => {
+        const list = Object.values(picks)
+        if (!list.length) { setHiMsg({ ok: false, text: '先在候选里标记对/错' }); return }
+        setHiBusy(true)
+        try {
+          const entries = list.map((x: any) => ({
+            contentSig: x.contentSig, question: x.question, result: x.result,
+            source: srcNote.trim() || null, happenedAt: happenedAt || null,
+          }))
+          const r = await api('/history/entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries, source: srcNote.trim() || null }) })
+          if (r && r.error) { setHiMsg({ ok: false, text: r.error }) }
+          else {
+            setHiMsg({ ok: true, text: '已补录 ' + r.accepted + ' 题（批次 ' + String(r.batchId || '').slice(0, 12) + '）'
+              + (r.conflicts && r.conflicts.length ? ' · 冲突跳过 ' + r.conflicts.length + ' 题' : '')
+              + (r.rejected && r.rejected.length ? ' · 无效 ' + r.rejected.length + ' 题' : '')
+              + ' · 错题已进错题本（历史练习不计入今日新刷）' })
+            setHiPicks({}); setHiResults(null); setHikw(''); setHiSrc(''); setHiDate('')
+            loadBatches()
+          }
+        } catch (e: any) { setHiMsg({ ok: false, text: '补录失败: ' + ((e && e.message) || e) }) }
+        finally { setHiBusy(false) }
+      }
+
+      const undoBatch = async (id: string) => {
+        setHiBusy(true)
+        try {
+          const r = await api('/history/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: id }) })
+          setHiMsg(r && r.error ? { ok: false, text: r.error } : { ok: true, text: '已撤销批次：移除 ' + (r.removedHistory || 0) + ' 条历史 + ' + (r.removedWrong || 0) + ' 条错题' })
+          loadBatches()
+        } catch (e: any) { setHiMsg({ ok: false, text: '撤销失败: ' + ((e && e.message) || e) }) }
+        finally { setHiBusy(false) }
+      }
+
+      const pickList = Object.values(picks)
+      return h(Card, { title: '📥 纸质刷题补录（把纸上的对错记进系统）' },
+        h('div', { style: { fontSize: 11, color: '#64748b', marginBottom: 8 } },
+          '① 输入题干关键词搜现有题库 → ② 核对候选（题干/选项/来源）→ ③ 标记 已做对/已做错/结果未知 → ④ 保存（错题自动进错题本，同批次可撤销）。原始日期未知可留空。'),
+        h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 } },
+          h('input', {
+            value: kw, onChange: (e: any) => setHikw(e.target.value), onKeyDown: (e: any) => { if (e.key === 'Enter') doSearch() },
+            placeholder: '题干关键词，如「林产品出口」「模态命题」',
+            style: { flex: '1 1 260px', padding: '7px 11px', borderRadius: 9, border: '1.5px solid rgba(148,163,184,.35)', fontSize: 12, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' } }),
+          h('button', { style: { ...KV_BTN, padding: '7px 14px' }, onClick: doSearch, disabled: busy }, busy ? '…' : '🔍 搜索候选')),
+        // ② 核对候选
+        results ? h('div', { style: { marginBottom: 8 } },
+          results.list && results.list.length
+            ? results.list.map((it: any) => {
+                const picked = picks[it.contentSig]
+                const stemPlain = String(it.stem || '').slice(0, 110)
+                return h('div', { key: it.contentSig, style: { border: '1.5px solid ' + (picked ? '#6366f1' : 'rgba(148,163,184,.25)'), borderRadius: 10, padding: '9px 11px', marginBottom: 6, background: picked ? 'rgba(99,102,241,.05)' : 'transparent' } },
+                  h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 } },
+                    h('span', { style: KV_TAG }, it.module || ''),
+                    it.matchSource ? h('span', { style: { ...KV_TAG, fontSize: 9.5 } }, it.matchSource === 'naoku' ? '深度题库' : '真题库') : null,
+                    it.year ? h('span', { style: { ...KV_TAG, fontSize: 9.5 } }, String(it.year)) : null,
+                    picked ? h('span', { style: { ...KV_TAG, background: 'rgba(99,102,241,.12)', color: '#4338ca', fontSize: 9.5 } }, '已标记: ' + (picked.result === 'right' ? '做对' : picked.result === 'wrong' ? '做错' : '结果未知')) : null),
+                  h('div', { style: { fontSize: 12, lineHeight: 1.6 } }, stemPlain + (String(it.stem || '').length > 110 ? '…' : '')),
+                  h('div', { style: { display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' } },
+                    h('button', { style: { ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'right' ? { background: 'rgba(16,185,129,.14)', color: '#059669', borderColor: '#10b981' } : {}) }, onClick: () => pick(it, 'right') }, '✓ 已做对'),
+                    h('button', { style: { ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'wrong' ? { background: 'rgba(239,68,68,.14)', color: '#dc2626', borderColor: '#ef4444' } : {}) }, onClick: () => pick(it, 'wrong') }, '✗ 已做错'),
+                    h('button', { style: { ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'unknown' ? { background: 'rgba(245,158,11,.14)', color: '#b45309', borderColor: '#f59e0b' } : {}) }, onClick: () => pick(it, 'unknown') }, '? 结果未知')))
+              })
+            : h('div', { style: { fontSize: 12, color: '#94a3b8', padding: '10px 0' } }, '未找到含该关键词的题目——换个更短的关键词试试'))
+          : null,
+        // ③ 补录附加信息 + 提交
+        pickList.length ? h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '8px 10px', borderRadius: 10, background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.18)' } },
+          h('span', { style: { fontSize: 11.5, fontWeight: 700, color: '#4338ca' } }, '待补录 ' + pickList.length + ' 题'),
+          h('input', { value: srcNote, onChange: (e: any) => setHiSrc(e.target.value), placeholder: '纸质来源（书名·页码，可选）', style: { flex: '1 1 180px', padding: '5px 9px', borderRadius: 8, border: '1px solid rgba(148,163,184,.3)', fontSize: 11, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' } }),
+          h('input', { value: happenedAt, onChange: (e: any) => setHiDate(e.target.value), placeholder: '原始作答日期 YYYY-MM-DD（可选）', style: { flex: '1 1 180px', padding: '5px 9px', borderRadius: 8, border: '1px solid rgba(148,163,184,.3)', fontSize: 11, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' } }),
+          h('button', { style: { ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, fontWeight: 700, padding: '6px 14px' }, onClick: submit, disabled: busy }, busy ? '保存中…' : '💾 保存补录'))
+          : null,
+        msg ? h('div', { style: { fontSize: 11.5, marginTop: 8, color: msg.ok ? '#059669' : '#dc2626' } }, (msg.ok ? '✓ ' : '⚠ ') + msg.text) : null,
+        // ④ 批次台账 + 撤销
+        batches && batches.importedTotal > 0
+          ? h('div', { style: { marginTop: 10, borderTop: '1px dashed rgba(148,163,184,.2)', paddingTop: 8 } },
+              h('div', { style: { fontSize: 11, color: '#64748b', marginBottom: 5 } }, '累计补录 ' + batches.importedTotal + ' 题 · 近 ' + (batches.batches || []).length + ' 批（可撤销窗口 30 批）'),
+              (batches.batches || []).slice(0, 5).map((b: any) => h('div', { key: b.batchId, style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 10.5, color: '#64748b', padding: '2px 0' } },
+                h('span', { style: { fontFamily: 'monospace' } }, String(b.batchId).slice(0, 14)),
+                h('span', null, b.count + ' 题'),
+                b.source ? h('span', null, '· ' + String(b.source).slice(0, 24)) : null,
+                h('button', { style: { ...KV_BTN, fontSize: 9.5, marginLeft: 'auto', color: '#dc2626', borderColor: 'rgba(239,68,68,.4)' }, onClick: () => undoBatch(b.batchId), disabled: busy }, '↩ 撤销此批'))))
+          : null)
     }

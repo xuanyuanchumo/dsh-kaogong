@@ -135,18 +135,19 @@ export function naokuQuestions({ module, category, kadian, count = 1, random = t
     type: r.category || r.qtype || '',
     kadian: r.kadian || '',
     region: r.region || '', year: r.year || '', exam: r.paper || '',
-    stem: stripHtml(r.stem || '') + (repoRoot && r.img_refs ? (NL + imageMarkdown(repoRoot, r.img_refs, mountPath)) : ''),
+    stem: stripHtmlKeepImg(r.stem || '') + (repoRoot && r.img_refs ? (NL + imageMarkdown(repoRoot, r.img_refs, mountPath)) : ''),
     options: parseOptions(r.options),
     correctAnswer: (r.answer || '').trim().toUpperCase() || null,
-    analysis: stripHtml(r.analysis || ''),
-    // 深度标注（方法论原生化的核心）
-    reasoning: stripHtml(r.reasoning || ''),
-    fastest: stripHtml(r.fastest || ''),
-    pitfalls: stripHtml(r.pitfalls || ''),
-    mother: stripHtml(r.mother || ''),
+    analysis: stripHtmlKeepImg(r.analysis || ''),
+    reasoning: stripHtmlKeepImg(r.reasoning || ''),
+    fastest: stripHtmlKeepImg(r.fastest || ''),
+    pitfalls: stripHtmlKeepImg(r.pitfalls || ''),
+    mother: stripHtmlKeepImg(r.mother || ''),
     hasImage: !!r.has_image,
     imgRefs: r.img_refs || '',
     source: 'naoku',
+    // cycle-21 出处标注：exam 即卷名（GongkaoNaoku paper 字段），kadian 是知识点锚
+    paperFile: r.paper || '',
   }))
 }
 
@@ -161,13 +162,55 @@ export function searchKadian(keyword, limit = 20) {
   return rows.map(r => ({ kadian: r.kadian, category: r.category, module: r.module, count: r.c }))
 }
 
+/** cycle-21（issue #3）：题干关键词全文搜索（补录候选）——DB LIKE 全量（非前 60 条截取），
+ *  排除「已删/破损」行；与 naokuQuestions 同一映射链路（imageMarkdown 由调用方注入 repoRoot 时拼接）。 */
+export function searchQuestionsByStem(keyword, limit = 12, repoRoot = null, mountPath = '/kaogong') {
+  if (!db) return []
+  const kw = String(keyword || '').trim()
+  if (!kw) return []
+  const rows = safeAll(
+    `SELECT id,qid,module,category,kadian,region,year,paper,stem,options,answer,analysis,has_image,img_refs,qtype
+     FROM questions WHERE stem LIKE ? ORDER BY year DESC, id ASC LIMIT ?`,
+    ['%' + kw.replace(/[%_]/g, m => '\\' + m) + '%', Math.min(50, limit)])
+  return rows.map(r => ({
+    id: 'naoku-' + r.id,
+    number: null,
+    module: r.module || '',
+    type: r.category || r.qtype || '',
+    kadian: r.kadian || '',
+    region: r.region || '', year: r.year || '', exam: r.paper || '',
+    stem: stripHtmlKeepImg(r.stem || '') + (repoRoot && r.img_refs ? (NL + imageMarkdown(repoRoot, r.img_refs, mountPath)) : ''),
+    options: parseOptions(r.options),
+    correctAnswer: (r.answer || '').trim().toUpperCase() || null,
+    analysis: stripHtmlKeepImg(r.analysis || ''),
+    hasImage: !!r.has_image,
+    source: 'naoku',
+  }))
+}
+
 /** 取某知识点下的题（供「专题」按知识点刷题） */
 export function questionsByKadian(kadian: string, limit = 10, repoRoot: any = null) {
   return naokuQuestions({ kadian, count: limit, random: false, repoRoot })
 }
 
-function stripHtml(s) {
-  return String(s || '')
+// ══ cycle-22（专题-判断推理无图修复 · ㊾ 同族教训）══
+// DB 抽样实证：8294 题解析、1406 题选项内联 <img src="/90-图片/{题目图|公式图}/x.webp">，
+// 旧 stripHtml 一刀切剥掉 → 专题枢纽→深度题库视图选项无图、解析无图（不可作答/不可复盘）。
+// 修复：剥 HTML 前先把内联 <img> 转成**中立占位** `【图:kgimg://<相对 xingcezhenti 的路径>】`
+// （与 repoData.parseQuestions 同一模板：落盘/存储与端口、挂载点无关；
+// 前端 RichText 渲染时才改写为 /api/kg-img?p= 绝对 URL，服务端按 basename 探测真实扩展名——
+// DB 记 .webp 而磁盘是 .png，kg-img 端点用 resolveNaokuImage 兜底换扩展名）。
+const KG_IMG_TAG_RE = /<img[^>]*\ssrc=["']([^"']+)["'][^>]*\/?>/gi
+function neutralizeImages(s) {
+  return String(s || '').replace(KG_IMG_TAG_RE, (full, src) => {
+    const rel = String(src || '').replace(/\\/g, '/')
+    if (!rel || /^https?:/i.test(rel)) return full          // 外链原样保留
+    return `【图:kgimg://${rel.replace(/^\/+/, '')}】`       // 去开头斜杠 → 相对 xingcezhenti
+  })
+}
+/** 剥 HTML 但保留图片占位（选项/解析/五维标注/题干共用） */
+function stripHtmlKeepImg(s) {
+  return neutralizeImages(s)
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<[^>]+>/g, '')
@@ -184,7 +227,8 @@ function parseOptions(raw) {
     if (Array.isArray(arr)) {
       for (const o of arr) {
         const key = (o.key || o.label || '').toString().trim().toUpperCase()
-        const text = stripHtml(o.html || o.text || o.label || '')
+        // cycle-22：stripHtmlKeepImg——选项配图（资料分析公式图/数学运算图）必须保留占位
+        const text = stripHtmlKeepImg(o.html || o.text || o.label || '')
         if (key && text) out[key] = text
       }
       return out
@@ -192,7 +236,7 @@ function parseOptions(raw) {
   } catch { /* 非 JSON，尝试文本解析 */ }
   const t = String(raw)
   for (const m of t.matchAll(/([A-D])[.、．:：]\s*([^A-D]+?)(?=\s*[A-D][.、．:：]|$)/g)) {
-    out[m[1]] = stripHtml(m[2])
+    out[m[1]] = stripHtmlKeepImg(m[2])
   }
   return out
 }

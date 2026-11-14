@@ -116,7 +116,8 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
             onClick: () => setAnswers(a => ({ ...a, [q.no]: L })),
           },
             h('div', { style: { width: 24, height: 24, borderRadius: '50%', background: chosen ? '#6366f1' : 'rgba(148,163,184,.15)', color: chosen ? '#fff' : 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 } }, L),
-            h('div', { style: { flex: 1 } }, txt))
+            // cycle-22：选项含图占位 → RichText 渲染出图（真题卷链路选项本就走 markdown 重写，此处兜底统一）
+            String(txt || '').includes('![') ? h('div', { style: { flex: 1, minWidth: 0 } }, h(RichText, { text: txt, fontSize: 13 })) : h('div', { style: { flex: 1 } }, txt))
         })
         return h('div', {},
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' } },

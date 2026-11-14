@@ -212,6 +212,8 @@
       { id: 'pagerank', label: 'PageRank', tip: '按 PageRank 分数渐变着色' },
       { id: 'betweenness', label: '中介', tip: '按中介中心性渐变着色' },
       { id: 'degree', label: '度', tip: '按节点度数渐变着色' },
+      // cycle-21 W2 学习画像叠加（T-026）：模块掌握率弱→强渐变；模块/端点/视图三类节点生效
+      { id: 'mastery', label: '掌握度', tip: '按「我的模块正确率」弱→强着色（红=弱区）' },
     ]
 
     /** hex → [r,g,b]（解析失败返回 null，调用方必须兜底；不抛错） */
@@ -352,6 +354,32 @@
         if (m === 'pagerank') vals = (src && src.prMap) || {}
         else if (m === 'betweenness') vals = (src && src.btMap) || {}
         else if (m === 'degree') vals = (src && src.degMap) || {}
+        else if (m === 'mastery') {
+          // cycle-21 W2 学习画像：mastery[模块名].rate（0-100）弱→强。
+          // 生效节点 = module:* 与直连视图/端点（掌握率向关联节点透传 0.5 中性值不渲染噪声）。
+          const mastery = (src && src.masteryMap) || {}
+          const modRate: any = {}
+          for (const [name, v] of Object.entries(mastery)) {
+            const rate = Number((v as any) && (v as any).rate)
+            if (isFinite(rate)) modRate[String(name)] = rate / 100
+          }
+          const colors: any = {}, radius: any = {}, items: any[] = []
+          let covered = 0
+          for (const n of list) {
+            const nidStr = String(n.id)
+            if (nidStr.startsWith('module:')) {
+              const name = nidStr.slice('module:'.length)
+              const t = modRate[name] != null ? modRate[name] : null
+              colors[nidStr] = t != null ? graphSeqColor(1 - t) : '#94a3b8'   // 弱区=红端（t 小 → 1-t 大 → 红）
+              radius[nidStr] = 1.15
+              if (t != null) covered++
+            } else { colors[nidStr] = '#cbd5e1'; radius[nidStr] = 1 }
+          }
+          // 图例：六模块掌握率红→绿梯度条（与视图热力条同色系语义）
+          const mods = Object.keys(modRate)
+          if (mods.length) for (const name of mods) items.push({ idx: 0, name, rate: Math.round(modRate[name] * 100) })
+          return { colors, radius, legend: { kind: 'mastery', items, covered }, covered }
+        }
         else return null
         let min = Infinity, max = -Infinity
         const score: any = {}

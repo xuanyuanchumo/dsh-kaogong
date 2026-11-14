@@ -1,5 +1,31 @@
 # Changelog — ai-native-iteration-cycle
 
+## 2.6.2 — ENOBUFS 误判超时根修 + auto-fix-loop 缓冲区标尺（cycle-113）
+
+### 修复
+- **`lib/budget.mjs` `isTimeoutError`：ENOBUFS 最优先短路**。真机 20/20 复现实证
+  （dsh-codegraph-visualizer flow-tracker 取证）：execSync 默认 maxBuffer=1MB，大测试套件
+  输出塞满缓冲区被 kill 时抛 `{code:'ENOBUFS', signal:'SIGTERM', status:null}`——signal/status
+  两个维度与超时形态**逐字段相同**，旧实现落进 SIGTERM 分支判成超时。症状：120s 预算在
+  ~59s 被杀、20 次 auto-fix-loop 全部 exit 2 且全记 `test-command-timeout`（实耗只占预算 49%，
+  被 flow-tracker 的 durationMs 直接戳穿）。判定顺序改为 code 维度（ETIMEDOUT/ENOBUFS 互斥、
+  证据最强）先于 killed/SIGTERM。
+- **auto-fix-loop `runCommand`：maxBuffer 显式 16MB + ENOBUFS 独立分支**（与 eval-runner
+  cycle-40 同标尺）。溢出返回 `overflow:true` 的独立结果，不再伪装成超时/失败；原
+  `isBufferOverflowError` 分支因超时分支先吞掉 ENOBUFS 而是死代码，本修后两道防线顺序纪律
+  由契约测试钉死。
+- 宿主 native 侧 `autoFixEngine.runTestCommand` 同语义（spawnSync `r.error.code==='ENOBUFS'`
+  独立返回），与技能脚本逐字对齐。
+
+### 测试
+- `scriptBudgetContract` 新增：ENOBUFS **真实完整形态**回归（简化形态 `{code:'ENOBUFS'}`
+  钉不住本洞）+ auto-fix-loop 源形状守卫（maxBuffer 必须 ≥16MB、ENOBUFS 判定必须先于超时判定）。
+- `initCycleStateSync` 补齐 cycle-147 三源取最大的 6 场景回归（归档收口态/三源取最大/
+  防归档名碰撞/全新项目/损坏状态），此前修复提交只带了脚本未带测试。
+
+### 兼容性
+- 退出码语义不变（0 成功 / 1 前置错误 / 2 熔断）；`.dsh` 副本需 repair 同步。
+
 ## 2.6.1 — 账本循环身份 + 账本形状归一（cycle-79）
 
 ### 修复

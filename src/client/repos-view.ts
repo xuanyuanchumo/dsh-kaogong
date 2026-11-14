@@ -99,6 +99,7 @@ function RpAboutProject({ self }: any) {
 
 export function NativeReposView({ api }: any) {
   /* ── hooks 顶部恒定：state×5 + effect×2 + callback×4 ── */
+  const [dl, setDl] = React.useState(null)   // cycle-21 W1：数据位置白盒（/api/data-location）
   const [data, setData] = React.useState(null)
   const [err, setErr] = React.useState('')
   const [busyKey, setBusyKey] = React.useState('')
@@ -123,6 +124,8 @@ export function NativeReposView({ api }: any) {
   React.useEffect(() => {
     aliveRef.current = true
     load()
+    // cycle-21 W1：数据位置白盒卡数据（一次性；迁移状态/包内残留透出）
+    api('/data-location').then((d: any) => { if (aliveRef.current) setDl(d) }).catch(() => {})
     return () => { aliveRef.current = false; try { if (pollRef.current) clearInterval(pollRef.current) } catch {} }
   }, [load])
 
@@ -202,6 +205,23 @@ export function NativeReposView({ api }: any) {
 
     /* ⓪ 关于本项目（GitHub/Release/Issue/npm 跳转 + 版本徽章） */
     h(RpAboutProject, { self: data.self }),
+
+    /* ⓪b cycle-21 W1：数据位置白盒卡（issue #2 可观测闭环：位置/来源/迁移/残留一行透视） */
+    dl ? h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, padding: '8px 12px', borderRadius: 10, background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.2)' } },
+      h('span', { style: { fontWeight: 700, fontSize: 11.5, color: '#065f46' } }, '🛡 数据安全'),
+      h('span', { style: { ...KV_TAG, fontSize: 10 } }, '用户数据根: ' + String(dl.userDataRoot || '—')),
+      h('span', { style: { ...KV_TAG, fontSize: 10 } }, '来源: ' + String(dl.source || '—')),
+      dl.migration && dl.migration.status
+        ? h('span', { style: { ...KV_TAG, fontSize: 10, background: dl.migration.status === 'failed' ? 'rgba(239,68,68,.12)' : 'rgba(16,185,129,.12)', color: dl.migration.status === 'failed' ? '#dc2626' : '#059669' } },
+            '迁移: ' + dl.migration.status + (dl.migration.movedCount ? '（' + dl.migration.movedCount + ' 项）' : ''))
+        : null,
+      dl.migration && dl.migration.status === 'failed' && dl.migration.failedItem
+        ? h('span', { style: { fontSize: 10.5, color: '#b45309' }, title: dl.migration.failedItem }, '⚠ ' + String(dl.migration.failedItem).slice(0, 50))
+        : null,
+      Array.isArray(dl.pkgResidual) && dl.pkgResidual.length
+        ? h('span', { style: { ...KV_TAG, fontSize: 10, background: 'rgba(245,158,11,.12)', color: '#b45309' }, title: '包内仍存有旧数据（迁移失败降级，源数据已保留）' }, '包内残留: ' + dl.pkgResidual.join('、'))
+        : h('span', { style: { ...KV_TAG, fontSize: 10, background: 'rgba(16,185,129,.12)', color: '#059669' } }, '包内无用户数据 ✓'))
+      : null,
 
     /* ① 总览（cycle-20：健康汇总 + 可用空间如实呈现，null 即降级不臆造） */
     h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 14 } },
@@ -319,7 +339,7 @@ export function NativeReposView({ api }: any) {
     /* ⑥ 口径说明 */
     h('div', { style: { fontSize: 10.5, color: '#94a3b8', lineHeight: 1.8 } },
       '口径：安装=git clone --depth 1（浅克隆省流量）· 已装仓库再点=git pull --ff-only 更新 · 一键必选走服务端队列（并发 2）· ',
-      '删除仅清本地数据目录（学习进度在 data/progress 不受影响）· clone 失败的半成品自动清理可重装 · ',
+      '删除仅清本地数据目录（学习进度/错题本在用户数据根 progress/，升级卸载均不受影响）· clone 失败的半成品自动清理可重装 · ',
       '健康巡检：空仓库/缺 .git/半成品显式标记 · 非 git 的用户数据目录受保护拒绝覆盖 · ',
       '全部数据归上游仓库作者所有（点 ↗ 致敬原作者）。'))
 }

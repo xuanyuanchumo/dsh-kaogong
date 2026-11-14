@@ -1,9 +1,9 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.15.0
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.17.0
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
-[![tests](https://img.shields.io/badge/tests-smoke%20293%20%C2%B7%20render%2051-10b981)](#-开发与验证)
+[![tests](https://img.shields.io/badge/tests-smoke%20317%20%C2%B7%20render%2055-10b981)](#-开发与验证)
 
 > **一句话**：把 **16 个**优秀开源考公仓库整合为 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）宿主内的**原生**学习平台 ——
 > 刷题 / SRS 错题本 / 真题卷 / 整卷模考 / 申论评改 / **花生十三体系方法论** / 可交互知识图谱 / 白盒可观测，**完全离线可用**。
@@ -137,7 +137,7 @@ plugin_manager install_bundle <克隆目录>/dsh-kaogong
 npm install dsh-kaogong@latest      # 或 plugin_manager upgrade / 重新 install_bundle
 ```
 
-升级代码不影响已下载的题库数据与学习进度（数据在数据根，与包分离）。
+升级代码不影响已下载的题库数据与学习进度（**v1.16 起用户数据外置**：进度/错题本/配置在 `~/.dsh/kaogong/`（`DSH_HOME` 感知，`KG_DATA_DIR` 可覆盖），与包彻底分离——市场/npm 升级整目录替换包也不丢数据；旧版本包内数据在首次启动时自动原子迁移到新位置，`📦 题库管理` 面板「🛡 数据安全」卡可查位置与迁移状态）。
 
 **卸载**
 
@@ -145,7 +145,7 @@ npm install dsh-kaogong@latest      # 或 plugin_manager upgrade / 重新 instal
 plugin_manager remove_bundle dsh-kaogong     # 仅移除插件
 ```
 
-题库数据与进度**不会被删**；如需彻底清理，删除数据根下的对应仓库目录与 `data/progress/` 即可。
+题库数据与进度**不会被删**；如需彻底清理，删除数据根下的对应仓库目录与 `~/.dsh/kaogong/progress/` 即可。
 
 **自检（三条命令，判断装没装对）**
 
@@ -342,11 +342,11 @@ src/
 
 ```bash
 npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 14 模块为宿主单 combo
-node smoke.test.mjs  # 293 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
+node smoke.test.mjs  # 317 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
                      # 三布局/流动粒子/白盒三件套/题库管理 R-P-01..06/
                      # 方法论 HS13-01..10 六端点+降级语义+跨 ws 隔离/
                      # 打包卫生 R28: bundle patch 与随包模板必须入包、语料与调试 overlay 不得入包）
-node render.test.mjs # 51 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
+node render.test.mjs # 55 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
                      # 含 C18-01..08 方法论五分区 + 专题枢纽锚点 + 白盒链路卡）
 npm run test:all     # 上面两步一起跑
 ```

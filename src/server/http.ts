@@ -12,9 +12,10 @@
  */
 
 import { createServer } from 'node:http'
-import { writeFileSync, appendFileSync, mkdirSync } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { writeFileSync, appendFileSync, mkdirSync, createReadStream, statSync } from 'node:fs'
+import { join, resolve, dirname, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { safeImagePath, resolveNaokuImage } from '../adapters/naokuImage.js'
 import {
   CAPABILITIES, NODE_META, EDGE_META, buildGraph, graphMetrics, healthScore,
   degreeAnalysis, labelPropagation, clusteringCoefficient, brandesBetweenness,
@@ -29,8 +30,9 @@ import { makePaperApi } from './paperApi.js'
 import { makeNaokuApi, initNaoku, resetNaoku } from './naokuApi.js'
 import { makeTuxingApi } from './tuxingApi.js'
 import { makeMethodologyApi } from './methodologyApi.js'
-import { resolveReposRoot } from './dataRoot.js'
+import { resolveReposRoot, USER_DATA_ROOT, PROGRESS_DIR_USER, migratePkgData, dataLocationReport } from './dataRoot.js'
 import { makeRepoManager } from './repoManager.js'
+import { makeHistoryApi } from './historyApi.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
@@ -39,13 +41,17 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const PKG_ROOT = resolve(HERE, '..', '..')          // <pkg>
 /** 开发态兼容常量（smoke 直接引用）；运行期真实根走 getRepoRoot() 动态解析 */
 export const REPO_ROOT = resolve(PKG_ROOT, '..')
-const DATA_DIR = join(PKG_ROOT, 'data')
-const PROGRESS_DIR = join(DATA_DIR, 'progress')
+// ── cycle-21（issue #2）：用户数据全部外置到用户数据根（~/.dsh/kaogong/）——
+// 市场升级 = pnpm 整目录替换包，包内数据必然丢失。DATA_DIR 仅保留为兼容别名（不再写入）。
+const DATA_DIR = USER_DATA_ROOT
+const PROGRESS_DIR = PROGRESS_DIR_USER
 const RUNTIME_FILE = join(DATA_DIR, 'runtime.json')
 const LIFECYCLE_FILE = join(DATA_DIR, 'lifecycle.jsonl')
 const PLAN_FILE = join(DATA_DIR, 'study-plan.md')
 const APP_NAME = 'dsh-kaogong'
 const BOOT_TS = Date.now()
+/** 进程级迁移报告（启动时执行一次；/api/data-location 透出） */
+const MIGRATION = migratePkgData()
 
 // ══ cycle-16 数据根动态化：域装配工厂（一键式安装的架构基座）══
 // npm/GitHub 安装态下题库数据不在包内；数据根 = env KG_REPOS_DIR > data/repos-config.json
@@ -66,6 +72,8 @@ function buildDomains(root: string) {
     // 因此这里必须注入 repoRoot —— 数据根热切换时由 rebuildDomains 重建本域。
     // store 用于 trace 计数器按 wsKey 分槽隔离（cycle-17 ㉙ 跨项目污染教训）。
     methodologyApi: makeMethodologyApi({ pkgRoot: PKG_ROOT, repoRoot: root, dataDir: DATA_DIR, store }),
+    // cycle-21 纸质补录域（issue #3）：搜索/补录/撤销，指纹与错题本同源
+    historyApi: makeHistoryApi({ store, repoRoot: root }),
     studyPlan: makeStudyPlan(PLAN_FILE),
   }
   initNaoku(root, DATA_DIR).catch(() => {})
@@ -98,6 +106,36 @@ function logLifecycle(event, data = {}) {
     const all = safeReadFile(LIFECYCLE_FILE, 900000)?.split('\n').filter(Boolean) || []
     if (all.length > 300) writeFileSync(LIFECYCLE_FILE, all.slice(-300).join('\n') + '\n')
   } catch { /* 日志失败不影响业务 */ }
+}
+
+// ══ cycle-21（issue #1）：xingcezhenti 题库配图服务 ══
+// 练习链路（/api/questions）的题干图片在 parseQuestions 时被剥成中立占位 `kgimg://相对路径`，
+// 前端 RichText 把占位改写为 `${MOUNT_PATH}/api/kg-img?p=` 请求本端点。
+// 安全模型与 naokuImage.safeImagePath 同族：resolve 归一后必须仍在 xingcezhenti 内 + 扩展名白名单。
+const KG_IMG_MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }
+function serveKgImage(params, res) {
+  const dec = (v) => { try { return decodeURIComponent(v || '') } catch { return v || '' } }
+  const rel = dec(params.get('p'))
+  if (!rel) { try { res.writeHead(400); res.end('bad request') } catch {} ; return }
+  // 占位协议：kgimg://<相对 xingcezhenti 的路径>；防御 http(s)/越级引用/绝对路径
+  if (/^https?:/i.test(rel) || rel.includes('..') || resolve(rel) === rel) { try { res.writeHead(403); res.end('forbidden') } catch {} ; return }
+  // cycle-22：深度题库（naoku）内联图占位引用的扩展名与磁盘不符（DB 记 .webp，磁盘 39051 个全是 .png）
+  // → 先原样探测（练习链路占位路径与磁盘一致），未命中再按 basename 换扩展名兜底（与 naoku-img 端点同族语义）。
+  let target = safeImagePath(getRepoRoot(), rel)
+  if (!target) {
+    const alt = resolveNaokuImage(getRepoRoot(), '/' + rel.replace(/^\/+/, ''))
+    if (alt) target = safeImagePath(getRepoRoot(), alt)
+  }
+  if (!target) { try { res.writeHead(404); res.end('not found') } catch {} ; return }
+  const mime = KG_IMG_MIME[extname(target).toLowerCase()]
+  if (!mime) { try { res.writeHead(415); res.end('unsupported') } catch {} ; return }
+  let size = 0
+  try { size = statSync(target).size } catch { try { res.writeHead(500); res.end('stat error') } catch {} ; return }
+  try { res.writeHead(200, { 'Content-Type': mime, 'Content-Length': size, 'Cache-Control': 'public, max-age=86400' }) }
+  catch { try { res.destroy() } catch {} ; return }
+  const st = createReadStream(target)
+  st.on('error', () => { try { res.destroy() } catch {} })
+  st.pipe(res)
 }
 
 // ══ 遥测：滑窗 QPS + 每端点环形延迟样本（p50/p95 有序统计）══
@@ -424,6 +462,7 @@ async function handleApi(path, params, post, method, wsRaw, port) {
   }
   return domains.methodologyApi.handle(path, params, post, method, wsRaw)
     ?? domains.srsApi(path, params, post, method, wsRaw)
+    ?? domains.historyApi.handle(path, params, post, method, wsRaw)
     ?? domains.tuxingApi.handle(path, params)
     ?? domains.naokuApi.handle(path, params, post, method, wsRaw)
     ?? domains.paperApi.handle(path, params, post, method, wsRaw)
@@ -517,6 +556,8 @@ function coreApi(path, params, post, method, wsRaw, port) {
     }
   }
   if (path === '/api/workspaces') return { workspaces: domains.store.listWorkspaces() }
+  // cycle-21（issue #2）：数据位置白盒——位置/来源/迁移状态/包内残留一次透出
+  if (path === '/api/data-location') return { ...dataLocationReport(), migration: MIGRATION }
   return { error: `Unknown API: ${path}` }
 }
 
@@ -604,6 +645,8 @@ export function attachWebRoute(webServer, mountPath = '/kaogong') {
       if (rel === '/api/paper-img') { domains.paperApi.serveImage(params, res); return }
       if (rel === '/api/naoku-img') { domains.naokuApi.serveImage(params, res); return }
       if (rel === '/api/tuxing-img') { domains.tuxingApi.serveImage(params, res); return }
+      // cycle-21（issue #1）：xingcezhenti 题库图（题目图/公式图）——中立占位 kgimg:// 的服务端
+      if (rel === '/api/kg-img') { serveKgImage(params, res); return }
       let body = ''
       req.on('data', c => body += c)
       req.on('end', async () => {
@@ -654,6 +697,7 @@ function buildHttpServer(port) {
         if (path === '/api/paper-img') { domains.paperApi.serveImage(params, res); return }
         if (path === '/api/naoku-img') { domains.naokuApi.serveImage(params, res); return }
         if (path === '/api/tuxing-img') { domains.tuxingApi.serveImage(params, res); return }
+        if (path === '/api/kg-img') { serveKgImage(params, res); return }
         let body = ''
         req.on('data', c => body += c)
         req.on('end', async () => {

@@ -1,8 +1,8 @@
 {
   "skill": "ai-native-iteration-cycle",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "fileCount": 69,
-  "generatedAt": "2026-11-09T03:56:58.486Z",
+  "generatedAt": "2026-11-14T00:23:56.516Z",
   "files": [
     {
       "path": "assets/config/config.example.yml",
@@ -116,8 +116,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 26041,
-      "sha256": "a78572656fad6af5e3881e05bd74c582065c8db5c425d18af793ae02a7fed2e2"
+      "size": 27930,
+      "sha256": "0b71b7072d0d179908100ed2584cccfabb17670a066c7501cc965ed4e67e3b90"
     },
     {
       "path": "evals/evals.json",
@@ -187,7 +187,7 @@
     {
       "path": "references/scripts-reference.md",
       "size": 30978,
-      "sha256": "9354e44f0f6efe9867b10813daa8d2b6445f376c02d3fafdaadc10e0946dbb71"
+      "sha256": "bfb43679543edd8cdc192d6a75ef66643920f2ffb844b1cd5ac660665c62e2a9"
     },
     {
       "path": "references/state-transition.md",
@@ -206,8 +206,8 @@
     },
     {
       "path": "scripts/auto-fix-loop.mjs",
-      "size": 26920,
-      "sha256": "619cecb76be4182aadbb6f15f0a63b8bc206175412acda04f4f95d5fa9b80e82"
+      "size": 28011,
+      "sha256": "da7c9c713688d607daef971fffbad5c254f33c9c6d109fa3d6ef16b8ba6e70fc"
     },
     {
       "path": "scripts/band-detector.mjs",
@@ -261,8 +261,8 @@
     },
     {
       "path": "scripts/lib/budget.mjs",
-      "size": 9096,
-      "sha256": "c14d926d0f7c0f589f70701ba2b44457d99330793e47f878efd58e9dd1eaa5f4"
+      "size": 10448,
+      "sha256": "675e01fe4dd5dc4d664341e520819b7f9fbe9fccbcf6d5c46e121d69cc0c8d71"
     },
     {
       "path": "scripts/lib/config.mjs",
@@ -317,7 +317,7 @@
     {
       "path": "scripts/mcp-server.mjs",
       "size": 20194,
-      "sha256": "dd84ba454a6998c90968241e053d186691ac737b8e291d2079980ceb22e8616a"
+      "sha256": "4eac27e05bbd1f5ce53b65da7d0f3031c133fc6e059a894f4f4e069cd0dad433"
     },
     {
       "path": "scripts/multi-agent-gate.mjs",
@@ -347,7 +347,7 @@
     {
       "path": "SKILL.md",
       "size": 22809,
-      "sha256": "fdfbf679480dea13a20083d57d25e9541cfa6070983e821bfdd3041e2fc0b0ad"
+      "sha256": "7617463d62b1c1f64486e28c511f9bfaaf2c245118591281c10f48fdab83b50f"
     }
   ]
 }

@@ -137,8 +137,25 @@
 | `/api/repos/batch?id=` | GET | 批量安装批次进度 → `{batch:{id,state,items[{key,state,error}],done,total}}` |
 | `/api/repos/jobs?limit=` | GET | 作业归档（环形 20）→ `{total, jobs[{key,action,state,error,elapsedSec,logTail}]}` |
 
-数据根解析优先级：env `KG_REPOS_DIR` > `data/repos-config.json` > 开发态上级（含任一登记仓库）> `data/repos` 托管默认。
+数据根解析优先级：env `KG_REPOS_DIR` > repos-config.json > 开发态上级（含任一登记仓库）> `<用户数据根>/repos` 托管默认。
 分级：**必选 3**（huasheng13 336KB / xingcezhenti 341MB / gk-tuxing 19MB）、**推荐 3**（kaogong-skill 3MB / gwy-zhenti 626MB / GongkaoNaoku 120MB）、**可选 10**（体积见 `/api/repos` 面板分级列表，不在文档写死合计值）。
+
+## 九b、数据位置白盒与纸质补录（v1.16 · cycle-21）
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/data-location` | GET | **数据位置白盒**（issue #2 可观测闭环）→ `{userDataRoot, source, reposRoot:{root,source}, migratedMark, pkgResidual[], migration:{status:'not-needed'\|'migrated'\|'already-migrated'\|'failed', movedCount, failedItem?}}` |
+| `/api/history/search?q=&module=&limit=` | GET | **补录候选搜索**（issue #3）：naoku DB LIKE 全量 + xingcezhenti 目录兜底 → `{keyword, list[{...题对象, contentSig, matchSource}]}` |
+| `/api/history/entries` | POST | **补录写入**：`{entries:[{contentSig\|question, result:'right'\|'wrong'\|'unknown', userAnswer?, source?, happenedAt?}]}` → `{batchId, accepted, acceptedItems, conflicts[], rejected[]}`；错题自动进错题本（box=1, historical=true, fromImport=批次） |
+| `/api/history/undo` | POST | **批次撤销**：`{batchId}` → `{undone, removedHistory, removedWrong}`；只回滚 import 条目，在线作答历史不动 |
+| `/api/history/batches` | GET | 补录台账 → `{batches[{batchId,at,count,source}], importedTotal, undoWindow:30}` |
+| `/api/kg-img?p=` | GET | **xingcezhenti 题图服务**（issue #1 + cycle-22）：`kgimg://` 中立占位的二进制端点；安全模型同 `/api/naoku-img`（resolve 前缀 + 扩展名白名单，越级 403）。**cycle-22 扩展名探测回退**：原样未命中 → basename 换扩展名重探（DB 记 `.webp` 磁盘是 `.png` 的深度题库内联图可服务） |
+
+**统计隔离口径（补录语义）**：import 条目（`source:'import'`）不进 `/api/stats` 的 days/byModule/answered/streak（历史归历史，不污染今日打卡），但错题进入 wrongBook 参与 SRS 回炉；`stats.importedTotal` 单独透出。幂等：`importedSigs[sig]=batchId` 台账防重复计数；同批内重复=冲突提示。
+
+**题图占位协议**：`parseQuestions` 不再剥 `<img>`——转中立占位 `【图:kgimg://<相对 xingcezhenti 路径>】`（落盘数据与端口/挂载点无关，升级/换挂载不失效）；前端 RichText 渲染时改写为 `${MOUNT_PATH}/api/kg-img?p=`。资料分析等「根据上图」题的**材料块图**按「最近前置材料段」归属附给题干（1479 个含图材料块全库覆盖）。
+
+**cycle-22 深度题库占位化（专题-判断推理无图修复）**：`adapters/naoku.ts` 的 `stripHtmlKeepImg`/`neutralizeImages` 与 repoData 同模板——选项（1406 题含图）、解析（8294 题含图）、五维标注（reasoning/fastest/pitfalls/mother）的内联 `<img>` 全部转 `kgimg://` 占位；客户端 `OptionRow`/深度题库选项行/模考选项行检测占位后走 RichText 渲染出图；manifest 已补登记 `/api/kg-img`（consumers=practice/deepbank/topics）。
 
 ## 十、工具（host 半 · 6 个 · 均声明 output:{schema,render}）
 

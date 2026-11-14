@@ -144,7 +144,7 @@ function readYamlConfig() {
 }
 
 const server = new Server(
-  { name: "ai-native-iteration-cycle", version: "2.6.1" },
+  { name: "ai-native-iteration-cycle", version: "2.6.2" },
   { capabilities: { tools: {} } }
 );
 
@@ -447,4 +447,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error(`AI-Native Iteration Cycle MCP Server v2.6.1 running (project: ${projectDir})`);
+console.error(`AI-Native Iteration Cycle MCP Server v2.6.2 running (project: ${projectDir})`);

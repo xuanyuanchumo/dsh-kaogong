@@ -9,7 +9,7 @@
 import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, G_CHIP, MOUNT_PATH } from './ui-kit.js'
 import { createGraphEngine } from './graph-engine.js'
 import { graphKeyCommand } from './graph-transition.js'
-import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetLayout, graphReadLayers, GRAPH_NODE_META, GRAPH_EDGE_META, graphPaintModel, graphLocalBetweenness, graphDegreeHistogram, GRAPH_COLOR_MODES, GRAPH_SEQ_STOPS } from './graph-analytics.js'
+import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetLayout, graphReadLayers, GRAPH_NODE_META, GRAPH_EDGE_META, graphPaintModel, graphLocalBetweenness, graphDegreeHistogram, GRAPH_COLOR_MODES, GRAPH_SEQ_STOPS, graphSeqColor } from './graph-analytics.js'
 
     /* ── cycle-15：布局三态序列 + 文案（工具条按钮与键盘 l 键共用同一序列，单一事实源）──
        force=FR 力导向 · layered=Kahn 拓扑分层 · circular=语义环形（NODE_META.layer 层序圆周）。 */
@@ -106,7 +106,9 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
             try { for (const it of graphLocalBetweenness(nodes, edges)) btMap[it.id] = it.score } catch { btMap = {} }
           }
           const communities = Array.isArray(an.communities) ? an.communities : local.communities
-          return graphPaintModel(nodes, colorMode, { communities, prMap: local.pagerank, btMap, degMap, boost: radiusBoost })
+          // cycle-21 W2 学习画像：mastery 模式把 stats.mastery（模块正确率）传进着色模型
+          const masteryMap = colorMode === 'mastery' ? ((props && props.stats && props.stats.mastery) || {}) : {}
+          return graphPaintModel(nodes, colorMode, { communities, prMap: local.pagerank, btMap, degMap, boost: radiusBoost, masteryMap })
         } catch { return null }
       }, [raw, nodes, edges, local, colorMode, radiusBoost])
       // W2b：度分布直方图 bins（服务端 degreeStats.histogram 优先，本地兜底；展示前 26 桶）
@@ -234,6 +236,14 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         if (!e || !e.ok) return
         try { e.setView({ colorModel: paint, radiusBoost }) } catch {}
       }, [paint, radiusBoost])
+
+      // cycle-22 P1：掌握率表同步（tooltip 第三行；与「掌握度」着色模式同口径同数据源）
+      React.useEffect(() => {
+        const e = engineRef.current
+        if (!e || !e.ok) return
+        const mm = (props && props.stats && props.stats.mastery) || null
+        try { e.setView({ masteryMap: mm }) } catch {}
+      }, [props && props.stats])
 
       // cycle-15：流动粒子开关同步（字段级合并语义；关闭即恢复省电停帧）
       React.useEffect(() => {
@@ -385,6 +395,19 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
               '社区' + (it.idx + 1) + ' · ' + it.count)),
             lg.rest > 0 ? h('span', { style: { color: '#94a3b8', alignSelf: 'center' } }, '其余 ' + lg.rest + ' 个社区（色板循环）') : null)
         }
+        // cycle-21 W2 学习画像图例：模块掌握率 chips（红=弱区→绿=强区，与 graphSeqColor 反向语义一致）
+        if (lg.kind === 'mastery') {
+          return h('div', { key: 'g-legend-mastery', style: { marginTop: 8, fontSize: 10, color: '#64748b' } },
+            h('div', { style: { marginBottom: 4 } }, '学习画像 · 我的模块掌握率（' + (lg.covered || 0) + ' 个模块有数据）· 红色=弱区'),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 4 } },
+              (lg.items || []).slice().sort((a: any, b: any) => a.rate - b.rate).map((it: any) => h('span', {
+                key: it.name,
+                title: it.name + ' 正确率 ' + it.rate + '%',
+                style: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 9, background: graphSeqColor(1 - it.rate / 100) + '1a', color: graphSeqColor(1 - it.rate / 100), fontWeight: 700 },
+              },
+                h('i', { style: { width: 7, height: 7, borderRadius: '50%', background: graphSeqColor(1 - it.rate / 100), display: 'inline-block' } }),
+                it.name + ' ' + it.rate + '%'))))
+        }
         return null
       }
       function degreeOf(id: any) {
@@ -477,6 +500,19 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         const m = nodeMeta[n.type] || GRAPH_NODE_META[n.type] || { label: String(n.type || '未知'), color: '#94a3b8', icon: '•' }
         const deg = degreeOf(String(n.id))
         const rows = neighborRows(String(n.id))
+        // cycle-22 P1（图谱直达业务）：节点 id 形如 `type:id`——view:/module:/method: 三类
+        // 可映射到具体业务视图（view→setView(id)；module→practice?module=；method→专题方法论分区）。
+        // 无 onGo（右栏引导页等父层未接线）或类型不可跳 → 按钮不渲染（不臆造入口）。
+        const rawId = String(n.id || '')
+        const sepAt = rawId.indexOf(':')
+        const nType = sepAt > 0 ? rawId.slice(0, sepAt) : String(n.type || '')
+        const nKey = sepAt > 0 ? rawId.slice(sepAt + 1) : rawId
+        const goItems: any[] = []
+        if (typeof (props && props.onGo) === 'function') {
+          if (nType === 'view' && nKey) goItems.push({ label: '🖥 打开该视图', v: nKey, p: {} })
+          else if (nType === 'module' && nKey) goItems.push({ label: '✏️ 去刷该模块', v: 'practice', p: { module: nKey } })
+          else if (nType === 'method' && nKey) goItems.push({ label: '📖 读方法论', v: 'huasheng13', p: { section: nKey } })
+        }
         return h('div', {
           key: 'g-drawer',
           style: {
@@ -509,6 +545,12 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                 h('span', { style: { fontSize: 10, color: '#94a3b8', flexShrink: 0 } }, r.relLabel)))
             : h('div', { style: { fontSize: 11, color: '#94a3b8' } }, '无邻接边（可能是孤儿节点）'),
           h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 } },
+            // cycle-22 P1：直达业务按钮（图谱节点 → 业务视图的连通性闭环）
+            goItems.length ? goItems.map(it => h('button', {
+              key: it.label,
+              style: Object.assign({}, G_BTN, { background: 'rgba(99,102,241,.1)', borderColor: 'rgba(99,102,241,.4)', color: '#4f46e5', fontWeight: 700 }),
+              onClick: () => { try { (props as any).onGo(it.v, it.p) } catch {} },
+            }, it.label)) : null,
             h('button', { style: G_BTN, onClick: () => setPathState({ from: String(n.id), to: pathState.to || null, path: null, loading: false, error: null }) }, '设为起点'),
             h('button', {
               style: G_BTN,

@@ -91,7 +91,7 @@ node scripts/gate-check.mjs <project-dir> [--gate G0|G1|G2|G3|all] [--record]
 | `--gate` | 否 | 指定门禁，默认 all |
 | `--record` | 否 | 把每次判定结果写入账本（v1.8.0）：同门最新 result+detail 相同则去重（`unchanged, not re-recorded`）；**FAIL 也记录**（org-status 熔断条件 CB2 依赖账本中的 FAIL 记录） |
 
-**循环身份（技能 v2.6.1 / cycle-79）**：G1/G2/G3 的账本 `detail` 末尾带 `§cycle-N`（G0 的 detail 本就含 `in cycle-N`）。
+**循环身份（技能 v2.6.2 / cycle-79）**：G1/G2/G3 的账本 `detail` 末尾带 `§cycle-N`（G0 的 detail 本就含 `in cycle-N`）。
 去重键是 `(result, detail)`——带上循环身份后，**跨循环同结论不再被静默去重**（此前实测：cycle-78 的 G2/G3 仍是
 cycle-77 记录，本循环无审计条目）；同一循环重复运行仍正常去重。宿主 `gateEngine` 的 native 侧 detail 与脚本**逐字全等**。
 
@@ -318,7 +318,7 @@ node scripts/gate-ledger.mjs <project-dir> --list
 | `--verify` | 是（验证模式） | 验证账本哈希链完整性 |
 | `--list` | 是（列表模式） | 列出所有账本条目 |
 
-**账本形状兼容（技能 v2.6.1 / cycle-79）**：`lib/ledger.mjs` 的 `readLedger` 是唯一读取实现，
+**账本形状兼容（技能 v2.6.2 / cycle-79）**：`lib/ledger.mjs` 的 `readLedger` 是唯一读取实现，
 接受 `{ entries: [...] }` 包裹与**裸数组**两种容器（裸数组的链头由末条 hash 重建，`--verify` 结论与包裹形态一致）；
 缺失 / 坏 JSON / 形状不认识时，`--list` / `--verify` 输出 `[SKIP] ledger unavailable — <原因>` 并 **exit 1**，
 **绝不**再把不可读账本报成 `Total entries: 0 / Valid: YES`；此时 `record` 模式**拒绝追加**（防覆盖历史）。

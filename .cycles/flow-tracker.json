@@ -1072,9 +1072,164 @@
       "stdout": "=== HITL Audit (Fix-First Strategy) ===\n\n[PASS] H1: No security-sensitive operations detected\n[PASS] H2: Destructive ops detected (1 files), rollback available via git\n[PASS] H3: All gates green, audit log present\n[PASS] H4: Gate evidence sufficient, no conflicts\n\nAll HITL audits PASSED.\n",
       "stderr": "",
       "durationMs": 404
+    },
+    {
+      "flowId": "init-cycle-2026-11-14T00:24:21.371Z-52",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-14T00:24:21.371Z",
+      "cycle": "cycle-20",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-14T00:24:21.371Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T00:24:21.492Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-21 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-21\n",
+      "stderr": "",
+      "durationMs": 109
+    },
+    {
+      "flowId": "init-cycle-2026-11-14T02:14:54.297Z-53",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-14T02:14:54.297Z",
+      "cycle": "cycle-21",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-14T02:14:54.297Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T02:14:54.423Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-22 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-22\n",
+      "stderr": "",
+      "durationMs": 121
+    },
+    {
+      "flowId": "gate-check-2026-11-14T02:44:59.932Z-54",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--gate",
+        "all",
+        "--quality",
+        "--record"
+      ],
+      "status": "FAILED",
+      "startedAt": "2026-11-14T02:44:59.932Z",
+      "cycle": "cycle-22",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-14T02:44:59.932Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T02:45:03.327Z",
+      "exitCode": 1,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-22 (8 dimension rows)\n  [FAIL] G0-Quality: Quality dimensions not evaluated — gate cannot close without evidence: Q1(row absent), Q5(row absent)\n  [LEDGER] G0 FAIL recorded (hash 629b963211c2de57...)\n[PASS] G1: All 7 tasks completed §cycle-22\n  [FAIL] G1-Quality: Quality dimensions not evaluated — gate cannot close without evidence: Q7(row absent)\n  [LEDGER] G1 FAIL recorded (hash 1a798271e9db8b9b...)\n[FAIL] G2: Test report summary not recognized: 测试报告.md has no 通过/失败 rows (expected the §2 汇总 table) §cycle-22\n  [LEDGER] G2 FAIL recorded (hash a9da768208ed7650...)\n[PASS] G3: Build passed: npm run build §cycle-22 [dist=absent]\n  [FAIL] G3-Quality: Quality dimensions not evaluated — gate cannot close without evidence: Q3(row absent), Q4(row absent)\n  [LEDGER] G3 FAIL recorded (hash 971c3e6c0a66d0ae...)\n",
+      "stderr": "\nGate check FAILED. Fix issues before proceeding.\n",
+      "durationMs": 3390
+    },
+    {
+      "flowId": "gate-check-2026-11-14T02:46:10.262Z-55",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--gate",
+        "all",
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-14T02:46:10.262Z",
+      "cycle": "cycle-22",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-14T02:46:10.262Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T02:46:13.400Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-22 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 PASS recorded (hash 6c697dcb169bd109...)\n[PASS] G1: All 7 tasks completed §cycle-22\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 PASS recorded (hash 4397d101476a7fe7...)\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-22\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 PASS recorded (hash 470259a5e9bc45a5...)\n[PASS] G3: Build passed: npm run build §cycle-22 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 PASS recorded (hash 679efc18f54c8826...)\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 3134
+    },
+    {
+      "flowId": "hitl-audit-2026-11-14T02:46:19.190Z-56",
+      "script": "hitl-audit",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--gate",
+        "all"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-14T02:46:19.190Z",
+      "cycle": "cycle-22",
+      "phase": "plan",
+      "gate": "H1",
+      "attribution": {
+        "at": "2026-11-14T02:46:19.190Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T02:46:19.564Z",
+      "exitCode": 0,
+      "stdout": "=== HITL Audit (Fix-First Strategy) ===\n\n[PASS] H1: No security-sensitive operations detected\n[PASS] H2: Destructive ops detected (1 files), rollback available via git\n[PASS] H3: All gates green, audit log present\n[PASS] H4: Gate evidence sufficient, no conflicts\n\nAll HITL audits PASSED.\n",
+      "stderr": "",
+      "durationMs": 371
+    },
+    {
+      "flowId": "band-detector-2026-11-14T02:46:24.798Z-57",
+      "script": "band-detector",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-14T02:46:24.798Z",
+      "cycle": "cycle-22",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-14T02:46:24.798Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T02:46:24.911Z",
+      "exitCode": 0,
+      "stdout": "Complexity Band Detection Report\n  Total complexity score: 3136\n  Average per file: 84.8\n  Budget: 180 | Upper band: 207 | Lower band: 153\n  Status: WARNING\n  History snapshots: 50\n  Statistical Control:\n    Mean: 73.46 | StdDev: 9.29\n    1σ: [64.2, 82.8]\n    2σ: [54.9, 92.0]\n    3σ: [45.6, 101.3]\n\nWESTERN ELECTRIC RULE VIOLATIONS (52):\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #6, value=88.61)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #7, value=88.61)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #8, value=88.61)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #9, value=61.42)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #12, value=61.42)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #13, value=61.42)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #14, value=72.23)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #49, value=84.76)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #16, value=72.23)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #17, value=72.23)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #18, value=70.74)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #19, value=68.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #20, value=68.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #21, value=68.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #22, value=68.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #23, value=68.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #24, value=68.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #25, value=68.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #26, value=68.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #27, value=69.50)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #28, value=69.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #29, value=69.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #30, value=72.29)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #31, value=72.29)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #32, value=72.29)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #33, value=70.45)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #34, value=70.45)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #35, value=70.68)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #36, value=70.68)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #37, value=70.74)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #45, value=81.89)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #46, value=84.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #47, value=84.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #48, value=84.76)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #49, value=84.76)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #28, value=69.54)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #29, value=69.54)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #30, value=72.29)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #31, value=72.29)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #32, value=72.29)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #33, value=70.45)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #34, value=70.45)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #35, value=70.68)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #36, value=70.68)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #37, value=70.74)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #7, value=88.61)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #8, value=88.61)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #9, value=61.42)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #10, value=61.42)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #11, value=61.42)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #12, value=61.42)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #13, value=61.42)\n\nCOMPLEXITY HOTSPOTS (top 6):\n  [204] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\server\\http.ts (branches: 122, functions: 41)\n  [182] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\shared\\manifest.ts (branches: 132, functions: 25)\n  [179] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\graph-physics.ts (branches: 125, functions: 27)\n  [177] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\server\\methodologyApi.ts (branches: 101, functions: 38)\n  [175] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\adapters\\huasheng13.ts (branches: 123, functions: 26)\n  [174] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\graph-engine.ts (branches: 106, functions: 34)\n\nWarning: 6 complexity hotspots detected. Consider refactoring.\n\n52 Western Electric rule violation(s) detected. Process may be out of statistical control.\n\nMode: report (default) | alarms: WARNING(6 hotspots), WE_VIOLATIONS(52)\nReport mode: alarms surfaced as report data, exit 0 (use --strict for gate semantics).\n",
+      "stderr": "",
+      "durationMs": 110
+    },
+    {
+      "flowId": "gate-check-2026-11-14T02:56:38.583Z-58",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--gate",
+        "all",
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-14T02:56:38.583Z",
+      "cycle": "cycle-22",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-14T02:56:38.583Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T02:56:41.767Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-22 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[PASS] G1: All 7 tasks completed §cycle-22\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 unchanged, not re-recorded\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-22\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 unchanged, not re-recorded\n[PASS] G3: Build passed: npm run build §cycle-22 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 3179
     }
   ],
-  "counter": 51,
+  "counter": 58,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

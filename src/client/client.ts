@@ -239,7 +239,7 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
           // R9：子视图经组件挂载，key=view+tick → 切换即干净重挂载，父 hook 链恒定
           data && data.kind === 'dashboard' ? h(NativeDashboardView, { key: 'd' + tick, data }) : null,
           data && data.kind === 'wrongbook' ? h(NativeWrongbookView, { key: 'w' + tick, data: data.wb }) : null,
-          data && data.kind === 'graph' ? h(NativeGraphView, { key: 'g' + tick, data: data.g, stats: data.stats, api, wsKey }) : null,
+          data && data.kind === 'graph' ? h(NativeGraphView, { key: 'g' + tick, data: data.g, stats: data.stats, api, wsKey, onGo: (v, params) => setView(v, params || {}) }) : null,
           data && data.kind === 'obs' ? h(NativeObsView, { key: 'o' + tick, data, insight: data.insight, onReload: () => setTick(t => t + 1) }) : null,
           ))
     }

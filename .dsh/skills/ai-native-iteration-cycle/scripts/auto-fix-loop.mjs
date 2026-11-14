@@ -56,13 +56,34 @@ const getLatestCycle = getLatestCycleDir;
 function runCommand(cmd, projectDir, timeoutMs) {
   const started = Date.now();
   try {
+    // cycle-113：maxBuffer 显式 16MB——与 eval-runner runTestCommand 同一标尺
+    // （execSync 默认 1MB，全量 vitest 的 stdout/stderr 轻易超线，被 kill 时
+    // 抛 ENOBUFS；不显式给值就把「缓冲区溢出」伪装成随机故障）。
     const output = execSync(cmd, {
       cwd: projectDir, timeout: timeoutMs, stdio: 'pipe', encoding: 'utf-8',
+      maxBuffer: 16 * 1024 * 1024,
       windowsHide: true, // cycle-99b：auto-fix 循环每次修复命令不弹 cmd 窗口
     });
     return { success: true, output, timedOut: false, timeoutMs, durationMs: Date.now() - started };
   } catch (e) {
     const durationMs = Date.now() - started;
+    // cycle-113：ENOBUFS 判定必须在超时判定**之前**——isTimeoutError 的旧实现
+    // 曾把 ENOBUFS 吞成超时（signal/status 维度逐字段相同），让下面的
+    // isBufferOverflowError 分支永远到不了（死代码）。现在 isTimeoutError
+    // 已对 ENOBUFS 短路（budget.mjs 同修），但两道防线顺序纪律不变。
+    if (isBufferOverflowError(e)) {
+      return {
+        success: false,
+        timedOut: false,
+        overflow: true,
+        timeoutMs,
+        durationMs,
+        output: '',
+        error: `command output exceeded the execSync buffer (ENOBUFS) — cannot judge; ` +
+          `reduce output verbosity, or raise maxBuffer (see runCommand)`,
+        exitCode: e.status,
+      };
+    }
     const timedOut = isTimeoutError(e);
     // 超时的 stdout 是**半截输出**：不能当失败详情（把半截日志当结论是
     // cycle-39 归因错误的另一半根因）。超时只报「预算 + 实耗」这组事实。
