@@ -24,13 +24,13 @@
 
 import { h, React, MOUNT_PATH, PORTS, APP_NAME, Stat, KaogongErrorBoundary } from './ui-kit.js'
 // cycle-13 对话窗口瘦身：会话练题控件已删除（会话输入区 slot 随之下线）
-import { NativeDashboardView, NativePracticeView, NativeWrongbookView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
-import { NativeExamView, NativePapersView, NativeTopicsView, NativeEssayView } from './papers-view.js'
-import { NativeGraphView } from './graph-view.js'
-import { NativeObsView } from './obs-view.js'
-import { NativeReposView } from './repos-view.js'
+import { NativeDashboardView, NativePracticeView, NativeWrongbookView, NativeTuxingView, NativeDeepBankView } from './views/study-view.js'
+import { NativeExamView, NativePapersView, NativeTopicsView, NativeEssayView } from './views/papers-view.js'
+import { NativeGraphView } from './views/graph-view.js'
+import { NativeObsView } from './views/obs-view.js'
+import { NativeReposView } from './views/repos-view.js'
 // cycle-18 花生十三体系方法论（消费 /api/huasheng13/*，自管数据视图）
-import { NativeHuasheng13View } from './huasheng13-view.js'
+import { NativeHuasheng13View } from './views/huasheng13-view.js'
 
 ;(window as any).__ModuleLoader__.load({
   id: 'dsh-kaogong',
@@ -91,23 +91,18 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
       const channel = useChannel()
       const [view, setViewRaw] = React.useState(() => localStorage.getItem('kg-native-view') || 'dashboard')
       const [viewParams, setViewParams] = React.useState({})   // v1.7.1：专题 entry 传参（模块/题型/科目）
-      const [data, setData] = React.useState(null)
-      const [err, setErr] = React.useState(null)
       const [tick, setTick] = React.useState(0)
 
       /**
-       * 视图切换（v1.8.0 修复「重复点击同一视图永久 loading」）：
-       * 原实现无条件 setData(null)，但父 effect 依赖 [channel, view, api, tick] ——
-       * 重复点同一 tab 时 view 未变、effect 不重跑，于是 data 永远为 null，
-       * 界面卡在 spinner（用户感知「图谱打不开」）。现在用 tick 强制重取：
-       * 命中同一视图时自增 tick（effect 依赖含 tick，必然重新拉数据）。
+       * 视图切换（v1.8.0 修复「重复点击同一视图永久 loading」，cycle-24 保留语义）：
+       * tick 参与挂载 key —— 命中同一视图时自增 tick（key 变化 → 自治视图干净重挂载并重新取数）。
+       * cycle-24 P0-1：父层不再拉取/下发 data —— 全部视图自治 fetch（窄 props），err 下沉到各视图。
        */
       const setView = React.useCallback((v: any, params?: any) => {
         localStorage.setItem('kg-native-view', v)
-        setData(null)
         setViewParams(params || {})
         setViewRaw(prev => {
-          if (prev === v) setTick(t => t + 1)   // 同一视图重入 → 强制刷新
+          if (prev === v) setTick(t => t + 1)   // 同一视图重入 → 强制重挂载重取
           return v
         })
       }, [])
@@ -118,77 +113,35 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
         return r.json()
       }, [channel, wsKey])
 
-      React.useEffect(() => {
-        if (!channel) return
-        // v1.6：自管数据视图（papers/topics/essay）由子组件自行 fetch，父不介入
-        if (view === 'papers' || view === 'topics' || view === 'essay' || view === 'exam' || view === 'practice' || view === 'deepbank' || view === 'tuxing' || view === 'repos' || view === 'huasheng13') { setData(null); return }
-        let cancelled = false
-        setErr(null)
-        ;(async () => {
-          try {
-            if (view === 'dashboard') {
-              const [st, stats, papers, eh, xh] = await Promise.all([
-                api('/status'), api('/stats'),
-                api('/papers?_=1').catch(() => ({ total: 0, subjects: [] })),
-                api('/essay/history').catch(() => ({ total: 0, avgRatio: 0 })),
-                api('/paper/exam/history').catch(() => ({ total: 0, avgRate: 0 })),
-              ])
-              const subj = (papers && papers.subjects) || []
-              const essayPapers = (subj.find(x => x.subject === '申论') || {}).count || 0
-              const xingcePapers = (subj.find(x => x.subject === '行测') || {}).count || 0
-              const extra = {
-                paperTotal: (papers && papers.total) || 0, essayPapers, xingcePapers,
-                essayCount: (eh && eh.total) || 0, avgEssay: (eh && eh.avgRatio) || 0,
-                examCount: (xh && xh.total) || 0, avgExam: (xh && xh.avgRate) || 0,
-              }
-              if (!cancelled) setData({ kind: 'dashboard', st, stats, extra })
-            } else if (view === 'wrongbook') {
-              const wb = await api('/wrong')
-              if (!cancelled) setData({ kind: 'wrongbook', wb })
-            } else if (view === 'graph') {
-              const [g, statsI] = await Promise.all([api('/graph'), api('/stats').catch(() => null)])
-              if (!cancelled) setData({ kind: 'graph', g, stats: statsI })
-            } else if (view === 'obs') {
-              // v1.8.0：并行拉齐白盒面板所需全部数据源，任一失败单独降级不影响其余卡片
-              const [tel, caps, eh, xh, life, wss] = await Promise.all([
-                api('/telemetry'),
-                api('/capabilities'),
-                api('/essay/history').catch(() => null),
-                api('/paper/exam/history').catch(() => null),
-                api('/lifecycle').catch(() => null),
-                api('/workspaces').catch(() => null),
-              ])
-              /**
-               * cycle-18：方法论链路三源，**必须与上面那组分开 await**——
-               * 合并成一个 Promise.all 会让目录树（首次调用可能触发索引构建）拖慢
-               * 整个白盒面板首屏；分开则各卡片独立到达、互不等待。
-               *
-               * 为什么不交给 obs-view 自己 fetch：obs 卡拿不到 api 闭包里的 channel.base
-               * 与 wsKey，自取只能落 default 命名空间 → 把「default 的检索命中率」当成
-               * 当前工作区展示，正是 cycle-17 ㉙ 跨项目污染事故的同族错误。故由父层带
-               * ?ws= 取好再透传。
-               * 每个请求都 .catch(()=>null)：方法论链路故障绝不能让 obs 面板整体降级。
-               */
-              const [hs13Trace, hs13Coverage, hs13Catalog] = await Promise.all([
-                api('/huasheng13/trace').catch(() => null),
-                api('/huasheng13/coverage').catch(() => null),
-                api('/huasheng13/catalog').catch(() => null),
-              ])
-              if (!cancelled) setData({
-                kind: 'obs', tel, caps,
-                life: life || (caps && caps.lifecycle) || null,
-                workspaces: (wss && wss.workspaces) || [],
-                insight: { essay: eh, exam: xh },
-                // cycle-18 方法论消费链路：obs-view 的「📖 方法论链路」卡只读这里
-                // （形状固定 { trace, coverage, catalog }；任一为 null 即该块卡片级降级）
-                hs13: { trace: hs13Trace, coverage: hs13Coverage, catalog: hs13Catalog },
-              })
-            }
-          } catch (e) { if (!cancelled) setErr(String((e && e.message) || e)) }
-        })()
-        return () => { cancelled = true }
-      }, [channel, view, api, tick])
+      // cycle-24 P0-1：取数下沉段整体移除 —— dashboard/wrongbook/graph/obs 四视图改为自治 fetch
+      //（原 90 行 data.kind 分发 + Promise.all 整包下传删除；各视图错误各自就地降级）
+      /** 自管视图名单（组件内自行 fetch，不经父层）：cycle-24 起为全部视图 */
+      const SELF_MANAGED_VIEWS = new Set(['papers', 'topics', 'essay', 'exam', 'practice', 'deepbank', 'tuxing', 'repos', 'huasheng13'])
 
+      /**
+       * cycle-24 P0-2：视图路由注册表（唯一分发事实源）。
+       * 每项：组件（稳定函数引用，模块/壳作用域声明）+ 挂载 key + 窄 props 工厂。
+       * 新增视图 = 一行登记（替代原 17 行三元分发链 + 重复布尔排除串两处）。
+       */
+      const VIEW_ROUTES: Record<string, { comp: any; key: (t: number) => string; props: () => any }> = {
+        dashboard: { comp: NativeDashboardView, key: t => 'd' + t, props: () => ({ api }) },
+        wrongbook: { comp: NativeWrongbookView, key: t => 'w' + t, props: () => ({ api }) },
+        graph: { comp: NativeGraphView, key: t => 'g' + t, props: () => ({ api, wsKey, statsApi: api, onGo: (v: any, params?: any) => setView(v, params || {}) }) },
+        obs: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onReload: () => setTick(t => t + 1) }) },
+        papers: { comp: NativePapersView, key: t => 'pp' + t, props: () => ({ api, initialSubject: viewParams.subject || '' }) },
+        exam: { comp: NativeExamView, key: t => 'ex' + t, props: () => ({ api }) },
+        practice: { comp: NativePracticeView, key: t => 'pr' + t + JSON.stringify(viewParams), props: () => ({ api, initialModule: viewParams.module || '', onGoWrongbook: () => setView('wrongbook') }) },
+        deepbank: { comp: NativeDeepBankView, key: t => 'dp' + t, props: () => ({ api, initialModule: viewParams.module || '', initialCategory: viewParams.category || '' }) },
+        tuxing: { comp: NativeTuxingView, key: t => 'tx' + t, props: () => ({ api }) },
+        repos: { comp: NativeReposView, key: t => 'rp' + t, props: () => ({ api }) },
+        huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t, props: () => ({ api, initialSection: viewParams.section || '' }) },
+        topics: { comp: NativeTopicsView, key: t => 'tp' + t, props: () => ({ api, onGo: (v: any, params?: any) => setView(v, params || {}), initialModule: viewParams.module || '' }) },
+        essay: { comp: NativeEssayView, key: t => 'es' + t + JSON.stringify(viewParams), props: () => ({ api, initialType: viewParams.type || '' }) },
+      }
+      const route = VIEW_ROUTES[view]
+      const routeEl = route ? h(route.comp, { key: route.key(tick), ...route.props() }) : null
+
+      // 通道未就绪守卫（cycle-24 取数下沉时曾误删 → channel.kind 崩溃进 ErrorBoundary，render 实测抓住）
       if (!channel) {
         return h('div', { className: 'kg-page', role: 'main', 'aria-label': t('title') },
           h('div', { className: 'kg-load', style: { flex: 1 } },
@@ -223,25 +176,9 @@ import { NativeHuasheng13View } from './huasheng13-view.js'
                 onClick: () => setView(id),
               }, label)))))),
         h('div', { className: 'kg-page-body', style: { overflowY: 'auto', padding: '16px 20px' } },
-          err ? h('div', { style: { color: '#ef4444', fontSize: 13 } }, '加载失败: ' + err) : null,
-          // v1.6 自管数据视图（组件内自行 fetch，不经父 effect）
-          view === 'papers' ? h(NativePapersView, { key: 'pp' + tick, api, initialSubject: viewParams.subject || '' }) : null,
-          view === 'exam' ? h(NativeExamView, { key: 'ex' + tick, api }) : null,
-          view === 'practice' ? h(NativePracticeView, { key: 'pr' + tick + JSON.stringify(viewParams), api, initialModule: viewParams.module || '', onGoWrongbook: () => setView('wrongbook') }) : null,
-          view === 'deepbank' ? h(NativeDeepBankView, { key: 'dp' + tick, api, initialModule: viewParams.module || '', initialCategory: viewParams.category || '' }) : null,
-          view === 'tuxing' ? h(NativeTuxingView, { key: 'tx' + tick, api }) : null,
-          view === 'repos' ? h(NativeReposView, { key: 'rp' + tick, api }) : null,
-          view === 'huasheng13' ? h(NativeHuasheng13View, { key: 'hs13' + tick, api, initialSection: viewParams.section || '' }) : null,
-          view === 'topics' ? h(NativeTopicsView, { key: 'tp' + tick, api, onGo: (v, params) => setView(v, params || {}), initialModule: viewParams.module || '' }) : null,
-          view === 'essay' ? h(NativeEssayView, { key: 'es' + tick + JSON.stringify(viewParams), api, initialType: viewParams.type || '' }) : null,
-          // 父 effect 管理数据的视图
-          view !== 'papers' && view !== 'topics' && view !== 'essay' && view !== 'exam' && view !== 'practice' && view !== 'deepbank' && view !== 'tuxing' && view !== 'repos' && view !== 'huasheng13' && !data && !err ? h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' })) : null,
-          // R9：子视图经组件挂载，key=view+tick → 切换即干净重挂载，父 hook 链恒定
-          data && data.kind === 'dashboard' ? h(NativeDashboardView, { key: 'd' + tick, data }) : null,
-          data && data.kind === 'wrongbook' ? h(NativeWrongbookView, { key: 'w' + tick, data: data.wb }) : null,
-          data && data.kind === 'graph' ? h(NativeGraphView, { key: 'g' + tick, data: data.g, stats: data.stats, api, wsKey, onGo: (v, params) => setView(v, params || {}) }) : null,
-          data && data.kind === 'obs' ? h(NativeObsView, { key: 'o' + tick, data, insight: data.insight, onReload: () => setTick(t => t + 1) }) : null,
-          ))
+          // cycle-24 P0-2：唯一分发点 —— 注册表驱动，未知视图渲染 null（导航只暴露已登记 id）
+          // R9 保留：routeEl 经 h(Comp, props) 挂载（key 含 tick → 切换/重入干净重挂载）
+          routeEl))
     }
     /** 左栏面板图标（shell 事件委托接管点击/选中） */
     function KaogongPanelIcon({ size }) {

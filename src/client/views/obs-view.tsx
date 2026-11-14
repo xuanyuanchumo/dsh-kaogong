@@ -12,7 +12,7 @@
  *  ⑤ 本模块顶层声明一律 Obs/OBS 前缀——combo 合并后所有模块共享 factory 单作用域，
  *     顶层名与其他模块（graph 系 / study-view / papers-view）撞名会直接重复声明 SyntaxError。
  */
-import { h, React, Stat, Bar, Sparkline, stageColor, alertColor, G_BTN, G_BTN_ON, G_TAG } from './ui-kit.js'
+import { h, React, Stat, Bar, Sparkline, stageColor, alertColor, G_BTN, G_BTN_ON, G_TAG } from '../ui-kit.js'
 
 /* ═══════════════ W2c 共享样式：玻璃拟态（与图谱升级风格统一） ═══════════════
    沿用既有 CSS 变量（--surface-card 等）保持深浅色自适应；color-mix 把不透明
@@ -739,14 +739,19 @@ function supDigits(s: string): string {
         + 延迟分位阶梯/吞吐象限/完成度环(cycle-15)
    ═══════════════════════════════════════════════════════════════════════ */
 
-export function NativeObsView(props) {
-  const data: any = (props && props.data) || {}
-  const tel: any = data.tel || {}
-  const caps: any = data.caps || {}
-  const life: any = data.life || null
-  const wsList: any[] = Array.isArray(data.workspaces) ? data.workspaces : (Array.isArray(data.wsList) ? data.wsList : [])
-
+/**
+ * cycle-24 P0-1 取数下沉：白盒面板自治 fetch（原由父层拉 data/insight/hs13 三包下发）。
+ * 窄 props = { api, onReload }。十个数据源并行拉齐（方法论三源独立分组：目录树首调可能
+ * 触发索引构建，分开 await 让各卡片独立到达——cycle-18 教训保留，语义零变化）。
+ * hook 链恒定：原 7 个 useState + 新增 data/err/loading 3 个 useState，全部顶部声明。
+ */
+export function NativeObsView({ api, onReload }) {
   /* ── hooks：全部在顶部声明，跨渲染数量恒定（R9） ── */
+  const [data, setData] = React.useState(null)
+  const [ins, setIns] = React.useState(null)
+  const [hs, setHs] = React.useState({})
+  const [fetchErr, setFetchErr] = React.useState(null)
+  const [loading, setLoading] = React.useState(true)
   const [sortKey, setSortKey] = React.useState('p95')     // p95 | count | p50 | errRate | path
   const [sortAsc, setSortAsc] = React.useState(false)
   const [filter, setFilter] = React.useState('')
@@ -755,8 +760,46 @@ export function NativeObsView(props) {
   const [busy, setBusy] = React.useState(false)
   const [lastAt, setLastAt] = React.useState(null)
 
-  const ins: any = (props && props.insight) || {}
-  const eps: any = tel.endpoints || {}
+  /* ── 自治取数：主面板十源并行 + 方法论三源独立分组（卡片级降级） ── */
+  React.useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    ;(async () => {
+      try {
+        const [tel, caps, eh, xh, life, wss] = await Promise.all([
+          api('/telemetry'),
+          api('/capabilities'),
+          api('/essay/history').catch(() => null),
+          api('/paper/exam/history').catch(() => null),
+          api('/lifecycle').catch(() => null),
+          api('/workspaces').catch(() => null),
+        ])
+        // 方法论链路三源独立分组：任一 null 即该块卡片级降级，绝不拖垮面板（cycle-18 契约）
+        const [hs13Trace, hs13Coverage, hs13Catalog] = await Promise.all([
+          api('/huasheng13/trace').catch(() => null),
+          api('/huasheng13/coverage').catch(() => null),
+          api('/huasheng13/catalog').catch(() => null),
+        ])
+        if (cancelled) return
+        setData({
+          tel: tel || {}, caps: caps || {},
+          life: life || (caps && caps.lifecycle) || null,
+          workspaces: (wss && wss.workspaces) || [],
+        })
+        setIns({ essay: eh, exam: xh })
+        setHs({ trace: hs13Trace, coverage: hs13Coverage, catalog: hs13Catalog })
+        setFetchErr(null)
+      } catch (e) { if (!cancelled) setFetchErr(String((e && e.message) || e)) }
+      finally { if (!cancelled) setLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [api])
+
+  const eps: any = (data && data.tel && data.tel.endpoints) || {}
+  const tel: any = (data && data.tel) || {}
+  const caps: any = (data && data.caps) || {}
+  const life: any = (data && data.life) || null
+  const wsList: any[] = data && Array.isArray(data.workspaces) ? data.workspaces : (data && Array.isArray(data.wsList) ? data.wsList : [])
   const consumed = new Set(Object.keys(eps))
   const declared: any[] = Array.isArray(caps.endpoints) ? caps.endpoints : []
   const recon: any = caps.reconciliation || {}
@@ -818,10 +861,12 @@ export function NativeObsView(props) {
   const stages: any[] = Array.isArray(life && life.stages) ? life.stages : []
   const lifeEvents: any[] = Array.isArray(life && life.events) ? life.events.slice(0, 12) : []
 
-  const essayAvg = (ins.essay && ins.essay.avgRatio) || 0
-  const examAvg = (ins.exam && ins.exam.avgRate) || 0
-  const essayN = (ins.essay && ins.essay.total) || 0
-  const examN = (ins.exam && ins.exam.total) || 0
+  // cycle-24：ins 在取数完成前为 null，派生计算一律防御式读取（早退守卫在 hooks 之后才生效）
+  const insSafe: any = ins || {}
+  const essayAvg = (insSafe.essay && insSafe.essay.avgRatio) || 0
+  const examAvg = (insSafe.exam && insSafe.exam.avgRate) || 0
+  const essayN = (insSafe.essay && insSafe.essay.total) || 0
+  const examN = (insSafe.exam && insSafe.exam.total) || 0
 
   const coverage = typeof tel.coverage === 'number' ? tel.coverage : (declared.length ? Object.keys(eps).length / declared.length : 0)
   const problemCount = rows.filter(r => r.undeclared || (r.count > 0 && (r.p95 > 200 || r.errRate > 0.01))).length
@@ -851,7 +896,7 @@ export function NativeObsView(props) {
   const doRefresh = () => {
     if (busy) return
     setBusy(true)
-    try { if (typeof props.onReload === 'function') props.onReload() } catch {}
+    try { if (typeof onReload === 'function') onReload() } catch {}
     setTimeout(() => { setBusy(false); setLastAt(new Date()) }, 500)
   }
   const doExport = () => {
@@ -898,6 +943,10 @@ export function NativeObsView(props) {
     key: label, onClick: fn, title: title || label,
     style: { border: '1px solid rgba(148,163,184,.4)', background: 'rgba(255,255,255,.7)', color: '#475569', borderRadius: 9, padding: '5px 11px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
   }, label)
+
+  /* ── R9 早退守卫：必须放在全部 hooks（含两个 useMemo）之后 —— 渲染期 hook 数量跨渲染恒定 ── */
+  if (loading) return h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' }))
+  if (fetchErr || !data) return h('div', { style: { color: '#ef4444', fontSize: 13 } }, '白盒面板加载失败: ' + (fetchErr || '无数据'))
 
   return h('div', {},
     /* ── 行 hover 高亮样式（React 内联样式写不了 :hover，注入一次作用域样式） ── */
@@ -950,8 +999,8 @@ export function NativeObsView(props) {
       h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 } },
         h(Stat, { v: essayN ? essayAvg + '%' : '—', l: '申论均分率 · ' + essayN + ' 次', color: essayAvg >= 60 ? '#10b981' : '#f59e0b' }),
         h(Stat, { v: examN ? examAvg + '%' : '—', l: '模考均分率 · ' + examN + ' 场', color: examAvg >= 60 ? '#10b981' : '#f59e0b' }),
-        h(Stat, { v: (ins.essay && ins.essay.recent && ins.essay.recent.length) || 0, l: '近期申论记录' }),
-        h(Stat, { v: (ins.exam && ins.exam.recent && ins.exam.recent.length) || 0, l: '近期模考记录' }))),
+        h(Stat, { v: (insSafe.essay && insSafe.essay.recent && insSafe.essay.recent.length) || 0, l: '近期申论记录' }),
+        h(Stat, { v: (insSafe.exam && insSafe.exam.recent && insSafe.exam.recent.length) || 0, l: '近期模考记录' }))),
 
     /* ── B 运行态 ── */
     h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(104px,1fr))', gap: 8, marginBottom: 14 } },
@@ -1003,7 +1052,7 @@ export function NativeObsView(props) {
         : h('div', { style: { fontSize: 12, color: '#94a3b8' } }, '生命周期端点未就绪（/api/lifecycle 未返回 stages）—— 服务可用，仅该卡片降级')),
 
     /* ── C2 cycle-18 方法论链路（六模块覆盖热力条 + 检索命中率 + p50/p95） ── */
-    h(ObsMethodologyCard, { hs13: (data && data.hs13) || null }),
+    h(ObsMethodologyCard, { hs13: hs }),
 
     /* ── D 能力对账 + E 端点性能表（共用一张表，一屏看全；W2c 三态灯列） ── */
     h(ObsGlassCard, { title: '🧩 能力对账 × 端点性能（注册 → 生产 → 消费）', accent: '#6366f1' },

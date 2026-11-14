@@ -28,3 +28,12 @@
 | T-024 | 会话内练题（conversation.input.left） | ~~体验升级~~ | **cycle-11 已清偿**：输入栏「📚 练题」控件 + 上弹面板（抽题/判分/解析/统计）；try/catch 全包裹 | 选最轻 slot，不接管会话流 | cycle-11 ✅ |
 | T-025 | **client.ts 单文件复杂度 677（预算 180，超 3.76 倍）** | 架构债 | 475 分支 / 101 函数 / 3363 行；band-detector OVER_BUDGET；根因是 combo 格式要求单文件内嵌全部视图（`require` 仅解析已注册模块，禁本地 import） | **两条候选路径**：(a) 拆为多 combo 文件并在 `__ModuleLoader__` 逐条注册（已验证 loader 支持 registered-factory 解析，需改 `dsh.client` 声明与 bundle 生成）；(b) 迁移到 tsc 多文件 + 代码生成单文件 combo 产物。**评估下一循环专项**（影响 5 个视图 400+ 行，需完整回归） | cycle-12 |
 | T-026 | 图谱力学参数与原实现标定方式脆弱（魔数 LINK/REP/向心） | 可维护债 | **cycle-12 部分清偿**：改 FR 模型 `k=sqrt(area/V)` + 度数加权理想边长 + 离线预收敛 `relax(140)` + `fit` 适配；参数不再依赖节点数魔数 | 剩余：力模拟缺 octree 空间索引（V>600 走抽样近似，精度有损） | cycle-12 ✅部分 |
+
+## cycle-24 登记（2026-11-14）
+
+| ID | 描述 | 类别 | 处置建议 | 登记循环 |
+|---|---|---|---|---|
+| T-24-12 | graph-view.tsx / obs-view.tsx JSX 转换未完成（subagent 超时，lead 接管降级） | 体验债 | cycle-25 首项；tsx-graph-obs 移交的侦察情报在 _tmp/tsx-conv-backup 同级（EOL/反斜杠敏感行/interface 清单） | cycle-24 |
+| T-24-13 | ui-kit 样式 token 化：~200 处硬编码色值 + 5 种圆角混用（ui-radius.md 先角色后档位） | 体验债 | 语义 CSS 变量（--kg-accent/--kg-border/--kg-surface）+ 明暗联动 | cycle-25 |
+| T-24-14 | obs-view 1101 行单文件巨型视图（八区块） | 架构债 | 卡片级拆分 obs/cards/*.tsx，与复杂度预算 180 联动 | cycle-25 |
+| T-24-15 | ui/index.html 1514 行独立 SPA 与 client.tsx 重复实现同一界面 | 架构债 | 降级为极简跳转页（R25 文案漂移同族根治） | cycle-26 |

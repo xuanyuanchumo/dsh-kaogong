@@ -1133,7 +1133,97 @@
       "timestamp": "2026-11-14T03:58:16.005Z",
       "previousHash": "78f16319d4750ea7422d62916bb32d74ee88f998a8f93b1590195a1d30d115f0",
       "hash": "5e0db346de60e992dfad4ecb658cf96940f17705b3c922f4f3da36fdf80dafdd"
+    },
+    {
+      "gate": "G0",
+      "gateName": "评估收敛门",
+      "result": "FAIL",
+      "detail": "Evaluation report found in cycle-24 (8 dimension rows) [Q1:ABSENT,Q5:ABSENT]",
+      "timestamp": "2026-11-14T06:45:01.936Z",
+      "previousHash": "5e0db346de60e992dfad4ecb658cf96940f17705b3c922f4f3da36fdf80dafdd",
+      "hash": "c2a295ee86bcc4177f0abb46f304622a0479d3adf592d39cf8895013a7ff0f50"
+    },
+    {
+      "gate": "G1",
+      "gateName": "任务收敛门",
+      "result": "FAIL",
+      "detail": "No task entries found (fill the task tables in 任务清单.md) §cycle-24",
+      "timestamp": "2026-11-14T06:45:01.946Z",
+      "previousHash": "c2a295ee86bcc4177f0abb46f304622a0479d3adf592d39cf8895013a7ff0f50",
+      "hash": "a06dec6a53fb3e9d52307a83409a468bf3bf8c065b59cf4ad9d720d7916b7792"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "FAIL",
+      "detail": "No test reports §cycle-24",
+      "timestamp": "2026-11-14T06:45:01.955Z",
+      "previousHash": "a06dec6a53fb3e9d52307a83409a468bf3bf8c065b59cf4ad9d720d7916b7792",
+      "hash": "c6c69f5845549bd513f99e940d5f55cf1e02c7a327adbdf9adc86a75fb0549e6"
+    },
+    {
+      "gate": "G3",
+      "gateName": "构建收敛门",
+      "result": "FAIL",
+      "detail": "Build passed: npm run build §cycle-24 [dist=absent] [Q3:ABSENT,Q4:ABSENT]",
+      "timestamp": "2026-11-14T06:45:05.114Z",
+      "previousHash": "c6c69f5845549bd513f99e940d5f55cf1e02c7a327adbdf9adc86a75fb0549e6",
+      "hash": "6354a99108a0b9cdd6dbf7c0a28fa5a4c0d156fc2e625874cbf724ff34eba2be"
+    },
+    {
+      "gate": "G0",
+      "gateName": "评估收敛门",
+      "result": "PASS",
+      "detail": "Evaluation report found in cycle-24 (16 dimension rows) [Q1:PASS,Q5:PASS]",
+      "timestamp": "2026-11-14T06:46:12.005Z",
+      "previousHash": "6354a99108a0b9cdd6dbf7c0a28fa5a4c0d156fc2e625874cbf724ff34eba2be",
+      "hash": "2a3ca0daefc93392a01f8a5962af6a3c365033bee73e8ae4c9b349ea4979454f"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "FAIL",
+      "detail": "Test report summary not recognized: cycle-24测试报告.md has no 通过/失败 rows (expected the §2 汇总 table) §cycle-24",
+      "timestamp": "2026-11-14T06:46:12.018Z",
+      "previousHash": "2a3ca0daefc93392a01f8a5962af6a3c365033bee73e8ae4c9b349ea4979454f",
+      "hash": "4d0a9f73665db69f5c23f1dec8afed23960095b8840357095713384e6d1c8b85"
+    },
+    {
+      "gate": "G3",
+      "gateName": "构建收敛门",
+      "result": "PASS",
+      "detail": "Build passed: npm run build §cycle-24 [dist=absent] [Q3:PASS,Q4:PASS]",
+      "timestamp": "2026-11-14T06:46:15.252Z",
+      "previousHash": "4d0a9f73665db69f5c23f1dec8afed23960095b8840357095713384e6d1c8b85",
+      "hash": "d08af56f54e3819c93f1f6a513a4c7ae3914aa22673205c36d4ebb1e3ce394f4"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "PASS",
+      "detail": "Zero failures, zero errors (cycle-24测试报告.md) §cycle-24 [Q2:PASS]",
+      "timestamp": "2026-11-14T06:47:23.946Z",
+      "previousHash": "d08af56f54e3819c93f1f6a513a4c7ae3914aa22673205c36d4ebb1e3ce394f4",
+      "hash": "2aa44806563514d5fd3bcfefd8ee5bed53b89b4f7d94b2e0ede8bba97bee5080"
+    },
+    {
+      "gate": "G1",
+      "gateName": "任务收敛门",
+      "result": "FAIL",
+      "detail": "4 of 15 tasks not completed §cycle-24",
+      "timestamp": "2026-11-14T06:48:13.642Z",
+      "previousHash": "2aa44806563514d5fd3bcfefd8ee5bed53b89b4f7d94b2e0ede8bba97bee5080",
+      "hash": "f9eb69ec2562f3431ebaa7b61d5270709f5dbafda3407f093b3dc5458062d0de"
+    },
+    {
+      "gate": "G1",
+      "gateName": "任务收敛门",
+      "result": "PASS",
+      "detail": "All 11 tasks completed §cycle-24 [Q7:PASS]",
+      "timestamp": "2026-11-14T06:48:34.583Z",
+      "previousHash": "f9eb69ec2562f3431ebaa7b61d5270709f5dbafda3407f093b3dc5458062d0de",
+      "hash": "3f5111fa8210289e24d95eb7d5d9e4ec9cb8fa5919ebef363c616f0de31e2c94"
     }
   ],
-  "chainHead": "5e0db346de60e992dfad4ecb658cf96940f17705b3c922f4f3da36fdf80dafdd"
+  "chainHead": "3f5111fa8210289e24d95eb7d5d9e4ec9cb8fa5919ebef363c616f0de31e2c94"
 }

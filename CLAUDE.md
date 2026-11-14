@@ -138,6 +138,27 @@
 - **㊻（健康态被布尔吞掉）**：`present`/`isGit` 两个布尔让「装了但不可用」（空仓库/缺 .git/半成品）混在「已安装」里。修法：独立 `health` 词表（ok/empty/half-clone/no-git/absent）+ `lastCommitAt`。**教训：布尔字段表达不了状态机——多态状态必须用词表，且不可探测的量用 null（降级）而非 0（撒谎）。**
 - **㊼（截断口径两侧各写一个数字）**：服务端截 300、UI 只渲染 120、文案写「前 120 项（共 X）」→ 用户看到自相矛盾的数字。修法：`total` 恒为真实总数、`truncated` 由「总数 > 返回数」派生、文案从服务端字段渲染。**教训：分页/截断的「共多少」只能有一个事实源；客户端不得二次裁剪后再自报数字。**
 
+## cycle-24 客户端组件化契约（v1.19.0 TSX 重构）
+
+- **目录分层**：`src/client/{client,ui-kit}.tsx`（entry+基建）+ `src/client/views/*.tsx`（7 视图组件层）+ `src/client/graph/*.ts`（图谱引擎纯逻辑族，零 JSX）。视图文件**禁止**放回 client/ 根。
+- **TSX 编译配置**：tsconfig `jsx:"react"`（classic runtime → 产出 `React.createElement`）+ `include` 含 `**/*.tsx`。**禁止 `jsx:"react-jsx"`**（会产出行首 `import { jsx } from 'react/jsx-runtime'` → R11 第四次复发）。
+- **React 引入纪律**：全组合唯一一份 `require('react')` 在 ui-kit.tsx 发生（bundle 内闭包可见）；所有 .tsx **禁止** `import React from 'react'`（verbatimModuleSyntax 保留 → 行首 import → assert-combo 响亮失败）。
+- **bundler 子目录**：`bundle-client.mjs` 递归扫 `dist/client/**`，模块 id 为 posix 相对路径（`client/views/graph-view`）；相对导入 `./x.js`/`../graph/x.js` 经 `resolveSpec` 解析。新增子目录无需改 bundler，但**模块发现、拓扑序、重名防御三段对子目录均生效**。
+- **注册表路由（P0-2）**：client.tsx 的 `VIEW_ROUTES` 是视图分发**唯一事实源**——每视图一行 `{ comp, key(t), props() }`；新增视图=一行登记，分发点只有 `routeEl` 一处。禁止回退到三元链分发（重复布尔排除串已消灭）。
+- **取数下沉（P0-1）**：**全部视图自治 fetch**，父层不下发 data。窄 props 口径 `{ api, wsKey?, onGo?/onReload?, initial*? }`。组件内取数遵守：取数 useEffect 顶部声明；**早退 return（loading/err）必须放在全部 hooks 之后**（R9：hook 数跨渲染恒定）；派生计算对 null 态防御式读取。
+- **Props 类型化**：每个组件声明 `interface XxxProps`；`api: (p: string, opts?: any) => Promise<any>` 是视图标准接口（R12 形状漂移的编译期防线）。
+- **组件规范（smoke C24 守卫）**：client.tsx 必须含 `VIEW_ROUTES` 注册表 + `h(route.comp,` 单点挂载；client/ 根不得新增视图级 .tsx（views/ 之外只允许 entry+ui-kit）。
+
+## cycle-24 事故与教训（v1.19.0 重构）
+- **（C24-1 channel 守卫误删）**：改造 useEffect 时把 `if (!channel) return 加载态` 一起删了 → `channel.kind` null 崩溃进 ErrorBoundary，render.test 主面板断言抓住。**教训：删「父层取数 effect」时逐段核对同函数内其它早退守卫；render 测试是这类回归的唯一捕获面（smoke 静态守卫测不到）。**
+- **（C24-2 早退在 hooks 前 = R9 自伤）**：obs-view 自治化后 loading 早退 return 放在两个 useMemo 之前 → `Rendered more hooks`。**教训：新增早退 return 前先数该函数下方还有几个 hook 调用；规则固化为「早退必须在最后一个 hook 之后」，写进组件规范。**
+- **（C24-3 派生计算先于守卫执行）**：`ins.essay` 在 ins=null（loading 态）时被 useMemo 前的派生段解引用。**教训：取数下沉的组件，派生段一律 `insSafe` 式防御读取，不假设「守卫已兜住」。**
+- **（C24-4 守卫断言锚定旧形态）**：smoke 三个断言锚定三元分发/`data.g` 旧文本 → 重构后假红。**教训：改架构形态时同波次 grep smoke/render 的形态锚点断言（教训④的推广：不止 nav 锚点，所有「形态守卫」都要跟）。
+
+
 ## cycle-22 事故与教训（v1.17.0 专题-判断推理图片全链路修复）
+
+
+
 - **（同族链路修复必须全字段枚举·㊾ 半修复态复发）**：cycle-21 修复了 parseQuestions（练习链路）与题干 img_refs（深度题库），但**同一适配器内** options/analysis/reasoning/fastest/pitfalls/mother 六字段仍走旧 stripHtml → 专题-判断推理选项/解析继续无图（用户二报）。修法：naoku.ts `stripHtmlKeepImg`（neutralizeImages 先占位化再剥标签）全字段替换 + `/api/kg-img` 扩展名探测回退（DB 记 .webp 磁盘 .png）+ 客户端 OptionRow/深度题库选项行/模考选项行 RichText 出图。**规矩：修「剥 HTML」类缺陷时，先 grep 该文件全部 `<[^>]+>` 剥除调用点，逐一判定业务语义（img=必须占位保留），修复面按「字段」枚举而非按「链路」划分——同文件不留幸存者。**
 - **（端点「实现+消费」齐备 ≠ 已声明）**：`/api/kg-img` v1.16.0 服务端已实现、RichText 已消费，但 manifest 漏登记 → 能力对账面板与 smoke 口径守卫看不到它（假漂移第三形态：不是路径口径、不是影子端点，是**漏声明**）。修法：manifest 补登记（consumers=practice/deepbank/topics）+ smoke SMOKE-IMG22-02 固化。**规矩：新增端点四步纪律（manifest→server→UI→smoke）中，manifest 是唯一事实源——「能跑通」不等于「已声明」，对账面板只认声明。**

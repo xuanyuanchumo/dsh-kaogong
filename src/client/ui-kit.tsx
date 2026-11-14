@@ -19,28 +19,48 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
     export const PORTS = [8400, 8401, 8402, 8403, 8404]
     export const APP_NAME = 'dsh-kaogong'
 
-    /* ── 无状态小组件（零 hook）── */
-    export function Stat(props) {
-      return h('div', { style: { background: 'var(--surface-card,#fff)', borderRadius: 14, padding: '16px 8px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07)', border: '1px solid rgba(148,163,184,.12)' } },
-        h('div', { style: { fontSize: 24, fontWeight: 800, color: props.color || 'var(--text-primary,#0f172a)' } }, props.v),
-        h('div', { style: { fontSize: 11.5, color: '#64748b', marginTop: 3 } }, props.l))
+    /* ── 无状态小组件（零 hook；cycle-24 TSX 组件化示范：Props 类型化 + JSX 语法） ── */
+
+    /** Stat 单指标卡 props */
+    interface StatProps { v: any; l: string; color?: string }
+    export function Stat({ v, l, color }: StatProps) {
+      return (
+        <div style={{ background: 'var(--surface-card,#fff)', borderRadius: 14, padding: '16px 8px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07)', border: '1px solid rgba(148,163,184,.12)' }}>
+          <div style={{ fontSize: 24, fontWeight: 800, color: color || 'var(--text-primary,#0f172a)' }}>{String(v)}</div>
+          <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 3 }}>{l}</div>
+        </div>
+      )
     }
-    export function Bar(props) {
-      return h('div', { style: { height: 7, background: 'rgba(148,163,184,.25)', borderRadius: 4, overflow: 'hidden' } },
-        h('i', { style: { display: 'block', height: '100%', width: Math.max(0, Math.min(100, props.pct)) + '%', background: props.color || 'linear-gradient(135deg,#6366f1,#8b5cf6)', borderRadius: 4, transition: 'width .5s' } }))
+
+    /** Bar 进度条 props（pct ∈ [0,100]，越界钳制在渲染处） */
+    interface BarProps { pct: number; color?: string }
+    export function Bar({ pct, color }: BarProps) {
+      return (
+        <div style={{ height: 7, background: 'rgba(148,163,184,.25)', borderRadius: 4, overflow: 'hidden' }}>
+          <i style={{ display: 'block', height: '100%', width: Math.max(0, Math.min(100, pct)) + '%', background: color || 'linear-gradient(135deg,#6366f1,#8b5cf6)', borderRadius: 4, transition: 'width .5s' }} />
+        </div>
+      )
     }
-    export function Card(props) {
-      return h('div', { style: { background: 'var(--surface-card,#fff)', borderRadius: 14, padding: 18, marginBottom: 14, boxShadow: '0 1px 3px rgba(0,0,0,.07)', border: '1px solid rgba(148,163,184,.12)' } },
-        props.title && h('div', { style: { fontWeight: 700, fontSize: 13.5, marginBottom: 12 } }, props.title),
-        props.children)
+
+    /** Card 通用卡片 props（title 可选；children 经显式声明传递——宿主 slots 契约的组件级等价物） */
+    interface CardProps { title?: string; children?: any }
+    export function Card({ title, children }: CardProps) {
+      return (
+        <div style={{ background: 'var(--surface-card,#fff)', borderRadius: 14, padding: 18, marginBottom: 14, boxShadow: '0 1px 3px rgba(0,0,0,.07)', border: '1px solid rgba(148,163,184,.12)' }}>
+          {title ? <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 12 }}>{title}</div> : null}
+          {children}
+        </div>
+      )
     }
 
     /**
+     * RichText props：text 必传；maxHeight 可选（传入即开启纵向滚动）。
      * 富文本渲染：把 markdown 图片引用 ![](url) 转为 <img>，其余按段落保留换行。
      * T-018：行测图形推理题必须看图才能作答（gwy-zhenti 内 11 万张本地图，走 /api/paper-img 服务）。
      */
-    export function RichText(props) {
-      const src = String(props.text || '')
+    interface RichTextProps { text: any; fontSize?: number; maxHeight?: number }
+    export function RichText({ text: rawText, fontSize, maxHeight }: RichTextProps) {
+      const src = String(rawText || '')
       // cycle-21（issue #1）：xingcezhenti 题图占位 `【图:kgimg://90-图片/题目图/x.png】`
       // 先改写为 markdown 形式（与既有 ![]() 渲染共用一条链路）——URL 指向 /api/kg-img?p=。
       // 占位在落盘数据（进度/错题本）中保持中立形态：不含端口/挂载点，换挂载/换端口不失效。
@@ -55,18 +75,36 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
         last = m.index + m[0].length
       }
       if (last < withImgs.length) parts.push({ t: 'text', k: 't' + (n++), v: withImgs.slice(last) })
-      const mh = props.maxHeight
-      return h('div', { style: { fontSize: props.fontSize || 12.5, lineHeight: 1.85, maxHeight: mh || 'none', overflowY: mh ? 'auto' : 'visible' } },
-        parts.map(pt => pt.t === 'img'
-          ? h('img', {
-              key: pt.k,
-              src: /^kgimg:\/\//.test(pt.src) ? MOUNT_PATH + '/api/kg-img?p=' + encodeURIComponent(pt.src.replace(/^kgimg:\/\//, '')) : pt.src,
-              alt: pt.alt || '题目配图', loading: 'lazy',
-              style: { maxWidth: '100%', maxHeight: 320, display: 'block', margin: '10px 0', borderRadius: 8, border: '1px solid rgba(148,163,184,.25)' },
-              onError: (e) => { if (e && e.target) { e.target.style.display = 'none' } },
-            })
-          : h('span', { key: pt.k, style: { whiteSpace: 'pre-wrap' } }, pt.v)))
+      const mh = maxHeight
+
+      return (
+
+        <div style={{ fontSize: fontSize || 12.5, lineHeight: 1.85, maxHeight: mh || 'none', overflowY: mh ? 'auto' : 'visible' }}>
+
+          {parts.map(pt => pt.t === 'img'
+
+            ? <img
+
+                key={pt.k}
+
+                src={/^kgimg:\/\//.test(pt.src) ? MOUNT_PATH + '/api/kg-img?p=' + encodeURIComponent(pt.src.replace(/^kgimg:\/\//, '')) : pt.src}
+
+                alt={pt.alt || '题目配图'} loading="lazy"
+
+                style={{ maxWidth: '100%', maxHeight: 320, display: 'block', margin: '10px 0', borderRadius: 8, border: '1px solid rgba(148,163,184,.25)' }}
+
+                onError={(e: any) => { if (e && e.target) { e.target.style.display = 'none' } }}
+
+              />
+
+            : <span key={pt.k} style={{ whiteSpace: 'pre-wrap' }}>{pt.v}</span>)}
+
+        </div>
+
+      )
     }
+
+
 
     /** 图谱区通用样式（纯对象，无 hook） */
     export const G_BTN = { border: '1px solid rgba(148,163,184,.35)', background: 'transparent', color: 'var(--text-muted,#64748b)', borderRadius: 8, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }

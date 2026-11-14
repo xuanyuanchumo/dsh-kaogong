@@ -6,10 +6,10 @@
  * 空态/加载骨架 + 视觉现代化（精灵渐变/脉冲环/弧线/玻璃拟态）。
  */
 
-import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, G_CHIP, MOUNT_PATH } from './ui-kit.js'
-import { createGraphEngine } from './graph-engine.js'
-import { graphKeyCommand } from './graph-transition.js'
-import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetLayout, graphReadLayers, GRAPH_NODE_META, GRAPH_EDGE_META, graphPaintModel, graphLocalBetweenness, graphDegreeHistogram, GRAPH_COLOR_MODES, GRAPH_SEQ_STOPS, graphSeqColor } from './graph-analytics.js'
+import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, G_CHIP, MOUNT_PATH } from '../ui-kit.js'
+import { createGraphEngine } from '../graph/graph-engine.js'
+import { graphKeyCommand } from '../graph/graph-transition.js'
+import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetLayout, graphReadLayers, GRAPH_NODE_META, GRAPH_EDGE_META, graphPaintModel, graphLocalBetweenness, graphDegreeHistogram, GRAPH_COLOR_MODES, GRAPH_SEQ_STOPS, graphSeqColor } from '../graph/graph-analytics.js'
 
     /* ── cycle-15：布局三态序列 + 文案（工具条按钮与键盘 l 键共用同一序列，单一事实源）──
        force=FR 力导向 · layered=Kahn 拓扑分层 · circular=语义环形（NODE_META.layer 层序圆周）。 */
@@ -19,18 +19,42 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
 
     /**
      * NativeGraphView — 契约 §3 的原生交互图谱（真组件；hook 数量恒定）。
-     * props: { data: /api/graph 响应, stats?: /api/stats, api?: (p,opts)=>Promise }
-     * api 是可选的（父层若未传，路径分析降级为同源直接 fetch，失败静默）。
+     * cycle-24 P0-1 取数下沉：props 收窄为 { api, wsKey, statsApi?, onGo? }，
+     * /api/graph 与 /api/stats 由视图自治拉取（原 data.g 由父层 Promise.all 下发）。
+     * api 必传；statsApi 缺省复用 api；onGo 供节点直达业务视图。
      */
     export function NativeGraphView(props) {
       const liveRef = React.useRef({})
       liveRef.current = { api: props && props.api, wsKey: props && props.wsKey }   // 每次渲染刷新最新 props（供异步回调用）
 
-      const raw: any = (props && props.data) || {}
+      /* ── 自治取数（R9：hooks 全部在组件顶部，跨渲染数量恒定） ── */
+      const [graphData, setGraphData] = React.useState(null)
+      const [statsData, setStatsData] = React.useState(null)
+      const [fetchErr, setFetchErr] = React.useState(null)
+      const [graphLoading, setGraphLoading] = React.useState(true)
+      React.useEffect(() => {
+        let cancelled = false
+        setGraphLoading(true)
+        const apiFn = (props && props.api) || props && (props as any).statsApi
+        if (!apiFn) { setFetchErr('api 通道未注入'); setGraphLoading(false); return }
+        Promise.all([
+          apiFn('/graph'),
+          (props.statsApi || apiFn)('/stats').catch(() => null),
+        ]).then(([g, st]) => {
+          if (cancelled) return
+          setGraphData(g || {}); setStatsData(st); setFetchErr(null); setGraphLoading(false)
+        }).catch((e: any) => {
+          if (!cancelled) { setFetchErr(String((e && e.message) || e)); setGraphLoading(false) }
+        })
+        return () => { cancelled = true }
+      }, [props && props.api, props && props.statsApi])
+
+      const raw: any = graphData || {}
       const nodes: any[] = Array.isArray(raw.nodes) ? raw.nodes : []
       const edges: any[] = Array.isArray(raw.edges) ? raw.edges : []
       const nodeMeta: any = (raw.nodeMeta && typeof raw.nodeMeta === 'object') ? raw.nodeMeta : GRAPH_NODE_META
       const edgeMeta: any = (raw.edgeMeta && typeof raw.edgeMeta === 'object') ? raw.edgeMeta : GRAPH_EDGE_META
+      const stats: any = statsData
 
       /* ── hooks：全部在组件顶部，跨渲染数量恒定（R9） ── */
       const canvasRef = React.useRef(null)
@@ -107,7 +131,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           }
           const communities = Array.isArray(an.communities) ? an.communities : local.communities
           // cycle-21 W2 学习画像：mastery 模式把 stats.mastery（模块正确率）传进着色模型
-          const masteryMap = colorMode === 'mastery' ? ((props && props.stats && props.stats.mastery) || {}) : {}
+          const masteryMap = colorMode === 'mastery' ? ((stats && stats.mastery) || {}) : {}
           return graphPaintModel(nodes, colorMode, { communities, prMap: local.pagerank, btMap, degMap, boost: radiusBoost, masteryMap })
         } catch { return null }
       }, [raw, nodes, edges, local, colorMode, radiusBoost])
@@ -241,9 +265,9 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       React.useEffect(() => {
         const e = engineRef.current
         if (!e || !e.ok) return
-        const mm = (props && props.stats && props.stats.mastery) || null
+        const mm = (stats && stats.mastery) || null
         try { e.setView({ masteryMap: mm }) } catch {}
-      }, [props && props.stats])
+      }, [statsData])
 
       // cycle-15：流动粒子开关同步（字段级合并语义；关闭即恢复省电停帧）
       React.useEffect(() => {
@@ -469,7 +493,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       }
 
       // 考点掌握（既有 T-020 卡片，移到图谱下方；逻辑保持不变）
-      const mastery: any = (props && props.stats && props.stats.mastery) || {}
+      const mastery: any = (stats && stats.mastery) || {}
       const mRows: any[] = entries(mastery)
         .map(([m, v]: any) => ({ m, answered: v.answered || 0, correct: v.correct || 0, rate: v.answered ? Math.round(v.correct / v.answered * 100) : 0 }))
         .filter((r: any) => r.answered > 0)
@@ -477,7 +501,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
 
       const hasNodes = nodes.length > 0
       // W2b：加载态（父层 data 未到达）/ 成因提示 / 全类型被过滤 / 连续着色模式判定
-      const loading = !props || props.data == null
+      const loading = graphLoading || !graphData
       const banksNotReady = !!(raw.banks && raw.banks.ready === false)
       const allTypesHidden = hasNodes && typeChips.length > 0 && typeChips.every((c: any) => hiddenTypes.has(c.type))
       const isContinuous = colorMode === 'pagerank' || colorMode === 'betweenness' || colorMode === 'degree'
@@ -824,7 +848,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                   h('span', { style: { width: 62, textAlign: 'right', color: '#64748b' } }, Number(r.pr || 0).toFixed(4))))
               : h('div', { style: { fontSize: 11.5, color: '#64748b' } }, '暂无中心性数据')
           })()),
-        // ⑩ 既有「我的考点掌握」卡片（数据来自 props.stats.mastery，逻辑保持原样）
+        // ⑩ 既有「我的考点掌握」卡片（数据来自自治 statsData.mastery，逻辑保持原样）
         h(Card, { title: '🔥 我的考点掌握（弱 → 强）' },
           mRows.length === 0
             ? h('div', { style: { fontSize: 12, color: '#64748b' } }, '暂无作答数据 —— 去「刷题」或「模考」后再看')

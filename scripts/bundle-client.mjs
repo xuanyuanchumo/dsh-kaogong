@@ -26,8 +26,14 @@
  * 铁律：不重命名任何标识符；不压缩；不删注释（中文注释全保留）；模块体内的
  * require('react') 原样保留（factory 参数 require 经闭包可见，render.test 的
  * requireShim 只认 'react'）；绝不产生行首 `export `/`import `（smoke 组合格式守卫）。
+ *
+ * cycle-24（v1.19.0 客户端组件化 TSX 重构）：模块发现从「单层平铺」升级为
+ * 「递归扫子目录」——src/client/views/（视图组件层）与 src/client/graph/（图谱引擎族）
+ * 进入合并范围；模块 id 为相对 dist/client 的 posix 路径（如 client/views/graph-view），
+ * 相对导入 `./x.js` / `./views/x.js` / `../graph/x.js` 统一经 resolveSpec 解析。
+ * 拓扑序 / 重名防御 / 原子写 / combo 终检语义零变化。
  */
-import { readFileSync, writeFileSync, readdirSync, renameSync } from 'node:fs'
+import { readFileSync, writeFileSync, readdirSync, renameSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -39,13 +45,26 @@ const read = (p) => readFileSync(p, 'utf-8')
 const fail = (msg) => { console.error('[bundle-client] ' + msg); process.exit(1) }
 
 /* ── 模块发现与依赖解析 ── */
+
+/** 以 dist/client 为根解析模块相对导入 spec（'./x' | './views/x' | '../graph/x'），
+ *  返回 dist/client 相对 posix 路径（不含 .js）。手写解析避免 Windows 分隔符混入。 */
+function resolveSpec(fromName, spec) {
+  const parts = fromName.includes('/') ? fromName.slice(0, fromName.lastIndexOf('/')).split('/') : []
+  for (const seg of spec.split('/')) {
+    if (seg === '.' || seg === '') continue
+    if (seg === '..') parts.pop()
+    else parts.push(seg)
+  }
+  return parts.join('/')
+}
+
 function parseModule(name) {
   const src = read(join(clientDir, name + '.js'))
   const deps = []
-  const importRe = /^[ \t]*import \{([^}]*)\} from '\.\/([\w-]+)\.js';?[ \t]*$/gm
+  const importRe = /^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*$/gm
   let m
   while ((m = importRe.exec(src)) !== null) {
-    deps.push({ names: m[1].split(',').map(s => s.trim()).filter(Boolean), target: m[2] })
+    deps.push({ names: m[1].split(',').map(s => s.trim()).filter(Boolean), target: resolveSpec(name, m[2]) })
   }
   return { name, id: 'client/' + name, src, deps }
 }
@@ -77,8 +96,12 @@ function collectExports(src) {
 
 /* ── 拓扑排序（依赖在前）+ 环检测 ── */
 const modules = new Map()
-for (const f of readdirSync(clientDir)) {
-  if (f.endsWith('.js')) modules.set(f.slice(0, -3), parseModule(f.slice(0, -3)))
+// cycle-24：递归发现 dist/client/**/*.js（含 views/、graph/ 子目录），模块名统一 posix 分隔符
+for (const rel of readdirSync(clientDir, { recursive: true })) {
+  if (!rel.endsWith('.js')) continue
+  const name = rel.split('\\').join('/').slice(0, -3)
+  if (name.endsWith('.tmp-' + String(process.pid)) || name.includes('.tmp-')) continue  // 原子写 tmp 产物不参与合并
+  modules.set(name, parseModule(name))
 }
 if (!modules.has(entryId)) fail('缺少 dist/client/client.js entry')
 
@@ -115,8 +138,8 @@ const tail = entryMod.src.slice(tailMatch.index)
 
 // entry 头部（factory 之外）的顶层 import：剥离并移入 factory 体内改写
 const entryImports = []
-const headOut = head.replace(/^[ \t]*import \{([^}]*)\} from '\.\/([\w-]+)\.js';?[ \t]*\n?/gm, (_, list, target) => {
-  entryImports.push({ list: list.split(',').map(s => s.trim()).filter(Boolean), target })
+const headOut = head.replace(/^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*\n?/gm, (_, list, spec) => {
+  entryImports.push({ list: list.split(',').map(s => s.trim()).filter(Boolean), target: resolveSpec(entryId, spec) })
   return ''
 })
 
@@ -154,8 +177,8 @@ for (const name of order) {
   if (!collected.names.length) fail(`模块 ${name} 无导出（异常）`)
   let body = collected.body
   const importLines = []
-  body = body.replace(/^[ \t]*import \{([^}]*)\} from '\.\/([\w-]+)\.js';?[ \t]*\n?/gm, (_, list, target) => {
-    const line = pick(list.split(',').map(s => s.trim()).filter(Boolean), target)
+  body = body.replace(/^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*\n?/gm, (_, list, spec) => {
+    const line = pick(list.split(',').map(s => s.trim()).filter(Boolean), resolveSpec(name, spec))
     if (line) importLines.push(line)
     return ''
   })
