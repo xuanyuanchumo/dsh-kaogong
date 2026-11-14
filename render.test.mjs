@@ -137,7 +137,7 @@ globalThis.fetch = async (url) => {
     reconciliation: { orphanEndpoints: [], orphanViews: [], unconsumedEndpoints: ['/api/questions'], missingProducers: [] },
     lifecycle: { stages: [{ stage: 'serve', desc: '稳态', state: 'current' }], events: [], current: 'serve' },
   }) }
-  if (u.includes('/api/wrong')) return { json: async () => ({ wrong: [], summary: { open: 0, mastered: 0 } }) }
+  if (u.includes('/api/wrong')) return { json: async () => ({ wrong: [{ sig: 'wb1', module: '判断推理', wrongCount: 2, box: 1, mastered: false, stem: '错题题干文本示例（超过九十字符以验证展开全文交互）——此处继续填充题干内容用于确认截断线与展开按钮的渲染行为是否正常工作，需要足够长的文本内容才能越过九十字符阈值从而触发展开全文提示行的条件渲染，因此继续追加更多文字直到确实超过阈值为止。' }], summary: { open: 1, mastered: 0 } }) }
   // cycle-20 题库管理：批量安装端点必须先于 /api/repos 匹配（否则被通配吞掉）
   if (u.includes('/api/repos/install-batch')) return { json: async () => ({ ok: true, batchId: 'b1-test', batch: { id: 'b1-test', state: 'running', items: [{ key: 'xingcezhenti', state: 'running', error: null }], done: 0, total: 1 } }) }
   if (u.includes('/api/repos/batch')) return { json: async () => ({ batch: { id: 'b1-test', state: 'done', items: [{ key: 'xingcezhenti', state: 'done', error: null }], done: 1, total: 1 } }) }
@@ -452,6 +452,37 @@ try {
   if (!/回答正确|回答错误/.test(afterSubmit)) throw new Error('提交后未展示判分反馈（v1.7 修复点失效）: ' + afterSubmit.slice(0, 150))
   if (!afterSubmit.includes('解析')) throw new Error('提交后未展示解析')
   ok('真实 client.js: 作答→提交→就地判分+解析（v1.7 刷题修复验证）')
+
+  // RENDER-WB-33（cycle-33）：错题本工作台旅程——筛选/展开/双入口。在快速切换序列后
+  // 单独进入错题本断言新形态（mock wrong 已升级为 1 条非空条目）。
+  {
+    const wbBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('错题本'))
+    if (!wbBtn) throw new Error('RENDER-WB-33 未找到错题本导航按钮')
+    await act(async () => { wbBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+    const t = JSON.stringify(tr.toJSON())
+    // 工作台操作条：SRS 回炉 + 纸质补录折叠开关
+    if (!t.includes('SRS 回炉复习')) throw new Error('RENDER-WB-33 SRS 回炉入口缺失')
+    if (!t.includes('纸质刷题补录')) throw new Error('RENDER-WB-33 纸质补录折叠入口缺失')
+    if (!t.includes('1 / 1 条')) throw new Error('RENDER-WB-33 筛选计数缺失')
+    // 筛选条：模块 chips + 状态三态
+    if (!t.includes('全部模块')) throw new Error('RENDER-WB-33 模块筛选缺失')
+    if (!t.includes('待消灭') || !t.includes('已掌握')) throw new Error('RENDER-WB-33 状态筛选缺失')
+    // 条目：截断 + 展开全文交互
+    if (!t.includes('… 展开全文')) throw new Error('RENDER-WB-33 条目展开全文按钮缺失（截断线失效）')
+    const stemDiv = tr.root.findAll(n => n.type === 'div' && typeof n.props.onClick === 'function' && String(n.props.title || '').includes('点击展开全文'))
+    if (!stemDiv.length) throw new Error('RENDER-WB-33 条目点击展开交互缺失')
+    await act(async () => { stemDiv[0].props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+    // 补录折叠展开（错题本内嵌 KgHistoryImport）
+    const importBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-wb-import'] === '1')
+    await act(async () => { importBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+    const t2 = JSON.stringify(tr.toJSON())
+    if (!t2.includes('输入题干关键词搜现有题库')) throw new Error('RENDER-WB-33 内嵌补录卡未展开（KgHistoryImport 未挂载）')
+    if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('RENDER-WB-33 错题本工作台交互触发降级')
+    ok('RENDER-WB-33: 错题本工作台（筛选/展开全文/SRS回炉/内嵌补录）全交互零降级')
+  }
 
   // 快速来回切视图（hook 漂移压力 + prop 形状验证）。
   // cycle-13：一级导航已无「刷题」（收敛进专题枢纽分区），其切换压力由下方

@@ -18,6 +18,7 @@
 import { createHash } from 'node:crypto'
 import { naokuQuestions, naokuReady, searchQuestionsByStem } from '../adapters/naoku.js'
 import { getRandomQuestions, XINGCE_MODULES } from '../adapters/repoData.js'
+import { buildPaperIndex, loadPaper } from '../adapters/paperData.js'
 
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
@@ -76,6 +77,39 @@ export function makeHistoryApi({ store, repoRoot = '' }: { store: any, repoRoot?
         }
         if (list.length >= limit) break
       }
+    }
+    // 3) 真题卷全文扫描（cycle-33 P0：issue#3「好像没实现」的根治通道）——
+    //    根因：①naoku DB 由 GongkaoNaoku 的 Python 合并脚本生成，只装真题库的用户恒缺 → 通道①恒空；
+    //    ②目录兜底用 getRandomQuestions 随机抽 12 题再过滤关键词 → 命中率≈0（兜底形同虚设）。
+    //    本通道复用 buildPaperIndex（磁盘快照 13ms）+ loadPaper（~18ms/卷）逐卷扫描，
+    //    行测卷按年份倒序、找满 limit 早停、maxPapers 上限控响应时间；结果带 paperId/exam/year/no
+    //    溯源元数据（用户可回原卷核对）。守卫 C33-01。
+    if (list.length < limit) {
+      try {
+        const idx = buildPaperIndex(storeRepoRoot())
+        const papers = (idx.papers || [])
+          .filter((p: any) => p.subject === '行测')
+          .sort((a: any, b: any) => (b.year || 0) - (a.year || 0))
+          .slice(0, 80)   // 最坏 ~1.4s（80 × 18ms）；早停常见 <10 卷
+        for (const pp of papers) {
+          if (list.length >= limit) break
+          let detail: any = null
+          try { detail = loadPaper(storeRepoRoot(), pp.id) } catch { continue }
+          for (const q of (detail && detail.questions) || []) {
+            const stem = String(q.stem || '').replace(/【图:kgimg:\/\/[^\]】]+】/g, '')
+            if (!normStem(stem).includes(normStem(kw))) continue
+            if (wantModule && q.module !== wantModule) continue
+            const sig = contentSig(q.module || pp.subject, q.stem)
+            if (seen.has(sig)) continue
+            seen.add(sig)
+            list.push({
+              ...q, contentSig: sig, matchSource: 'papers',
+              paperId: pp.id, exam: pp.exam || detail.exam, year: pp.year || detail.year, paperFile: pp.id.split('/').pop(),
+            })
+            if (list.length >= limit) break
+          }
+        }
+      } catch { /* 真题库不可用：静默跳过（前两通道结果仍有效） */ }
     }
     return { keyword: kw, module: wantModule || null, list, total: list.length }
   }
