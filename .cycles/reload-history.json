@@ -1,0 +1,16 @@
+[
+  {
+    "at": "2026-11-14T03:59:00.307Z",
+    "actor": "anic_reload_self",
+    "reason": "主力 link: profile 指向开发仓，dist 已重建（client.js/host 11:58），强制热重载让用户 GUI 立即生效 cycle-23 修复",
+    "status": "reloaded",
+    "fromRevision": "a341cb3a45f291ae",
+    "toRevision": "a341cb3a45f291ae",
+    "staleAtRequest": false,
+    "warnings": [],
+    "pending": [],
+    "restartReason": null,
+    "error": null,
+    "finalizedAt": "2026-11-14T03:59:01.708Z"
+  }
+]

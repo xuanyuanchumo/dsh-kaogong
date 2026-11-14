@@ -1088,7 +1088,52 @@
       "timestamp": "2026-11-14T02:46:13.387Z",
       "previousHash": "470259a5e9bc45a580c1373dec1c923d77cd1e2f99bc70aac4db2a9ba07fd464",
       "hash": "679efc18f54c8826a84bbca9c7bf8787176a98e05bcec5145ae98445bd3b746e"
+    },
+    {
+      "gate": "G0",
+      "gateName": "评估收敛门",
+      "result": "PASS",
+      "detail": "Evaluation report found in cycle-23 (16 dimension rows) [Q1:PASS,Q5:PASS]",
+      "timestamp": "2026-11-14T03:57:45.019Z",
+      "previousHash": "679efc18f54c8826a84bbca9c7bf8787176a98e05bcec5145ae98445bd3b746e",
+      "hash": "f8c2732d8ffb92222a14eb681232e737302f995105fa1bf6f11e9fffe565a82a"
+    },
+    {
+      "gate": "G1",
+      "gateName": "任务收敛门",
+      "result": "PASS",
+      "detail": "All 6 tasks completed §cycle-23 [Q7:PASS]",
+      "timestamp": "2026-11-14T03:57:45.032Z",
+      "previousHash": "f8c2732d8ffb92222a14eb681232e737302f995105fa1bf6f11e9fffe565a82a",
+      "hash": "9d5590f7f7d9c5dcc389cd11cada8f3e4bd300e69c90ab029d080f9cfd68da27"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "FAIL",
+      "detail": "Test report summary not recognized: 测试报告.md has no 通过/失败 rows (expected the §2 汇总 table) §cycle-23",
+      "timestamp": "2026-11-14T03:57:45.042Z",
+      "previousHash": "9d5590f7f7d9c5dcc389cd11cada8f3e4bd300e69c90ab029d080f9cfd68da27",
+      "hash": "5be4899e4eb5577879bee1da505d0fa6da44e123a549a8fbd5240c64ea54cb2a"
+    },
+    {
+      "gate": "G3",
+      "gateName": "构建收敛门",
+      "result": "PASS",
+      "detail": "Build passed: npm run build §cycle-23 [dist=absent] [Q3:PASS,Q4:PASS]",
+      "timestamp": "2026-11-14T03:57:48.020Z",
+      "previousHash": "5be4899e4eb5577879bee1da505d0fa6da44e123a549a8fbd5240c64ea54cb2a",
+      "hash": "78f16319d4750ea7422d62916bb32d74ee88f998a8f93b1590195a1d30d115f0"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "PASS",
+      "detail": "Zero failures, zero errors (测试报告.md) §cycle-23 [Q2:PASS]",
+      "timestamp": "2026-11-14T03:58:16.005Z",
+      "previousHash": "78f16319d4750ea7422d62916bb32d74ee88f998a8f93b1590195a1d30d115f0",
+      "hash": "5e0db346de60e992dfad4ecb658cf96940f17705b3c922f4f3da36fdf80dafdd"
     }
   ],
-  "chainHead": "679efc18f54c8826a84bbca9c7bf8787176a98e05bcec5145ae98445bd3b746e"
+  "chainHead": "5e0db346de60e992dfad4ecb658cf96940f17705b3c922f4f3da36fdf80dafdd"
 }
