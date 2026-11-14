@@ -21,7 +21,9 @@ function upsertWrong(progress, q) {
   const sig = questionSig(q)
   let item = progress.wrongBook.find(w => w.sig === sig)
   if (!item) {
-    item = { sig, module: q.module || '未知', type: q.type || '', stem: q.stem, options: q.options, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongCount: 0, box: 1, consecutive: 0, mastered: false, lastAt: Date.now() }
+    // cycle-21 出处标注：错题入库时快照题库出处（回炉时随题透出，UI 显示来源）
+    item = { sig, module: q.module || '未知', type: q.type || '', stem: q.stem, options: q.options, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongCount: 0, box: 1, consecutive: 0, mastered: false, lastAt: Date.now(),
+      source: q.source || null, exam: q.exam || null, year: q.year || null, paperFile: q.paperFile || null }
     progress.wrongBook.push(item)
   }
   item.wrongCount++
@@ -88,7 +90,9 @@ export function makeSrsApi({ repoRoot, store }) {
       .sort((a, b) => a.lastAt - b.lastAt).slice(0, count)
     if (due.length) {
       return { file: '(错题回炉)', count: due.length, srs: true, mode: 'retry',
-        questions: due.map(w => ({ id: 'wrong-' + w.sig, number: 0, type: w.type, module: w.module, stem: w.stem, options: w.options, correctAnswer: w.correctAnswer, analysis: w.analysis, fromWrongBook: true, sig: w.sig, box: w.box, wrongCount: w.wrongCount })) }
+        questions: due.map(w => ({ id: 'wrong-' + w.sig, number: 0, type: w.type, module: w.module, stem: w.stem, options: w.options, correctAnswer: w.correctAnswer, analysis: w.analysis, fromWrongBook: true, sig: w.sig, box: w.box, wrongCount: w.wrongCount,
+          // cycle-21 出处标注：错题回炉继承入库时的题库出处（旧数据无 source 时按 module 推断显示）
+          source: w.source || null, exam: w.exam || null, year: w.year || null, paperFile: w.paperFile || null })) }
     }
     let mod = moduleName
     if (!mod || mod === 'all') {
@@ -110,8 +114,12 @@ export function makeSrsApi({ repoRoot, store }) {
 
   function statsSnapshot(wsRaw) {
     const p = loadProgress(wsRaw)
+    // cycle-21（issue #3）统计隔离：补录条目（source==='import'）是**历史**练习——
+    // 不进「今日新刷/打卡/趋势」（否则整批历史算成今天新刷），只体现在错题本与累计量。
+    const online = (h: any) => h && h.source !== 'import'
+    const onlineHistory = (p.history || []).filter(online)
     const byDay: any = {}
-    for (const h of p.history || []) {
+    for (const h of onlineHistory) {
       const d = (byDay[h.date] = byDay[h.date] || { answered: 0, correct: 0 })
       d.answered++
       if (h.isCorrect) d.correct++
@@ -131,7 +139,8 @@ export function makeSrsApi({ repoRoot, store }) {
       mastery[m] = { rate: Math.round(rate * 100), confidence: +confidence.toFixed(2), mastery: Math.round(rate * confidence * 100), answered: s.answered }
     }
     const wb = p.wrongBook || []
-    return { days, streak, mastery, wrong: { open: wb.filter(w => !w.mastered).length, mastered: wb.filter(w => w.mastered).length, total: wb.length }, day: p.day, answered: p.answered, correct: p.correct, rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
+    const importedTotal = (p.history || []).length - onlineHistory.length
+    return { days, streak, mastery, wrong: { open: wb.filter(w => !w.mastered).length, mastered: wb.filter(w => w.mastered).length, total: wb.length }, day: p.day, answered: p.answered, correct: p.correct, rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0, importedTotal }
   }
 
   return function handleSrsApi(path, params, post, method, wsRaw) {

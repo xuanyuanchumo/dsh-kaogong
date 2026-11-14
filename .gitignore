@@ -24,5 +24,6 @@ data/lifecycle.jsonl
 # 本轮临时验证脚本（不入户）
 _tmp/
 .npmrc
-_tmp-*
-pnpm-lock.yaml
+# cycle-23：ANIC 工作区不入发布仓（config.yml 除外——smoke R11-GUARD-01 守卫读它判「门禁走 npm scripts」）
+.cycles/*
+!.cycles/config.yml

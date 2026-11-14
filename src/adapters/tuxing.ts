@@ -110,6 +110,8 @@ export function tuxingQuestions(repoRoot: string, opts: { cat?: string; limit?: 
     count: slice.length,
     questions: slice.map((q) => ({
       ...q,
+      // cycle-21 出处标注：图形推理专项来自 gk-tuxing，src 字段即上游原始出处
+      source: 'gk-tuxing',
       imgUrl: '/kaogong/api/tuxing-img?p=' + encodeURIComponent(q.img),
     })),
   }
@@ -119,7 +121,7 @@ export function tuxingQuestions(repoRoot: string, opts: { cat?: string; limit?: 
 export function tuxingQuestion(repoRoot: string, id: string) {
   const q = loadAll(repoRoot).find((x) => x.id === id)
   if (!q) return { error: '题目不存在: ' + id }
-  return { ...q, imgUrl: '/kaogong/api/tuxing-img?p=' + encodeURIComponent(q.img) }
+  return { ...q, source: 'gk-tuxing', imgUrl: '/kaogong/api/tuxing-img?p=' + encodeURIComponent(q.img) }
 }
 
 const MIME: Record<string, string> = {

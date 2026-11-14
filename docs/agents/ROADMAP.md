@@ -2,21 +2,21 @@
 
 > 债务清单同步 `.cycles/tech-debt/backlog.md`。每轮迭代收口时更新状态。
 
-## 当前状态（v1.15.0 / cycle-20）
+## 当前状态（v1.17.0 / cycle-22）
 
 | 维度 | 数据 |
 |---|---|
 | 真题卷 | 1683 套（申论 944 / 行测 739，2008–2026） |
-| 深度题库 | 27506 题（知识点覆盖 100%，速解 41%，含图 10647） |
+| 深度题库 | 27506 题（知识点覆盖 100%，速解 41%，含图 10647；**选项含图 1406 / 解析含图 8294——cycle-22 起全部保留**） |
 | 本地图片 | 11 万+（试卷配图 + 354 张图推题图） |
 | 方法论语料 | 25 篇（20 references + 5 examples，336KB），位于数据根，**不随包** |
 | 方法论覆盖 | 六模块 overall **0.9756**（40/41；yanyu 0.889 为真实缺公式缺口） |
 | 方法论练习 | 74 题（32 题字母答案可自动判分 / 42 题文字作答走自评） |
 | 仓库 | 16（必选 3：huasheng13 / xingcezhenti / gk-tuxing；推荐 3：kaogong-skill / gwy-zhenti / GongkaoNaoku；可选 10） |
 | 视图 | 16 个原生 React 视图（含 huasheng13；方法论入口在专题枢纽内，不占一级导航） |
-| 端点 | **60 个**（cycle-18 加 `/api/huasheng13/*` 6；cycle-20 加 `/api/repos/{install-batch,batch,jobs}` 3） |
+| 端点 | **66 个**（`/api/kg-img` cycle-22 补 manifest 登记 + 扩展名探测回退） |
 | 工具 | 6 个（1 离线 + 5 可选 AI，含 `kaogong_ai_method`；输出全部实时取自能力矩阵） |
-| 断言 | smoke **293** + render **51** |
+| 断言 | smoke **321** + render **57** |
 | 数据根 | 四级可配置（env/config/开发态上级/托管默认）+ 一键克隆分级（**cycle-20**：批量队列 / 半成品死锁解除 / 健康巡检 / 旧根提示 / 配置校验） |
 | 研究文档 | `docs/research/` 10 篇（PageRank / BM25 / SRS / FR / LRU / Brandes / Merkle / SPC / 参考插件 / 桑基） |
 | 发布 | GitHub（SSH）+ npm + 市场合规齐备（条目草案见 [MARKETPLACE-ENTRY.md](./MARKETPLACE-ENTRY.md)） |
@@ -36,6 +36,32 @@
 | AI 工具 `kaogong_ai_method` | `src/host/index.ts:260-261`；`src/shared/manifest.ts:126` |
 | 文档闭环（方法论规范 / API / 架构 / 测试 / 规范 / 路线图 / 市场条目） | `docs/agents/METHODOLOGY.md` + 本目录 9 篇同步 |
 
+## cycle-21 已交付（v1.16.0 数据安全 + 用户旅程修复）
+
+| 交付项 | 证据 |
+|---|---|
+| 用户数据外置（issue #2 根治）：progress/配置/计划 → `~/.dsh/kaogong/`（KG_DATA_DIR/DSH_HOME 感知），包内旧数据启动时原子迁移（跨卷 cp 回退删源 / lifecycle 环形日志保留新根删源 / 失败只读降级绝不删源） | `src/server/dataRoot.ts`（migratePkgData + dataLocationReport）；`src/server/http.ts`（DATA_DIR=USER_DATA_ROOT） |
+| 数据位置白盒端点 + 面板「🛡 数据安全」卡 | `/api/data-location`；`src/client/repos-view.ts`（W1 卡） |
+| 练习链路图片修复（issue #1）：`<img>` 剥除 → `kgimg://` 中立占位（落盘与挂载/端口无关）；`/api/kg-img` 二进制端点；RichText 渲染改写 | `src/adapters/repoData.ts`（neutralizeImages）；`src/server/http.ts`（serveKgImage）；`src/client/ui-kit.ts`（RichText kgimg 分支） |
+| 材料图归属：「根据上图」题的图在材料块（1479 个含图材料块）→ 按「最近前置材料段」附给题干 | `src/adapters/repoData.ts`（matImgTable + qOffsets 偏移归属） |
+| 选项纯字母图形题诚实降级提示（上游数据缺选项图 2728 题） | `src/client/study-view.ts`（lettersOnly 提示条） |
+| 纸质补录第一阶段（issue #3）：搜索（naoku DB LIKE 全量 + 目录兜底）/逐题批量补录/幂等/统计隔离/批次撤销 | `src/server/historyApi.ts`；`src/adapters/naoku.ts`（searchQuestionsByStem）；UI KgHistoryImport 四步旅程 |
+| 统计隔离：import 条目不进今日新刷/趋势/打卡，错题本照常回炉 | `src/server/srs.ts`（statsSnapshot online 过滤 + importedTotal） |
+| 图谱「掌握度」学习画像着色（T-026 前半）：模块正确率弱→强 + 弱区红语义图例 | `src/client/graph-analytics.ts`（mastery 模式）；`src/client/graph-view.ts`（masteryMap + 图例） |
+| 沙箱用户旅程：图片端到端渲染（img[kg-img] 200+加载）/补录四步交互/数据安全卡/掌握度图例 全过 | Playwright 实测（3181 沙箱）；smoke SMOKE-DX/IMG/HIST 22 断言 + render C22-01..03 + G-11b |
+
+## cycle-22 已交付（v1.17.0 专题-判断推理图片全链路修复）
+
+| 交付项 | 证据 |
+|---|---|
+| 深度题库内联图占位化（专题-判断推理无图根治）：选项（1406 题）/解析（8294 题）/五维标注的内联 `<img>` → `kgimg://` 中立占位（与 repoData 同模板；旧 stripHtml 一刀切剥图根因） | `src/adapters/naoku.ts`（stripHtmlKeepImg/neutralizeImages；options/analysis/reasoning/fastest/pitfalls/mother 全字段） |
+| `/api/kg-img` 扩展名探测回退：原样未命中 → basename 换扩展名重探（DB 记 .webp 磁盘是 .png） | `src/server/http.ts`（serveKgImage + resolveNaokuImage 兜底） |
+| 客户端统一出图：OptionRow / 深度题库内联选项行 / 模考选项行检测占位 → RichText 渲染 | `src/client/ui-kit.ts`；`src/client/study-view.ts`；`src/client/papers-view.ts` |
+| manifest 补登记 `/api/kg-img`（cycle-21 漏声明 → 能力对账假漂移缺口闭环） | `src/shared/manifest.ts`；smoke SMOKE-IMG22-02 |
+| 图谱直达业务：详情抽屉 view:/module:/method: 三类节点 → setView（打开该视图/去刷该模块/读方法论） | `src/client/graph-view.ts`（goItems）；`src/client/client.ts`（onGo 接线）；render G-17 |
+| hover tooltip 掌握率第三行：masteryMap 穿线 engine setView → draw 选项（红黄绿分档，与「掌握度」着色同口径） | `src/client/graph-physics.ts`（tooltip line3）；`src/client/graph-engine.ts`（masteryMap） |
+| TDD 断言：SMOKE-IMG22-01..04 + C22-IMG + RENDER-G-17 | `smoke.test.mjs`（321 全绿）；`render.test.mjs`（57 全绿） |
+
 ## 待办（按价值排序）
 
 ### T-030 · awesome-dsh-plugin 收录 PR
@@ -44,8 +70,8 @@
 - 前置：仓库创建满 1 天（CI 自动查）、GitHub topic `dsh-plugin`、按 PR 当日复核。
 
 ### T-026 · 图谱「学习画像」叠加层
-- 现状：图谱反映插件结构（模块/端点/视图），学习洞察只在仪表盘卡片。
-- 目标：把「考点掌握」按 PageRank/社区着色叠加到图谱（用户画像与系统画像合一），支持「弱区高亮」模式。
+- 现状：cycle-21 交付掌握度着色；cycle-22 补 hover tooltip 掌握率 + 详情抽屉直达业务（view/module/method → setView）。
+- 剩余：弱区高亮开关（一键只显示 rate<50% 的模块子图）与考点级（非模块级）掌握率映射。
 
 ### T-027 · 学习计划智能化（原 T-025 延续）
 - 现状：30 天四阶段静态日历 + 手动滑杆。

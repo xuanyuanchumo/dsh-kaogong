@@ -1131,6 +1131,239 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   check('R-N-01 /api/naoku/questions 结构化（就绪=题目数组 / 未就绪=空数组+fallback，非 5xx）',
     nkStructured, `status=${nkR.status} ready=${nkW3.source === 'naoku'} n=${nkW3.questions && nkW3.questions.length}`)
 
+// ── cycle-21 数据外置 / 题图占位 / 纸质补录（运行时 + 静态守卫）──
+// 位置纪律（教训⑧+⑤）：运行时 fetch 必须落在 §11b **长阻塞（快照重建）之前**、§12 崩溃安全（server.close）之前。
+{
+  const CX = 'PROJ_C21'
+
+  // ═══ SMOKE-DX 数据外置（issue #2）：/api/data-location 白盒 + 静态守卫 ═══
+  {
+    const r = await fetch(`${B}/api/data-location?ws=${CX}`)
+    const d = await r.json()
+    check('SMOKE-DX-01 /api/data-location 200 且透出 userDataRoot/source',
+      r.status === 200 && typeof d.userDataRoot === 'string' && typeof d.source === 'string',
+      JSON.stringify(d).slice(0, 120))
+    check('SMOKE-DX-02 userDataRoot 不在插件包内（含 kaogong 命名空间）',
+      String(d.userDataRoot).includes('kaogong') && !String(d.userDataRoot).includes('node_modules'),
+      String(d.userDataRoot))
+    check('SMOKE-DX-03 迁移状态词表齐备（migration.status + reposRoot）',
+      d.migration && ['not-needed', 'migrated', 'already-migrated', 'failed'].includes(d.migration.status) && d.reposRoot,
+      d.migration && d.migration.status)
+    // 静态守卫：http.ts 的 DATA_DIR/PROGRESS_DIR 派生自 USER_DATA_ROOT（外置），不再指包内
+    const httpSrc = fs.readFileSync(new URL('./src/server/http.ts', import.meta.url), 'utf-8')
+    check('SMOKE-DX-04 http.ts 数据目录派生自 USER_DATA_ROOT（外置）',
+      httpSrc.includes('const DATA_DIR = USER_DATA_ROOT') && httpSrc.includes('const PROGRESS_DIR = PROGRESS_DIR_USER'),
+      'DATA_DIR=USER_DATA_ROOT 缺失' + (httpSrc.includes('const DATA_DIR = USER_DATA_ROOT') ? '' : '（主）'))
+    const drSrc = fs.readFileSync(new URL('./src/server/dataRoot.ts', import.meta.url), 'utf-8')
+    check('SMOKE-DX-05 迁移器幂等与失败保护（MIGRATED_MARK + 不删源数据 + tmp+rename）',
+      drSrc.includes('.migrated') && drSrc.includes('moveEntry') && drSrc.includes('pkgResidual'),
+      '迁移器关键判据缺失')
+    check('SMOKE-DX-06 manifest 声明 /api/data-location 且消费者登记',
+      fs.readFileSync(new URL('./src/shared/manifest.ts', import.meta.url), 'utf-8').includes("path: '/api/data-location'"))
+  }
+
+  // ═══ SMOKE-IMG 题图占位（issue #1）：parseQuestions 保留 img → kgimg:// 占位 + /api/kg-img ═══
+  {
+    const rdSrc = fs.readFileSync(new URL('./src/adapters/repoData.ts', import.meta.url), 'utf-8')
+    check('SMOKE-IMG-01 parseQuestions 图片占位化（kgimg:// 中立协议，不再剥 img）',
+      rdSrc.includes('kgimg://') && rdSrc.includes('neutralizeImages'),
+      'repoData.ts 缺占位化逻辑')
+    const ukSrc = readClientBundle('SMOKE-IMG')
+    check('SMOKE-IMG-02 RichText 渲染 kgimg:// → /api/kg-img?p= 绝对 URL',
+      ukSrc.includes('/api/kg-img?p=') && ukSrc.includes('kgimg://'),
+      'client bundle 缺 kgimg 渲染链路')
+    check('SMOKE-IMG-03 http.ts 双通道分流齐备（同源 attachWebRoute + 独立端口 buildHttpServer）',
+      fs.readFileSync(new URL('./src/server/http.ts', import.meta.url), 'utf-8').split("'/api/kg-img'").length >= 3,
+      'kg-img 分流点不足（需同源+独立端口两处）')
+    // 运行时：真实题库占位可达——跨 5 模块各抽 6 题（图形推理/资料分析含图率高，单模块随机会漏）
+    let withImgTotal = 0, qTotal = 0
+    for (const mod of ['判断推理', '资料分析', '数量关系', '言语理解与表达', '常识判断']) {
+      const qs = await J(`${B}/api/questions?module=${encodeURIComponent(mod)}&count=6&ws=${CX}`)
+      qTotal += (qs.questions || []).length
+      withImgTotal += (qs.questions || []).filter((q) => String(q.stem || '').includes('kgimg://')).length
+    }
+    check('SMOKE-IMG-04 真实题库抽题：跨模块题干含 kgimg:// 占位（图片不再丢失）',
+      qTotal > 0 && withImgTotal > 0,
+      `抽 ${qTotal} 题含图 ${withImgTotal} 题`)
+    // 运行时：占位路径经 /api/kg-img 服务真实可达（403/404 防线也要在）
+    if (withImgTotal) {
+      const qs2 = await J(`${B}/api/questions?module=资料分析&count=6&ws=${CX}`)
+      const first = (qs2.questions || []).concat((await J(`${B}/api/questions?module=判断推理&count=6&ws=${CX}`)).questions || [])
+        .find((q) => String(q.stem || '').includes('kgimg://'))
+      const rel = first && String(first.stem).match(/kgimg:\/\/([^\]】]+)】/)?.[1]
+      if (rel) {
+        const img = await fetch(`${B}/api/kg-img?p=${encodeURIComponent(rel)}&ws=${CX}`)
+        check('SMOKE-IMG-05 /api/kg-img 占位路径服务 200 且为图片 MIME',
+          img.status === 200 && /^image\//.test(img.headers.get('content-type') || ''),
+          `status=${img.status} type=${img.headers.get('content-type')}`)
+        const bad = await fetch(`${B}/api/kg-img?p=${encodeURIComponent('../../etc/passwd')}&ws=${CX}`)
+        check('SMOKE-IMG-06 越级路径 403/404 防线（绝不出包）',
+          bad.status === 403 || bad.status === 404, `status=${bad.status}`)
+      }
+    }
+  }
+
+  // ═══ SMOKE-HIST 纸质补录（issue #3）：搜索/补录/幂等/统计隔离/撤销 ═══
+  {
+    const H = (p) => `${B}/api/history${p}${p.includes('?') ? '&' : '?'}ws=${CX}`
+    const src = await J(H('/search?q=最接近'))
+    check('SMOKE-HIST-01 /api/history/search 返回候选（list + contentSig 稳定指纹）',
+      Array.isArray(src.list) && src.list.every((x) => x.contentSig && x.stem),
+      `list=${(src.list || []).length}`)
+    // 取一个候选补录三态：right / wrong / unknown；wrong 须进错题本
+    const cand = (src.list || [])[0]
+    if (cand) {
+      const r1 = await P(H('/entries'), { entries: [
+        { contentSig: cand.contentSig, question: cand, result: 'wrong', source: '测试书·p12' },
+      ] })
+      check('SMOKE-HIST-02 补录 wrong → accepted=1 + batchId + 错题入本',
+        r1 && r1.accepted === 1 && r1.batchId && r1.acceptedItems && r1.acceptedItems[0].result === 'wrong',
+        JSON.stringify(r1).slice(0, 100))
+      // 统计隔离：importedTotal > 0 且 history 带 historical 标记；stats.answered 不含补录
+      const wrongList = await J(`${B}/api/wrong?ws=${CX}`)
+      const importedWrong = (wrongList.wrong || []).find((w) => w.fromImport === r1.batchId)
+      check('SMOKE-HIST-03 补录错题进错题本（fromImport 批次标记）', !!importedWrong,
+        `wrong=${(wrongList.wrong || []).length}`)
+      // 幂等：同 sig 再录 → conflicts
+      const r2 = await P(H('/entries'), { entries: [{ contentSig: cand.contentSig, question: cand, result: 'wrong' }] })
+      check('SMOKE-HIST-04 重复补录 → conflicts=1 不重复计数',
+        r2 && Array.isArray(r2.conflicts) && r2.conflicts.length === 1 && r2.accepted === 0,
+        JSON.stringify(r2 && r2.conflicts).slice(0, 80))
+      // 撤销：批次回滚 → history 错题移除
+      const r3 = await P(H('/undo'), { batchId: r1.batchId })
+      check('SMOKE-HIST-05 批次撤销 → removedHistory=1 + removedWrong=1',
+        r3 && r3.undone === true && r3.removedHistory === 1 && r3.removedWrong === 1,
+        JSON.stringify(r3).slice(0, 90))
+      const wrongAfter = await J(`${B}/api/wrong?ws=${CX}`)
+      check('SMOKE-HIST-06 撤销后错题本不再含该补录题',
+        !(wrongAfter.wrong || []).some((w) => w.sig === cand.contentSig))
+      // unknown 结果：无所选答案也能录（result=unknown, isCorrect=null）
+      const r4 = await P(H('/entries'), { entries: [{ contentSig: cand.contentSig, question: cand, result: 'unknown' }] })
+      check('SMOKE-HIST-07 result=unknown 可补录（isCorrect=null 不虚构对错）',
+        r4 && r4.accepted === 1, JSON.stringify(r4).slice(0, 80))
+      const st = await J(`${B}/api/stats?ws=${CX}`)
+      check('SMOKE-HIST-08 统计隔离：importedTotal ≥1 且补录不算在线作答（answered 只来自在线判分）',
+        st.importedTotal >= 1 && st.answered === 0,
+        `importedTotal=${st.importedTotal} answered=${st.answered}`)
+      // 清理测试命名空间
+      await P(H('/undo'), { batchId: r4.batchId })
+    } else {
+      check('SMOKE-HIST-01b 深度题库/真题库均无候选（环境降级也必须返回结构）', src.list && src.list.length === 0)
+    }
+    // 静态守卫：manifest 声明 4 端点 + http 域链接入
+    const mfSrc = fs.readFileSync(new URL('./src/shared/manifest.ts', import.meta.url), 'utf-8')
+    check('SMOKE-HIST-09 manifest 声明 /api/history/* 四端点',
+      ['/api/history/search', '/api/history/entries', '/api/history/undo', '/api/history/batches'].every((p) => mfSrc.includes("path: '" + p + "'")))
+    const httpSrc21 = fs.readFileSync(new URL('./src/server/http.ts', import.meta.url), 'utf-8')
+    check('SMOKE-HIST-10 historyApi 接入域链（buildDomains + 分发）',
+      httpSrc21.includes('makeHistoryApi') && httpSrc21.includes('domains.historyApi.handle'))
+    // cycle-21 出处标注（用户要求「每道题标明出处」）：三库 source 字段 + UI 徽章组件
+    const ukSrc21 = readClientBundle('SMOKE-HIST')
+    check('SMOKE-HIST-11 题库出处标注：三库 source 字段 + SourceBadge 组件 + 错题入库快照出处',
+      ukSrc21.includes('KG_SOURCE_META') && ukSrc21.includes('SourceBadge') &&
+      fs.readFileSync(new URL('./src/adapters/repoData.ts', import.meta.url), 'utf-8').includes("source: 'xingcezhenti'") &&
+      fs.readFileSync(new URL('./src/adapters/tuxing.ts', import.meta.url), 'utf-8').includes("source: 'gk-tuxing'") &&
+      fs.readFileSync(new URL('./src/server/srs.ts', import.meta.url), 'utf-8').includes('paperFile: q.paperFile || null'),
+      'SourceBadge/三库 source/错题出处快照 任一缺失')
+    // 运行时：新抽题必带 source+paperFile（xingcezhenti）
+    const qsr = await J(`${B}/api/questions?module=判断推理&count=1&ws=${CX}`)
+    const q0 = (qsr.questions || [])[0]
+    check('SMOKE-HIST-12 运行时抽题带出处（source=xingcezhenti + paperFile 卷名）',
+      q0 && q0.source === 'xingcezhenti' && typeof q0.paperFile === 'string' && q0.paperFile.length > 0,
+      q0 ? ('source=' + q0.source + ' paperFile=' + String(q0.paperFile).slice(0, 20)) : 'no question')
+  }
+
+  // ═══ SMOKE-IMG22 cycle-22（专题-判断推理无图修复）：naoku 内联图占位全链路 ═══
+  // 数据实证：DB 8294 题解析、1406 题选项内联 <img src="/90-图片/…">，旧 stripHtml 一刀切剥掉。
+  // 修复面：naoku.ts stripHtmlKeepImg（占位化）→ RichText/OptionRow 渲染 → /api/kg-img 扩展名探测服务。
+  {
+    const CX22 = 'PROJ_C22'
+    // 静态守卫：适配器占位化 + 解析/选项双字段走 KeepImg 链路
+    const nkSrc = fs.readFileSync(new URL('./src/adapters/naoku.ts', import.meta.url), 'utf-8')
+    check('SMOKE-IMG22-01 naoku 适配器占位化：stripHtmlKeepImg 覆盖 stem/options/analysis（不再一刀切剥 img）',
+      nkSrc.includes('stripHtmlKeepImg') && nkSrc.includes('neutralizeImages') && nkSrc.includes('kgimg://'),
+      'naoku.ts 缺占位化链路')
+    check('SMOKE-IMG22-02 manifest 补登记 /api/kg-img（能力对账闭环，消费方=练习/深度题库/专题）',
+      fs.readFileSync(new URL('./src/shared/manifest.ts', import.meta.url), 'utf-8').includes("path: '/api/kg-img'"))
+    // 运行时：深度题库就绪时，抽判断推理题验证题干/选项/解析三处占位
+    const nk22 = await J(`${B}/api/naoku/status`)
+    if (nk22.ready) {
+      // ═══ SMOKE-C23 cycle-23（用户二报：资料分析/言语理解渲染异常 + 材料缺失）═══
+      // 根因：① naoku SELECT 漏取 material（资料分析 99.6%/言语 36% 有材料）；
+      // ② img_refs 全量追加进题干 → 内联图重复渲染 + 解析公式图污染题干。
+      {
+        const nkSrc23 = fs.readFileSync(new URL('./src/adapters/naoku.ts', import.meta.url), 'utf-8')
+        check('SMOKE-C23-01 naoku SELECT 补 material/material_ref（资料分析材料不再缺失）',
+          nkSrc23.includes('material,material_ref') && nkSrc23.includes("material: materialText"),
+          'naoku.ts 缺 material 字段链路')
+        // img_refs 追加移除：naoku.ts 不得再调 imageMarkdown 拼题干（300 题抽检 refs basename
+        // 100% 已内联于 stem/options/analysis/material，追加 = 重复渲染）。
+        // （imgRefs 透传字段保留——原始 refs 仍下发供诊断；断言只盯「拼接进 stem」的旧模式）
+        check('SMOKE-C23-02 naoku 移除 img_refs 追加（杜绝重复渲染与解析公式图污染题干）',
+          !nkSrc23.includes('imageMarkdown') && !nkSrc23.includes("+ imageMarkdown") && !nkSrc23.includes("imgMarkdown"),
+          'naoku.ts 仍有 img_refs 拼接残留')
+        // 运行时：资料分析/言语理解抽题必须带材料（材料缺失=不可作答）
+        let matN = 0, zlTotal = 0, yyMat = 0, yyTotal = 0
+        for (const mod of ['资料分析', '言语理解与表达']) {
+          const d23 = await J(`${B}/api/naoku/questions?module=${encodeURIComponent(mod)}&count=6&ws=${CX22}`)
+          for (const q of (d23.questions || [])) {
+            if (mod === '资料分析') { zlTotal++; if (q.material) matN++ }
+            else { yyTotal++; if (q.material) yyMat++ }
+          }
+        }
+        check('SMOKE-C23-03 深度题库资料分析抽题带材料字段（材料覆盖率 ≥80%，全库实测 99.6%）',
+          zlTotal > 0 && matN / zlTotal >= 0.8, `资料分析 ${matN}/${zlTotal} 带材料 · 言语 ${yyMat}/${yyTotal}`)
+        check('SMOKE-C23-04 material 与 stem 字段分离（服务端不拼接，UI 组装——SRS 快照历史可复现）',
+          nkSrc23.includes('stem: stemText') && !nkSrc23.includes('materialText + NL + stemText'),
+          'naoku.ts 拼接残留 → 双重渲染风险')
+      }
+      // 跨模块抽样（选项含图集中在 资料分析619/数量512/判断推理167）：每模块抽 8 题 × 3 模块
+      let optImg = 0, anaImg = 0, stemImg = 0, qN = 0
+      let firstImgQ = null
+      for (const mod of ['资料分析', '数量关系', '判断推理']) {
+        const d = await J(`${B}/api/naoku/questions?module=${encodeURIComponent(mod)}&count=8&ws=${CX22}`)
+        for (const q of (d.questions || [])) {
+          qN++
+          const stemS = String(q.stem || '')
+          const anaS = String(q.analysis || '')
+          if (stemS.includes('kgimg://')) { stemImg++; if (!firstImgQ) firstImgQ = q }
+          if (Object.values(q.options || {}).some(v => String(v).includes('kgimg://'))) optImg++
+          if (anaS.includes('kgimg://')) anaImg++
+        }
+      }
+      check('SMOKE-IMG22-03 深度题库跨模块抽题：解析含 kgimg:// 占位（公式图/题图不再丢失）',
+        qN > 0 && anaImg > 0, `抽 ${qN} 题 · 解析含图 ${anaImg} · 选项含图 ${optImg} · 题干含图 ${stemImg}`)
+      // 运行时：解析内联占位经 /api/kg-img 服务真实可达（webp→png 扩展名探测回退）
+      if (firstImgQ || anaImg > 0 || optImg > 0) {
+        // 取一道解析含图的题（抽资料分析多题提高命中率，解析含图率 8294/27506≈30%）
+        let rel = null
+        for (let i = 0; i < 4 && !rel; i++) {
+          const d = await J(`${B}/api/naoku/questions?module=资料分析&count=8&ws=${CX22}`)
+          for (const q of (d.questions || [])) {
+            const m = String(q.analysis || '').match(/kgimg:\/\/([^\]】]+)】/)
+            if (m) { rel = m[1]; break }
+          }
+        }
+        if (rel) {
+          const img = await fetch(`${B}/api/kg-img?p=${encodeURIComponent(rel)}&ws=${CX22}`)
+          check('SMOKE-IMG22-04 /api/kg-img 解析内联占位服务 200 且为图片 MIME（扩展名探测回退 webp→png）',
+            img.status === 200 && /^image\//.test(img.headers.get('content-type') || ''),
+            `status=${img.status} type=${img.headers.get('content-type')} rel=${String(rel).slice(0, 50)}`)
+        } else {
+          check('SMOKE-IMG22-04 /api/kg-img 解析内联占位服务（本轮抽样未命中含图解析，环境降级跳过）', true)
+        }
+      }
+    } else {
+      check('SMOKE-C23-01 naoku material 链路（node:sqlite 不可用，降级跳过）', true)
+      check('SMOKE-C23-02 naoku img_refs 追加移除（降级跳过）', true)
+      check('SMOKE-C23-03 深度题库跨模块抽题（node:sqlite 不可用，降级跳过）', true)
+      check('SMOKE-C23-04 material 与 stem 字段分离（降级跳过）', true)
+      check('SMOKE-IMG22-03 深度题库跨模块抽题（node:sqlite 不可用，降级跳过）', true)
+      check('SMOKE-IMG22-04 /api/kg-img 解析内联占位服务（降级跳过）', true)
+    }
+  }
+}
+
   // R-P-03 + R-P-01：快照 v2 版本门（运行时，模块级）
   const IDX = 'data/.paper-index.json'
   const BAK = 'data/.paper-index.json.w3-bak'
@@ -1308,12 +1541,15 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
 }
 
 // ── 清理测试命名空间产物（避免污染真实进度事实）──
+// cycle-21：progress 已外置到用户数据根（~/.dsh/kaogong/progress）——清理必须跟随新位置，
+// 否则测试残留永远清不掉（本轮实证：清理段仍指包内 data/progress → MEM-01 默认态假红）。
 {
   const fs = await import('node:fs')
   const { join } = await import('node:path')
-  const dir = join(process.cwd(), 'data', 'progress')
+  const { PROGRESS_DIR_USER } = await import('./dist/server/dataRoot.js')
+  const dir = PROGRESS_DIR_USER
   if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir)) {
-    if (f.includes('PROJ_A') || f.includes('PROJ_B') || f.includes('PROJ_S')) fs.rmSync(join(dir, f))
+    if (/^PROJ_/.test(f)) fs.rmSync(join(dir, f))
   }
 }
 

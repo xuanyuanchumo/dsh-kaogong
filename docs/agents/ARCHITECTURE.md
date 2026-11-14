@@ -73,14 +73,26 @@ async function handleApi(path, params, post, method, wsRaw, port) {
 
 - **数据根四级解析**（v1.11 一键式安装的基座）：`buildDomains(root)` 集中装配全部域，
   root 由 `dataRoot.resolveReposRoot()` 解析（env `KG_REPOS_DIR` > `data/repos-config.json`
-  > 开发态上级目录 > `data/repos` 托管默认）。安装/删除/换根 → `rebuildDomains()`：
+  > 开发态上级目录 > `<用户数据根>/repos` 托管默认）。安装/删除/换根 → `rebuildDomains()`：
   新 root 重建域 + 三级缓存失效（`resetPaperIndex` / `resetNaoku` / `graphCache.clear`）。
   **纪律：路径是运行期事实，不是加载期常量**（教训⑫⑬）。
 - 域模块返回 `undefined` 表示「不是我的路由」，继续下一个；返回对象即响应体。
-- **二进制端点**（`/api/paper-img`、`/api/naoku-img`、`/api/tuxing-img`）在 JSON 链路**之前**分流，直接 `pipe` 文件流。
-- 隔离：所有写路径按 `?ws=<workspace>` 哈希命名，落 `data/progress/<slug>-<hash8>.json`；
+- **二进制端点**（`/api/paper-img`、`/api/naoku-img`、`/api/tuxing-img`、`/api/kg-img`）在 JSON 链路**之前**分流，直接 `pipe` 文件流。
+- 隔离：所有写路径按 `?ws=<workspace>` 哈希命名，落 `<用户数据根>/progress/<slug>-<hash8>.json`；
   **图谱快照缓存按 wsKey 分槽**（v1.12：快照内嵌 progress 是 ws 相关字段，全局单槽缓存会跨工作区泄漏——LRU 上限 24 槽）。
 - 崩溃安全：spawn git 子进程 `windowsHide:true` + `on('error')` 全接住 + `GIT_TERMINAL_PROMPT=0`（v1.12 修控制台窗口闪现；一切外部异步错误挂回作业状态，绝不冒泡）。
+
+### 用户数据外置与迁移（v1.16 · issue #2 根治）
+
+```js
+// src/server/dataRoot.ts —— 用户数据根解析 + 包内旧数据一次性迁移
+export const USER_DATA_ROOT = resolveUserDataRoot()   // KG_DATA_DIR > $DSH_HOME/kaogong > ~/.dsh/kaogong
+export function migratePkgData(): MigrationReport     // 启动时执行一次（http.ts 模块加载期）
+```
+
+- **为什么必须外置**：市场/npm 升级 = pnpm 把包目录**整目录替换**（`ERR_PNPM_EPERM` 失败恢复也不保数据）——包内一切用户数据（进度/错题本/配置）必然丢失（issue #2 实证）。用户数据根 = `~/.dsh/kaogong/`（dsh-cookie-guard 实证模式：DSH 主目录下插件命名空间，与安装位置零耦合）。
+- **迁移器语义**：`progress/`、`repos-config.json`、`study-plan.md` 搬家（原子 rename → 跨卷 cp 回退**删源**）；`lifecycle.jsonl` 是环形审计日志（新根侧被运行时改写），保留新根删源；缓存快照（`.naoku.db`/`.paper-index.json` 等）不迁（可再生，rebuild 自动重建）。幂等标记 `.migrated`；失败只读降级**绝不删源**；`/api/data-location` 白盒透出位置/来源/迁移状态/包内残留。
+- **纪律：用户数据永不写进包目录**——新增写路径先问「升级替换包目录后它还在吗」。
 
 ### 方法论域（methodologyApi）的装配与边界（v1.13）
 

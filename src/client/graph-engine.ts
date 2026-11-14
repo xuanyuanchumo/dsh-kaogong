@@ -62,6 +62,8 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
          trans：350ms 布局过渡（force↔layered），过渡期物理步进暂停。 */
       let colorModel: any = null
       let radiusBoost = false
+      // cycle-22 P1：学习画像掌握率表（tooltip 第三行；setView 传入，结构与 stats.mastery 一致）
+      let masteryMap: any = null
       const trans: any = { active: false, t0: 0, dur: 350, fx: null, fy: null, tx: null, ty: null }
       // cycle-15：边流动粒子开关（opt-in；开启期间 frame 保持 rAF，关闭恢复省电停帧）
       let flowOn = false
@@ -178,6 +180,7 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
           draw(ctx, dpr, W, H, zoom, panX, panY, {
             hoverId, selectedId, simNodes, simEdges, byId, view, pathNodeSet, pathEdgeSet,
             hoverPos, focusSet, nodeMeta, edgeMeta, colorModel, pulse: ph,
+            masteryMap,           // cycle-22 P1：tooltip 掌握率（空表时零开销）
             flow: { on: flowOn, t: now / 1700 },   // cycle-15：粒子时间项（确定性相位 + 时间推进）
           })
           // 小地图：同一帧内绘制（数据/视口/着色天然一致，无第二循环）
@@ -345,6 +348,7 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
           if (v.colorModel !== undefined) colorModel = (v.colorModel && typeof v.colorModel === 'object') ? v.colorModel : null
           if (v.radiusBoost !== undefined) radiusBoost = !!v.radiusBoost
           if (v.flowParticles !== undefined) flowOn = !!v.flowParticles   // cycle-15：粒子开关（字段级合并语义）
+          if (v.masteryMap !== undefined) masteryMap = (v.masteryMap && typeof v.masteryMap === 'object') ? v.masteryMap : null   // cycle-22 P1：tooltip 掌握率
           requestDraw()
         } catch {}
       }
