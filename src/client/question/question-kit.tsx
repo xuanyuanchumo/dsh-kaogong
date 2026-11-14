@@ -18,7 +18,7 @@
  *  - 零模块级可变状态（R7 热重载竞态）
  */
 
-import { h, React, entries, RichText, OptionRow, DimBlock, SourceBadge, KV_TAG } from '../ui-kit.js'
+import { h, React, entries, RichText, OptionRow, DimBlock, SourceBadge, KV_TAG, KV_BTN } from '../ui-kit.js'
 import { QwLightbox } from './question-lightbox.js'
 
 /* ══════════════ Lightbox 宿主（context 驱动，全组件域共享单实例） ══════════════ */
@@ -350,6 +350,111 @@ export function QwQuestionCard({ q, mode = 'single', interactive, selected, righ
       <QwOptions q={q} interactive={interactive} selected={selected} right={right} revealed={revealed} disabled={disabled} onSelect={onSelect} />
       {/* 6 答案与解析 */}
       <QwAnswerDims q={q} revealed={revealed} />
+    </div>
+  )
+}
+
+/* ══════════════ 整卷容器：四区划分（cycle-27 v1.23.0） ══════════════ */
+
+/**
+ * QwPaperMode — 整卷模式容器（用户诉求四区划分，exam/browse 双态复用）：
+ *   区1 材料区：当前题的题组材料（QwMaterial 自治折叠；无则整区隐藏）
+ *   区2 题目区：QwQuestionCard（当前题；material 段禁传——材料已在区1，避免双事实源）
+ *   区3 题目切换区：上一题/下一题 + 位置指示
+ *   区4 答题卡区：QwExamNavigator（exam 交互四态 / browse 只读跳转）
+ * 题组感知：材料区显示「共 X 题用此材料」；同组题切换时材料区不重挂（key=材料文本头）。
+ * R9：hooks 全顶部；早退在全部 hooks 之后。
+ */
+interface QwPaperModeProps {
+  questions: any[]
+  current: number
+  onJump: (i: number) => void
+  mode?: 'exam' | 'browse'
+  paperMeta?: { exam?: string; year?: any; subject?: string; paperType?: string }
+  // exam 态做题交互
+  answers?: Record<string, string>
+  flags?: Set<any>
+  onSelect?: (letter: string) => void
+  onToggleFlag?: (no: any) => void
+}
+
+/** 题组材料 key：取材料文本头 24 字（同组题材料一致 → key 稳定 → 切题不重挂） */
+function qwMatKey(text) {
+  return String(text || '').slice(0, 24)
+}
+
+export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMeta, answers, flags, onSelect, onToggleFlag }: QwPaperModeProps) {
+  /* ── hooks（R9）：全顶部恒定 ── */
+  const [navCollapsed, setNavCollapsed] = React.useState(false)
+  const q = questions[current] || {}
+  const isExam = mode === 'exam'
+  // 题组材料：同组题共享同一段文本；无组材料的题整区隐藏
+  const groupMaterial = String(q.groupMaterial || '')
+  // 该材料被多少题共享（组感知文案；O(N) 顺序遍历，确定性）
+  let groupCount = 0
+  if (groupMaterial) for (const x of questions) if (x.groupMaterial === q.groupMaterial) groupCount++
+  const wide = typeof window !== 'undefined' && (window as any).innerWidth >= 1100
+
+  return (
+    <div>
+      {/* 顶部状态条（exam 态由宿主渲染倒计时/交卷；browse 态显示卷源 meta） */}
+      {!isExam && paperMeta ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          {paperMeta.exam ? <span style={KV_TAG}>{paperMeta.exam + ' ' + paperMeta.year}</span> : null}
+          {paperMeta.subject ? <span style={KV_TAG}>{paperMeta.subject + (paperMeta.paperType ? ' · ' + paperMeta.paperType : '')}</span> : null}
+          <span style={{ fontSize: 11.5, color: '#64748b' }}>{(questions.length) + ' 题 · 整卷浏览'}</span>
+        </div>
+      ) : null}
+      {/* 区4 答题卡区（宽屏提到顶部右侧更贴近做题动线；窄屏纵向堆叠在材料/题目之后 → 由 CSS order 控制，
+          此处统一放顶部：exam 宿主原形态即顶部，browse 新增也置顶保持一致性） */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span style={{ fontWeight: 700, fontSize: 12.5 }}>{'🗂 答题卡'}</span>
+          <button style={{ ...KV_BTN, fontSize: 10.5, padding: '2px 8px' }} onClick={() => setNavCollapsed(v => !v)}>
+            {navCollapsed ? '展开答题卡' : '收起答题卡'}
+          </button>
+        </div>
+        {!navCollapsed ? (
+          <QwExamNavigator questions={questions} answers={answers || {}} flags={flags} current={current} onJump={onJump} />
+        ) : null}
+      </div>
+      {/* 区1 材料区（题组材料；无则隐藏）+ 区2 题目区 */}
+      <div style={wide ? { display: 'flex', gap: 14, alignItems: 'flex-start' } : undefined}>
+        {/* 材料区：宽屏左栏 38%；key=材料文本头 → 同组切题不重挂（折叠态保留） */}
+        {groupMaterial ? (
+          <div key={qwMatKey(groupMaterial)} style={wide ? { width: '38%', flexShrink: 0 } : { marginBottom: 10 }}>
+            <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 4 }}>{'📄 题组材料 · 共 ' + groupCount + ' 题用此材料'}</div>
+            <QwMaterial text={groupMaterial} matRef={'材料 ' + String(q.groupMaterialNo || '')} />
+          </div>
+        ) : null}
+        {/* 题目区：QwQuestionCard（material 禁传——材料已在区1；exam 态交互选项） */}
+        <div style={wide ? { flex: 1, minWidth: 0 } : undefined}>
+          <QwQuestionCard
+            mode={mode}
+            interactive={isExam}
+            q={{
+              no: q.no, score: q.score, type: q.type,
+              exam: isExam ? (paperMeta && paperMeta.subject) : q.exam,
+              year: isExam ? (paperMeta && paperMeta.year) : q.year,
+              stem: q.stem, options: q.options,
+              flagged: flags && flags.has ? flags.has(q.no) : false,
+              requirement: q.requirement, reference: q.reference,
+              answer: q.answer, analysis: q.analysis,
+              dims: q.dims,
+            } as any}
+            selected={isExam ? (answers && answers[q.no]) : undefined}
+            revealed={!isExam}
+            onSelect={isExam ? onSelect : undefined}
+            onToggleFlag={onToggleFlag ? () => onToggleFlag(q.no) : undefined}
+          />
+        </div>
+      </div>
+      {/* 区3 题目切换区（上一题/下一题 + 位置指示；render 锚点文本「← 上一题」「下一题 →」保留） */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
+        <button style={KV_BTN} disabled={current <= 0} onClick={() => onJump(Math.max(0, current - 1))}>{'← 上一题'}</button>
+        <button style={KV_BTN} disabled={current >= questions.length - 1} onClick={() => onJump(Math.min(questions.length - 1, current + 1))}>{'下一题 →'}</button>
+        <span style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b' }}>{(current + 1) + ' / ' + questions.length}</span>
+      </div>
     </div>
   )
 }

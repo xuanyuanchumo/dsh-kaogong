@@ -52,3 +52,11 @@
 | T-26-07 | 真题卷详情「逐题模式」入口（browse 卡 + 题间导航，与模考做题模式互补） | 功能缺口 | cycle-27：复用 QwQuestionCard + QwExamNavigator browse 态（答题卡只读跳转） | cycle-26 |
 | T-26-08 | 行测题组「材料 ↔ 题」联动跳转（申论 jumpToMaterial 同款，组材料锚点定位） | 体验债 | cycle-27：QwMaterial 加 id 锚 + 题卡关联 chip | cycle-26 |
 | T-26-09 | 深度题库/图形推理视图接入 QwQuestionCard（T-25-09 顺延） | 体验债 | cycle-27 首项 | cycle-25→26 |
+
+## cycle-27 登记（2026-11-14）
+
+| ID | 描述 | 类别 | 处置建议 | 登记循环 |
+|---|---|---|---|---|
+| T-27-07 | 键盘导航（←→切题）未接入 QwPaperMode | 体验债 | cycle-28：容器内 useEffect 键盘监听（ESC 关 lightbox 已有） | cycle-27 |
+| T-27-08 | browse 态答题卡未答/已答态无区分（answers 未传） | 体验债 | browse 可带「已浏览」灰度标记（非作答态，避免误读） | cycle-28 |
+| T-27-09 | 申论整卷 browse 的 per-题材料（相关材料联动 jumpToMaterial）未映射到 QwPaperMode 材料区 | 体验债 | cycle-28：申论 relatedMaterials 解析 → 材料区锚点联动 | cycle-26→27 |

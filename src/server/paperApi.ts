@@ -221,6 +221,10 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
       const qs = (paper.questions || []).map(q => ({
         no: q.no, stem: rewriteImages(q.stem, id, mountPath), score: q.score,
         options: q.options || {},
+        // cycle-27：题型 + 题组材料随题下发——组材料不是答案（资料分析多题共享），
+        // 剥离它会让材料区消失（实测 130 题 0 题带材料）；answer/analysis 仍绝不下发
+        type: q.type || '',
+        groupMaterial: q.groupMaterial ? rewriteImages(q.groupMaterial, id, mountPath) : '',
         // 答案与解析绝不下发（防作弊）：交卷时服务端自行比对后回传
       }))
       const totalScore = qs.reduce((s, q) => s + (q.score || 0), 0) || qs.length

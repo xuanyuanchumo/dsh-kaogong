@@ -10,7 +10,7 @@ import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './stud
 // 依赖方向 papers-view → huasheng13-view 是单向的；bundler 会按拓扑序排布（不会成环）。
 import { NativeHuasheng13View } from './huasheng13-view.js'
 // cycle-25：题目渲染接入统一组件域（QwQuestionCard 七段卡 / QwExamNavigator 答题卡 / QwZoomHost 图片放大宿主）
-import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/question-kit.js'
+import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../question/question-kit.js'
 
     /* ══ v1.6 新增：真题卷 / 专题 / 申论评改（全部宿主原生渲染，组件自管数据）══ */
 
@@ -120,8 +120,8 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/questio
       if (exam) {
         const q = exam.questions[idx]
         if (!q) return <div className="kg-load">{'题目加载异常'}</div>
-        {/* cycle-25：QwZoomHost 整卡图片可放大。本仓 JSX 工厂（classic/preact 签名）不把 JSX children 折叠进
-            attrs 类型校验（ui-kit Card 能用是因其 children? 可选），QwZoomHostProps.children 必填 → 显式传参 */}
+        {/* cycle-27：四区划分收敛进 QwPaperMode（区1 材料区·无则隐藏 / 区2 题目区 / 区3 切换区 / 区4 答题卡区）。
+            QwZoomHost 整卡图片可放大；倒计时/交卷属宿主职责保留在容器外。 */}
         return (
           <QwZoomHost children={
             <div>
@@ -134,23 +134,18 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/questio
                   disabled={busy} onClick={doSubmit}
                 >{busy ? '交卷中…' : '交卷'}</button>
               </div>
-              {/* 答题卡跳转：网格四态（未答灰/已答蓝/标记黄/当前描边）+ 进度统计；flags 由宿主 useState 持有 */}
-              <QwExamNavigator questions={exam.questions} answers={answers} flags={flags} current={idx} onJump={(i) => setIdx(i)} />
-              {/* 统一七段卡（exam 做题态）：选项三态交互 + 标记旗（旗逻辑在 question-kit 内部） */}
-              <QwQuestionCard
+              {/* 整卷四区容器：材料区（题组材料·无则隐藏）→ 题目区 → 切换区 → 答题卡区 */}
+              <QwPaperMode
                 mode="exam"
-                q={{ no: q.no, type: q.type, exam: exam.subject, year: exam.year, stem: q.stem, options: q.options, flagged: flags.has(q.no) }}
-                interactive
-                selected={answers[q.no]}
+                questions={exam.questions}
+                current={idx}
+                onJump={(i) => setIdx(i)}
+                paperMeta={{ exam: exam.subject, year: exam.year, subject: exam.subject }}
+                answers={answers}
+                flags={flags}
                 onSelect={(L) => setAnswers(a => ({ ...a, [q.no]: L }))}
-                onToggleFlag={() => setFlags(f => { const n = new Set(f); n.has(q.no) ? n.delete(q.no) : n.add(q.no); return n })}
+                onToggleFlag={(no) => setFlags(f => { const n = new Set(f); n.has(no) ? n.delete(no) : n.add(no); return n })}
               />
-              {/* 上下题按钮行保留（render.test 按钮文本锚点） */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
-                <button style={KV_BTN} disabled={idx === 0} onClick={() => setIdx(i => Math.max(0, i - 1))}>{'← 上一题'}</button>
-                <button style={KV_BTN} disabled={idx >= exam.questions.length - 1} onClick={() => setIdx(i => Math.min(exam.questions.length - 1, i + 1))}>{'下一题 →'}</button>
-                <span style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b' }}>{(idx + 1) + ' / ' + exam.questions.length}</span>
-              </div>
             </div>
             } />
         )
@@ -206,6 +201,8 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/questio
       const [list, setList] = React.useState(null)
       const [openId, setOpenId] = React.useState(null)
       const [detail, setDetail] = React.useState(null)
+      // cycle-27：整卷浏览当前题下标（换卷重置；QwPaperMode browse 态驱动）
+      const [browseIdx, setBrowseIdx] = React.useState(0)
       // cycle-14：材料逐份折叠（用户诉求：给定材料除全局折叠外，支持材料 1/2/3/4 单独折叠展开）。
       // 键=材料段号，值=true 表示该份折叠；换卷时重置为全展开。
       const [collapsedMats, setCollapsedMats] = React.useState({})
@@ -225,6 +222,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/questio
         let cancelled = false
         setCollapsedMats({})   // cycle-14：换卷重置材料折叠态（新卷默认全展开）
         setDetail(null)
+        setBrowseIdx(0)   // cycle-27：换卷重置整卷浏览当前题
         api('/paper?id=' + encodeURIComponent(openId)).then(d => { if (!cancelled) setDetail(d) }).catch(() => { if (!cancelled) setDetail({ error: '加载失败' }) })
         return () => { cancelled = true }
         // cycle-26 D-2 修复：detail 曾在依赖数组里——setDetail(d) 触发本 effect 重跑 →
@@ -276,17 +274,18 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/questio
                 )
               })}
             </Card> : null}
-            <Card title="📝 题目与参考答案">
-              {/* cycle-25：题目列表接入统一组件域（QwQuestionCard browse 只读，不传 interactive）；QwZoomHost 整卡图片可放大。
-                  本仓无 @types/react（classic JSX 仅按 props 接口校验 attrs，不折叠 children/key）→ children 显式传参、key 走 kit 内 as any 展开惯例 */}
-              <QwZoomHost children={(detail.questions || []).map(q =>
-                <QwQuestionCard
-                  {...({ key: q.no } as any)}
+            <Card title="📝 题目与参考答案（整卷模式：材料区 · 题目区 · 切换区 · 答题卡区）">
+              {/* cycle-27：整卷模式接入 QwPaperMode browse 态——整卷由单题组合成，
+                  材料区随当前题组切换（无组材料的题隐藏）、只读答题卡跳转、题间导航。
+                  （cycle-26 D-2 修复的 openId/detail 取数 effect 不动；browseMode 为纯 UI 状态） */}
+              <QwZoomHost children={
+                <QwPaperMode
                   mode="browse"
-                  // cycle-26 D-1：行测题组共享材料（groupMaterial，资料分析 `## 材料 N` 形态）——
-                  // 同组多题各带一份相同材料文本，材料段有则渲染（QwMaterial 有 onToggle 前仅展示头行）
-                  q={{ no: q.no, score: q.score, stem: q.stem, requirement: q.requirement, reference: q.reference, material: q.groupMaterial || '', materialRef: q.groupMaterial ? '题组材料' : '' }}
-                />)}
+                  questions={detail.questions || []}
+                  current={browseIdx}
+                  onJump={(i) => setBrowseIdx(i)}
+                  paperMeta={{ exam: detail.exam, year: detail.year, subject: detail.subject, paperType: detail.paperType }}
+                />}
               />
             </Card>
           </div>

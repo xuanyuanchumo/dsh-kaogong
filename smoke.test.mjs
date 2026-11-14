@@ -1615,9 +1615,11 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
 
     paSrc26.includes('q.groupMaterial = rewriteImages'))
 
-  check('C26-03 组材料消费：papers-view browse 卡注入 material（题组材料有则渲染）',
-
-    pvSrc26.includes('q.groupMaterial') && kitSrc26.includes('wordCount > 500'))
+  check('C26-03 组材料消费：整卷模式消费组材料（QwPaperMode 容器 + study-view material 注入）',
+    (() => { const kit = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+      const sv = fs.readFileSync('src/client/views/study-view.tsx', 'utf-8')
+      const pv = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+      return kit.includes('q.groupMaterial') && kit.includes('function QwPaperMode') && sv.includes('q.groupMaterial') && /QwPaperMode/.test(pv) && kit.includes('wordCount > 500') })())
 
   check('C26-04 加载死循环根治：详情 effect 依赖不含 detail（渲染值不进取数依赖）',
 
