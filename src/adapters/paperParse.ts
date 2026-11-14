@@ -52,6 +52,9 @@ export function parseMaterials(content) {
 /**
  * cycle-26 D-1：行测形态材料段扫描——收集全部 `## 材料 N` H2 段（不吞正文）。
  * 返回 Map<材料号, 正文>，供 parsePaperText 注入题组材料。
+ * cycle-28 修正（用户二报「44 题材料过度+答案泄露」）：段终止条件除下一个 H2 外
+ * **必须含下一个题头（H3 `### 第 N 题`）**——浙江卷「材料 1」后无 H2 时段文本会
+ * 吞到文末，把后续全部题干与 <details> 答案解析吞进材料（泄露事故）。
  */
 export function parseGroupMaterials(content) {
   const out = new Map()
@@ -61,8 +64,12 @@ export function parseGroupMaterials(content) {
   while ((m = re.exec(content)) !== null) marks.push({ no: +m[1], at: m.index, after: m.index + m[0].length })
   for (let i = 0; i < marks.length; i++) {
     const seg = content.slice(marks[i].after)
+    // 终止于：下一个 H2（## xxx）或下一个题头（### 第 N 题）——取更近者
     const nextH2 = seg.search(/^##\s+/m)
-    const text = (nextH2 >= 0 ? seg.slice(0, nextH2) : seg).trim().slice(0, 20000)
+    const nextQ = seg.search(/^###\s*第\s*\d+\s*题/m)
+    let end = nextH2 >= 0 ? nextH2 : -1
+    if (nextQ >= 0 && (end < 0 || nextQ < end)) end = nextQ
+    const text = (end >= 0 ? seg.slice(0, end) : seg).trim().slice(0, 20000)
     if (text) out.set(marks[i].no, text)
   }
   return out

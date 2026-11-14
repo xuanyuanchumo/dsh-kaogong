@@ -7,7 +7,7 @@
 
 import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow, SourceBadge } from '../ui-kit.js'
 // cycle-25：题目七段渲染接入统一组件域 question-kit（QwQuestionCard 组装器 + QwZoomHost 图片放大宿主）
-import { QwQuestionCard, QwZoomHost } from '../question/question-kit.js'
+import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-kit.js'
 
 /* ════════════ cycle-15 专项刷题记忆（/api/memory · 按工作区命名空间隔离）════════════
    三端同步契约：manifest 声明 /api/memory → server/srs.js memoryApi 实现 → 本视图族消费。
@@ -311,33 +311,32 @@ function KgMemBanner(props: KgMemBannerProps) {
           </div>
           {/* cycle-25：QwZoomHost 整卡图片可放大。本仓 JSX 工厂（classic/preact 签名）不把 JSX children 折叠进
               attrs 类型校验（ui-kit Card 能用是因其 children? 可选），QwZoomHostProps.children 必填 → 显式传参 */}
+          {/* cycle-28：四区对齐模考——队列即整卷（同卷资料分析题组连续抽取），材料区/切换区/答题卡区由 QwPaperMode 承担。
+              当前题 = queueRef 队列首；判分交互经 selected/right/revealed 下传；提交判分按钮与反馈区留在容器之外（宿主职责）。
+              注意：队列剩余题作为 questions 传入（答题卡四态=已答标记），当前题映射为 number→no。 */}
           <QwZoomHost children={
-            /* cycle-25：题目七段渲染接入 question-kit 统一组件域（0编号/1来源/2类型/4题干/5选项/6答案解析）。
-               字段映射以源码为准：练习链路题目对象是 number（非 no）+ correctAnswer（repoData/srs 双适配器一致）；
-               纯字母降级提示 / 判分反馈区（下一题/重答/去错题本）留在卡片之外，hooks 链不动。 */
-            <QwQuestionCard
+            <QwPaperMode
               mode="practice"
-              interactive
-              q={{
-                no: q.number,
-                source: q.source,
-                exam: q.exam,
-                year: q.year,
-                region: q.region,
-                paperFile: q.paperFile,
-                module: q.module || module,
-                type: q.type || (q.fromWrongBook ? '错题回炉' : ''),
-                // cycle-26 D-1b：专题刷题链路的资料分析题组材料（repoData groupMaterial，同组多题共享；
-                // 有则渲染——>500 字自动折叠，含 kgimg:// 图占位经 RichText 出图）
-                material: q.groupMaterial || '',
-                materialRef: q.groupMaterial ? '题组材料' : '',
-                stem: q.stem,
-                options: q.options,
-                answer: q.correctAnswer || q.answer,
-                analysis: q.analysis,
-              } as any}
+              questions={[
+                ...queueRef.current.map((x: any) => ({
+                  no: x.number, score: x.score, type: x.type, module: x.module || module,
+                  source: x.source, exam: x.exam, year: x.year, region: x.region, paperFile: x.paperFile,
+                  stem: x.stem, options: x.options, answer: x.correctAnswer || x.answer, analysis: x.analysis,
+                  groupMaterial: x.groupMaterial || '',
+                })),
+              ]}
+              current={0}
+              onJump={(i) => {
+                // 跳转 = 重排队列头（保持既有 takeNext 单一数据源语义；i>0 时把前面的题移到队尾循环）
+                const arr = queueRef.current.slice()
+                if (i > 0 && i < arr.length) { const head = arr.splice(0, i); arr.push(...head); queueRef.current = arr; setQueueLen(arr.length - 1) }
+                const nq = arr[0] || null
+                setQ(nq); setSel(null); setResult(null)
+                remember(nq, module)
+              }}
+              paperMeta={{ subject: q.module || module }}
               selected={sel}
-              right={result ? (result.correctAnswer || result.answer || q.correctAnswer) : undefined}
+              right={result ? (result.correctAnswer || result.answer || (q as any).correctAnswer) : undefined}
               revealed={!!result}
               disabled={!!result}
               onSelect={(L: string) => { if (!result) setSel(L) }}

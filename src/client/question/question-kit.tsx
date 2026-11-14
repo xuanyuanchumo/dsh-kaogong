@@ -78,7 +78,6 @@ interface QwQuestion {
 
 /** 渲染模式：single=单题浏览 practice=练习判分 exam=整卷做题 browse=整卷只读 */
 type QwMode = 'single' | 'practice' | 'exam' | 'browse'
-
 /* ══════════════ 0 编号 ══════════════ */
 
 /** QwNumberBadge props：no 编号；score 分值可选；flagged 标记旗可选；onToggleFlag 可选 */
@@ -369,13 +368,20 @@ interface QwPaperModeProps {
   questions: any[]
   current: number
   onJump: (i: number) => void
-  mode?: 'exam' | 'browse'
+  // cycle-28：扩展 'practice' —— 专题刷题队列（同卷资料分析题组）复用四区体验：
+  // 题目区=QwQuestionCard practice 判分交互；材料区/切换区/答题卡区与 exam 同构
+  mode?: 'exam' | 'browse' | 'practice'
   paperMeta?: { exam?: string; year?: any; subject?: string; paperType?: string }
   // exam 态做题交互
   answers?: Record<string, string>
   flags?: Set<any>
   onSelect?: (letter: string) => void
   onToggleFlag?: (no: any) => void
+  // practice 态判分交互（cycle-28）：selected/right/revealed 由宿主 useState 持有
+  selected?: string
+  right?: string
+  revealed?: boolean
+  disabled?: boolean
 }
 
 /** 题组材料 key：取材料文本头 24 字（同组题材料一致 → key 稳定 → 切题不重挂） */
@@ -383,11 +389,12 @@ function qwMatKey(text) {
   return String(text || '').slice(0, 24)
 }
 
-export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMeta, answers, flags, onSelect, onToggleFlag }: QwPaperModeProps) {
+export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMeta, answers, flags, onSelect, onToggleFlag, selected, right, revealed, disabled }: QwPaperModeProps) {
   /* ── hooks（R9）：全顶部恒定 ── */
   const [navCollapsed, setNavCollapsed] = React.useState(false)
   const q = questions[current] || {}
   const isExam = mode === 'exam'
+  const isPractice = mode === 'practice'
   // 题组材料：同组题共享同一段文本；无组材料的题整区隐藏
   const groupMaterial = String(q.groupMaterial || '')
   // 该材料被多少题共享（组感知文案；O(N) 顺序遍历，确定性）
@@ -397,8 +404,8 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
 
   return (
     <div>
-      {/* 顶部状态条（exam 态由宿主渲染倒计时/交卷；browse 态显示卷源 meta） */}
-      {!isExam && paperMeta ? (
+      {/* 顶部状态条（exam/practice 态由宿主渲染倒计时/统计条；browse 态显示卷源 meta） */}
+      {mode === 'browse' && paperMeta ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           {paperMeta.exam ? <span style={KV_TAG}>{paperMeta.exam + ' ' + paperMeta.year}</span> : null}
           {paperMeta.subject ? <span style={KV_TAG}>{paperMeta.subject + (paperMeta.paperType ? ' · ' + paperMeta.paperType : '')}</span> : null}
@@ -427,24 +434,29 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
             <QwMaterial text={groupMaterial} matRef={'材料 ' + String(q.groupMaterialNo || '')} />
           </div>
         ) : null}
-        {/* 题目区：QwQuestionCard（material 禁传——材料已在区1；exam 态交互选项） */}
+        {/* 题目区：QwQuestionCard（material 禁传——材料已在区1；exam/practice 态交互选项） */}
         <div style={wide ? { flex: 1, minWidth: 0 } : undefined}>
           <QwQuestionCard
             mode={mode}
-            interactive={isExam}
+            interactive={isExam || isPractice}
             q={{
               no: q.no, score: q.score, type: q.type,
-              exam: isExam ? (paperMeta && paperMeta.subject) : q.exam,
-              year: isExam ? (paperMeta && paperMeta.year) : q.year,
+              exam: isExam || isPractice ? (paperMeta && paperMeta.subject) || q.exam : q.exam,
+              year: isExam || isPractice ? (paperMeta && paperMeta.year) || q.year : q.year,
+              module: q.module,
+              source: q.source, region: q.region, paperFile: q.paperFile,
               stem: q.stem, options: q.options,
               flagged: flags && flags.has ? flags.has(q.no) : false,
               requirement: q.requirement, reference: q.reference,
               answer: q.answer, analysis: q.analysis,
               dims: q.dims,
             } as any}
-            selected={isExam ? (answers && answers[q.no]) : undefined}
-            revealed={!isExam}
-            onSelect={isExam ? onSelect : undefined}
+            // exam 态：answers[q.no]；practice 态：宿主 selected/right/revealed（判分揭示三态）
+            selected={isExam ? (answers && answers[q.no]) : selected}
+            right={right}
+            revealed={isExam ? false : revealed}
+            disabled={isPractice ? disabled : undefined}
+            onSelect={isExam || isPractice ? onSelect : undefined}
             onToggleFlag={onToggleFlag ? () => onToggleFlag(q.no) : undefined}
           />
         </div>

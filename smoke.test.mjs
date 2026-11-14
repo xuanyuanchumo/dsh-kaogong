@@ -1615,17 +1615,32 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
 
     paSrc26.includes('q.groupMaterial = rewriteImages'))
 
-  check('C26-03 组材料消费：整卷模式消费组材料（QwPaperMode 容器 + study-view material 注入）',
+  check('C26-03 组材料消费：整卷/专题模式消费组材料（QwPaperMode 容器 + study-view 队列映射）',
     (() => { const kit = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
       const sv = fs.readFileSync('src/client/views/study-view.tsx', 'utf-8')
       const pv = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
-      return kit.includes('q.groupMaterial') && kit.includes('function QwPaperMode') && sv.includes('q.groupMaterial') && /QwPaperMode/.test(pv) && kit.includes('wordCount > 500') })())
+      return kit.includes('q.groupMaterial') && kit.includes('function QwPaperMode') && sv.includes('x.groupMaterial') && /QwPaperMode/.test(pv) && /mode="practice"/.test(sv) && kit.includes('wordCount > 500') })())
 
   check('C26-04 加载死循环根治：详情 effect 依赖不含 detail（渲染值不进取数依赖）',
 
     !/\}, \[openId, detail, api\]\)/.test(pvSrc26) && /}, \[openId, api\]\)/.test(pvSrc26))
 
+
+
+  // ── cycle-28 静态守卫（C28）：材料段终止条件 + 泄露防线 + 专题四区对齐 ──
+
+  check('C28-01 材料段终止于题头：parseGroupMaterials 终止条件含 ### 第 N 题（防吞后续题干与答案）',
+
+    /export function parseGroupMaterials/.test(ppSrc26) && ppSrc26.includes('###\\s*第\\s*\\d+\\s*题'))
+
+  check('C28-02 专题四区对齐：study-view 练习态经 QwPaperMode（材料区/切换区/答题卡区同构模考）',
+
+    (() => { const sv = fs.readFileSync('src/client/views/study-view.tsx', 'utf-8')
+
+      return sv.includes('mode="practice"') && sv.includes('<QwPaperMode') })())
+
 }
+
 
 // ── cycle-20 P0 静态守卫：R11 复发根治（裸 tsc 覆写 combo → 插件启动失败/宿主崩溃）──
 {

@@ -162,3 +162,7 @@
 
 - **（同族链路修复必须全字段枚举·㊾ 半修复态复发）**：cycle-21 修复了 parseQuestions（练习链路）与题干 img_refs（深度题库），但**同一适配器内** options/analysis/reasoning/fastest/pitfalls/mother 六字段仍走旧 stripHtml → 专题-判断推理选项/解析继续无图（用户二报）。修法：naoku.ts `stripHtmlKeepImg`（neutralizeImages 先占位化再剥标签）全字段替换 + `/api/kg-img` 扩展名探测回退（DB 记 .webp 磁盘 .png）+ 客户端 OptionRow/深度题库选项行/模考选项行 RichText 出图。**规矩：修「剥 HTML」类缺陷时，先 grep 该文件全部 `<[^>]+>` 剥除调用点，逐一判定业务语义（img=必须占位保留），修复面按「字段」枚举而非按「链路」划分——同文件不留幸存者。**
 - **（端点「实现+消费」齐备 ≠ 已声明）**：`/api/kg-img` v1.16.0 服务端已实现、RichText 已消费，但 manifest 漏登记 → 能力对账面板与 smoke 口径守卫看不到它（假漂移第三形态：不是路径口径、不是影子端点，是**漏声明**）。修法：manifest 补登记（consumers=practice/deepbank/topics）+ smoke SMOKE-IMG22-02 固化。**规矩：新增端点四步纪律（manifest→server→UI→smoke）中，manifest 是唯一事实源——「能跑通」不等于「已声明」，对账面板只认声明。**
+
+## cycle-28 事故与教训（v1.24.0 材料泄露 + 专题四区）
+- **（C28-材料段终止条件）**：`parseGroupMaterials` 原终止条件只看下一个 H2——浙江 2026 A 类卷「材料 1」后**无 H2**，段文本吞到文末（20000 字截断），把**后续全部题干 + `<details>` 答案解析**吞进组材料（用户报「44 题材料过度+答案出来了」）。修法：终止条件取「下一个 H2 ∪ 下一个题头（`### 第 N 题`）」更近者。**教训：凡「段边界」解析，终止集必须含同级标题、更深层标题、题头三类；只认同级=默认尾部无界。守卫 C28-01 固化。**
+- **（C28-专题四区复用）**：专题刷题（practice）对齐模考四区没有新造组件——QwPaperMode 扩展 `mode:'practice'`（题目区=判分交互，材料/切换/答题卡三区同构）；practice 的抽题队列即「整卷」（同卷资料分析题组连续抽取）。**教训：新模式先问「与既有 mode 差异是什么」——practice 与 exam 只差判分态来源（selected/right/revealed 由宿主持有 vs answers[q.no]），容器层零分支。**
