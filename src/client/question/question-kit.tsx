@@ -217,19 +217,18 @@ export function QwOptions({ q, interactive, selected, right, revealed, disabled,
 /* ══════════════ 6 答案与解析 ══════════════ */
 
 /** QwAnswerDims props：五维标注（analysis/kadian/reasoning/fastest/pitfalls/mother）+ 答案行 + 参考答案折叠 */
-interface QwAnswerDimsProps { q: QwQuestion; revealed?: boolean; answerOf?: string }
-export function QwAnswerDims({ q, revealed, answerOf }: QwAnswerDimsProps) {
+interface QwAnswerDimsProps { q: QwQuestion; revealed?: boolean; answerOf?: string; hideBeforeAnswer?: boolean }
+export function QwAnswerDims({ q, revealed, answerOf, hideBeforeAnswer }: QwAnswerDimsProps) {
   const d = q.dims || ({} as QwDims)
   const hasDims = !!(d.analysis || d.kadian || d.reasoning || d.fastest || d.pitfalls || d.mother)
   const hasPlain = !!q.analysis || !!q.reference || typeof q.answer === 'string'
   if (!revealed && !hasDims && !hasPlain) return null
-  // cycle-31（用户报「真题卷的解析不能省略」）：占位语义只限 practice 考试中未提交——
-  // 旧条件 (!revealed && !hasDims) 把「有平铺解析/参考答案但未揭示」的题也吞成占位行，
-  // browse 态（真题卷对照前）与 single 态的全部解析被隐藏。修法：占位仅当
-  // 「无任何平铺内容可显示」（!hasPlain）时才出现；hasPlain=true 的题未揭示也完整渲染
-  // 解析/参考答案（browse 本就是看卷面答案的场景，对照按钮只控制判色不控制内容隐藏）。
-  if (!revealed && !hasDims && !hasPlain) return null
-  if (!revealed && !hasPlain) {
+  // cycle-32b（用户报「学习模式的解析要答题之后才能显示」）：占位语义按 mode 分流——
+  // practice/learn 是「作答后判分」场景（hideBeforeAnswer=true）：未揭示时解析/答案/参考答案
+  // 一律占位隐藏（防偷看，cycle-31 放宽条件误伤了这里）；
+  // browse/single 是「看卷面答案」场景（hideBeforeAnswer=false）：解析/参考答案未揭示也完整
+  // 渲染（对照按钮只控制判色不控制内容隐藏，cycle-31 修复的语义只对浏览场景成立）。
+  if (!revealed && hideBeforeAnswer) {
     return <div style={{ marginTop: 10, fontSize: 11.5, color: '#94a3b8' }}>{'提交作答后显示答案与解析'}</div>
   }
   return (
@@ -353,7 +352,9 @@ export function QwQuestionCard({ q, mode = 'single', interactive, selected, righ
       {/* 5 选项 */}
       <QwOptions q={q} interactive={interactive} selected={selected} right={right} revealed={revealed} disabled={disabled} onSelect={onSelect} />
       {/* 6 答案与解析 */}
-      <QwAnswerDims q={q} revealed={revealed} />
+      {/* 6 答案与解析（cycle-32b：hideBeforeAnswer 按 mode 分流——practice/exam 答题场景
+          未揭示占位防偷看；browse/single 浏览场景解析完整显示） */}
+      <QwAnswerDims q={q} revealed={revealed} hideBeforeAnswer={mode === 'practice' || mode === 'exam'} />
     </div>
   )
 }

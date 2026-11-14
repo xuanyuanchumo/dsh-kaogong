@@ -2,7 +2,5 @@ url: https://github.com/xuanyuanchumo/dsh-kaogong
 name: xuanyuanchumo/dsh-kaogong
 category: usage
 description:
-  en: 'Civil-service exam study platform: question banks, SRS wrong-book, mock exams, essay grading, methodology retrieval, interactive knowledge graph with on-demand subgraphs, offline-first.'
-  zh: 考公备考整合平台：一键式题库管理、SRS 错题本、真题卷与整卷模考、申论评改、方法论检索、可交互知识图谱（子图按需加载+影响面分析），完全离线可用。
-icon: https://raw.githubusercontent.com/xuanyuanchumo/dsh-kaogong/main/assets/icon-180.png
-npm: https://www.npmjs.com/package/dsh-kaogong
+  en: 'Civil-service exam study platform: question banks, SRS wrong-book, 1,683 real exam papers with three study modes (timed mock / learn one-by-one / full-paper checking), essay grading, methodology retrieval, adaptive study schedule, interactive knowledge graph, offline-first.'
+  zh: 考公备考整合平台：一键式题库管理、SRS 错题本、1,683 套真题卷（限时模考/学习/全卷三模式）、申论评改、方法论检索、学习计划智能排程、可交互知识图谱，完全离线可用。

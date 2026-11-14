@@ -192,3 +192,20 @@ src/**/*.ts  --(tsc, noEmitOnError)-->  dist/**/*.js  --(宿主加载)-->  运�
 - **健康态显式化**：把「装了但不可用」（空仓库/缺 .git/半成品）从 present 布尔里拆出独立 health 词表，UI 用徽章呈现；「可用空间」等无法探测的量用 null + 降级，绝不臆造 0。
 - **换根不删数据**：切根时记录旧根快照并统计其仓库数，UI 明示「旧根仍有 N 个仓库（数据未删除）」+ 一键切回——消解「数据凭空消失」的恐慌。
 - **截断口径单一事实源**：分页/截断的 total 恒为真实总数，truncated 由「真实总数 > 实际返回数」派生，客户端文案从服务端字段渲染，禁止两侧各写一个数字。
+
+## cycle-29~32 新增纪律（v1.26~v1.29.1）
+
+### 工具 UI 展示契约（v1.26）
+- 新增宿主工具必须声明 `presentCall`/`presentResult`（`kgToolCard` 工厂复用）——纯函数投影（must be total），异常收敛 undefined 保留宿主兜底；workspace 隔离键不进卡片正文。守卫 C29-01..03。
+
+### 复杂度预算与固定拆法（v1.26 持续生效）
+- 任何文件加逻辑后先跑 band-detector；超 180 走 cycle-13 教训①固定拆法（只读纯函数外提+参数穿线），落点新模块文件（如 graph-subgraph/graphQuery/planSchedule）。
+
+### 排程/分配类算法纪律（v1.27）
+- 复用 SRS 同源弱度模型 `1/(rate+0.15)`（同一业务语义全仓单一事实源）；确定性（无 Math.random/Date.now）；分配类算法必须有守恒断言（Σ=30，SMOKE-SCHED-04）。
+
+### 共享组件 mode × reveal 语义矩阵（v1.29.1）
+- `QwAnswerDims.hideBeforeAnswer = (mode === 'practice' || mode === 'exam')`——practice/exam 作答场景未揭示占位防偷看；browse/single 浏览场景解析完整显示。**改共享组件显示条件必须枚举全部消费 mode 的语义**，回归测试覆盖「所有 mode × 所有 reveal 态」矩阵（RENDER-PP-30/31/31b/32）。
+
+### 真题卷三模式（v1.29）
+- 新增学习/答题类功能先问「与既有 exam/practice/browse 域差异是什么」——三模式全部由既有域组合（零新端点零新判分器）。状态各自 useState、换卷统一重置（openId effect）。诚实降级必配「下一步」出路（主观题跳题按钮，降级≠死路）。

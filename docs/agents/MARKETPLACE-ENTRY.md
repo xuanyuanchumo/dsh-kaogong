@@ -11,8 +11,8 @@ url: https://github.com/xuanyuanchumo/dsh-kaogong
 name: xuanyuanchumo/dsh-kaogong
 category: usage
 description:
-  en: 'Civil-service exam study platform: on-demand question banks, five-box SRS wrong-book, 1,683 real exam papers with mock exams, offline essay grading, a 25-article six-module methodology library with BM25 search, an interactive knowledge graph, and a white-box observability panel; the 16 upstream data repositories (including the 336KB methodology corpus) are installed on demand, and the package ships no exam data.'
-  zh: '离线考公备考平台：一键式题库管理、五箱 SRS 错题本、1,683 套真题卷与整卷模考、申论离线评改、25 篇六模块方法论（BM25 检索）、可交互知识图谱与白盒可观测面板；16 个上游数据仓库（含 336KB 方法论语料）按需安装，插件包不携带题库数据。'
+  en: 'Civil-service exam study platform: on-demand question banks, five-box SRS wrong-book, 1,683 real exam papers with three study modes (timed mock exam, learn-one-by-one with instant analysis, full-paper answer checking), offline essay grading, a 25-article six-module methodology library with BM25 search, an adaptive 30-day study schedule, an interactive knowledge graph with on-demand subgraphs, and a white-box observability panel; the 16 upstream data repositories are installed on demand, and the package ships no exam data.'
+  zh: '离线考公备考平台：一键式题库管理、五箱 SRS 错题本、1,683 套真题卷（三种模式：限时模考 / 学习模式单题即判即析 / 全卷答案对照）、申论离线评改、25 篇六模块方法论（BM25 检索）、30 天学习计划智能排程、可交互知识图谱（子图按需加载）与白盒可观测面板；16 个上游数据仓库按需安装，插件包不携带题库数据。'
 icon: https://raw.githubusercontent.com/xuanyuanchumo/dsh-kaogong/main/assets/icon-180.png
 ```
 

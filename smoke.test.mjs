@@ -1687,9 +1687,10 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   // ── cycle-31 静态守卫（C31）：解析省略根治 + T-028 镜像回落 ──
   const kitSrc31 = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
   const rmSrc31 = fs.readFileSync('src/server/repoManager.ts', 'utf-8')
-  // C31-01 占位语义收敛：占位行只在「无平铺内容」时出现（browse/single 解析不再被吞）
-  check('C31-01 解析省略根治：占位分支条件 !hasPlain（非 !hasDims），解析有值即完整渲染',
-    kitSrc31.includes('if (!revealed && !hasPlain) {') && !kitSrc31.includes('if (!revealed && !hasDims) {'))
+  // C31-01 解析显示语义（cycle-32b 精化）：占位按 mode 分流——hideBeforeAnswer=practice|exam
+  // （作答场景未揭示防偷看）；browse/single 解析完整显示（C31 修复的浏览语义不变）
+  check('C31-01 解析显示按 mode 分流：hideBeforeAnswer=practice|exam，browse/single 完整显示',
+    kitSrc31.includes("hideBeforeAnswer={mode === 'practice' || mode === 'exam'}") && kitSrc31.includes('if (!revealed && hideBeforeAnswer) {'))
   // C31-02 镜像回落：镜像作业失败自动切直连重试（T-028），direct 通道防再包裹
   check('C31-02 镜像回落直连：close 失败钩子 auto-retry + startJob direct 通道',
     rmSrc31.includes('auto-retry') && rmSrc31.includes('{ direct: true }') && rmSrc31.includes('opts.direct'))
