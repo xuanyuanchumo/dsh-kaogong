@@ -709,7 +709,78 @@ try {
       await act(async () => { await new Promise(r => setTimeout(r, 30)) })
       const t2 = JSON.stringify(tr.toJSON())
       if (!t2.includes('对照答案（卷面：B）')) throw new Error('RENDER-PP-30 重做后未回未揭示态（自选 B 保留）')
-      ok('RENDER-PP-30: browse 自答对照全旅程（点选B→揭示判色→解析展开→重做回退）零降级')
+      // cycle-31（解析省略根治）：未对照时（未点「对照答案」）解析/参考答案就必须完整显示
+      //——browse 本就是看卷面答案的场景，占位行只属于 practice 考试中。
+      // 回到第 1 题（申论形态，有 reference）验证未对照也有内容渲染。
+      const prevBtn = tr.root.findAllByType('button').find(b => String(b.props.children) === '← 上一题')
+      if (!prevBtn) throw new Error('RENDER-PP-31 切换区「← 上一题」缺失')
+      await act(async () => { prevBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      const tUnrevealed = JSON.stringify(tr.toJSON())
+      if (tUnrevealed.includes('提交作答后显示答案与解析')) {
+        throw new Error('RENDER-PP-31 browse 未对照态出现占位行（解析被省略——回归）')
+      }
+      // 第 1 题是申论形态（reference='参考答案内容'）→ 未对照也应有参考答案 details
+      if (!tUnrevealed.includes('参考答案')) throw new Error('RENDER-PP-31 browse 未对照态参考答案缺失（解析省略回归）')
+      ok('RENDER-PP-31: browse 未对照态解析/参考答案完整显示（占位语义收敛到 practice 考试中）')
+
+    // RENDER-PP-32（cycle-32）：真题卷三模式切换——学习模式单题判分旅程（点选 A → 即时判错 →
+    // 卷面答案揭示 → 下一题推进）。答题模式走真实 exam 端点链，render 只验切换条与引导卡。
+    {
+      // 切到答题模式：验引导卡与开始按钮
+      const ansBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-paper-mode'] === 'answer')
+      if (!ansBtn) throw new Error('RENDER-PP-32 三模式切换条缺「答题模式」按钮')
+      await act(async () => { ansBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const tAns = JSON.stringify(tr.toJSON())
+      if (!tAns.includes('答题模式（未开始）')) throw new Error('RENDER-PP-32 答题模式引导卡未渲染')
+      const startBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-answer-start'] === '1')
+      if (!startBtn) throw new Error('RENDER-PP-32 开始作答按钮缺失')
+      // 开始作答 → exam/start mock（走真实 exam 链路形状）
+      await act(async () => { startBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 120)) })
+      const tExam = JSON.stringify(tr.toJSON())
+      if (!tExam.includes('⏱') || !tExam.includes('交卷')) throw new Error('RENDER-PP-32 答题模式考试中视图未渲染（倒计时/交卷缺失）')
+      // 切到学习模式：点选第 1 题选项 A（卷面正确答案按 mock 是 B 形态校验判错揭示）
+      const learnBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-paper-mode'] === 'learn')
+      if (!learnBtn) throw new Error('RENDER-PP-32 三模式切换条缺「学习模式」按钮')
+      await act(async () => { learnBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const tLearn0 = JSON.stringify(tr.toJSON())
+      if (!tLearn0.includes('学习进度')) throw new Error('RENDER-PP-32 学习模式进度条未渲染')
+      // 学习模式当前题第 1 题是申论形态（mock 无选项）→ 应诚实降级 + 跳题按钮（防死路）
+      if (!tLearn0.includes('不支持在线判分')) throw new Error('RENDER-PP-32 主观题降级提示缺失（申论形态无选项）')
+      const skipBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-learn-skip'] === '1')
+      if (!skipBtn) throw new Error('RENDER-PP-32 主观题跳过按钮缺失（学习模式死路）')
+      await act(async () => { skipBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const tSkip = JSON.stringify(tr.toJSON())
+      if (!tSkip.includes('学习进度 2/')) throw new Error('RENDER-PP-32 跳过主观题未推进到第 2 题')
+      // 学习模式第 2 题（行测题，卷面 B）→ 点选 A（错答）→ 即时揭示
+      function lrText(node, depth) {
+        if (depth > 6 || !node) return ''
+        let s = ''
+        if (node.children && Array.isArray(node.children)) { for (const ch of node.children) { if (typeof ch === 'string') s += ch; else if (ch && typeof ch === 'object') s += lrText(ch, depth + 1) } }
+        return s
+      }
+      const lRows = tr.root.findAll(n => n.type === 'div' && typeof n.props.onClick === 'function')
+      const optA = lRows.find(r => lrText(r, 0) === 'A选项A' || lrText(r, 0).includes('选项A'))
+      if (!optA) throw new Error('RENDER-PP-32 学习模式选项不可点（practice 转发断裂）')
+      await act(async () => { optA.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const tJudge = JSON.stringify(tr.toJSON())
+      if (!tJudge.includes('回答错误') || !tJudge.includes('卷面答案：B')) throw new Error('RENDER-PP-32 学习模式即时判分揭示缺失（应报错答 + 卷面 B）')
+      if (!tJudge.includes('解析文本')) throw new Error('RENDER-PP-32 学习模式判分后解析未展开')
+      // 下一题按钮：mock 仅 2 题且已到最后一题 → 文案应为「已是最后一题」且 disabled（边界正确）
+      const nextLearn = tr.root.findAllByType('button').find(b => b.props['data-kg-learn-next'] === '1')
+      if (!nextLearn) throw new Error('RENDER-PP-32 学习模式下一题按钮缺失')
+      if (String(nextLearn.props.children) !== '已是最后一题' || nextLearn.props.disabled !== true) {
+        throw new Error('RENDER-PP-32 最后一题边界异常: ' + String(nextLearn.props.children) + ' disabled=' + nextLearn.props.disabled)
+      }
+      const tNext = JSON.stringify(tr.toJSON())
+      if (!tNext.includes('学习进度 2/2')) throw new Error('RENDER-PP-32 学习进度未停留在末题')
+      ok('RENDER-PP-32: 三模式切换 + 学习模式单题判分旅程（错答揭示→解析→下一题）+ 答题模式 exam 链复用')
+    }
     }
   }
 

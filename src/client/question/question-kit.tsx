@@ -223,8 +223,13 @@ export function QwAnswerDims({ q, revealed, answerOf }: QwAnswerDimsProps) {
   const hasDims = !!(d.analysis || d.kadian || d.reasoning || d.fastest || d.pitfalls || d.mother)
   const hasPlain = !!q.analysis || !!q.reference || typeof q.answer === 'string'
   if (!revealed && !hasDims && !hasPlain) return null
-  // 未揭示（practice 模式未答）：只显示「提交后可见」占位，不泄露
-  if (!revealed && !hasDims) {
+  // cycle-31（用户报「真题卷的解析不能省略」）：占位语义只限 practice 考试中未提交——
+  // 旧条件 (!revealed && !hasDims) 把「有平铺解析/参考答案但未揭示」的题也吞成占位行，
+  // browse 态（真题卷对照前）与 single 态的全部解析被隐藏。修法：占位仅当
+  // 「无任何平铺内容可显示」（!hasPlain）时才出现；hasPlain=true 的题未揭示也完整渲染
+  // 解析/参考答案（browse 本就是看卷面答案的场景，对照按钮只控制判色不控制内容隐藏）。
+  if (!revealed && !hasDims && !hasPlain) return null
+  if (!revealed && !hasPlain) {
     return <div style={{ marginTop: 10, fontSize: 11.5, color: '#94a3b8' }}>{'提交作答后显示答案与解析'}</div>
   }
   return (

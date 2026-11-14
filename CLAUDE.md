@@ -185,3 +185,14 @@
 ## cycle-30b 教训（v1.27.0 T-027/T-031 清偿）
 - **（C30b-排程算法不造新轮子）**：智能排程弱度复用 SRS 同源模型 1/(rate+0.15)（教训⑤的推广：同一业务语义的权重公式全仓只有一个事实源）；积压放大 (1+backlogShare) 是正交修正项而非新模型。**确定性纪律**：无 Math.random/Date.now（同输入两次输出深相等，SMOKE-SCHED-02 运行时固化）；题量分配 softmax 守恒（Σsuggested=30，SMOKE-SCHED-04）——「分配类」算法必须有守恒断言，否则浮点漂移让 UI 数字自相矛盾。
 - **（C30b-静态与动态解耦）**：排程不改动 30 天日历结构（阶段/天数是模板事实源 study-plan.md），只重排每日「训练侧重标注+建议题量」——静态计划与动态画像分离，可解释（primaryRate/backlog 全透出）可回退（不写盘，刷新即重算）。旧 SPA（ui/index.html）与原生视图共用 /api/plan/schedule（四步纪律 manifest→server→UI→smoke；UI 先落旧 SPA 兜底通道）。
+
+## cycle-30 发布段教训（v1.27.0）
+- **（C30-npm publish 成功后的 E404 误判）**：vault_run 首次 `npm publish` 实际成功，但认证通道 `npm view` 短暂返回 `latest: 1.26.0`（registry 副本传播延迟）→ 误判失败并重试 publish → 报 `You cannot publish over the previously published versions: 1.27.0` + 前一次重试报 `PUT 404`。**正确判定顺序：`cannot publish over` 是「已发布成功」的机器证据（409 语义）；404/陈值都可能是传播延迟。教训：发布成功判定 = ① `+ pkg@ver` 输出 ② 重试时出现 `cannot publish over` ③ 认证通道 view 复验（三者任一即成功，传播延迟等 30s+ 再验）。
+
+## cycle-31 事故与教训（v1.28.0 解析省略 + T-028）
+- **（C31-占位语义的适用范围）**：QwAnswerDims 的「提交作答后显示答案与解析」占位行本意是 practice 考试中防偷看，但旧条件 `(!revealed && !hasDims)` 只检查五维——真题卷题走平铺 analysis（hasPlain=true、dims 恒缺）→ 未对照时整段解析被占位吞掉（用户报「解析不能省略」）。**修法：占位仅当 `!hasPlain`（无任何可显示内容）时出现**；browse/single 是「看卷面答案」的场景，解析/参考答案未揭示也完整渲染，对照按钮只控制判色不控制内容隐藏。守卫 C31-01 + RENDER-PP-31（未对照态断言无占位行）。**教训：条件分支的语义边界要按「场景」枚举（practice 考试中≠browse 浏览），不能按「字段缺失」一刀切；共享组件的每条分支要逐 mode 推演。**
+- **（C31-镜像回落的设计）**：T-028 落点不是「增量 git fetch」（用户场景是镜像不可用，不是仓库太大）——失败回落比断点续传更高频。落法：close 失败钩子检测 job.url 含镜像前缀 → 剥前缀直连重跑（startJob opts.direct 跳过 applyMirror 防二次包裹——**回落通道必须显式绕过自动包装，否则回落 URL 又被拼回镜像**）；retriedFrom 防环（直连失败不无限重试）；日志留 [auto-retry] 行让作业历史可追溯完整链路。
+
+## cycle-32 教训（v1.29.0 真题卷三模式）
+- **（C32-三模式复用既有域，零新端点）**：答题模式=exam 域三端点原样复用（start 剥答案防作弊/submit 服务端判分），学习模式=practice 同构（选中即揭示三态宿主持有），全卷模式=browse 自答对照——三种模式全部由既有域组合，零新端点零新判分器（C28 教训「容器层零分支」的推广）。模式间状态独立（answerSel vs learnSel vs browseSel 各自 useState），换卷统一重置。
+- **（C32-主观题降级防死路）**：学习模式遇申论形态题（无选项）诚实降级「不支持在线判分」，但**降级提示旁必须给「跳过此题 →」按钮**——render 旅程实测暴露死路（用户卡在主观题无法推进）。教训：任何「诚实降级」都要回答「用户下一步怎么走」，降级≠死路。

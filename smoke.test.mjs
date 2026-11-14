@@ -1684,6 +1684,34 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('C30b-04 排程崩溃安全：try/catch 收敛 {error} + 空计划守卫',
     schedSrc30.includes('catch (e: any)') && schedSrc30.includes('计划为空'))
 
+  // ── cycle-31 静态守卫（C31）：解析省略根治 + T-028 镜像回落 ──
+  const kitSrc31 = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+  const rmSrc31 = fs.readFileSync('src/server/repoManager.ts', 'utf-8')
+  // C31-01 占位语义收敛：占位行只在「无平铺内容」时出现（browse/single 解析不再被吞）
+  check('C31-01 解析省略根治：占位分支条件 !hasPlain（非 !hasDims），解析有值即完整渲染',
+    kitSrc31.includes('if (!revealed && !hasPlain) {') && !kitSrc31.includes('if (!revealed && !hasDims) {'))
+  // C31-02 镜像回落：镜像作业失败自动切直连重试（T-028），direct 通道防再包裹
+  check('C31-02 镜像回落直连：close 失败钩子 auto-retry + startJob direct 通道',
+    rmSrc31.includes('auto-retry') && rmSrc31.includes('{ direct: true }') && rmSrc31.includes('opts.direct'))
+  // C31-03 防环：回落作业不再二次回落（retriedFrom 防环标记）
+  check('C31-03 回落防环：retriedFrom 判据（直连失败不无限重试）',
+    rmSrc31.includes('!job.retriedFrom') && rmSrc31.includes('.retriedFrom = job.url'))
+
+  // ── cycle-32 静态守卫（C32）：真题卷三模式（学习/答题/全卷）──
+  const pvSrc32 = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+  // C32-01 三模式切换条：paperMode 三态 + data-kg-paper-mode 锚点
+  check('C32-01 三模式切换条：paperMode ∈ browse|answer|learn + 切换锚点',
+    pvSrc32.includes("useState('browse')") && pvSrc32.includes("setPaperMode('answer')") && pvSrc32.includes("setPaperMode('learn')") && pvSrc32.includes('data-kg-paper-mode'))
+  // C32-02 答题模式复用 exam 域（start 剥答案 + submit 服务端判分），不重造判分器
+  check('C32-02 答题模式复用 exam 域三端点（start/submit 服务端判分，零新端点）',
+    pvSrc32.includes('/paper/exam/start?id=') && pvSrc32.includes('/paper/exam/submit') && pvSrc32.includes('data-kg-answer-start') && pvSrc32.includes('data-kg-answer-submit'))
+  // C32-03 学习模式：单题选中即判分揭示（不可改选）+ 下一题推进 + 申论题诚实降级
+  check('C32-03 学习模式：选中即揭示（if (learnReveal) return 防改选）+ 下一题锚点 + 主观题降级',
+    pvSrc32.includes('if (learnReveal) return') && pvSrc32.includes('data-kg-learn-next') && pvSrc32.includes('不支持在线判分'))
+  // C32-04 换卷重置：三模式全部状态随 openId 重置（learn/answer/browse 零残留）
+  check('C32-04 换卷重置：learn/answer 状态全部随 openId 清零',
+    pvSrc32.includes('setLearnIdx(0)') && pvSrc32.includes('setAnswerExam(null)') && pvSrc32.includes('setLearnCorrectCount(0)'))
+
 
   // ── cycle-26 静态守卫（C26）：行测材料双形态 + 真题卷加载死循环根治 ──
 
