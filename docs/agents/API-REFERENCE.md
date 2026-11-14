@@ -180,6 +180,30 @@
 
 **子图模式契约（v1.26）**：`activeNodes/activeEdges` 是 `createGraphEngine` 唯一数据源——子图/全图同一装配路径零分支（C28 教训推广）；统计面板/图例**保持全图口径**（subData 不参与 metrics），面包屑明示口径防止「数字对不上」假漂移感知；「← 返回全图」置空 subData 即恢复。实现：`src/client/graph/graph-subgraph.ts`（fetch/normalize/derive 三纯函数，cycle-13 教训①固定拆法）+ `src/server/graphQuery.ts`（graphSnapshot 参数注入外提）。
 
+## 十·c、学习计划智能排程（v1.27 cycle-30b，T-027 清偿）
+
+| 端点 | 入参 | 响应 | UI 消费 |
+|---|---|---|---|
+| `/api/plan/schedule` | 无（ws 隔离键贯穿） | `{schedule:[{day,title,phase,tasks,focus:[{module,weight,suggested,primary}],primary,primaryRate,backlog}],profile:{hasProfile,modules[],openWrong,strategy}}` | 计划视图「🎯 智能排程」卡（今日主攻 + 题量分配条）；`kaogong_ai_plan` 工具可选消费 |
+
+**排程契约（v1.27）**：弱度复用 SRS 同源模型 `1/(rate+0.15)`，积压放大 `(1+backlogShare)`；`Σsuggested=30` 守恒（softmax 预算）；**确定性纯函数**（无 Math.random/Date.now，同输入两次输出深相等）；静态 30 天日历零改动（排程只重排训练侧重，可解释可回退）。实现：`src/server/planSchedule.ts`。
+
+## 十·d、真题卷三模式（v1.29/v1.29.1 cycle-32/32b）
+
+真题卷详情页三模式切换（`data-kg-paper-mode` 锚点：`browse|answer|learn`），全部由既有域组合（**零新端点零新判分器**）：
+
+| 模式 | 数据通道 | 判分语义 | 状态持有 |
+|---|---|---|---|
+| 📖 全卷模式 `browse` | `/api/paper`（答案+解析全量下发） | 自答对照：点选记录 → 主动「对照答案」揭示判色（绿/红）→ 重做 | `browseSel`/`browseReveal` |
+| 🎓 学习模式 `learn` | 同上（practice 同构） | 选中**即**判分揭示（不可改选）→ 解析展开 → 下一题；主观题（无选项）诚实降级 + 「跳过此题」防死路 | `learnSel`/`learnReveal`/`learnIdx` |
+| 📝 答题模式 `answer` | `/api/paper/exam/start`（**答案剥离防作弊**）→ `/api/paper/exam/submit`（服务端判分） | 限时倒计时（行测 120 分/申论 150 分）→ 交卷报告（模块得分分布 + 逐题回顾含卷面答案与解析） | `answerSel`/`answerFlags`/`answerLeft`/`answerReport` |
+
+**答案/解析显示契约（v1.29.1，mode 分流）**：`QwAnswerDims.hideBeforeAnswer = (mode === 'practice' || mode === 'exam')`——
+- **practice/exam（作答场景）**：未揭示时「提交作答后显示答案与解析」占位（防偷看；作答/交卷后判色 + 解析展开）
+- **browse/single（浏览场景）**：解析/参考答案**未对照也完整显示**（对照按钮只控制判色，不控制内容隐藏）
+
+三模式状态各自独立 useState，换卷（openId 变化）统一重置。守卫：C30-01..05 / C31-01 / C32-01..04；render 旅程 RENDER-PP-30/31/31b/32 固化「mode × reveal 态」矩阵。
+
 ## 十一、视图清单（16）
 
 `dashboard`仪表盘 · `practice`刷题 · `deepbank`深度题库 · `tuxing`图形推理 · `exam`模考 · `papers`真题卷 · `topics`专题 · `essay`申论 · `wrongbook`错题本 · `plan`计划 · `search`检索 · `method`方法论 · **`huasheng13`花生十三体系** · `graph`图谱 · `repos`题库管理 · `observability`可观测

@@ -2,7 +2,7 @@
 
 > 债务清单同步 `.cycles/tech-debt/backlog.md`。每轮迭代收口时更新状态。
 
-## 当前状态（v1.26.0 / cycle-29）
+## 当前状态（v1.29.1 / cycle-32b）
 
 | 维度 | 数据 |
 |---|---|
@@ -10,9 +10,10 @@
 | 深度题库 | 27506 题（知识点覆盖 100%，速解 41%，含图 10647；选项含图 1406 / 解析含图 8294） |
 | 本地图片 | 11 万+（试卷配图 + 354 张图推题图） |
 | 方法论语料 | 25 篇（20 references + 5 examples，336KB），位于数据根，**不随包** |
-| 端点/工具/视图 | 66 端点 / 6 工具（**v1.26 全部接入 presentCall/presentResult UI 展示契约**）/ 16 视图 |
-| 测试 | smoke 350 + render 59；eval-runner 16 维；band-detector WARNING（零超预算文件） |
-| 图谱 | 168 节点全图 + **v1.26 子图按需加载**（1/2 跳邻域 86 节点/102 边实测 + 影响面反向可达） |
+| 端点/工具/视图 | 67 端点（含 /api/plan/schedule 智能排程）/ 6 工具（**v1.26 起全部接入 presentCall/presentResult UI 展示契约**）/ 16 视图 |
+| 测试 | smoke 371 + render 62；eval-runner 16 维；band-detector WARNING（零超预算文件） |
+| 图谱 | 168 节点全图 + v1.26 子图按需加载（1/2 跳邻域 + 影响面反向可达） |
+| 真题卷 | **v1.29 三模式**（📝答题=exam 域限时判分 / 🎓学习=单题即判即析+主观题跳题 / 📖全卷=自答对照）；解析显示按 mode 分流（v1.29.1 hideBeforeAnswer） |
 | 方法论覆盖 | 六模块 overall **0.9756**（40/41；yanyu 0.889 为真实缺公式缺口） |
 | 方法论练习 | 74 题（32 题字母答案可自动判分 / 42 题文字作答走自评） |
 | 仓库 | 16（必选 3：huasheng13 / xingcezhenti / gk-tuxing；推荐 3：kaogong-skill / gwy-zhenti / GongkaoNaoku；可选 10） |
