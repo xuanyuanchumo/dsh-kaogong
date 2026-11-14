@@ -26,8 +26,14 @@
  * 铁律：不重命名任何标识符；不压缩；不删注释（中文注释全保留）；模块体内的
  * require('react') 原样保留（factory 参数 require 经闭包可见，render.test 的
  * requireShim 只认 'react'）；绝不产生行首 `export `/`import `（smoke 组合格式守卫）。
+ *
+ * cycle-24（v1.19.0 客户端组件化 TSX 重构）：模块发现从「单层平铺」升级为
+ * 「递归扫子目录」——src/client/views/（视图组件层）与 src/client/graph/（图谱引擎族）
+ * 进入合并范围；模块 id 为相对 dist/client 的 posix 路径（如 client/views/graph-view），
+ * 相对导入 `./x.js` / `./views/x.js` / `../graph/x.js` 统一经 resolveSpec 解析。
+ * 拓扑序 / 重名防御 / 原子写 / combo 终检语义零变化。
  */
-import { readFileSync, writeFileSync, readdirSync, renameSync } from 'node:fs'
+import { readFileSync, writeFileSync, readdirSync, renameSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -39,13 +45,26 @@ const read = (p) => readFileSync(p, 'utf-8')
 const fail = (msg) => { console.error('[bundle-client] ' + msg); process.exit(1) }
 
 /* ── 模块发现与依赖解析 ── */
+
+/** 以 dist/client 为根解析模块相对导入 spec（'./x' | './views/x' | '../graph/x'），
+ *  返回 dist/client 相对 posix 路径（不含 .js）。手写解析避免 Windows 分隔符混入。 */
+function resolveSpec(fromName, spec) {
+  const parts = fromName.includes('/') ? fromName.slice(0, fromName.lastIndexOf('/')).split('/') : []
+  for (const seg of spec.split('/')) {
+    if (seg === '.' || seg === '') continue
+    if (seg === '..') parts.pop()
+    else parts.push(seg)
+  }
+  return parts.join('/')
+}
+
 function parseModule(name) {
   const src = read(join(clientDir, name + '.js'))
   const deps = []
-  const importRe = /^[ \t]*import \{([^}]*)\} from '\.\/([\w-]+)\.js';?[ \t]*$/gm
+  const importRe = /^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*$/gm
   let m
   while ((m = importRe.exec(src)) !== null) {
-    deps.push({ names: m[1].split(',').map(s => s.trim()).filter(Boolean), target: m[2] })
+    deps.push({ names: m[1].split(',').map(s => s.trim()).filter(Boolean), target: resolveSpec(name, m[2]) })
   }
   return { name, id: 'client/' + name, src, deps }
 }
@@ -56,29 +75,35 @@ function topLevelDecls(src) {
   for (const line of src.split('\n')) {
     const indent = (line.match(/^ */) || [''])[0].length
     if (indent !== 0 && indent !== 4) continue
-    const m = line.match(/^(?:export )?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)/)
+    const m = line.match(/^(?:export )?(?:async )?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)/)
     if (m) names.push(m[1])
   }
   return names
 }
 
 // export 剥皮：内联前缀去掉 `export `；`export { A, B }` 整行删除；返回改写体 + 导出名
+// cycle-29：同时剥 `export async function`（新形态——graph-subgraph 外提引入 async 导出）；
+// 收集名用 lookahead 兼容 async：`export async function f` 与 `export function f` 同形。
 function collectExports(src) {
   const names = new Set()
-  for (const m of src.matchAll(/^[ \t]*export\s+(?:(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)|\{([^}]*)\})/gm)) {
+  for (const m of src.matchAll(/^[ \t]*export\s+(?:(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)|\{([^}]*)\})/gm)) {
     if (m[1]) names.add(m[1])
     else for (const n of m[2].split(',').map(s => s.trim()).filter(Boolean)) names.add(n)
   }
   const body = src
-    .replace(/^[ \t]*export (?=(?:function|class|const|let|var)\s+[A-Za-z_$][\w$]*)/gm, '')
+    .replace(/^[ \t]*export (?=(?:async\s+)?(?:function|class|const|let|var)\s+[A-Za-z_$][\w$]*)/gm, '')
     .replace(/^[ \t]*export \{[^}]*\};?[ \t]*\n?/gm, '')
   return { body, names: [...names] }
 }
 
 /* ── 拓扑排序（依赖在前）+ 环检测 ── */
 const modules = new Map()
-for (const f of readdirSync(clientDir)) {
-  if (f.endsWith('.js')) modules.set(f.slice(0, -3), parseModule(f.slice(0, -3)))
+// cycle-24：递归发现 dist/client/**/*.js（含 views/、graph/ 子目录），模块名统一 posix 分隔符
+for (const rel of readdirSync(clientDir, { recursive: true })) {
+  if (!rel.endsWith('.js')) continue
+  const name = rel.split('\\').join('/').slice(0, -3)
+  if (name.endsWith('.tmp-' + String(process.pid)) || name.includes('.tmp-')) continue  // 原子写 tmp 产物不参与合并
+  modules.set(name, parseModule(name))
 }
 if (!modules.has(entryId)) fail('缺少 dist/client/client.js entry')
 
@@ -102,6 +127,20 @@ function visit(name, path) {
 visit(entryId, [])
 if (order[order.length - 1] !== entryId) fail('entry 不在拓扑序末位: ' + order.join(' → '))
 
+/* ── 幂等守卫（cycle-25 缺陷根治）：bundler 的输入必须是 tsc 裸 ESM 产物。
+ * 对「上一次合并后的 combo」二次运行会把 __kgM 注册表当模块体再包一层 → 尾部锚点失配。
+ * 历史上 npm scripts 总是先 tsc（产物必被重写为裸 ESM）掩盖了此缺陷；
+ * smoke 0a 自愈（检出裸 ESM 窗口后重跑 bundler）与手动重跑会踩中。判定依据：
+ * 行首 import 是裸 ESM 必有（与 smoke 0a 同判据），combo 产物必无。 ── */
+const rawEntrySrc = modules.get(entryId).src
+if (!/^import /m.test(rawEntrySrc)) {
+  console.log('[bundle-client] 检测到产物已是合并形态（无行首 import）——本次跳过重复合并（幂等）')
+  // 终检 + 正常退出：形态守卫复用 assert 语义，保证「跳过」不代表「不验证」
+  if (/^export /m.test(rawEntrySrc)) fail('产物含行首 export（异常形态，拒绝静默通过）')
+  if (!/window\.__ModuleLoader__\.load\(\{/.test(rawEntrySrc)) fail('产物丢失 load 头（异常形态）')
+  process.exit(0)
+}
+
 /* ── entry factory 头尾定位（以 entry 现有 factory 头尾为准包裹，不发明新结构） ── */
 const entryMod = modules.get(entryId)
 const openToken = 'factory(require) {'
@@ -115,8 +154,8 @@ const tail = entryMod.src.slice(tailMatch.index)
 
 // entry 头部（factory 之外）的顶层 import：剥离并移入 factory 体内改写
 const entryImports = []
-const headOut = head.replace(/^[ \t]*import \{([^}]*)\} from '\.\/([\w-]+)\.js';?[ \t]*\n?/gm, (_, list, target) => {
-  entryImports.push({ list: list.split(',').map(s => s.trim()).filter(Boolean), target })
+const headOut = head.replace(/^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*\n?/gm, (_, list, spec) => {
+  entryImports.push({ list: list.split(',').map(s => s.trim()).filter(Boolean), target: resolveSpec(entryId, spec) })
   return ''
 })
 
@@ -154,8 +193,8 @@ for (const name of order) {
   if (!collected.names.length) fail(`模块 ${name} 无导出（异常）`)
   let body = collected.body
   const importLines = []
-  body = body.replace(/^[ \t]*import \{([^}]*)\} from '\.\/([\w-]+)\.js';?[ \t]*\n?/gm, (_, list, target) => {
-    const line = pick(list.split(',').map(s => s.trim()).filter(Boolean), target)
+  body = body.replace(/^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*\n?/gm, (_, list, spec) => {
+    const line = pick(list.split(',').map(s => s.trim()).filter(Boolean), resolveSpec(name, spec))
     if (line) importLines.push(line)
     return ''
   })

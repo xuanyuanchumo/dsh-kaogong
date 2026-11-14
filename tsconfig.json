@@ -5,6 +5,7 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"],
+    "jsx": "react",
 
     "rootDir": "src",
     "outDir": "dist",
@@ -30,6 +31,6 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": false
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist"]
 }

@@ -168,6 +168,17 @@
 | `kaogong_ai_essay_review` | 可选 AI | 深度点评：先调离线 grade/article 基线分再交模型；参数 `{paperId?, no?, question?, answer, mode?:'essay'|'article', workspace?}` |
 | `kaogong_ai_method` | 可选 AI | **v1.13 新增**：花生十三体系方法论检索；消费 `/api/huasheng13/search` + `/doc` + `/coverage`（不依赖题库安装检查，但仍需数据根已装 huasheng13） |
 | （全体工具） | 输出契约 | **v1.14**：六工具输出统一「正文 + 尾部标记行」`[kaogong vX.Y.Z · 服务:up|down · ws:<ns>]`（`kgMarkTail`，版本锚/服务态/隔离键三要素；dsh-ops host-contract 卡片模式落地） |
+| （全体工具） | UI 展示契约 | **v1.26（cycle-29 命令窗口根治）**：六工具统一接入宿主 `presentCall`/`presentResult`（`kgToolCard` 工厂）——待执行卡 = 语义化标题（图标+模块名）+ 参数摘要行（workspace 隔离键不进正文）；完成卡 = 正文首个非标题行截 140 字。两投影纯函数（must be total，异常收敛 undefined 保留宿主兜底；smoke C29-02 守卫）。未声明时宿主回退 generic 卡（title=工具名、raw args 平铺 = 用户感知的「命令窗口」） |
+
+## 十·b、图谱查询端点（v1.26 cycle-29 UI 消费闭环）
+
+| 端点 | 入参 | 响应 | UI 消费 |
+|---|---|---|---|
+| `/api/graph/neighborhood` | `node`, `depth`(1-3) | `{center,depth,nodes[],edges[],stats}`（error 时 200+`{error}`） | 详情抽屉「🕸 1跳/2跳邻域」按钮 → `loadSubgraph` → 引擎换源子图渲染 + 面包屑 |
+| `/api/graph/impact` | `node` | `{node,dependents[],count}`（只有 id 集） | 抽屉「⚡ 影响面」→ 客户端按 `nodeIndex` 派生节点/边子图（`graphDeriveImpact`）→ 面包屑显示反向可达计数 |
+| `/api/graph/path` | `from`, `to` | `{found,path[],length}` | 既有路径分析（v1.8，未变） |
+
+**子图模式契约（v1.26）**：`activeNodes/activeEdges` 是 `createGraphEngine` 唯一数据源——子图/全图同一装配路径零分支（C28 教训推广）；统计面板/图例**保持全图口径**（subData 不参与 metrics），面包屑明示口径防止「数字对不上」假漂移感知；「← 返回全图」置空 subData 即恢复。实现：`src/client/graph/graph-subgraph.ts`（fetch/normalize/derive 三纯函数，cycle-13 教训①固定拆法）+ `src/server/graphQuery.ts`（graphSnapshot 参数注入外提）。
 
 ## 十一、视图清单（16）
 

@@ -28,6 +28,42 @@ const textOutput = {
   schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
   render(_args, value) { return [{ type: 'text', text: value.text }] },
 }
+// ── cycle-29 P0：工具调用 UI 展示契约（presentCall/presentResult）──
+// 【根因】此前 6 个工具均未声明这两个可选方法，宿主 GUI 回退 generic 兜底卡片
+// （title=工具名 · raw args 原样平铺），用户感知为生硬的「命令窗口」样式。
+// 【契约】宿主 tools.md：presentCall(args) 返回 { card:'generic', title, kind?, content? }
+// 纯函数投影（must be total：绝不能抛错，可被 live streaming 与 session-log replay 反复调用，
+// 只依赖入参不依赖运行态）；presentResult(args, result) 从持久化投影 content[0].text
+// 提取完成态摘要。任何异常一律收敛为 undefined = 保留宿主兜底渲染（绝不抛到渲染期）。
+const KG_CARD_KIND = 'other'   // ToolCallKind 词表：read/edit/delete/move/search/execute/fetch/other——学习平台素材工具归 other
+function kgToolCard(title: any) {
+  return {
+    /** 待执行卡片：语义化标题 + 参数摘要行（workspace 是隔离键不进正文） */
+    presentCall(args: any) {
+      try {
+        const t = typeof title === 'function' ? title(args || {}) : title
+        const bits: string[] = []
+        for (const [k, v] of Object.entries(args || {})) {
+          if (v == null || k === 'workspace') continue
+          const s = String(v).replace(/\s+/g, ' ').trim()
+          if (!s) continue
+          bits.push(k + '：' + (s.length > 36 ? s.slice(0, 36) + '…' : s))
+        }
+        return { card: 'generic', title: t, kind: KG_CARD_KIND, content: bits.join(' · ') || undefined }
+      } catch { return undefined }
+    },
+    /** 完成卡片：模型可见正文的首个非标题行作为摘要（截 140 字防卡片爆炸） */
+    presentResult(_args: any, result: any) {
+      try {
+        const text = String((result && result.content && result.content[0] && result.content[0].text) || '')
+        const line = text.split('\n').map((l: string) => l.trim())
+          .find(l => l && !l.startsWith('#') && !l.startsWith('---') && !l.startsWith('>') && !l.startsWith('`')) || ''
+        return { card: 'generic', title: typeof title === 'function' ? title({}) : title, content: line.slice(0, 140) || undefined }
+      } catch { return undefined }
+    },
+  }
+}
+
 /** 尾部状态标记行：`---` 分隔 + 反引号标记行（版本锚/服务态/隔离键三要素） */
 function kgMarkTail(version: any, up: boolean, ws?: string): string {
   return `\n---\n\`[kaogong v${version || '?'} · 服务:${up ? 'up' : 'down'} · ws:${ws || 'default'}]\``
@@ -89,6 +125,7 @@ export function apply(ctx) {
     description: '考公学习平台状态与引导（全部字段实时取自服务，非硬编码）。平台双入口：左栏「考公学习」全屏面板 + 右侧 Sidebar 标签。完全离线可用；题库数据未就绪时引导用户到「📦 题库管理」一键安装。',
     parameters: { type: 'object', properties: { workspace: { type: 'string', description: '可选：当前项目工作区绝对路径（用于隔离进度查询）' } } },
     output: textOutput,
+    ...kgToolCard('📚 考公学习平台 · 状态引导'),
     async execute(args) {
       // cycle-17：消灭「工具输出陈旧显示」——视图/工具/端点/仓库/数据根全部来自
       // /api/capabilities + /api/status + /api/repos 实时数据，杜绝手写模板漂移
@@ -139,6 +176,7 @@ export function apply(ctx) {
       required: ['module'],
     },
     output: textOutput,
+    ...kgToolCard((a: any) => '🧑‍🏫 AI辅导 · ' + String((a && a.module) || '') + ((a && a.question_type) ? ' · ' + a.question_type : '')),
     async execute(args) {
       let method: any = {}, search = { results: [] }
       try { method = await callApi(`/api/method?topic=${encodeURIComponent('行测')}`, args.workspace) } catch {}
@@ -159,6 +197,7 @@ export function apply(ctx) {
     description: '【可选·需模型】拉取当前工作区的学习进度与各模块正确率，供模型生成个性化建议。离线看GUI仪表盘。',
     parameters: { type: 'object', properties: { workspace: { type: 'string', description: '工作区路径（隔离命名空间）' } } },
     output: textOutput,
+    ...kgToolCard('📈 学习进度 · 个性化建议素材'),
     async execute(args) {
       let p: any = {}
       try { p = await callApi('/api/progress', args.workspace) } catch {}
@@ -191,6 +230,7 @@ export function apply(ctx) {
       required: ['question', 'answer'],
     },
     output: textOutput,
+    ...kgToolCard('✍️ 申论批改素材'),
     async execute(args) {
       let method: any = {}
       try { method = await callApi('/api/method?topic=申论', args.workspace) } catch {}
@@ -221,6 +261,7 @@ export function apply(ctx) {
       required: ['answer'],
     },
     output: textOutput,
+    ...kgToolCard((a: any) => '📝 申论深度点评' + ((a && a.mode === 'article') ? ' · 大作文' : ((a && a.paperId) ? ' · ' + a.paperId : ''))),
     async execute(args) {
       const isArticle = args.mode === 'article'
       // 取离线基线分（POST 到本地规则引擎）
@@ -283,6 +324,7 @@ export function apply(ctx) {
       },
     },
     output: textOutput,
+    ...kgToolCard((a: any) => (a && a.file) ? '📖 方法论全文 · ' + a.file : '📖 方法论检索 · ' + String((a && a.query) || '')),
     async execute(args) {
       const limit = Math.min(20, Math.max(1, Math.floor(Number(args.limit) || 5)))
       const lines: string[] = ['## 📖 花生十三体系方法论', '']

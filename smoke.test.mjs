@@ -144,14 +144,19 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
 {
   const W = '?ws=PROJ_S'
   // 取一道"干净"错题：循环抽题直到 stem 不在错题本（同文件重复题会致签名计数>1，flaky 根因）
+  // cycle-29 加固：空响应/错误响应防御——抽题器偶发 {error} 时跳过本轮而非裸崩（.questions[0]）
   let q1 = null, wrongAns = null
   for (let i = 0; i < 6; i++) {
-    const cand = (await J(`${B}/api/questions?module=常识判断&count=1`)).questions[0]
+    const qr = await J(`${B}/api/questions?module=常识判断&count=1`)
+    const cand = qr && Array.isArray(qr.questions) && qr.questions.length ? qr.questions[0] : null
+    if (!cand) continue   // 端点级 error/空（数据根未就绪等）→ 跳过，循环末尾统一判失败
     const existing = (await J(`${B}/api/wrong${W}`)).wrong.find(w => w.stem === cand.stem)
     if (!existing || existing.wrongCount === 0) { q1 = cand; break }
     // 撞重复题：把它从错题本清掉再重测
     if (existing) await P(`${B}/api/wrong/remove${W}`, { sig: existing.sig })
   }
+  // cycle-29：6 轮全部空响应 = 服务端抽题不可用（真实缺陷），响亮失败而非 undefined 解引用裸崩
+  if (!q1) throw new Error('SRS 前置抽题 6 轮均空响应（/api/questions 常识判断）——检查数据根与题库文件')
   wrongAns = 'A' === q1.correctAnswer ? 'B' : 'A'
   await P(`${B}/api/check${W}`, { question: q1, answer: wrongAns })  // 故意答错
   const wb1 = await J(`${B}/api/wrong${W}`)
@@ -294,10 +299,10 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   const manifestSrc = readSrc('./src/shared/manifest.ts')
   check('SMOKE-MEM-06 manifest 声明 /api/memory 且消费者=三专项视图', manifestSrc.includes("path: '/api/memory'") && manifestSrc.includes("consumers: ['ui:practice', 'ui:tuxing', 'ui:deepbank']"))
   // ⑤ 图谱三布局：环形布局函数（层序+id 序圆周、半径自适应）+ 引擎分支 + 三态轮换单一序列
-  const transSrc = readSrc('./src/client/graph-transition.ts')
-  const engineSrc = readSrc('./src/client/graph-engine.ts')
-  const physicsSrc = readSrc('./src/client/graph-physics.ts')
-  const graphViewSrc = readSrc('./src/client/graph-view.ts')
+  const transSrc = readSrc('./src/client/graph/graph-transition.ts')
+  const engineSrc = readSrc('./src/client/graph/graph-engine.ts')
+  const physicsSrc = readSrc('./src/client/graph/graph-physics.ts')
+  const graphViewSrc = readSrc('./src/client/views/graph-view.tsx')
   check('SMOKE-GR15-01 环形布局（语义层序圆周+半径自适应+确定性）', /export function graphCircularLayout/.test(transSrc) && transSrc.includes('labelGap') && transSrc.includes('2 * Math.PI * i) / V'))
   check('SMOKE-GR15-01 引擎接受 circular 且终态走确定性函数', engineSrc.includes("mode === 'circular' ? 'circular'") && engineSrc.includes('graphCircularLayout(simNodes, nodeMeta, W, H)'))
   check('SMOKE-GR15-01 布局三态轮换（按钮=键盘同一 KG_LAYOUTS 序列）', graphViewSrc.includes("const KG_LAYOUTS = ['force', 'layered', 'circular']") && (graphViewSrc.match(/kgNextLayout/g) || []).length >= 2)
@@ -305,7 +310,7 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   check('SMOKE-GR15-02 流动粒子语义边集+确定性相位', physicsSrc.includes('const KG_FLOW_RELS') && physicsSrc.includes('graphHash(String(e.a)') && engineSrc.includes('flow: { on: flowOn, t: now / 1700 }'))
   check('SMOKE-GR15-02 粒子 opt-in（开启续帧/关闭停帧）', engineSrc.includes('|| flowOn) schedule()') && graphViewSrc.includes('flowParticles: flowOn'))
   // ⑦ 白盒三件套：延迟分位阶梯 / 生命周期完成度环 / 吞吐×延迟四象限
-  const obsSrc = readSrc('./src/client/obs-view.ts')
+  const obsSrc = readSrc('./src/client/views/obs-view.tsx')
   check('SMOKE-OBS15-01 延迟分位阶梯（SLO 200/500 阈值线+有序统计量）', obsSrc.includes('function ObsQuantLadder') && obsSrc.includes("'SLO 200ms'") && obsSrc.includes("'500ms'"))
   check('SMOKE-OBS15-01 生命周期完成度环（done/total 圆环占比）', obsSrc.includes('function ObsLifeRing') && obsSrc.includes('strokeDasharray') && obsSrc.includes("state === 'done'"))
   check('SMOKE-OBS15-02 吞吐×延迟四象限（log10 对数轴+中位吞吐+SLO 横线）', obsSrc.includes('function ObsScatter') && obsSrc.includes('Math.log10(1 +') && obsSrc.includes('中位吞吐'))
@@ -373,9 +378,9 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   // cycle-17 隔离守卫：图谱缓存必须按 wsKey 分槽（跨工作区进度不互染）
   check('SMOKE-RP-06 图谱缓存按 wsKey 分槽（跨项目隔离）', httpSrc16.includes('const graphCache = new Map') && httpSrc16.includes('graphCache.set(ck') && httpSrc16.includes('domains.store.wsKey(wsRaw)'))
   check('SMOKE-RP-05 manifest 声明 10 个 /api/repos* 端点且消费者=ui:repos（cycle-20 增 3：batch/jobs/install-batch）', (readSrc('./src/shared/manifest.ts').match(/path: '\/api\/repos/g) || []).length === 10)
-  const clientSrc = readSrc('./src/client/client.ts')
-  check('SMOKE-RP-05 client 接线题库管理视图（分发+自管数据名单）', clientSrc.includes('h(NativeReposView') && clientSrc.includes("view === 'repos'"))
-  const rvSrc = readSrc('./src/client/repos-view.ts')
+  const clientSrc = readSrc('./src/client/client.tsx')
+  check('SMOKE-RP-05 client 接线题库管理视图（cycle-24 注册表路由 + 窄 props）', /repos: \{ comp: NativeReposView/.test(clientSrc))
+  const rvSrc = readSrc('./src/client/views/repos-view.tsx')
   check('SMOKE-RP-05 combo 顶层名纪律（rp/Rp/RP 前缀或 Native*View 视图惯例，教训⑨）', !/^(?:function|const|class)\s+(?!rp|Rp|RP|NativeReposView)[A-Za-z_$]/m.test(rvSrc))
 }
 
@@ -433,7 +438,7 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
     rmSrc20.includes('previousRoot = getRoot()') && rmSrc20.includes('diskFreeMB(root)') &&
     /https?:\/\//.test(rmSrc20))
   // ── 静态：client 新 UI 区块与 manifest 声明一致（声明→生产→消费三方）──
-  const rv20 = readSrc20('./src/client/repos-view.ts')
+  const rv20 = readSrc20('./src/client/views/repos-view.tsx')
   check('SMOKE-RM-10 client 消费批次/作业/旧根/健康（doInstallBatch/pollBatch/recentJobs/RP2_HEALTH）',
     rv20.includes('doInstallBatch') && rv20.includes('pollBatch') && rv20.includes('recentJobs') &&
     rv20.includes('RP2_HEALTH') && rv20.includes('previousRoot'))
@@ -1076,13 +1081,13 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
     /province[,:]/.test(pd) && pd.includes("'全国'") && pd.includes("parts[0] === '省考'"))
   check('SMOKE-P-01 索引v2：provinces facet 聚合且按码点排序（无 localeCompare 调用）',
     pd.includes('byProvince') && /const provinces = /.test(pd) && !pd.includes('localeCompare('))
-  const pv = readSrc('./src/client/papers-view.ts')
+  const pv = readSrc('./src/client/views/papers-view.tsx')
   check('SMOKE-P-01 真题卷视图：省份 chips 过滤（provinces facet 驱动）',
     pv.includes('省份') && pv.includes('list.provinces') && /filters\.province/.test(pv))
   check('SMOKE-P-01 专题枢纽：方法论分区与母题精选就位（只消费既有端点）',
     pv.includes('方法论') && /TopicMethodView/.test(pv) && pv.includes('/api/methods') && pv.includes('/api/naoku/questions'))
   // SMOKE-N-01 导航精简（精确锚定 NAV_GROUPS 数组文本，避免误伤专题页内文案）
-  const cl = readSrc('./src/client/client.ts')
+  const cl = readSrc('./src/client/client.tsx')
   const nav = (cl.match(/const NAV_GROUPS[\s\S]*?\n {6}\]/) || [''])[0]
   check('SMOKE-N-01 导航精简：一级入口保留仪表盘/模考/真题卷/专题/错题本/图谱/可观测',
     nav.includes("'dashboard'") && nav.includes("'exam'") && nav.includes("'papers'") && nav.includes("'topics'") &&
@@ -1090,10 +1095,11 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   check('SMOKE-N-01 导航精简：刷题/深度题库/图形推理/申论退出一级导航',
     !!nav && !/['"](?:practice|deepbank|tuxing|essay)['"]/.test(nav) &&
     !nav.includes('刷题') && !nav.includes('深度题库') && !nav.includes('图形推理') && !nav.includes('申论'))
-  check('SMOKE-N-01 导航精简：四视图路由仍可达（仅导航收敛，分发未删）',
-    /view === 'practice'/.test(cl) && /view === 'deepbank'/.test(cl) && /view === 'tuxing'/.test(cl) && /view === 'essay'/.test(cl))
+  check('SMOKE-N-01 导航精简：四视图路由仍可达（cycle-24 注册表路由：VIEW_ROUTES 键位登记）',
+    /practice: \{ comp: NativePracticeView/.test(cl) && /deepbank: \{ comp: NativeDeepBankView/.test(cl) &&
+    /tuxing: \{ comp: NativeTuxingView/.test(cl) && /essay: \{ comp: NativeEssayView/.test(cl))
   // SMOKE-N-02 对话窗口瘦身
-  const sv = readSrc('./src/client/study-view.ts')
+  const sv = readSrc('./src/client/views/study-view.tsx')
   check('SMOKE-N-02 对话窗口瘦身：KaogongQuickPractice 已完全移除',
     !sv.includes('KaogongQuickPractice') && !cl.includes('KaogongQuickPractice'))
   check('SMOKE-N-02 对话窗口瘦身：右侧 tab 为精简引导体（KaogongTabHome）',
@@ -1460,9 +1466,10 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
     .filter(m => !/function|=>/.test(client.slice(Math.max(0, m.index - 40), m.index)))
   check('client 无组件函数直调（R9 条件hook守卫）', directCalls.length === 0, directCalls.map(m => m[1]).join(','))
   // combo 版用 h(...) 简写挂载（等价 createElement）；两种形态都认
-  check('client 子视图经组件挂载（h/createElement）',
-    /h\(NativePracticeView/.test(client) && /h\(NativeDashboardView/.test(client) &&
-    /h\(NativeGraphView, \{ key: 'g' \+ tick, data: data\.g/.test(client))
+  check('client 子视图经组件挂载（h/createElement；cycle-24 注册表形态）',
+    /h\(route\.comp, \{ key: route\.key\(tick\)/.test(client) &&
+    /dashboard: \{ comp: NativeDashboardView/.test(client) && /repos: \{ comp: NativeReposView/.test(client) &&
+    /(?:h|React\.createElement)\(NativePracticeView/.test(client))
   check('client 有错误边界', /class KaogongErrorBoundary extends React\.Component/.test(client))
   // R11 combo 格式守卫：必须走 __ModuleLoader__.load 且 factory 返回 {inject, apply}
   check('client 为 combo 格式（非裸 ESM）', /window\.__ModuleLoader__\.load\(\{/.test(client) && !/^export /m.test(client))
@@ -1521,7 +1528,7 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
 {
   const fs = await import('node:fs')
   const readSrc = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf-8')
-  const papersView = readSrc('./src/client/papers-view.ts')
+  const papersView = readSrc('./src/client/views/papers-view.tsx')
   const paperData = readSrc('./src/adapters/paperData.ts')
   const httpSrc = readSrc('./src/server/http.ts')
   // ① 材料逐份折叠：两处渲染点（真题卷详情 + 申论区）都有 collapsedMats 状态与「全部展开」总开关
@@ -1563,10 +1570,10 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('RDOC-01 研究文档 10 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
   // R-DOC 事实抽验（R14 纪律）：文档引用的代码符号 ≥5 条在源码真实存在
   const rdocBody = rdocExpected.map(f => { try { return fs.readFileSync(join(rd, f), 'utf-8') } catch { return '' } }).join('\n')
-  const graphAnalytics = fs.readFileSync('src/client/graph-analytics.ts', 'utf-8')
+  const graphAnalytics = fs.readFileSync('src/client/graph/graph-analytics.ts', 'utf-8')
   const huasheng13 = fs.readFileSync('src/adapters/huasheng13.ts', 'utf-8')
   const srsSrc = fs.readFileSync('src/server/srs.ts', 'utf-8')
-  const physicsSrc = fs.readFileSync('src/client/graph-physics.ts', 'utf-8')
+  const physicsSrc = fs.readFileSync('src/client/graph/graph-physics.ts', 'utf-8')
   const httpSrc19 = fs.readFileSync('src/server/http.ts', 'utf-8')
   const factChecks = [
     ['graphLocalPageRank', graphAnalytics.includes('export function graphLocalPageRank')],
@@ -1587,13 +1594,88 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('R-OUT-03 体积类写死数字不复活（㉘纪律：363MB 已移除）', !hostSrc.includes('363MB'))
   // R-OBS 守卫：生命周期量化（cumMs + bootMs + obsCumMs 渲染）
   check('R-OBS-01 生命周期量化·服务端 cumMs/bootMs', httpSrc19.includes('cumMs') && httpSrc19.includes('bootMs'))
-  check('R-OBS-02 生命周期量化·客户端 obsCumMs 徽章', physicsSrc.includes('KG_FLOW_RELS') && fs.readFileSync('src/client/obs-view.ts', 'utf-8').includes('obsCumMs'))
+  check('R-OBS-02 生命周期量化·客户端 obsCumMs 徽章', physicsSrc.includes('KG_FLOW_RELS') && fs.readFileSync('src/client/views/obs-view.tsx', 'utf-8').includes('obsCumMs'))
   // R-OBS-03（cycle-19 沙箱旅程实证）：UI 壳路径不得进能力对账（missingProducers 假漂移根治）
   check('R-OBS-03 对账消费集排除 UI 壳与聚合桶', /const consumed = new Set\(Object\.keys\(tel\.endpoints\)\.filter\(/.test(httpSrc19) && httpSrc19.includes("p !== UNMATCHED_BUCKET"))
   // R-GRAPH 守卫：搜索回车循环（keepQuery 参数 + 循环推进）
-  const graphViewSrc = fs.readFileSync('src/client/graph-view.ts', 'utf-8')
+  const graphViewSrc = fs.readFileSync('src/client/views/graph-view.tsx', 'utf-8')
   check('R-GRAPH-01 搜索回车循环定位（keepQuery + 循环提示）', graphViewSrc.includes('keepQuery?: boolean') && graphViewSrc.includes('回车循环定位'))
+
+  // ── cycle-29 静态守卫（C29）：工具展示契约 + 图谱子图按需加载 ──
+  const hostSrc29 = fs.readFileSync('src/host/index.ts', 'utf-8')
+  // C29-01 P0 命令窗口根治：6 工具全部声明 presentCall/presentResult 展示契约
+  //（宿主 asar 实测 148 处 presentCall 引用 = 完整支持；未声明则回退 generic 兜底卡片）
+  const cardCalls = (hostSrc29.match(/\.\.\.kgToolCard/g) || []).length
+  check('C29-01 工具展示契约：presentCall/presentResult 工厂存在且 6 工具全部接线',
+    hostSrc29.includes('function kgToolCard') && hostSrc29.includes('presentCall') && hostSrc29.includes('presentResult') && cardCalls === 6,
+    '接线数=' + cardCalls + '（应为 6）')
+  // C29-02 展示投影必须纯函数（never throw）：异常收敛 undefined 保留宿主兜底
+  check('C29-02 展示投影纯函数防御（try/catch 收敛 undefined，绝不抛到渲染期）',
+    (hostSrc29.match(/catch \{ return undefined \}/g) || []).length >= 2)
+  check('C29-03 展示卡片隐藏隔离键 workspace（不进卡片正文）', hostSrc29.includes("k === 'workspace'"))
+  // C29-04 图谱子图按需加载：消费服务端已声明端点 /api/graph/neighborhood + /api/graph/impact
+  check('C29-04 图谱子图：neighborhood/impact 端点 UI 消费闭环（loadSubgraph 双通道）',
+    graphViewSrc.includes('loadSubgraph') && graphViewSrc.includes('/graph/neighborhood') && graphViewSrc.includes('/graph/impact'))
+  // C29-05 子图模式面包屑：返回全图 + 全图统计口径不变的提示文案
+  check('C29-05 子图面包屑：返回全图按钮 + 口径提示（统计面板仍按全图）',
+    graphViewSrc.includes('返回全图') && graphViewSrc.includes('子图模式') && graphViewSrc.includes('仍按全图口径'))
+  // C29-06 引擎装配换源：activeNodes/activeEdges 成为引擎唯一数据源（子图/全图同构）
+  check('C29-06 引擎装配换源：activeNodes/activeEdges 喂引擎（子图与全图同构）',
+    graphViewSrc.includes('nodes: activeNodes, edges: activeEdges') && graphViewSrc.includes('[raw, activeNodes, activeEdges]'))
+  // C29-07 详情抽屉子图入口：1跳/2跳邻域 + 影响面三按钮可达
+  check('C29-07 抽屉子图入口：1跳/2跳邻域 + 影响面三按钮',
+    graphViewSrc.includes('1跳邻域') && graphViewSrc.includes('2跳邻域') && graphViewSrc.includes('影响面'))
+  // C29-08 manifest 工具声明与 host 接线数对齐（6 个 optional-ai 工具单一事实源不漂移）
+  const manifestSrc29 = fs.readFileSync('src/shared/manifest.ts', 'utf-8')
+  const manifestTools29 = (manifestSrc29.match(/name: 'kaogong_/g) || []).length
+  check('C29-08 manifest 工具声明数 = host 接线数（6）', manifestTools29 === 6 && cardCalls === 6,
+    'manifest=' + manifestTools29)
+
+
+  // ── cycle-26 静态守卫（C26）：行测材料双形态 + 真题卷加载死循环根治 ──
+
+  const ppSrc26 = fs.readFileSync('src/adapters/paperParse.ts', 'utf-8')
+
+  const pvSrc26 = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+
+  const paSrc26 = fs.readFileSync('src/server/paperApi.ts', 'utf-8')
+
+  const kitSrc26 = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+
+  check('C26-01 材料双形态：解析器支持 申论-给定材料 + 行测-材料N 组段（parseGroupMaterials）',
+
+    /export function parseGroupMaterials/.test(ppSrc26) && ppSrc26.includes('groupMaterial'))
+
+  check('C26-02 组材料透出：/api/paper 对 groupMaterial 做 rewriteImages（图片链路一致）',
+
+    paSrc26.includes('q.groupMaterial = rewriteImages'))
+
+  check('C26-03 组材料消费：整卷/专题模式消费组材料（QwPaperMode 容器 + study-view 队列映射）',
+    (() => { const kit = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+      const sv = fs.readFileSync('src/client/views/study-view.tsx', 'utf-8')
+      const pv = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+      return kit.includes('q.groupMaterial') && kit.includes('function QwPaperMode') && sv.includes('x.groupMaterial') && /QwPaperMode/.test(pv) && /mode="practice"/.test(sv) && kit.includes('wordCount > 500') })())
+
+  check('C26-04 加载死循环根治：详情 effect 依赖不含 detail（渲染值不进取数依赖）',
+
+    !/\}, \[openId, detail, api\]\)/.test(pvSrc26) && /}, \[openId, api\]\)/.test(pvSrc26))
+
+
+
+  // ── cycle-28 静态守卫（C28）：材料段终止条件 + 泄露防线 + 专题四区对齐 ──
+
+  check('C28-01 材料段终止于题头：parseGroupMaterials 终止条件含 ### 第 N 题（防吞后续题干与答案）',
+
+    /export function parseGroupMaterials/.test(ppSrc26) && ppSrc26.includes('###\\s*第\\s*\\d+\\s*题'))
+
+  check('C28-02 专题四区对齐：study-view 练习态经 QwPaperMode（材料区/切换区/答题卡区同构模考）',
+
+    (() => { const sv = fs.readFileSync('src/client/views/study-view.tsx', 'utf-8')
+
+      return sv.includes('mode="practice"') && sv.includes('<QwPaperMode') })())
+
 }
+
 
 // ── cycle-20 P0 静态守卫：R11 复发根治（裸 tsc 覆写 combo → 插件启动失败/宿主崩溃）──
 {
@@ -1628,6 +1710,63 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('R11-GUARD-04 当前 dist/client/client.js 为 combo factory 形态',
     !/^import[ \t]/m.test(combo) && !/^export[ \t]/m.test(combo) &&
     /window\.__ModuleLoader__\.load\(\{/.test(combo) && /return \{\s*inject: \[/.test(combo))
+
+  // ── cycle-24 组件规范守卫（C24）：目录分层 + 注册表路由形态 ──
+  const cl24 = fs.readFileSync('src/client/client.tsx', 'utf-8')
+  check('C24-01 注册表路由：client.tsx 含 VIEW_ROUTES 唯一分发事实源',
+    /const VIEW_ROUTES: Record</.test(cl24) && /h\(route\.comp, \{ key: route\.key\(tick\)/.test(cl24))
+  check('C24-02 注册表路由：三元分发链不复活（禁止 view === * ? h(Native* 形态 ≥2 处）',
+    (cl24.match(/view === '[a-z]+' \? h\(Native/g) || []).length <= 1)
+  check('C24-03 目录分层：client/ 根只允许 entry+ui-kit（视图级文件必须在 views/）',
+    (() => { const root = fs.readdirSync('src/client', { withFileTypes: true })
+      return root.filter(f => f.isFile()).every(f => ['client.tsx', 'ui-kit.tsx'].includes(f.name)) })())
+  check('C24-04 视图层全部 .tsx（views/ 下不得有 .ts 视图残留）',
+    fs.readdirSync('src/client/views').every(f => f.endsWith('.tsx')))
+  check('C24-05 tsconfig jsx=react（classic runtime；禁 react-jsx 自动 import）',
+    /"jsx": "react"/.test(fs.readFileSync('tsconfig.json', 'utf-8')) && !/"jsx": "react-jsx"/.test(fs.readFileSync('tsconfig.json', 'utf-8')))
+  check('C24-06 React 引入纪律：.tsx 禁 import React（唯一 require 在 ui-kit）',
+    (() => { for (const dir of ['src/client', 'src/client/views', 'src/client/question']) {
+
+        for (const f of fs.readdirSync(dir)) {
+          if (!f.endsWith('.tsx')) continue
+          const s = fs.readFileSync(dir + '/' + f, 'utf-8')
+          if (/^import\s+React\s/m.test(s)) return false
+          if (f !== 'ui-kit.tsx' && s.includes("require('react')")) return false
+        } } return true })())
+
+
+  // ── cycle-25 统一题目渲染域守卫（C25）：七段结构 + 答题卡 + 图片放大 ──
+
+  const kitSrc = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+
+  const lbSrc = fs.readFileSync('src/client/question/question-lightbox.tsx', 'utf-8')
+
+  check('C25-01 七段齐备：question-kit 含编号/来源/类型/材料/题干/选项/答案七段组件',
+
+    ['QwNumberBadge', 'QwSourceMeta', 'QwTypeTag', 'QwMaterial', 'QwStem', 'QwOptions', 'QwAnswerDims', 'QwQuestionCard'].every(n => kitSrc.includes('function ' + n)))
+
+  check('C25-02 答题卡：QwExamNavigator 含网格跳转与四态（未答/已答/标记/当前）',
+
+    /function QwExamNavigator/.test(kitSrc) && kitSrc.includes('onJump') && kitSrc.includes('flags && flags.has'))
+
+  check('C25-03 图片放大：QwLightbox 含滚轮缩放/拖拽/ESC 三交互',
+
+    /function QwLightbox/.test(lbSrc) && lbSrc.includes('wheelZoom') && lbSrc.includes('dragStart') && lbSrc.includes('Escape'))
+
+  check('C25-04 接入面：practice/exam/papers/essay 消费 QwQuestionCard',
+
+    (() => { const sv = fs.readFileSync('src/client/views/study-view.tsx', 'utf-8')
+
+      const pv = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+
+      return /QwQuestionCard/.test(sv) && /QwExamNavigator/.test(pv) && (pv.match(/QwQuestionCard/g) || []).length >= 3 })())
+
+  check('C25-05 材料折叠契约保留：papers-view 源码内 collapsedMats/toggleMat/jumpToMaterial 仍在',
+
+    (() => { const pv = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+
+      return (pv.match(/collapsedMats/g) || []).length >= 6 && (pv.match(/toggleMat/g) || []).length >= 4 && /jumpToMaterial/.test(pv) })())
+
 }
 
 // ── 汇总 ──

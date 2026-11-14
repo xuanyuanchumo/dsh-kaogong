@@ -72,20 +72,6 @@ export function parseQuestions(filePath, maxQ = 20) {
   }
   // 有图材料段的位置表（offset → 图片占位数组）
   const matImgTable: Array<{ at: number, imgs: string[] }> = []
-  {
-    const mr = /\n##\s*材料[^\n]*\n([\s\S]*?)(?=\n#{2,3}\s*第\s*\d+\s*题|\n##\s*材料|\n##\s*题目|$)/g
-    let em: RegExpExecArray | null
-    while ((em = mr.exec(content)) !== null) {
-      const segImgs: string[] = []
-      const ir2 = /<img[^>]*\ssrc=["']([^"']+)["'][^>]*\/?>/gi
-      let im2: RegExpExecArray | null
-      while ((im2 = ir2.exec(em[1])) !== null) {
-        const rel = String(im2[1] || '').replace(/\\/g, '/').replace(/^(\.\.\/)+/, '')
-        if (rel && !/^https?:/i.test(rel)) segImgs.push(rel)
-      }
-      if (segImgs.length) matImgTable.push({ at: em.index, imgs: segImgs })
-    }
-  }
   const questions: any[] = []
   // cycle-21（issue #1）：图片占位化。xingcezhenti 卷内图片以 <img src="../90-图片/…"> 引用，
   // 旧实现 `<[^>]+>→''` 直接剥掉 = 判断推理/资料分析题干图与公式图全部丢失（不可作答）。
@@ -102,6 +88,27 @@ export function parseQuestions(filePath, maxQ = 20) {
       return `【图:kgimg://${norm}】`
     })
   const stripHtmlKeepImg = (s) => neutralizeImages(s).replace(/<[^>]+>/g, '').trim()
+  // cycle-26 D-1b：材料段正文表（offset → { no, text }）——专题刷题链路的资料分析题组
+  // 与真题卷同源（xingcezhenti 卷内 `## 材料 N` 夹在题目流中），材料正文此前从不进题目对象
+  const matTextTable: Array<{ at: number, no: number, text: string }> = []
+  {
+    const mr = /\n##\s*材料([^\n]*)\n([\s\S]*?)(?=\n#{2,3}\s*第\s*\d+\s*题|\n##\s*材料|\n##\s*题目|$)/g
+    let em: RegExpExecArray | null
+    while ((em = mr.exec(content)) !== null) {
+      const head = String(em[1] || '').trim()
+      const noM = head.match(/(\d+)/)
+      const text = neutralizeImages(em[2]).replace(/<[^>]+>/g, '').trim().slice(0, 20000)
+      if (text) matTextTable.push({ at: em.index, no: noM ? +noM[1] : matTextTable.length + 1, text })
+      const segImgs: string[] = []
+      const ir2 = /<img[^>]*\ssrc=["']([^"']+)["'][^>]*\/?>/gi
+      let im2: RegExpExecArray | null
+      while ((im2 = ir2.exec(em[1])) !== null) {
+        const rel = String(im2[1] || '').replace(/\\/g, '/').replace(/^(\.\.\/)+/, '')
+        if (rel && !/^https?:/i.test(rel)) segImgs.push(rel)
+      }
+      if (segImgs.length) matImgTable.push({ at: em.index, imgs: segImgs })
+    }
+  }
   for (let i = 1; i < blocks.length && questions.length < maxQ; i += 2) {
     const qNum = parseInt(blocks[i])
     const block = blocks[i + 1] || ''
@@ -109,9 +116,10 @@ export function parseQuestions(filePath, maxQ = 20) {
     const qType = typeMatch ? typeMatch[1].trim() : '未知'
     // cycle-21：材料图归属——该题块偏移之前「最近的有图材料段」的图，附在题干尾部
     // （语义：资料分析题读图作答；题块自身已有图时材料图放在其后不重复附）
+    // cycle-26 D-1b：at 提为循环体作用域（组材料正文归属同用）
+    const at = qOffsets[(i - 1) / 2] != null ? qOffsets[(i - 1) / 2] : -1
     let matImgs: string[] = []
     {
-      const at = qOffsets[(i - 1) / 2] != null ? qOffsets[(i - 1) / 2] : -1
       for (const t of matImgTable) { if (t.at < at) matImgs = t.imgs; else break }
     }
     const subEnd = block.indexOf('</sub>')
@@ -137,6 +145,11 @@ export function parseQuestions(filePath, maxQ = 20) {
     const finalStem = (matImgs.length && !String(stem).includes('kgimg://'))
       ? String(stem) + '\n' + matImgs.map(rel => '【图:kgimg://' + rel + '】').join('\n')
       : stem
+    // cycle-26 D-1b：题组材料正文——该题块之前「最近的材料段」文本（资料分析多题共享一段材料；
+    // 无前置材料段的题此字段为空串，QwQuestionCard 有则渲染跳段）
+    let groupMaterial = ''
+    let groupMaterialNo = 0
+    for (const t of matTextTable) { if (t.at < at) { groupMaterial = t.text; groupMaterialNo = t.no } else break }
     if (finalStem && Object.keys(options).length > 0) {
       // cycle-21：题库出处标注（用户要求「每道题标明出处」）——
       // source=数据库名（xingcezhenti），exam/year/region 已由 frontmatter 提供；
@@ -148,6 +161,7 @@ export function parseQuestions(filePath, maxQ = 20) {
         exam: meta.试卷 || '', region: meta.地区 || '', year: meta.年份 || '',
         source: 'xingcezhenti', paperFile,
         stem: finalStem, options, correctAnswer, analysis,
+        groupMaterial, groupMaterialNo,
       })
     }
   }
@@ -159,7 +173,10 @@ export function getRandomQuestions(repoRoot, moduleName, count = 1) {
   const dirName = XINGCE_MODULES[moduleName]
   if (!dirName) return { error: `未知模块。可用: ${Object.keys(XINGCE_MODULES).join(', ')}` }
   const modulePath = join(repoRoot, 'xingcezhenti', dirName)
-  const files = safeReadDir(modulePath).filter(f => f.endsWith('.md'))
+  // cycle-29（flaky 根治）：排除非题库文件——六个模块目录各有一个 README.md（6/2962=0.2%），
+  // 解析恒为 0 题 → 抽中即返回 error，消费方 `.questions[0]` 裸崩（smoke 并行预热窗口实测崩一次）。
+  // 判据：文件名含 README/说明/目录 → 直接跳过；保留全部试卷文件。
+  const files = safeReadDir(modulePath).filter(f => f.endsWith('.md') && !/README|说明|目录/i.test(f))
   if (files.length === 0) return { error: `模块 ${moduleName} 无题文件` }
   const randomFile = files[Math.floor(Math.random() * files.length)]
   const questions = parseQuestions(join(modulePath, randomFile), 30)

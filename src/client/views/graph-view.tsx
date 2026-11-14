@@ -6,10 +6,11 @@
  * 空态/加载骨架 + 视觉现代化（精灵渐变/脉冲环/弧线/玻璃拟态）。
  */
 
-import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, G_CHIP, MOUNT_PATH } from './ui-kit.js'
-import { createGraphEngine } from './graph-engine.js'
-import { graphKeyCommand } from './graph-transition.js'
-import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetLayout, graphReadLayers, GRAPH_NODE_META, GRAPH_EDGE_META, graphPaintModel, graphLocalBetweenness, graphDegreeHistogram, GRAPH_COLOR_MODES, GRAPH_SEQ_STOPS, graphSeqColor } from './graph-analytics.js'
+import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, G_CHIP, MOUNT_PATH } from '../ui-kit.js'
+import { createGraphEngine } from '../graph/graph-engine.js'
+import { graphKeyCommand } from '../graph/graph-transition.js'
+import { graphFetchSubgraph, graphNormalizeNeighborhood, graphDeriveImpact } from '../graph/graph-subgraph.js'
+import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetLayout, graphReadLayers, GRAPH_NODE_META, GRAPH_EDGE_META, graphPaintModel, graphLocalBetweenness, graphDegreeHistogram, GRAPH_COLOR_MODES, GRAPH_SEQ_STOPS, graphSeqColor } from '../graph/graph-analytics.js'
 
     /* ── cycle-15：布局三态序列 + 文案（工具条按钮与键盘 l 键共用同一序列，单一事实源）──
        force=FR 力导向 · layered=Kahn 拓扑分层 · circular=语义环形（NODE_META.layer 层序圆周）。 */
@@ -19,18 +20,42 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
 
     /**
      * NativeGraphView — 契约 §3 的原生交互图谱（真组件；hook 数量恒定）。
-     * props: { data: /api/graph 响应, stats?: /api/stats, api?: (p,opts)=>Promise }
-     * api 是可选的（父层若未传，路径分析降级为同源直接 fetch，失败静默）。
+     * cycle-24 P0-1 取数下沉：props 收窄为 { api, wsKey, statsApi?, onGo? }，
+     * /api/graph 与 /api/stats 由视图自治拉取（原 data.g 由父层 Promise.all 下发）。
+     * api 必传；statsApi 缺省复用 api；onGo 供节点直达业务视图。
      */
     export function NativeGraphView(props) {
       const liveRef = React.useRef({})
       liveRef.current = { api: props && props.api, wsKey: props && props.wsKey }   // 每次渲染刷新最新 props（供异步回调用）
 
-      const raw: any = (props && props.data) || {}
+      /* ── 自治取数（R9：hooks 全部在组件顶部，跨渲染数量恒定） ── */
+      const [graphData, setGraphData] = React.useState(null)
+      const [statsData, setStatsData] = React.useState(null)
+      const [fetchErr, setFetchErr] = React.useState(null)
+      const [graphLoading, setGraphLoading] = React.useState(true)
+      React.useEffect(() => {
+        let cancelled = false
+        setGraphLoading(true)
+        const apiFn = (props && props.api) || props && (props as any).statsApi
+        if (!apiFn) { setFetchErr('api 通道未注入'); setGraphLoading(false); return }
+        Promise.all([
+          apiFn('/graph'),
+          (props.statsApi || apiFn)('/stats').catch(() => null),
+        ]).then(([g, st]) => {
+          if (cancelled) return
+          setGraphData(g || {}); setStatsData(st); setFetchErr(null); setGraphLoading(false)
+        }).catch((e: any) => {
+          if (!cancelled) { setFetchErr(String((e && e.message) || e)); setGraphLoading(false) }
+        })
+        return () => { cancelled = true }
+      }, [props && props.api, props && props.statsApi])
+
+      const raw: any = graphData || {}
       const nodes: any[] = Array.isArray(raw.nodes) ? raw.nodes : []
       const edges: any[] = Array.isArray(raw.edges) ? raw.edges : []
       const nodeMeta: any = (raw.nodeMeta && typeof raw.nodeMeta === 'object') ? raw.nodeMeta : GRAPH_NODE_META
       const edgeMeta: any = (raw.edgeMeta && typeof raw.edgeMeta === 'object') ? raw.edgeMeta : GRAPH_EDGE_META
+      const stats: any = statsData
 
       /* ── hooks：全部在组件顶部，跨渲染数量恒定（R9） ── */
       const canvasRef = React.useRef(null)
@@ -53,6 +78,13 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       const [narrow, setNarrow] = React.useState(false)
       const [canvasOk, setCanvasOk] = React.useState(true)
       const [focusId, setFocusId] = React.useState(null)
+      // cycle-29 P1：子图模式（图谱节点按需加载）——服务端 /api/graph/neighborhood（k 跳邻域）
+      // 与 /api/graph/impact（反向可达影响面）端点早已声明并实现，但 UI 一直未消费。
+      // subData = { kind:'neighborhood'|'impact', center, depth?, label, nodes, edges, idSet }
+      // 非空时引擎只渲染子图（全图分析面板/图例保持全图口径；面包屑一键返回全图）。
+      const [subData, setSubData] = React.useState(null)
+      const [subLoading, setSubLoading] = React.useState(false)
+      const [subErr, setSubErr] = React.useState(null)
       // W2b 新增：着色模式 / 半径随指标 / 图例折叠
       const [colorMode, setColorMode] = React.useState('type')
       const [radiusBoost, setRadiusBoost] = React.useState(false)
@@ -107,7 +139,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           }
           const communities = Array.isArray(an.communities) ? an.communities : local.communities
           // cycle-21 W2 学习画像：mastery 模式把 stats.mastery（模块正确率）传进着色模型
-          const masteryMap = colorMode === 'mastery' ? ((props && props.stats && props.stats.mastery) || {}) : {}
+          const masteryMap = colorMode === 'mastery' ? ((stats && stats.mastery) || {}) : {}
           return graphPaintModel(nodes, colorMode, { communities, prMap: local.pagerank, btMap, degMap, boost: radiusBoost, masteryMap })
         } catch { return null }
       }, [raw, nodes, edges, local, colorMode, radiusBoost])
@@ -186,7 +218,34 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         } catch {}
       }, [])
 
-      /* ── 引擎装配（数据变化即重建；canvas/wrap 缺失时静默降级） ── */
+      /* ── cycle-29 P1：子图取数（按需加载；崩溃安全：任何失败收敛为灰字提示）──
+         纯函数族外提到 graph-subgraph.ts（cycle-13 教训①拆法：只读外提+参数穿线），
+         本处只保留状态编排（setState），O(V+E) 归一化在模块层。 */
+      const loadSubgraph = React.useCallback(async (kind: any, id: any, depth: any) => {
+        const nid = String(id == null ? '' : id)
+        if (!nid || !nid.includes(':')) return   // 节点 id 形如 type:key，防御性只对合规 id 提供
+        setSubLoading(true); setSubErr(null)
+        try {
+          const api = liveRef.current && liveRef.current.api
+          const wsKey = liveRef.current && liveRef.current.wsKey
+          const d = await graphFetchSubgraph(String(kind), nid, Number(depth) || 1, api, wsKey)
+          const norm = String(kind) === 'impact'
+            ? graphDeriveImpact(d, nodeIndex, edges)
+            : graphNormalizeNeighborhood(d, nodeIndex, Number(depth) || 1)
+          if (!aliveRef.current) return
+          if (!norm.nodes || !norm.nodes.length) { setSubErr('子图为空（可能是孤儿节点或未知节点）'); setSubLoading(false); return }
+          setSubData(norm); setSelected(null); setFocusId(null)
+          setSubLoading(false)
+        } catch (e: any) {
+          if (aliveRef.current) { setSubErr(String((e && e.message) || e)); setSubLoading(false) }
+        }
+      }, [nodes, edges, nodeIndex])
+
+      /* ── 引擎装配（数据变化即重建；canvas/wrap 缺失时静默降级） ──
+         cycle-29 P1：子图模式优先——subData 非空时引擎装配子图（nodes/edges 换源，
+         其余配置同构）；返回全图 = subData 置空 → effect 依 [activeNodes, activeEdges] 自动重建。 */
+      const activeNodes: any[] = (subData && Array.isArray(subData.nodes) && subData.nodes.length) ? subData.nodes : nodes
+      const activeEdges: any[] = (subData && Array.isArray(subData.edges)) ? subData.edges : edges
       React.useEffect(() => {
         aliveRef.current = true
         const canvas = canvasRef.current
@@ -195,7 +254,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         let eng: any = null
         try {
           eng = createGraphEngine({
-            canvas, wrap, nodes, edges,
+            canvas, wrap, nodes: activeNodes, edges: activeEdges,
             presetLayout: graphReadPresetLayout(raw),
             layers: graphReadLayers(raw),
             nodeMeta, edgeMeta,
@@ -214,7 +273,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           try { if (eng && eng.destroy) eng.destroy() } catch {}
           engineRef.current = null
         }
-      }, [raw, nodes, edges])
+      }, [raw, activeNodes, activeEdges])
 
       // 布局模式同步
       React.useEffect(() => {
@@ -241,9 +300,9 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       React.useEffect(() => {
         const e = engineRef.current
         if (!e || !e.ok) return
-        const mm = (props && props.stats && props.stats.mastery) || null
+        const mm = (stats && stats.mastery) || null
         try { e.setView({ masteryMap: mm }) } catch {}
-      }, [props && props.stats])
+      }, [statsData])
 
       // cycle-15：流动粒子开关同步（字段级合并语义；关闭即恢复省电停帧）
       React.useEffect(() => {
@@ -469,15 +528,24 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       }
 
       // 考点掌握（既有 T-020 卡片，移到图谱下方；逻辑保持不变）
-      const mastery: any = (props && props.stats && props.stats.mastery) || {}
+      const mastery: any = (stats && stats.mastery) || {}
+      // cycle-29（沙箱视觉验证实证）：stats.mastery 真实形状是 { rate, confidence, mastery, answered }
+      // ——没有 correct 字段（rate 由服务端按 check 记录预计算），旧 v.correct||0 恒 0 →
+      // 显示「0/54 · NaN%」（0/0 未定义率）+ Bar pct=NaN。双形状兼容：correct 缺失时用
+      // rate 派生 correct = round(rate×answered/100)；rate 也缺失才走旧本地口径。
       const mRows: any[] = entries(mastery)
-        .map(([m, v]: any) => ({ m, answered: v.answered || 0, correct: v.correct || 0, rate: v.answered ? Math.round(v.correct / v.answered * 100) : 0 }))
+        .map(([m, v]: any) => {
+          const answered = v.answered || 0
+          const rate = (typeof v.rate === 'number') ? v.rate : (answered ? Math.round(((v.correct || 0) / answered) * 100) : 0)
+          const correct = (typeof v.correct === 'number') ? v.correct : Math.round((rate * answered) / 100)
+          return { m, answered, correct, rate }
+        })
         .filter((r: any) => r.answered > 0)
         .sort((a: any, b: any) => a.rate - b.rate)
 
       const hasNodes = nodes.length > 0
       // W2b：加载态（父层 data 未到达）/ 成因提示 / 全类型被过滤 / 连续着色模式判定
-      const loading = !props || props.data == null
+      const loading = graphLoading || !graphData
       const banksNotReady = !!(raw.banks && raw.banks.ready === false)
       const allTypesHidden = hasNodes && typeChips.length > 0 && typeChips.every((c: any) => hiddenTypes.has(c.type))
       const isContinuous = colorMode === 'pagerank' || colorMode === 'betweenness' || colorMode === 'degree'
@@ -560,7 +628,26 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
               },
             }, pathState.from ? '设为终点并分析' : '设为终点'),
             h('button', { style: G_BTN, onClick: () => locate(String(n.id)) }, '居中'),
-            h('button', { style: G_BTN, onClick: () => setFocusId(focusId ? null : String(n.id)) }, focusId ? '退出聚焦' : '聚焦 1 跳')),
+            h('button', { style: G_BTN, onClick: () => setFocusId(focusId ? null : String(n.id)) }, focusId ? '退出聚焦' : '聚焦 1 跳'),
+            // cycle-29 P1：子图按需加载（neighborhood k跳邻域 / impact 影响面——服务端已声明端点的 UI 消费闭环）
+            h('button', {
+              style: Object.assign({}, G_BTN, { background: 'rgba(16,185,129,.1)', borderColor: 'rgba(16,185,129,.4)', color: '#059669', fontWeight: 700 }),
+              disabled: subLoading,
+              title: '只渲染该节点 k 跳邻域子图（按需加载，大图提速）',
+              onClick: () => { try { loadSubgraph('neighborhood', n.id, 1) } catch {} },
+            }, subLoading ? '⏳ 子图加载中' : '🕸 1跳邻域'),
+            h('button', {
+              style: Object.assign({}, G_BTN, { background: 'rgba(16,185,129,.1)', borderColor: 'rgba(16,185,129,.4)', color: '#059669', fontWeight: 700 }),
+              disabled: subLoading,
+              title: '只渲染该节点 2 跳邻域子图',
+              onClick: () => { try { loadSubgraph('neighborhood', n.id, 2) } catch {} },
+            }, '🕸 2跳邻域'),
+            h('button', {
+              style: Object.assign({}, G_BTN, { background: 'rgba(245,158,11,.1)', borderColor: 'rgba(245,158,11,.4)', color: '#b45309', fontWeight: 700 }),
+              disabled: subLoading,
+              title: '反向可达：谁会因该节点变化受影响（影响面量化）',
+              onClick: () => { try { loadSubgraph('impact', n.id, null) } catch {} },
+            }, '⚡ 影响面')),
           h('div', { style: { fontSize: 10.5, color: '#94a3b8', marginTop: 8, lineHeight: 1.6 } },
             '提示：Shift+点击另一节点可直接做路径分析'))
       }
@@ -618,6 +705,26 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           gbtn('⬇ 导出 PNG', false, exportPNG),
           h('span', { style: { marginLeft: 'auto', fontSize: 10.5, color: '#94a3b8' } },
             '滚轮缩放 · 拖空白平移 · 拖节点钉住 · 双击聚焦 · Shift+点击路径 · 快捷键 +/−/0/f/l/Esc')),
+        // cycle-29 P1：子图模式面包屑（engine 装配的是 activeNodes/activeEdges；此处仅状态提示与返回全图）
+        subData ? h('div', {
+          key: 'g-sub-crumb',
+          style: {
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8,
+            padding: '6px 10px', borderRadius: 10, fontSize: 11.5,
+            background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.35)',
+          },
+        },
+          h('span', { style: { fontWeight: 800, color: '#059669' } }, '🧩 子图模式'),
+          h('span', { style: { color: '#475569' } },
+            subData.label + ' · ' + subData.nodes.length + ' 节点 / ' + subData.edges.length + ' 边' +
+            (subData.kind === 'impact' ? '（反向可达 · 含自身）' : '')),
+          h('span', { style: { fontSize: 10, color: '#94a3b8' } }, '统计面板/图例仍按全图口径；分析完成后回到全图继续探索'),
+          h('button', {
+            style: Object.assign({}, G_BTN, { marginLeft: 'auto', background: 'rgba(16,185,129,.12)', borderColor: 'rgba(16,185,129,.5)', color: '#059669', fontWeight: 700 }),
+            onClick: () => { setSubData(null); setSubErr(null) },
+          }, '← 返回全图'))
+          : null,
+        subErr ? h('div', { key: 'g-sub-err', style: { marginBottom: 8, fontSize: 10.5, color: '#b45309' } }, '⚠ 子图加载失败（已静默降级，可返回全图继续）：' + subErr) : null,
         // ② 搜索
         h('div', { style: { position: 'relative', marginBottom: 8, maxWidth: 420 } },
           h('input', {
@@ -730,7 +837,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
             h('canvas', {
               ref: canvasRef,
               role: 'img',
-              'aria-label': '知识图谱交互画布：' + nodes.length + ' 个节点、' + edges.length + ' 条边',
+              'aria-label': '知识图谱交互画布：' + activeNodes.length + ' 个节点、' + activeEdges.length + ' 条边' + (subData ? '（子图模式）' : ''),
               style: { display: 'block', width: '100%', height: '100%', touchAction: 'none', cursor: hasNodes ? 'grab' : 'default' },
             }),
             // W2b 小地图覆盖层（右下角 150×100；点击/拖拽平移视口，绘制由引擎驱动）
@@ -824,7 +931,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                   h('span', { style: { width: 62, textAlign: 'right', color: '#64748b' } }, Number(r.pr || 0).toFixed(4))))
               : h('div', { style: { fontSize: 11.5, color: '#64748b' } }, '暂无中心性数据')
           })()),
-        // ⑩ 既有「我的考点掌握」卡片（数据来自 props.stats.mastery，逻辑保持原样）
+        // ⑩ 既有「我的考点掌握」卡片（数据来自自治 statsData.mastery，逻辑保持原样）
         h(Card, { title: '🔥 我的考点掌握（弱 → 强）' },
           mRows.length === 0
             ? h('div', { style: { fontSize: 12, color: '#64748b' } }, '暂无作答数据 —— 去「刷题」或「模考」后再看')
