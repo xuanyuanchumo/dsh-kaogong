@@ -348,9 +348,28 @@ async function vWrongbook(wrap) {
    学习计划
    ═══════════════════════════════════════════════════════════════ */
 async function vPlan(wrap) {
-  const [plan, pg] = await Promise.all([api('/api/plan'), api('/api/progress')])
+  const [plan, pg, sched] = await Promise.all([api('/api/plan'), api('/api/progress'), api('/api/plan/schedule').catch(() => null)])
   const curDay = pg.day || 1
   if (!plan.phases || !plan.phases.length) { wrap.appendChild(el('div', { class: 'empty' }, el('div', { class: 'i' }, '📄'), plan.plan || '无计划数据')); return }
+  // cycle-30（T-027）：智能排程卡——按「模块正确率 + 错题积压」给出今日侧重与题量分配。
+  // 静态日历不动（阶段/天数是模板事实），排程只重排每日「训练侧重」建议，可解释可回退。
+  if (sched && !sched.error && sched.profile) {
+    const sc = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🎯 智能排程（弱点×积压加权）'))
+    sc.appendChild(el('div', { style: 'font-size:11px;color:var(--muted);margin-bottom:8px' }, sched.profile.strategy + ' · 未掌握错题 ' + sched.profile.openWrong + ' 题'))
+    const today = (sched.schedule || []).find(d => d.day === curDay) || sched.schedule[0]
+    if (today && today.focus && today.focus.length) {
+      sc.appendChild(el('div', { style: 'font-size:12px;font-weight:700;margin-bottom:6px' }, `今日 D${today.day} 主攻：${today.primary}（${today.primaryRate}）`))
+      const maxW = Math.max(...today.focus.map(f => f.weight), 0.001)
+      today.focus.forEach(f => {
+        sc.appendChild(el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11.5px' },
+          el('span', { style: f.primary ? 'font-weight:800;color:var(--primary,#6366f1);min-width:86px' : 'min-width:86px' }, (f.primary ? '▶ ' : '') + f.module),
+          el('div', { class: 'bar', style: 'flex:1' }, el('i', { class: f.primary ? 'f-blue' : '', style: `width:${Math.round(f.weight / maxW * 100)}%` })),
+          el('span', { style: 'color:var(--muted);min-width:64px;text-align:right' }, `建议 ${f.suggested} 题`)))
+      })
+      sc.appendChild(el('div', { style: 'font-size:10.5px;color:var(--muted);margin-top:6px' }, '依据你的作答正确率与错题积压自动加权；越弱的模块建议题量越大。静态日历任务不受影响。'))
+    }
+    wrap.appendChild(sc)
+  }
   const ov = el('div', { class: 'card' }, el('div', { class: 'ct' }, '🗓️ 30天四阶段'))
   plan.phases.forEach(ph => {
     const pct = Math.max(0, Math.min(1, (curDay - ph.startDay) / (ph.endDay - ph.startDay + 1)))

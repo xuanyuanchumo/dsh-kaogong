@@ -134,7 +134,7 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
         deepbank: { comp: NativeDeepBankView, key: t => 'dp' + t, props: () => ({ api, initialModule: viewParams.module || '', initialCategory: viewParams.category || '' }) },
         tuxing: { comp: NativeTuxingView, key: t => 'tx' + t, props: () => ({ api }) },
         repos: { comp: NativeReposView, key: t => 'rp' + t, props: () => ({ api }) },
-        huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t, props: () => ({ api, initialSection: viewParams.section || '' }) },
+        huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t, props: () => ({ api, initialSection: viewParams.section || '', onGo: (v: any, params?: any) => setView(v, params || {}) }) },
         topics: { comp: NativeTopicsView, key: t => 'tp' + t, props: () => ({ api, onGo: (v: any, params?: any) => setView(v, params || {}), initialModule: viewParams.module || '' }) },
         essay: { comp: NativeEssayView, key: t => 'es' + t + JSON.stringify(viewParams), props: () => ({ api, initialType: viewParams.type || '' }) },
       }

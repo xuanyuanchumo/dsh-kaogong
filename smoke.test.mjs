@@ -1168,6 +1168,22 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       fs.readFileSync(new URL('./src/shared/manifest.ts', import.meta.url), 'utf-8').includes("path: '/api/data-location'"))
   }
 
+  // ═══ SMOKE-SCHED（cycle-30b T-027）：智能排程运行时断言（教训⑧：§12 崩溃安全之前）═══
+  {
+    const sched = await J(`${B}/api/plan/schedule`)
+    check('SMOKE-SCHED-01 /api/plan/schedule 返回 schedule+profile（不冒泡 error）',
+      Array.isArray(sched.schedule) && sched.schedule.length >= 30 && !!sched.profile,
+      'schedule=' + (sched.schedule || []).length)
+    check('SMOKE-SCHED-02 确定性：同请求两次响应深相等（无随机/时钟依赖）',
+      JSON.stringify(sched) === JSON.stringify(await J(`${B}/api/plan/schedule`)))
+    const focusValid = (sched.schedule || []).every(d => d.focus && d.focus.length && d.primary && typeof d.primaryRate === 'string')
+    check('SMOKE-SCHED-03 每日侧重心构完整（focus 非空 + primary + 可解释率值）', focusValid)
+    const sum30 = sched.schedule && sched.schedule[0] && sched.schedule[0].focus ? sched.schedule[0].focus.reduce((s, f) => s + f.suggested, 0) : -1
+    check('SMOKE-SCHED-04 题量分配守恒：当日 suggested 求和 = 30（softmax 预算）', sum30 === 30, 'sum=' + sum30)
+    check('SMOKE-SCHED-05 画像策略可解释：hasProfile 时为弱点×积压加权',
+      !sched.profile.hasProfile || sched.profile.strategy.includes('弱点×积压'))
+  }
+
   // ═══ SMOKE-IMG 题图占位（issue #1）：parseQuestions 保留 img → kgimg:// 占位 + /api/kg-img ═══
   {
     const rdSrc = fs.readFileSync(new URL('./src/adapters/repoData.ts', import.meta.url), 'utf-8')
@@ -1630,6 +1646,43 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   const manifestTools29 = (manifestSrc29.match(/name: 'kaogong_/g) || []).length
   check('C29-08 manifest 工具声明数 = host 接线数（6）', manifestTools29 === 6 && cardCalls === 6,
     'manifest=' + manifestTools29)
+
+  // ── cycle-30 静态守卫（C30）：真题卷 browse 态答案选择交互恢复 ──
+  const kitSrc30 = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+  const pvSrc30 = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+  // C30-01 交互回归根治：QwPaperMode browse 态转发 interactive/onSelect（不再纯只读）
+  check('C30-01 browse 态自答对照：interactive/onSelect 含 isBrowse 分支（R9 容器层同构）',
+    kitSrc30.includes('interactive={isExam || isPractice || isBrowse}') && kitSrc30.includes('isExam || isPractice || isBrowse ? onSelect'))
+  // C30-02 宿主持有自答态：browseSel/browseReveal 双 useState + 换卷重置
+  check('C30-02 自答态宿主持有：browseSel/browseReveal useState + 换卷重置',
+    pvSrc30.includes('browseSel') && pvSrc30.includes('browseReveal') && pvSrc30.includes('setBrowseSel({})'))
+  // C30-03 对照操作条：主动揭示按钮（不自动判分）+ 重做入口
+  check('C30-03 对照操作条：主动揭示按钮 + 重做入口（data-kg-browse-reveal 锚点）',
+    pvSrc30.includes('data-kg-browse-reveal') && pvSrc30.includes('对照答案') && pvSrc30.includes('重做此题'))
+  // C30-04 答题卡四态同步：browseAnswers 透传 QwExamNavigator（已答态可见）
+  check('C30-04 答题卡四态同步：browseAnswers 透传 QwExamNavigator',
+    kitSrc30.includes('browseAnswers') && kitSrc30.includes('(isBrowse && browseAnswers) ? browseAnswers'))
+  // C30-05 卷面答案数据源：correctAnswer 优先、answer 字母形态兜底（解析器契约不漂移）
+  check('C30-05 卷面答案双源：correctAnswer 优先 + answer 字母兜底',
+    pvSrc30.includes('curQ.correctAnswer') && pvSrc30.includes("test(curQ.answer.toUpperCase())"))
+
+  // ── cycle-30b 静态守卫（C30b）：T-027 学习计划智能排程 ──
+  const schedSrc30 = fs.readFileSync('src/server/planSchedule.ts', 'utf-8')
+  const manifestSrc30 = fs.readFileSync('src/shared/manifest.ts', 'utf-8')
+  const httpSrc30 = fs.readFileSync('src/server/http.ts', 'utf-8')
+  const uiSrc30 = fs.readFileSync('src/ui/index.html', 'utf-8')
+  // C30b-01 算法模型：SRS 同源弱度 1/(rate+0.15) + 错题积压放大
+  check('C30b-01 排程模型：弱度 1/(rate+0.15) 与积压放大同源 SRS（数学口径一致）',
+    schedSrc30.includes('1 / (r + 0.15)') && schedSrc30.includes('(1 + (openTotal') && schedSrc30.includes('弱点×积压加权'))
+  // C30b-02 确定性：无随机/无时钟依赖（同输入两次输出深相等由运行时断言固化）
+  check('C30b-02 排程纯函数：无 Math.random、无 Date.now（确定性纪律）',
+    !schedSrc30.includes('Math.random') && !schedSrc30.includes('Date.now'))
+  // C30b-03 四步纪律闭环：manifest 声明 + server 实现 + UI 消费
+  check('C30b-03 排程四步纪律：manifest 声明 + http 接线 + 旧 SPA UI 消费',
+    manifestSrc30.includes('/api/plan/schedule') && httpSrc30.includes("/api/plan/schedule") && uiSrc30.includes('/api/plan/schedule'))
+  // C30b-04 崩溃安全：错误收敛 {error} 不冒泡
+  check('C30b-04 排程崩溃安全：try/catch 收敛 {error} + 空计划守卫',
+    schedSrc30.includes('catch (e: any)') && schedSrc30.includes('计划为空'))
 
 
   // ── cycle-26 静态守卫（C26）：行测材料双形态 + 真题卷加载死循环根治 ──

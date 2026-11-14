@@ -905,6 +905,14 @@ function Hs13Trace(props) {
                     <div style={{ marginTop: 10, fontSize: 10.5, color: '#94a3b8', lineHeight: 1.7 }}>{'索引源 ' + String(corpus.source || 'none') + ' · 构建 ' + hs13Fmt2(corpus.buildMs) + ' ms'
                         + (corpus.snapshotPresent ? ' · 快照已落盘' : ' · 无快照')
                         + (corpus.degraded ? ' · ⚠ 降级' : '')}</div>
+                    {/* cycle-30（T-031 清偿）：语料更新提示——版本/更新时间 + 跳题库管理入口（不重复造安装器） */}
+                    {corpus.updateHint ? <div style={{ marginTop: 6, fontSize: 10.5, lineHeight: 1.7, color: corpus.updateHint.stale ? '#b45309' : '#94a3b8' }}>
+                        {'语料版本：最后变更 ' + String(corpus.updateHint.lastChangedAt || '—') + '（' + (corpus.updateHint.lastChangedDaysAgo || 0) + ' 天前）'}
+                        {corpus.updateHint.stale ? ' · ⚠ 超过 30 天未更新' : ''}
+                        <span style={{ marginLeft: 6, cursor: 'pointer', color: '#4f46e5', fontWeight: 700 }}
+                            onClick={() => { try { if (typeof props.onGo === 'function') props.onGo('repos', {}) } catch {} }}
+                            title="打开题库管理检查语料更新（pull 即可，fixtureHash 自动失效快照）">{'→ 去题库管理更新'}</span>
+                    </div> : null}
                 </Card>
             </div> : null}
             {/* 声明对账（白盒假阳性守卫） */}
