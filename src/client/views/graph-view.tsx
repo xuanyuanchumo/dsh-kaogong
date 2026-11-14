@@ -529,8 +529,17 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
 
       // 考点掌握（既有 T-020 卡片，移到图谱下方；逻辑保持不变）
       const mastery: any = (stats && stats.mastery) || {}
+      // cycle-29（沙箱视觉验证实证）：stats.mastery 真实形状是 { rate, confidence, mastery, answered }
+      // ——没有 correct 字段（rate 由服务端按 check 记录预计算），旧 v.correct||0 恒 0 →
+      // 显示「0/54 · NaN%」（0/0 未定义率）+ Bar pct=NaN。双形状兼容：correct 缺失时用
+      // rate 派生 correct = round(rate×answered/100)；rate 也缺失才走旧本地口径。
       const mRows: any[] = entries(mastery)
-        .map(([m, v]: any) => ({ m, answered: v.answered || 0, correct: v.correct || 0, rate: v.answered ? Math.round(v.correct / v.answered * 100) : 0 }))
+        .map(([m, v]: any) => {
+          const answered = v.answered || 0
+          const rate = (typeof v.rate === 'number') ? v.rate : (answered ? Math.round(((v.correct || 0) / answered) * 100) : 0)
+          const correct = (typeof v.correct === 'number') ? v.correct : Math.round((rate * answered) / 100)
+          return { m, answered, correct, rate }
+        })
         .filter((r: any) => r.answered > 0)
         .sort((a: any, b: any) => a.rate - b.rate)
 
