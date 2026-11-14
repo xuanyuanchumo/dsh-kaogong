@@ -724,6 +724,18 @@ try {
       if (!tUnrevealed.includes('参考答案')) throw new Error('RENDER-PP-31 browse 未对照态参考答案缺失（解析省略回归）')
       ok('RENDER-PP-31: browse 未对照态解析/参考答案完整显示（占位语义收敛到 practice 考试中）')
 
+      // RENDER-PP-31b（cycle-32b）：学习模式未作答时解析必须隐藏（防偷看语义回归验证）
+      // —— 切学习模式（learnIdx 初始 0 = 申论题）→ 未点选 → 应出现占位行（hideBeforeAnswer）
+      const toLearn31 = tr.root.findAllByType('button').find(b => b.props['data-kg-paper-mode'] === 'learn')
+      if (!toLearn31) throw new Error('RENDER-PP-31b 学习模式切换按钮缺失')
+      await act(async () => { toLearn31.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const tLearnHidden = JSON.stringify(tr.toJSON())
+      if (!tLearnHidden.includes('提交作答后显示答案与解析')) {
+        throw new Error('RENDER-PP-31b 学习模式未作答时解析未隐藏（防偷看语义丢失——用户报的解析提前可见回归）')
+      }
+      ok('RENDER-PP-31b: 学习模式未作答态解析/答案占位隐藏（hideBeforeAnswer 防偷看语义生效）')
+
     // RENDER-PP-32（cycle-32）：真题卷三模式切换——学习模式单题判分旅程（点选 A → 即时判错 →
     // 卷面答案揭示 → 下一题推进）。答题模式走真实 exam 端点链，render 只验切换条与引导卡。
     {
