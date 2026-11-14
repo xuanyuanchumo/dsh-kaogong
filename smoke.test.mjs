@@ -1595,6 +1595,34 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   // R-GRAPH 守卫：搜索回车循环（keepQuery 参数 + 循环推进）
   const graphViewSrc = fs.readFileSync('src/client/views/graph-view.tsx', 'utf-8')
   check('R-GRAPH-01 搜索回车循环定位（keepQuery + 循环提示）', graphViewSrc.includes('keepQuery?: boolean') && graphViewSrc.includes('回车循环定位'))
+
+
+  // ── cycle-26 静态守卫（C26）：行测材料双形态 + 真题卷加载死循环根治 ──
+
+  const ppSrc26 = fs.readFileSync('src/adapters/paperParse.ts', 'utf-8')
+
+  const pvSrc26 = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+
+  const paSrc26 = fs.readFileSync('src/server/paperApi.ts', 'utf-8')
+
+  const kitSrc26 = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+
+  check('C26-01 材料双形态：解析器支持 申论-给定材料 + 行测-材料N 组段（parseGroupMaterials）',
+
+    /export function parseGroupMaterials/.test(ppSrc26) && ppSrc26.includes('groupMaterial'))
+
+  check('C26-02 组材料透出：/api/paper 对 groupMaterial 做 rewriteImages（图片链路一致）',
+
+    paSrc26.includes('q.groupMaterial = rewriteImages'))
+
+  check('C26-03 组材料消费：papers-view browse 卡注入 material（题组材料有则渲染）',
+
+    pvSrc26.includes('q.groupMaterial') && kitSrc26.includes('wordCount > 500'))
+
+  check('C26-04 加载死循环根治：详情 effect 依赖不含 detail（渲染值不进取数依赖）',
+
+    !/\}, \[openId, detail, api\]\)/.test(pvSrc26) && /}, \[openId, api\]\)/.test(pvSrc26))
+
 }
 
 // ── cycle-20 P0 静态守卫：R11 复发根治（裸 tsc 覆写 combo → 插件启动失败/宿主崩溃）──

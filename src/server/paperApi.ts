@@ -106,6 +106,8 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
         for (const q of paper.questions || []) {
           q.stem = rewriteImages(q.stem, id, mountPath)
           q.reference = rewriteImages(q.reference, id, mountPath)
+          // cycle-26 D-1：行测题组共享材料（资料分析 `## 材料 N` 形态）同样改写图片引用
+          if (q.groupMaterial) q.groupMaterial = rewriteImages(q.groupMaterial, id, mountPath)
         }
       }
       return paper

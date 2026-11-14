@@ -44,3 +44,11 @@
 |---|---|---|---|---|
 | T-25-09 | NativeTuxingView/NativeDeepBankView 尚未接入 QwQuestionCard（qw-practice 缩围遗留） | 体验债 | cycle-26 首项：deepbank 映射 dims 五维齐备可直转；tuxing 题干是 imgUrl 独立图需 kit 支持外置题图段 | cycle-25 |
 | T-25-10 | QwZoomHost 未包 exam/papers/essay 已接入视图的部分深层 RichText（材料段图暂不放大） | 体验债 | 富材料链路验证后扩大 QwZoomHost 包裹面 | cycle-26 |
+
+## cycle-26 登记（2026-11-14）
+
+| ID | 描述 | 类别 | 处置建议 | 登记循环 |
+|---|---|---|---|---|
+| T-26-07 | 真题卷详情「逐题模式」入口（browse 卡 + 题间导航，与模考做题模式互补） | 功能缺口 | cycle-27：复用 QwQuestionCard + QwExamNavigator browse 态（答题卡只读跳转） | cycle-26 |
+| T-26-08 | 行测题组「材料 ↔ 题」联动跳转（申论 jumpToMaterial 同款，组材料锚点定位） | 体验债 | cycle-27：QwMaterial 加 id 锚 + 题卡关联 chip | cycle-26 |
+| T-26-09 | 深度题库/图形推理视图接入 QwQuestionCard（T-25-09 顺延） | 体验债 | cycle-27 首项 | cycle-25→26 |

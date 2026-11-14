@@ -125,25 +125,32 @@ export function QwTypeTag({ q }: QwTypeTagProps) {
 
 /* ══════════════ 3 材料（受控折叠） ══════════════ */
 
-/** QwMaterial props：受控——collapsed/onToggle 由宿主持有（smoke 材料折叠契约）；长材料默认建议折叠 */
+/** QwMaterial props：受控（collapsed/onToggle 由宿主持有，保 smoke 材料折叠契约）或自治
+ *  （无 onToggle 时组件内自持折叠态，长材料 >500 字默认折叠——browse 模式题组材料形态） */
 interface QwMaterialProps { text: string; ref?: string; collapsed?: boolean; onToggle?: () => void }
 export function QwMaterial({ text, ref: materialRef, collapsed, onToggle }: QwMaterialProps) {
+  /* ── R9：hooks 全顶部；自治模式才用的 useState（受控模式下恒 false，hook 链恒定） ── */
+  const [selfCollapsed, setSelfCollapsed] = React.useState(null as boolean | null)
   const body = String(text || '')
   if (!body) return null
   const wordCount = body.replace(/\s/g, '').length
-  const isCollapsed = !!collapsed
+  // 受控模式：collapsed prop 生效；自治模式：长材料默认折叠（首次渲染计算一次）
+  const isCollapsed = typeof onToggle === 'function'
+    ? !!collapsed
+    : (selfCollapsed != null ? selfCollapsed : wordCount > 500)
+  const toggle = typeof onToggle === 'function' ? onToggle : () => setSelfCollapsed(v => !(v != null ? v : wordCount > 500))
   return (
     <div style={{ marginBottom: 10, padding: 12, background: 'rgba(14,165,233,.06)', borderRadius: 10, borderLeft: '3px solid #0ea5e9' }}>
-      {/* 材料头：标题行 + 字数；有 onToggle 时整行可点（受控），否则常显 */}
+      {/* 材料头：标题行 + 字数；整行可点折叠/展开（受控或自治） */}
       <div
-        style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5, color: '#0ea5e9', display: 'flex', alignItems: 'center', gap: 6, ...(typeof onToggle === 'function' ? { cursor: 'pointer', userSelect: 'none' } : {}) }}
-        onClick={typeof onToggle === 'function' ? onToggle : undefined}
-        title={typeof onToggle === 'function' ? (isCollapsed ? '展开材料' : '折叠材料') : undefined}
+        style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5, color: '#0ea5e9', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}
+        onClick={toggle}
+        title={isCollapsed ? '展开材料' : '折叠材料'}
       >
         <span style={{ display: 'inline-block', transition: 'transform .2s', transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>{'▸'}</span>
         <span>{'📄 材料'}</span>
         {materialRef ? <span style={{ fontWeight: 400, fontSize: 10.5, color: '#64748b' }}>{String(materialRef).slice(0, 40)}</span> : null}
-        <span style={{ fontWeight: 400, fontSize: 10.5, color: '#94a3b8' }}>{'约 ' + wordCount + ' 字' + (isCollapsed ? ' · 已折叠' : '')}</span>
+        <span style={{ fontWeight: 400, fontSize: 10.5, color: '#94a3b8' }}>{'约 ' + wordCount + ' 字' + (isCollapsed ? ' · 点击展开' : '')}</span>
       </div>
       {!isCollapsed ? <RichText text={body} fontSize={12.5} /> : null}
     </div>

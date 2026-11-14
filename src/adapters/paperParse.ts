@@ -27,7 +27,13 @@ export function parseOverview(content) {
   return { questionCount: q ? +q[1] : 0, imageCount: img ? +img[1] : 0 }
 }
 
-/** 给定材料段：截到下一个 H2 */
+/**
+ * 给定材料段：双形态（cycle-26 D-1）。
+ *  - 申论形态：`## 给定材料` 总段 → `### 材料 N` 逐份（整卷材料区在题目之前）
+ *  - 行测形态：`## 材料 N` 独立 H2 段直接夹在题目流中（资料分析题组：每段材料后跟 4-6 题）
+ * 行测形态由 parsePaperText 的 H2 流扫描处理（材料归属「其后第一题」的题组），
+ * 本函数仍只负责申论形态（向后兼容，返回值语义不变）。
+ */
 export function parseMaterials(content) {
   const out = []
   const start = content.search(/^##\s*给定材料\s*$/m)
@@ -39,6 +45,25 @@ export function parseMaterials(content) {
   const blocks = body.split(/\n###\s*材料\s*(\d+)\s*\n/)
   for (let i = 1; i < blocks.length; i += 2) {
     out.push({ no: +blocks[i], text: (blocks[i + 1] || '').trim().slice(0, 20000) })
+  }
+  return out
+}
+
+/**
+ * cycle-26 D-1：行测形态材料段扫描——收集全部 `## 材料 N` H2 段（不吞正文）。
+ * 返回 Map<材料号, 正文>，供 parsePaperText 注入题组材料。
+ */
+export function parseGroupMaterials(content) {
+  const out = new Map()
+  const re = /^##\s*材料\s*(\d+)\s*$/gm
+  const marks = []
+  let m
+  while ((m = re.exec(content)) !== null) marks.push({ no: +m[1], at: m.index, after: m.index + m[0].length })
+  for (let i = 0; i < marks.length; i++) {
+    const seg = content.slice(marks[i].after)
+    const nextH2 = seg.search(/^##\s+/m)
+    const text = (nextH2 >= 0 ? seg.slice(0, nextH2) : seg).trim().slice(0, 20000)
+    if (text) out.set(marks[i].no, text)
   }
   return out
 }
@@ -95,10 +120,14 @@ export function guessXingceType(stem) {
   return '综合'
 }
 
-/** 解析单题：按科目形态分流 */
-export function parseQuestion(no, body, subject) {
-  const beforeDetails = body.split(/<details>/)[0] || ''
+/** 解析单题：按科目形态分流。groupMaterial = 行测题组共享材料（cycle-26 D-1，可选注入） */
+export function parseQuestion(no, body, subject, groupMaterial) {
+  let beforeDetails = body.split(/<details>/)[0] || ''
   const isXingce = subject === '行测'
+  // cycle-26 D-1：`## 材料 N` 段文本会残留在「上一题块」尾部（split 以题头为界）——
+  // 本题题干若包含下一个材料段头，则从这里裁剪（材料正文由位置扫描注入下一题组）
+  const cutAt = beforeDetails.search(/^##\s*材料\s*\d+\s*$/m)
+  if (cutAt >= 0) beforeDetails = beforeDetails.slice(0, cutAt)
   let stemLines = []
   let optLines = []
   let parsed
@@ -128,18 +157,47 @@ export function parseQuestion(no, body, subject) {
     requirement: reqMatch ? reqMatch[1].trim() : '',
     reference: parsed.reference || '',
     analysis: parsed.analysis || '',
+    // cycle-26 D-1：行测题组共享材料（`## 材料 N` 形态）——归属「其后第一题」起的题组；
+    // 无组材料的题此字段为空串（不臆造空段，QwQuestionCard 按有则渲染跳段）
+    groupMaterial: String(groupMaterial || ''),
   }
 }
 
-/** 整卷解析：materials + questions */
+/** 整卷解析：materials（申论形态）+ questions（含行测题组材料注入） */
 export function parsePaperText(content, meta) {
   const materials = parseMaterials(content)
+  // cycle-26 D-1：行测 `## 材料 N` 组材料段（资料分析形态，夹在题目流中）
+  const groupMats = parseGroupMaterials(content)
   const qStart = content.search(/^##\s*题目\s*$/m)
   const qText = qStart >= 0 ? content.slice(qStart) : content
   const blocks = qText.split(/\n###\s*第\s*(\d+)\s*题\s*\n/)
   const questions = []
   for (let i = 1; i < blocks.length; i += 2) {
-    questions.push(parseQuestion(+blocks[i], blocks[i + 1] || '', meta.科目 || ''))
+    questions.push(parseQuestion(+blocks[i], blocks[i + 1] || '', meta.科目 || '', null))
+  }
+  // 组材料归属修正：blocks 切分以 `### 第 N 题` 为界，`## 材料 N` 段文本会残留在
+  // 「上一题块的尾部」。改为对全文做一次位置扫描，把每个 `## 材料 N` 的正文及其后
+  // 题号范围计算出来，再按题号注入。
+  if (groupMats.size) {
+    const reMat = /^##\s*材料\s*(\d+)\s*$/gm
+    const reQ = /^###\s*第\s*(\d+)\s*题/gm
+    const qPositions = []
+    let qm
+    while ((qm = reQ.exec(content)) !== null) qPositions.push({ no: +qm[1], at: qm.index })
+    const matRanges = []
+    let mm
+    reMat.lastIndex = 0
+    while ((mm = reMat.exec(content)) !== null) matRanges.push({ no: +mm[1], at: mm.index, after: mm.index + mm[0].length })
+    for (let i = 0; i < matRanges.length; i++) {
+      const rangeEnd = i + 1 < matRanges.length ? matRanges[i + 1].at : content.length
+      // 该材料段之后、下一材料段之前的全部题号共享此材料
+      const nos = qPositions.filter(q => q.at > matRanges[i].after && q.at < rangeEnd).map(q => q.no)
+      const text = groupMats.get(matRanges[i].no) || ''
+      if (!nos.length || !text) continue
+      for (const q of questions) {
+        if (nos.includes(q.no)) q.groupMaterial = text
+      }
+    }
   }
   return { materials, questions }
 }

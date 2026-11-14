@@ -227,7 +227,10 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/questio
         setDetail(null)
         api('/paper?id=' + encodeURIComponent(openId)).then(d => { if (!cancelled) setDetail(d) }).catch(() => { if (!cancelled) setDetail({ error: '加载失败' }) })
         return () => { cancelled = true }
-      }, [openId, detail, api])
+        // cycle-26 D-2 修复：detail 曾在依赖数组里——setDetail(d) 触发本 effect 重跑 →
+        // setDetail(null) + 重新 fetch 无限循环（用户感知「一直加载试卷」）。
+        // 渲染用值不进取数依赖；换卷由 openId 单独驱动。
+      }, [openId, api])
 
       if (openId) {
         if (!detail) return <div className="kg-load"><div className="kg-spin" />{'加载试卷…'}</div>
@@ -280,7 +283,9 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost } from '../question/questio
                 <QwQuestionCard
                   {...({ key: q.no } as any)}
                   mode="browse"
-                  q={{ no: q.no, score: q.score, stem: q.stem, requirement: q.requirement, reference: q.reference }}
+                  // cycle-26 D-1：行测题组共享材料（groupMaterial，资料分析 `## 材料 N` 形态）——
+                  // 同组多题各带一份相同材料文本，材料段有则渲染（QwMaterial 有 onToggle 前仅展示头行）
+                  q={{ no: q.no, score: q.score, stem: q.stem, requirement: q.requirement, reference: q.reference, material: q.groupMaterial || '', materialRef: q.groupMaterial ? '题组材料' : '' }}
                 />)}
               />
             </Card>
