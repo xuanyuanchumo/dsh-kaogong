@@ -386,11 +386,22 @@ function KgMemBanner(props: KgMemBannerProps) {
      * cycle-24 P0-1 取数下沉：错题本视图自治 fetch（原 props.data.wb 由父层拉取下发）。
      * 窄 props = { api }；单端点 /wrong 自取，hook 链恒定：useState×3 + useEffect×1。
      */
-    interface NativeWrongbookViewProps { api: any }
-    export function NativeWrongbookView({ api }: NativeWrongbookViewProps) {
+    interface NativeWrongbookViewProps { api: any; onGoPractice?: any }
+    /**
+     * NativeWrongbookView — 错题本工作台（cycle-33 issue#3 完善重写）
+     * 新增：① 模块/状态筛选条 ② 「SRS 回炉」跳刷题（srs=1 直达回炉抽题）
+     *       ③ 内嵌纸质补录卡（KgHistoryImport 复用——用户收「错题已进错题本」提示后
+     *          回错题本能直接再补录，不再要去深度题库页找入口）④ 条目展开全文。
+     * 保留：统计双卡 / SRS 箱位 / 出处标签 / mastered 灰化（cycle-21 形态不变）。
+     */
+    export function NativeWrongbookView({ api, onGoPractice }: NativeWrongbookViewProps) {
       const [wb, setWb] = React.useState(null)
       const [err, setErr] = React.useState(null)
       const [loading, setLoading] = React.useState(true)
+      const [modFilter, setModFilter] = React.useState('')
+      const [stateFilter, setStateFilter] = React.useState('all')
+      const [expanded, setExpanded] = React.useState({})   // sig → 展开全文
+      const [importOpen, setImportOpen] = React.useState(false)
       React.useEffect(() => {
         let cancelled = false
         setLoading(true)
@@ -404,32 +415,74 @@ function KgMemBanner(props: KgMemBannerProps) {
       if (err || !wb) return <div style={{ color: '#ef4444', fontSize: 13 }}>{'错题本加载失败: ' + (err || '无数据')}</div>
       const { wrong, summary } = wb
       const tagStyle = { background: '#eef2ff', color: '#4338ca', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }
+      // cycle-33 筛选：模块 chips（来源=条目里出现过的模块，确定性）+ 状态三态
+      const modulesAll = Array.from(new Set((wrong || []).map((w: any) => String(w.module || '未知')))).sort()
+      const filtered = (wrong || []).filter((w: any) => {
+        if (modFilter && String(w.module || '未知') !== modFilter) return false
+        if (stateFilter === 'open' && w.mastered) return false
+        if (stateFilter === 'mastered' && !w.mastered) return false
+        return true
+      })
       return (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginBottom: 14 }}>
             <Stat v={(summary && summary.open) || 0} l="🔥 待消灭" color="#ef4444" />
             <Stat v={(summary && summary.mastered) || 0} l="✅ 已掌握" color="#10b981" />
           </div>
-          {!(wrong || []).length && <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>{'🎉 错题本空空如也 — 保持！'}</div>}
-          {(wrong || []).map(w => <div key={w.sig} style={{ border: '1.5px solid rgba(148,163,184,.3)', borderRadius: 12, padding: '13px 15px', marginBottom: 9, background: 'var(--surface-card,#fff)', opacity: w.mastered ? .6 : 1 }}>
+          {/* cycle-33 工作台操作条：SRS 回炉入口 + 纸质补录折叠开关（错题本=复习工作台，不只展示） */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            {onGoPractice ? <button
+              style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, fontWeight: 700 }}
+              onClick={() => onGoPractice({ srs: 1 })}
+              data-kg-wb-srs="1"
+              title="跳到刷题页的 SRS 智能回炉（未掌握错题最久未复习优先）"
+            >{'🔁 SRS 回炉复习'}</button> : null}
+            <button
+              style={{ ...KV_BTN, ...(importOpen ? { background: 'rgba(99,102,241,.12)', borderColor: 'rgba(99,102,241,.5)', color: '#4f46e5', fontWeight: 700 } : {}) }}
+              onClick={() => setImportOpen(v => !v)}
+              data-kg-wb-import="1"
+            >{importOpen ? '▲ 收起纸质补录' : '📥 纸质刷题补录'}</button>
+            <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{(filtered || []).length + ' / ' + (wrong || []).length + ' 条'}</span>
+          </div>
+          {importOpen ? <div style={{ marginBottom: 14 }}><KgHistoryImport api={api} /></div> : null}
+          {/* cycle-33 筛选条：模块 chips + 状态三态 */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{'筛选'}</span>
+            <button style={{ ...KV_BTN, ...(modFilter === '' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }} onClick={() => setModFilter('')}>{'全部模块'}</button>
+            {modulesAll.map(m => <button key={m}
+              style={{ ...KV_BTN, ...(modFilter === m ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }}
+              onClick={() => setModFilter(m)}>{m}</button>)}
+            <span style={{ width: 10 }} />
+            {[['all', '全部'], ['open', '🔥 待消灭'], ['mastered', '✅ 已掌握']].map(([k, label]) =>
+              <button key={k}
+                style={{ ...KV_BTN, ...(stateFilter === k ? { background: 'linear-gradient(135deg,#f59e0b,#f97316)', color: '#fff', border: 0 } : {}) }}
+                onClick={() => setStateFilter(k)}>{label}</button>)}
+          </div>
+          {!(filtered || []).length && <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
+            {!(wrong || []).length ? '🎉 错题本空空如也 — 保持！' : '当前筛选无条目 — 试试放宽模块/状态筛选'}
+          </div>}
+          {(filtered || []).map(w => <div key={w.sig} style={{ border: '1.5px solid rgba(148,163,184,.3)', borderRadius: 12, padding: '13px 15px', marginBottom: 9, background: 'var(--surface-card,#fff)', opacity: w.mastered ? .6 : 1 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={tagStyle}>{w.module}</span>
               <span style={tagStyle}>{'错' + w.wrongCount + '次'}</span>
-              {/* cycle-21：错题条目也标出处（入库时快照的题库来源/卷名；旧数据无则不渲染） */}
-              {(w.source || w.exam) ? <span style={{ ...tagStyle, background: 'rgba(99,102,241,.1)', color: '#4338ca' }}>{'📌 ' + [w.exam || w.paperFile, w.year].filter(Boolean).join(' · ') || w.module}</span> : null}
+              {(w.source || w.exam) ? <span style={{ ...tagStyle, background: 'rgba(99,102,241,.1)', color: '#4338ca' }}>{'📌 ' + ([w.exam || w.paperFile, w.year].filter(Boolean).join(' · ') || w.module)}</span> : null}
+              {w.fromImport ? <span style={{ ...tagStyle, background: 'rgba(16,185,129,.12)', color: '#059669' }}>{'📥 纸质补录'}</span> : null}
               <span title={'SRS 箱位 ' + w.box + '/5'} style={{ display: 'inline-flex', gap: 3 }}>{Array.from({ length: 5 }, (_, i) => <i key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i < w.box ? (w.mastered ? '#10b981' : '#6366f1') : 'rgba(148,163,184,.3)' }} />)}</span>
               {w.mastered ? <span style={{ color: '#10b981', fontSize: 11, fontWeight: 700 }}>{'已掌握'}</span> : null}
             </div>
-            <div style={{ fontSize: 12.5, lineHeight: 1.65, maxHeight: 66, overflow: 'hidden' }}>{w.stem}</div>
+            {/* cycle-33 条目展开：点题干全文切换（默认 66px 截断，长题干看不全） */}
+            <div
+              style={{ fontSize: 12.5, lineHeight: 1.65, maxHeight: expanded[w.sig] ? 'none' : 66, overflow: 'hidden', cursor: 'pointer' }}
+              onClick={() => setExpanded(m => ({ ...m, [w.sig]: !m[w.sig] }))}
+              title={expanded[w.sig] ? '点击收起' : '点击展开全文'}
+            >{w.stem}</div>
+            {!expanded[w.sig] && String(w.stem || '').length > 90
+              ? <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3, cursor: 'pointer' }} onClick={() => setExpanded(m => ({ ...m, [w.sig]: true }))}>{'… 展开全文'}</div>
+              : null}
           </div>)}
         </div>
       )
     }
-    /**
-     * 图形推理专项视图（T-023 完整版 · 整合 gk-tuxing 354 题）
-     * 每题含：题干图（354 张本地图）/ 规律分类 / 参考答案 / 原创解题思路 / 分析 / 陷阱
-     * 交互：选规律 → 看图作答（A-D）→ 对答案 + 读思路 → 下一题
-     */
     interface NativeTuxingViewProps { api: any }
     export function NativeTuxingView({ api }: NativeTuxingViewProps) {
       const [cats, setCats] = React.useState(null)

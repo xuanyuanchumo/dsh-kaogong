@@ -1933,9 +1933,31 @@
       "stdout": "[PASS] G0: Evaluation report found in cycle-32 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[PASS] G1: All 5 tasks completed §cycle-32\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 unchanged, not re-recorded\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-32\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 unchanged, not re-recorded\n[PASS] G3: Build passed: npm run build §cycle-32 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n\nAll gates PASSED.\n",
       "stderr": "",
       "durationMs": 4309
+    },
+    {
+      "flowId": "archive-cycle-2026-11-14T14:32:50.138Z-94",
+      "script": "archive-cycle",
+      "workspace": "D:/Projects/TraeProjects/kaogong/dsh-kaogong",
+      "args": [
+        "--cycle",
+        "32"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-14T14:32:50.138Z",
+      "cycle": "cycle-32",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-14T14:32:50.138Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T14:32:50.254Z",
+      "exitCode": 0,
+      "stdout": "Archived cycle-32 to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\archive\\cycle-32\n  Ledger untouched (append-only hash chain, INV-9).\n",
+      "stderr": "",
+      "durationMs": 110
     }
   ],
-  "counter": 93,
+  "counter": 94,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

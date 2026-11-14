@@ -1713,6 +1713,24 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('C32-04 换卷重置：learn/answer 状态全部随 openId 清零',
     pvSrc32.includes('setLearnIdx(0)') && pvSrc32.includes('setAnswerExam(null)') && pvSrc32.includes('setLearnCorrectCount(0)'))
 
+  // ── cycle-33 静态守卫（C33）：issue#3 补录可用性根治 + 错题本工作台 ──
+  const histSrc33 = fs.readFileSync('src/server/historyApi.ts', 'utf-8')
+  const svSrc33 = fs.readFileSync('src/client/views/study-view.tsx', 'utf-8')
+  // C33-01 补录搜索第三通道：真题卷全文扫描（naoku 缺席/随机兜底失效的根治）
+  check('C33-01 补录搜索真题卷通道：buildPaperIndex+loadPaper 逐卷扫描（matchSource=papers + 溯源元数据）',
+    histSrc33.includes("matchSource: 'papers'") && histSrc33.includes('buildPaperIndex'))
+  check('C33-01b 真题卷通道溯源元数据：paperId/exam/year/no 随候选下发',
+    histSrc33.includes('paperId: pp.id') && histSrc33.includes('paperFile: pp.id.split'))
+  // C33-02 错题本工作台：筛选条 + 状态三态（错题本从纯展示升级工作台）
+  check('C33-02 错题本筛选：模块 chips + 待消灭/已掌握三态',
+    svSrc33.includes('setModFilter') && svSrc33.includes("stateFilter === 'open'") && svSrc33.includes('当前筛选无条目'))
+  // C33-03 双入口：错题本内嵌补录卡 + SRS 回炉入口（用户不再要去深度题库页找入口）
+  check('C33-03 错题本双入口：内嵌 KgHistoryImport + SRS 回炉跳转（onGoPractice）',
+    svSrc33.includes('<KgHistoryImport api={api} />') && svSrc33.includes('data-kg-wb-srs') && svSrc33.includes('data-kg-wb-import'))
+  // C33-04 条目增强：点题干展开全文 + 纸质补录来源标签
+  check('C33-04 错题条目增强：展开全文 + fromImport 来源标签',
+    svSrc33.includes('setExpanded') && svSrc33.includes('📥 纸质补录'))
+
 
   // ── cycle-26 静态守卫（C26）：行测材料双形态 + 真题卷加载死循环根治 ──
 

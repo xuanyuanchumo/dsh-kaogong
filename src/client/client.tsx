@@ -125,7 +125,7 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
        */
       const VIEW_ROUTES: Record<string, { comp: any; key: (t: number) => string; props: () => any }> = {
         dashboard: { comp: NativeDashboardView, key: t => 'd' + t, props: () => ({ api }) },
-        wrongbook: { comp: NativeWrongbookView, key: t => 'w' + t, props: () => ({ api }) },
+        wrongbook: { comp: NativeWrongbookView, key: t => 'w' + t, props: () => ({ api, onGoPractice: () => setView('practice', { srs: 1 }) }) },
         graph: { comp: NativeGraphView, key: t => 'g' + t, props: () => ({ api, wsKey, statsApi: api, onGo: (v: any, params?: any) => setView(v, params || {}) }) },
         obs: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onReload: () => setTick(t => t + 1) }) },
         papers: { comp: NativePapersView, key: t => 'pp' + t, props: () => ({ api, initialSubject: viewParams.subject || '' }) },
