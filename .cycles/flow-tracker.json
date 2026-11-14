@@ -1542,9 +1542,28 @@
       "stdout": "=== HITL Audit (Fix-First Strategy) ===\n\n[PASS] H1: No security-sensitive operations detected\n[PASS] H2: Destructive ops detected (1 files), rollback available via git\n[PASS] H3: All gates green, audit log present\n[PASS] H4: Gate evidence sufficient, no conflicts\n\nAll HITL audits PASSED.\n",
       "stderr": "",
       "durationMs": 422
+    },
+    {
+      "flowId": "fact-base-verify-2026-11-14T10:42:16.563Z-75",
+      "script": "fact-base-verify",
+      "workspace": "D:/Projects/TraeProjects/kaogong/dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-14T10:42:16.563Z",
+      "cycle": "cycle-29",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-14T10:42:16.563Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-14T10:42:16.695Z",
+      "exitCode": 0,
+      "stdout": "Fact-base verification: 5/5 passed (0 skipped, 24 excluded)\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [SKIP] 24 reference(s) excluded (historical artifact / glob / absolute path)\n\nAll fact-base references verified.\n",
+      "stderr": "",
+      "durationMs": 128
     }
   ],
-  "counter": 74,
+  "counter": 75,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

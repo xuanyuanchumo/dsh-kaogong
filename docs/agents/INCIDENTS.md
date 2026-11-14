@@ -204,3 +204,28 @@
 - **修复**：服务端只做尾部裁剪（`score < max(1.0, top×0.15)`，永远保留首条，不改 BM25 排序）+ 三档 `confidence`（`phraseHit`=整串真实命中 → high；全 token 共现 → medium；部分命中 → low）+ `note` 提示；**低置信度结果不丢弃**，把判断权交给 UI/调用方。
 - **守卫**：smoke `HS13-03`（裁剪口径 `rawTotal ≡ results + filtered`、high/phraseHit/coverage=1）、`HS13-04`（生造词 low 仍返回 + note；空查询不计 miss）。
 - **教训**：**检索的「相关性」是提示信号，不是删除开关**——零依赖中文检索宁可标注置信度，也不要静默杀结果。
+
+### R29 · 工具调用「命令窗口」样式（presentCall/presentResult 缺失 · v1.26 根治）
+- **现象**：用户报「本插件调用时的命令窗口显示问题」——模型调用 `kaogong_*` 工具时，GUI 卡片显示生硬（工具名 + raw args 原样平铺），类似命令行窗口输出。
+- **根因**：宿主 ToolDefinition 的可选 UI 展示契约 `presentCall(args)`/`presentResult(args, result)`（tools.md L90-107/L624-629：`card:'generic'|'terminal'|'diff'|...` 渲染意图联合）**六个工具均未声明** → 宿主回退 generic 兜底卡片。宿主 asar 二进制扫描证实 148 处 presentCall 引用 + 16 处 terminal 卡片 = 桌面宿主完整支持该契约，纯属插件侧漏声明。
+- **修复**：`src/host/index.ts` 新增 `kgToolCard(title)` 工厂——待执行卡 `{card:'generic', title, kind:'other', content:参数摘要}`（workspace 隔离键不进正文）；完成卡从 `result.content[0].text` 提取首个非标题行截 140 字。两投影**纯函数**（宿主会在 live streaming 与 session-log replay 两路反复调用，must be total）：全部 try/catch 收敛 undefined = 保留宿主兜底。
+- **守卫**：smoke `C29-01`（工厂存在 + 6 工具全部 `...kgToolCard` 接线 + manifest 工具数对齐）、`C29-02`（catch 收敛 undefined ≥2 处）、`C29-03`（workspace 过滤）。
+- **教训**：**宿主的可选契约 ≠ 不可用**——漏声明的代价是「能跑但难看」的静默降级；工具注册后应对照宿主 ToolDefinition 全字段盘点（output/presentCall/presentResult/presentationMeta），呈现层缺陷也是用户可见缺陷（R21/R22/R29 同族：「命令窗口显示问题」三案齐根）。
+
+### R30 · smoke SRS flaky：README.md 抽中 → `.questions[0]` 裸崩（v1.26 根治）
+- **现象**：eval-runner 并行预热窗口 smoke 偶崩 `Cannot read properties of undefined (reading '0')`（单跑全绿）。
+- **根因**：六个 xingcezhenti 模块目录各有一个 README.md（6/2962=0.2%），`getRandomQuestions` 随机文件采样可抽中 → parseQuestions 解析 0 题 → 端点返回 `{error}` → smoke SRS 段 `.questions[0]` 裸解引用。
+- **修复（双层）**：① 抽题器过滤 `README|说明|目录` 文件名（生产侧根治，20/2962 全库空解析文件不再进采样池）；② smoke SRS 循环判空（`qr.questions?.[0] ?? null` 跳过）+ 6 轮全空时响亮 throw（测试侧防御，错误信息指向数据根）。
+- **教训**：**随机采样池必须按「可消费项」过滤**，目录里的非数据文件（README/说明）不是边界数据；消费方对「列表可能为空」的端点响应一律判空（R05 证据纪律的测试基建推论）。
+
+### R31 · bundler export 剥皮不认 `export async function`（v1.26）
+- **现象**：外提 `graph-subgraph.ts` 后 `npm run build` 响亮失败「产物含行首 export/import」。
+- **根因**：`bundle-client.mjs` 的 `collectExports`/`topLevelDecls` 正则只认 `function|class|const|let|var`，`export async function` 是新形态 → export 关键字漏剥进 combo → 终检守卫抓住。
+- **修复**：正则补 `(?:async\s+)?` 分支（collectExports 收集名 + 剥皮两处、topLevelDecls 一处）。
+- **教训**：**基建的形态识别白名单 = 它必须认识的所有语法形态**；给 bundler/守卫喂新形态前先核对正则。本次终检响亮失败而非静默污染，验证了 assert-combo 防线的存在意义（㊵ 三层根治的持续回报）。
+
+### R32 · 掌握卡 NaN%（stats.mastery 形状漂移 · v1.26 沙箱视觉验证捕捉）
+- **现象**：沙箱 GUI 旅程实测图谱页「我的考点掌握」卡显示 `0/54 · NaN%`（smoke/render 全绿——只有真实浏览器渲染才暴露）。
+- **根因**：`stats.mastery` 服务端真实形状是 `{rate, confidence, mastery, answered}`（无 correct 字段，rate 由 check 记录预计算）；graph-view 旧代码 `v.correct||0` 恒 0 → `0/0` 未定义率 → NaN% + Bar pct=NaN。render 测试 mock 用了 `{answered, correct}` 旧形状（测试自证圆环）。
+- **修复**：双形状兼容——correct 缺失时用 `rate` 派生 `correct=round(rate×answered/100)`；rate 也缺失才走旧本地口径。
+- **教训**：**「UI 测试全绿」≠「界面正确」**（R4/R9/R12 同族第四案）——浏览器级视觉验证不可替代；数据形状漂移的防线在「派生计算对 null/缺失字段防御式读取」+ mock 必须对齐服务端真实形状（R12 纪律）。

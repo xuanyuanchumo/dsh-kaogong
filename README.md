@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
-[![tests](https://img.shields.io/badge/tests-smoke%20317%20%C2%B7%20render%2055-10b981)](#-开发与验证)
+[![tests](https://img.shields.io/badge/tests-smoke%20350%20%C2%B7%20render%2059-10b981)](#-开发与验证)
 
 > **一句话**：把 **16 个**优秀开源考公仓库整合为 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）宿主内的**原生**学习平台 ——
 > 刷题 / SRS 错题本 / 真题卷 / 整卷模考 / 申论评改 / **花生十三体系方法论** / 可交互知识图谱 / 白盒可观测，**完全离线可用**。
@@ -172,9 +172,9 @@ curl -s http://127.0.0.1:51093/kaogong/api/capabilities | head -c 300
 | ⏱ **整卷模考** | 限时倒计时 · 服务端判分（答案不下发，防作弊）· 模块得分分布 · 历史战绩 |
 | 🧠 **深度题库** | 27,506 题五维标注（考点定位 / 推理链 / 最快解法 / 易错点 / 母题思维）· 10,647 题含图 |
 | 📖 **花生十三体系方法论** | 25 篇六模块语料 · **BM25 中文检索**（bigram + 单字）· 覆盖矩阵（0.9756，缺口如实暴露）· 74 题配套练习 · 白盒消费链路 |
-| 🕸️ **交互图谱** | Canvas 2D 力导向（FR 模型）· 三布局（力导向/分层/环形）· 边流动粒子 · 五档着色 · 小地图 · 路径分析 · 导出 PNG |
+| 🕸️ **交互图谱** | Canvas 2D 力导向（FR 模型）· 三布局（力导向/分层/环形）· 边流动粒子 · 五档着色 · 小地图 · 路径分析 · 导出 PNG · **子图按需加载**（1/2 跳邻域 + 反向可达影响面，大图提速探索） |
 | 📡 **白盒可观测** | 生命周期状态机 · 能力对账（注册 → 生产 → 消费三态灯）· 端点性能表 · 延迟分位阶梯 · 吞吐×延迟四象限 · **方法论链路卡** · 诊断导出 |
-| 🔌 **可选 AI 增强** | **6 个**宿主工具（`kaogong_launch` / `ai_tutor` / `ai_plan` / `ai_shenlun` / `ai_essay_review` / **`ai_method`**）把离线基线分+方法论交模型深度点评；**无模型时全部离线功能不受影响** |
+| 🔌 **可选 AI 增强** | **6 个**宿主工具（`kaogong_launch` / `ai_tutor` / `ai_plan` / `ai_shenlun` / `ai_essay_review` / **`ai_method`**）把离线基线分+方法论交模型深度点评；工具调用卡**语义化呈现**（v1.26 接入宿主 presentCall/presentResult UI 展示契约：图标标题+参数摘要，不再是生硬的命令行样式）；**无模型时全部离线功能不受影响** |
 
 ### 界面预览
 
@@ -341,13 +341,15 @@ src/
 ## 🧪 开发与验证
 
 ```bash
-npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 14 模块为宿主单 combo
-node smoke.test.mjs  # 317 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
+npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 17 模块为宿主单 combo
+node smoke.test.mjs  # 350 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
                      # 三布局/流动粒子/白盒三件套/题库管理 R-P-01..06/
                      # 方法论 HS13-01..10 六端点+降级语义+跨 ws 隔离/
+                     # 工具展示契约 C29-01..03（presentCall/presentResult 6 工具全接线）/
+                     # 图谱子图 C29-04..07（neighborhood+impact 消费闭环）/
                      # 打包卫生 R28: bundle patch 与随包模板必须入包、语料与调试 overlay 不得入包）
-node render.test.mjs # 55 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
-                     # 含 C18-01..08 方法论五分区 + 专题枢纽锚点 + 白盒链路卡）
+node render.test.mjs # 59 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
+                     # 含 C18-01..08 方法论五分区 + 专题枢纽锚点 + 白盒链路卡 + C29 子图链）
 npm run test:all     # 上面两步一起跑
 ```
 
