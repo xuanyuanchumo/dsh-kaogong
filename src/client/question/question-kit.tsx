@@ -382,6 +382,11 @@ interface QwPaperModeProps {
   right?: string
   revealed?: boolean
   disabled?: boolean
+  // cycle-30：browse 态自答对照（用户报「真题卷的答案选择交互功能没了」的根治）——
+  // browse 不再纯只读：点选项=记录自选（selected 由宿主持有），宿主主动揭示后
+  // revealed=true → QwOptions 绿/红判色 + QwAnswerDims 展开。与 practice 同构转发，
+  // 容器层零新分支（C28 教训：mode 差异只在判分态来源）。
+  browseAnswers?: Record<string, string>
 }
 
 /** 题组材料 key：取材料文本头 24 字（同组题材料一致 → key 稳定 → 切题不重挂） */
@@ -389,12 +394,13 @@ function qwMatKey(text) {
   return String(text || '').slice(0, 24)
 }
 
-export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMeta, answers, flags, onSelect, onToggleFlag, selected, right, revealed, disabled }: QwPaperModeProps) {
+export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMeta, answers, flags, onSelect, onToggleFlag, selected, right, revealed, disabled, browseAnswers }: QwPaperModeProps) {
   /* ── hooks（R9）：全顶部恒定 ── */
   const [navCollapsed, setNavCollapsed] = React.useState(false)
   const q = questions[current] || {}
   const isExam = mode === 'exam'
   const isPractice = mode === 'practice'
+  const isBrowse = mode === 'browse'
   // 题组材料：同组题共享同一段文本；无组材料的题整区隐藏
   const groupMaterial = String(q.groupMaterial || '')
   // 该材料被多少题共享 + 当前题在组内的位置（O(N) 顺序遍历，确定性）
@@ -428,7 +434,7 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
           </button>
         </div>
         {!navCollapsed ? (
-          <QwExamNavigator questions={questions} answers={answers || {}} flags={flags} current={current} onJump={onJump} />
+          <QwExamNavigator questions={questions} answers={(isBrowse && browseAnswers) ? browseAnswers : (answers || {})} flags={flags} current={current} onJump={onJump} />
         ) : null}
       </div>
       {/* 区1 材料区（题组材料；无则隐藏）+ 区2 题目区 */}
@@ -448,7 +454,7 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
         <div style={wide ? { flex: 1, minWidth: 0 } : undefined}>
           <QwQuestionCard
             mode={mode}
-            interactive={isExam || isPractice}
+            interactive={isExam || isPractice || isBrowse}
             q={{
               no: q.no, score: q.score, type: q.type, groupMaterialNo: q.groupMaterialNo || 0,
               exam: isExam || isPractice ? (paperMeta && paperMeta.subject) || q.exam : q.exam,
@@ -462,11 +468,13 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
               dims: q.dims,
             } as any}
             // exam 态：answers[q.no]；practice 态：宿主 selected/right/revealed（判分揭示三态）
+            // cycle-30：browse 态自答对照——selected/revealed/onSelect 与 practice 同构转发
+            // （interactive=true 使选项可点；揭示只在宿主主动对照后发生，不自动判分）
             selected={isExam ? (answers && answers[q.no]) : selected}
             right={right}
             revealed={isExam ? false : revealed}
             disabled={isPractice ? disabled : undefined}
-            onSelect={isExam || isPractice ? onSelect : undefined}
+            onSelect={isExam || isPractice || isBrowse ? onSelect : undefined}
             onToggleFlag={onToggleFlag ? () => onToggleFlag(q.no) : undefined}
           />
         </div>

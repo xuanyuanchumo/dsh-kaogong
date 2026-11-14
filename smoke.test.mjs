@@ -1631,6 +1631,25 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('C29-08 manifest 工具声明数 = host 接线数（6）', manifestTools29 === 6 && cardCalls === 6,
     'manifest=' + manifestTools29)
 
+  // ── cycle-30 静态守卫（C30）：真题卷 browse 态答案选择交互恢复 ──
+  const kitSrc30 = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+  const pvSrc30 = fs.readFileSync('src/client/views/papers-view.tsx', 'utf-8')
+  // C30-01 交互回归根治：QwPaperMode browse 态转发 interactive/onSelect（不再纯只读）
+  check('C30-01 browse 态自答对照：interactive/onSelect 含 isBrowse 分支（R9 容器层同构）',
+    kitSrc30.includes('interactive={isExam || isPractice || isBrowse}') && kitSrc30.includes('isExam || isPractice || isBrowse ? onSelect'))
+  // C30-02 宿主持有自答态：browseSel/browseReveal 双 useState + 换卷重置
+  check('C30-02 自答态宿主持有：browseSel/browseReveal useState + 换卷重置',
+    pvSrc30.includes('browseSel') && pvSrc30.includes('browseReveal') && pvSrc30.includes('setBrowseSel({})'))
+  // C30-03 对照操作条：主动揭示按钮（不自动判分）+ 重做入口
+  check('C30-03 对照操作条：主动揭示按钮 + 重做入口（data-kg-browse-reveal 锚点）',
+    pvSrc30.includes('data-kg-browse-reveal') && pvSrc30.includes('对照答案') && pvSrc30.includes('重做此题'))
+  // C30-04 答题卡四态同步：browseAnswers 透传 QwExamNavigator（已答态可见）
+  check('C30-04 答题卡四态同步：browseAnswers 透传 QwExamNavigator',
+    kitSrc30.includes('browseAnswers') && kitSrc30.includes('(isBrowse && browseAnswers) ? browseAnswers'))
+  // C30-05 卷面答案数据源：correctAnswer 优先、answer 字母形态兜底（解析器契约不漂移）
+  check('C30-05 卷面答案双源：correctAnswer 优先 + answer 字母兜底',
+    pvSrc30.includes('curQ.correctAnswer') && pvSrc30.includes("test(curQ.answer.toUpperCase())"))
+
 
   // ── cycle-26 静态守卫（C26）：行测材料双形态 + 真题卷加载死循环根治 ──
 

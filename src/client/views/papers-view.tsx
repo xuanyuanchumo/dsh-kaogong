@@ -203,6 +203,18 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       const [detail, setDetail] = React.useState(null)
       // cycle-27：整卷浏览当前题下标（换卷重置；QwPaperMode browse 态驱动）
       const [browseIdx, setBrowseIdx] = React.useState(0)
+      // cycle-30（用户报「真题卷的答案选择交互功能没了」）：browse 态恢复自答对照交互。
+      // 根因：cycle-27 把整卷浏览收敛进 QwPaperMode mode="browse" 只读态（interactive=false、
+      // onSelect=undefined），v1.17 前的点选行为在重构中被降级丢失；而卷面 correctAnswer 数据
+      // 一直存在（parseQuestion 从 <details> 提取）。
+      // 设计「自答对照」：browse 选项可点选记录自选（不自动判分）→ 主动点「对照答案」揭示卷面
+      // 正确答案（绿/红判色 + 答案维度段展开）；换卷重置。纯 UI 态，宿主持有（与 practice 同构）。
+      const [browseSel, setBrowseSel] = React.useState({})
+      const [browseReveal, setBrowseReveal] = React.useState({})
+      const curQ = detail && Array.isArray(detail.questions) ? detail.questions[browseIdx] : null
+      const browseRevealed = !!(curQ && browseReveal[curQ.no])
+      const browseSelected = curQ ? (browseSel[curQ.no] || null) : null
+      const browseCorrect = curQ && typeof curQ.correctAnswer === 'string' ? curQ.correctAnswer.toUpperCase() : (curQ && typeof curQ.answer === 'string' && /^[A-D]$/.test(curQ.answer.toUpperCase()) ? curQ.answer.toUpperCase() : null)
       // cycle-14：材料逐份折叠（用户诉求：给定材料除全局折叠外，支持材料 1/2/3/4 单独折叠展开）。
       // 键=材料段号，值=true 表示该份折叠；换卷时重置为全展开。
       const [collapsedMats, setCollapsedMats] = React.useState({})
@@ -223,6 +235,8 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
         setCollapsedMats({})   // cycle-14：换卷重置材料折叠态（新卷默认全展开）
         setDetail(null)
         setBrowseIdx(0)   // cycle-27：换卷重置整卷浏览当前题
+        setBrowseSel({})   // cycle-30：换卷重置自答对照态（自选 + 揭示）
+        setBrowseReveal({})
         api('/paper?id=' + encodeURIComponent(openId)).then(d => { if (!cancelled) setDetail(d) }).catch(() => { if (!cancelled) setDetail({ error: '加载失败' }) })
         return () => { cancelled = true }
         // cycle-26 D-2 修复：detail 曾在依赖数组里——setDetail(d) 触发本 effect 重跑 →
@@ -285,8 +299,30 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   current={browseIdx}
                   onJump={(i) => setBrowseIdx(i)}
                   paperMeta={{ exam: detail.exam, year: detail.year, subject: detail.subject, paperType: detail.paperType }}
+                  // cycle-30：browse 态恢复自答对照交互——点选项记录自选（QwPaperMode 内部
+                  // 转发 browse 语义），主动揭示对照卷面答案（绿/红判色 + 答案维度段展开）。
+                  selected={browseSelected}
+                  right={browseCorrect}
+                  revealed={browseRevealed}
+                  browseAnswers={browseSel}
+                  onSelect={(letter) => setBrowseSel(m => ({ ...m, [curQ.no]: letter }))}
                 />}
               />
+              {/* cycle-30：对照操作条——自选未揭示时提示点选项；揭示后给重做入口 */}
+              {curQ && typeof browseCorrect === 'string' ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                  {!browseRevealed ? (
+                    <button
+                      style={{ ...KV_BTN, background: 'rgba(99,102,241,.12)', borderColor: 'rgba(99,102,241,.5)', color: '#4f46e5', fontWeight: 700 }}
+                      onClick={() => setBrowseReveal(m => ({ ...m, [curQ.no]: true }))}
+                      data-kg-browse-reveal="1"
+                    >{browseSelected ? '对照答案（卷面：' + browseCorrect + '）' : '直接看答案（卷面：' + browseCorrect + '）'}</button>
+                  ) : (
+                    <button style={KV_BTN} onClick={() => setBrowseReveal(m => ({ ...m, [curQ.no]: false }))}>{'↺ 重做此题'}</button>
+                  )}
+                  <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{'点选项=记录自选 · 对照后绿=自选正确 / 红=错答 · 答案与解析自动展开'}</span>
+                </div>
+              ) : null}
             </Card>
           </div>
         )

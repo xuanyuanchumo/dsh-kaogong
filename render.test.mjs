@@ -204,7 +204,7 @@ globalThis.fetch = async (url) => {
   }) }
   // v1.6 新端点真实形状（cycle-13：papers mock 带 provinces facet ≥3 项，驱动省份 chips 行）
   if (u.includes('/api/papers')) return { json: async () => ({ total: 1683, papers: [{ id: '国考/2009/申论-副省级', exam: '国考', year: 2009, subject: '申论', paperType: '副省级', province: '全国', questionCount: 4, verified: true }], subjects: [{ subject: '申论', count: 944 }, { subject: '行测', count: 739 }], provinces: [{ name: '山东', total: 12, minYear: 2009, maxYear: 2024, subjects: { 申论: 6, 行测: 6 } }, { name: '全国', total: 100, minYear: 2008, maxYear: 2026, subjects: { 申论: 50, 行测: 50 } }, { name: '广东', total: 30, minYear: 2010, maxYear: 2025, subjects: { 申论: 15, 行测: 15 } }] }) }
-  if (u.includes('/api/paper?')) return { json: async () => ({ id: 'x', exam: '国考', year: 2009, subject: '申论', paperType: '副省级', materials: [{ no: 1, text: '材料正文' }], questions: [{ no: 1, stem: '题干', score: 20, requirement: '不超过300字', relatedMaterials: '材料1', reference: '参考答案内容' }] }) }
+  if (u.includes('/api/paper?')) return { json: async () => ({ id: 'x', exam: '国考', year: 2009, subject: '申论', paperType: '副省级', materials: [{ no: 1, text: '材料正文' }], questions: [{ no: 1, stem: '题干', score: 20, requirement: '不超过300字', relatedMaterials: '材料1', reference: '参考答案内容' }, { no: 2, type: '单项选择题', module: '判断推理', stem: '行测题干', options: { A: '选项A', B: '选项B', C: '选项C', D: '选项D' }, correctAnswer: 'B', analysis: '解析文本' }] }) }
   if (u.includes('/api/topics')) return { json: async () => ({
     channels: [
       { id: 'xingce', name: '行测', icon: '📐', desc: '深度题库 27506 题', entries: [{ label: '刷题（SRS）', view: 'practice', params: {} }], topics: [{ id: 'xc:module:判断推理', channel: '行测', kind: 'module', title: '判断推理', desc: '模块', questionCount: 7749, entry: { view: 'practice', params: { module: '判断推理' } } }] },
@@ -647,6 +647,70 @@ try {
     const hit = globalThis.__kgFetchLog.find(u => u.includes('/api/papers') && u.includes('province=' + encodeURIComponent('山东')))
     if (!hit) throw new Error('RENDER-P-01 点击省份 chip 未触发带 province 参数的请求: ' + globalThis.__kgFetchLog.slice(-3).join(' ; '))
     ok('RENDER-P-01: 省份 chips 渲染（facet 驱动）且点击触发 ?province=山东 过滤请求')
+
+    // RENDER-PP-30（cycle-30）：真题卷 browse 态答案选择交互恢复——点选项记录自选 →
+    // 主动「对照答案」揭示卷面答案（绿/红判色）→ 重做入口。canvas-free 纯 DOM 断言。
+    {
+      // 列表项是 div（onClick 行）：children 是嵌套 span 数组，副省级在孙级文本。
+      // 用 react-test-renderer 的实例树逐层扁平收集 onClick 行的纯文本后代。
+      function flatText(node, depth) {
+        if (depth > 6 || !node) return ''
+        let s = ''
+        if (node.children && Array.isArray(node.children)) {
+          for (const ch of node.children) {
+            if (typeof ch === 'string') s += ch
+            else if (ch && typeof ch === 'object') s += flatText(ch, depth + 1)
+          }
+        }
+        return s
+      }
+      const rows = tr.root.findAll(n => n.type === 'div' && typeof n.props.onClick === 'function')
+      const paperItem = rows.filter(r => flatText(r, 0).includes('副省级'))
+      if (!paperItem.length) throw new Error('RENDER-PP-30 未找到试卷列表项（div onClick + 孙级文本）')
+      await act(async () => { paperItem[0].props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 120)) })
+      const t0 = JSON.stringify(tr.toJSON())
+      if (!t0.includes('整卷浏览')) throw new Error('RENDER-PP-30 整卷浏览模式未渲染（QwPaperMode browse 未挂载）')
+      // 跳到第 2 题（行测选择题，带卷面答案 B）
+      const nextBtn = tr.root.findAllByType('button').find(b => String(b.props.children) === '下一题 →')
+      if (!nextBtn) throw new Error('RENDER-PP-30 切换区「下一题 →」缺失')
+      await act(async () => { nextBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      // 点选项 B 记录自选——OptionRow 是 div（onClick），文本=label+text 分散在子节点，
+      // 用扁平文本收集定位（A-D 四行里含「选项B」的那行）
+      function optText(node, depth) {
+        if (depth > 6 || !node) return ''
+        let s = ''
+        if (node.children && Array.isArray(node.children)) {
+          for (const ch of node.children) {
+            if (typeof ch === 'string') s += ch
+            else if (ch && typeof ch === 'object') s += optText(ch, depth + 1)
+          }
+        }
+        return s
+      }
+      const optRows = tr.root.findAll(n => n.type === 'div' && typeof n.props.onClick === 'function')
+      const optB = optRows.find(r => optText(r, 0) === 'B选项B' || optText(r, 0).includes('选项B'))
+      if (!optB) throw new Error('RENDER-PP-30 browse 态选项不可点（interactive/onSelect 转发断裂——回归未根治），可选行=' + optRows.length)
+      await act(async () => { optB.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      // 主动揭示：对照按钮出现（文案含卷面答案 B）→ 点击 → 揭示态 + 重做入口
+      const revealBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-browse-reveal'] === '1')
+      if (!revealBtn) throw new Error('RENDER-PP-30 对照答案按钮缺失（data-kg-browse-reveal）')
+      if (!String(revealBtn.props.children).includes('B')) throw new Error('RENDER-PP-30 对照按钮未透出卷面答案')
+      await act(async () => { revealBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+      const t1 = JSON.stringify(tr.toJSON())
+      if (!t1.includes('重做此题')) throw new Error('RENDER-PP-30 揭示后重做入口缺失')
+      if (!t1.includes('解析文本')) throw new Error('RENDER-PP-30 揭示后答案解析段未展开（revealed 未透传 QwAnswerDims）')
+      // 重做 → 回未揭示态
+      const redo = tr.root.findAllByType('button').find(b => String(b.props.children) === '↺ 重做此题')
+      await act(async () => { redo.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+      const t2 = JSON.stringify(tr.toJSON())
+      if (!t2.includes('对照答案（卷面：B）')) throw new Error('RENDER-PP-30 重做后未回未揭示态（自选 B 保留）')
+      ok('RENDER-PP-30: browse 自答对照全旅程（点选B→揭示判色→解析展开→重做回退）零降级')
+    }
   }
 
   // RENDER-O-11..14：obs 视图（mock capabilities+telemetry+lifecycle 全字段）
