@@ -215,6 +215,74 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       const browseRevealed = !!(curQ && browseReveal[curQ.no])
       const browseSelected = curQ ? (browseSel[curQ.no] || null) : null
       const browseCorrect = curQ && typeof curQ.correctAnswer === 'string' ? curQ.correctAnswer.toUpperCase() : (curQ && typeof curQ.answer === 'string' && /^[A-D]$/.test(curQ.answer.toUpperCase()) ? curQ.answer.toUpperCase() : null)
+      // cycle-32（用户诉求：真题要有两种模式——答题模式和当前这种全卷模式）：
+      // paperMode ∈ 'browse'（📖 全卷模式，cycle-30 自答对照）| 'answer'（📝 答题模式，复用
+      // exam 域三端点：start 剥答案防作弊 / 限时倒计时 / submit 服务端判分）
+      // | 'learn'（🎓 学习模式，cycle-32b 用户追加：单题作答 → 立即判分给答案与解析 → 下一题）。
+      // 答题态三件套（answers/answerLeft/answerReport）宿主持有；换卷全部重置。
+      // 学习模式（learnSel/learnReveal）：与 practice 同构——选中即判分揭示（selected/right/
+      // revealed 三态由宿主持有），对错即时反馈 + 解析展开，下一题推进；无需 exam 域（解析
+      // 在 /api/paper 已下发，纯客户端判分），无倒计时无交卷，节奏自控。
+      const [paperMode, setPaperMode] = React.useState('browse')
+      const [answerExam, setAnswerExam] = React.useState(null)
+      const [answerIdx, setAnswerIdx] = React.useState(0)
+      const [answerSel, setAnswerSel] = React.useState({})
+      const [answerFlags, setAnswerFlags] = React.useState(() => new Set())
+      const [answerLeft, setAnswerLeft] = React.useState(0)
+      const [answerReport, setAnswerReport] = React.useState(null)
+      const [answerBusy, setAnswerBusy] = React.useState(false)
+      // 学习模式态：单题选中即揭示（对/错判色 + 解析）；learnIdx 驱动逐题推进
+      const [learnIdx, setLearnIdx] = React.useState(0)
+      const [learnSel, setLearnSel] = React.useState(null)
+      const [learnReveal, setLearnReveal] = React.useState(false)
+      const [learnCorrectCount, setLearnCorrectCount] = React.useState(0)
+      const [learnAnsweredCount, setLearnAnsweredCount] = React.useState(0)
+      // 答题模式倒计时（考试中且未交卷）
+      React.useEffect(() => {
+        if (paperMode !== 'answer' || !answerExam || answerReport) return
+        const t = setInterval(() => setAnswerLeft(v => (v <= 1 ? 0 : v - 1)), 1000)
+        return () => clearInterval(t)
+      }, [paperMode, answerExam, answerReport])
+      const startAnswerMode = async () => {
+        if (answerBusy || !openId) return
+        setAnswerBusy(true)
+        try {
+          const d = await api('/paper/exam/start?id=' + encodeURIComponent(openId))
+          if (d && d.error) return
+          setAnswerExam(d)
+          setAnswerSel({}); setAnswerFlags(new Set()); setAnswerIdx(0)
+          setAnswerLeft(d.durationSec || (detail && detail.subject === '申论' ? 9000 : 7200))
+          setAnswerReport(null)
+        } finally { setAnswerBusy(false) }
+      }
+      const submitAnswerMode = async () => {
+        if (answerBusy || !answerExam) return
+        setAnswerBusy(true)
+        try {
+          const r = await api('/paper/exam/submit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: answerExam.id, answers: answerSel, elapsedSec: (answerExam.durationSec || 0) - answerLeft }),
+          })
+          if (r && !r.error) setAnswerReport(r)
+        } finally { setAnswerBusy(false) }
+      }
+      const fmtAnswerClock = (sec) => {
+        const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60
+        return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0')
+      }
+      // 答题模式：服务端判分结果 → 每题解析揭示（卷面 correctAnswer 由 start 不下发，
+      // 交卷后从 report.detail（mine/right/isCorrect）重建每题判色 + 用 detail.questions 的 analysis 展示解析）
+      const answerQ = answerExam && Array.isArray(answerExam.questions) ? answerExam.questions[answerIdx] : null
+      const answerDetailRow = answerReport && Array.isArray(answerReport.detail) ? answerReport.detail.find(d => d.no === (answerQ && answerQ.no)) : null
+      const answerQFull = detail && Array.isArray(detail.questions) ? detail.questions.find(q => q.no === (answerQ && answerQ.no)) : null
+      const answerRevealed = !!answerReport   // 交卷后全部揭示（判色 + 解析）
+      // 换卷重置双模式全部状态（browseSel/browseReveal/答题态/学习态）
+      React.useEffect(() => {
+        if (!openId) return
+        setPaperMode('browse')
+        setAnswerExam(null); setAnswerReport(null); setAnswerSel({}); setAnswerFlags(new Set()); setAnswerIdx(0)
+        setLearnIdx(0); setLearnSel(null); setLearnReveal(false); setLearnCorrectCount(0); setLearnAnsweredCount(0)
+      }, [openId])
       // cycle-14：材料逐份折叠（用户诉求：给定材料除全局折叠外，支持材料 1/2/3/4 单独折叠展开）。
       // 键=材料段号，值=true 表示该份折叠；换卷时重置为全展开。
       const [collapsedMats, setCollapsedMats] = React.useState({})
@@ -288,6 +356,180 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                 )
               })}
             </Card> : null}
+            {/* cycle-32：双模式切换条（用户诉求：真题要有两种模式——答题模式和全卷模式）。
+                📝 答题模式 = 复用 exam 域（start 剥答案防作弊 + 限时倒计时 + submit 服务端判分）；
+                📖 全卷模式 = cycle-30 自答对照（点选记录 → 主动揭示卷面答案）。 */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                style={{ ...KV_BTN, ...(paperMode === 'browse' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, fontWeight: 700 } : {}) }}
+                onClick={() => setPaperMode('browse')}
+                data-kg-paper-mode="browse"
+              >{'📖 全卷模式'}</button>
+              <button
+                style={{ ...KV_BTN, ...(paperMode === 'answer' ? { background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 0, fontWeight: 700 } : {}) }}
+                onClick={() => setPaperMode('answer')}
+                data-kg-paper-mode="answer"
+              >{'📝 答题模式'}</button>
+              <button
+                style={{ ...KV_BTN, ...(paperMode === 'learn' ? { background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 0, fontWeight: 700 } : {}) }}
+                onClick={() => setPaperMode('learn')}
+                data-kg-paper-mode="learn"
+              >{'🎓 学习模式'}</button>
+              {paperMode === 'answer' && !answerExam ? (
+                <button
+                  style={{ ...KV_BTN, background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 0, fontWeight: 700 }}
+                  disabled={answerBusy}
+                  onClick={startAnswerMode}
+                  data-kg-answer-start="1"
+                >{answerBusy ? '加载试卷…' : '▶ 开始作答（限时 ' + ((detail.subject === '申论' ? 150 : 120)) + ' 分钟）'}</button>
+              ) : null}
+              <span style={{ fontSize: 10.5, color: '#94a3b8' }}>
+                {paperMode === 'browse' ? '全卷模式：逐题浏览卷面答案与解析（自答对照）'
+                  : paperMode === 'learn' ? '学习模式：单题作答 → 立即判分出答案与解析 → 下一题（节奏自控）'
+                  : '答题模式：限时作答 → 服务端判分 → 错题解析（answer 剥离防作弊）'}
+              </span>
+            </div>
+            {paperMode === 'learn' ? (
+              // ── 🎓 学习模式（cycle-32b 用户追加）：单题作答 → 立即判分给答案与解析 → 下一题。
+              // 与 practice 同构（选中即揭示）；解析/答案来自 /api/paper 已下发数据（纯客户端判分）。
+              (() => {
+                const lq = detail && Array.isArray(detail.questions) ? detail.questions[learnIdx] : null
+                if (!lq) return <Card title="🎓 学习模式"><div style={{ fontSize: 12, color: '#64748b' }}>{'本题卷无题目'}</div></Card>
+                const lCorrect = typeof lq.correctAnswer === 'string' ? lq.correctAnswer.toUpperCase() : (typeof lq.answer === 'string' && /^[A-D]$/.test(lq.answer.toUpperCase()) ? lq.answer.toUpperCase() : null)
+                const lIsCorrect = learnSel != null && lCorrect != null && learnSel === lCorrect
+                const hasOpts = lq.options && Object.keys(lq.options).length > 0
+                return (
+                  <div>
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={KV_TAG}>{'学习进度 ' + (learnIdx + 1) + '/' + (detail.questions || []).length}</span>
+                      <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{'已答 ' + learnAnsweredCount + ' · 对 ' + learnCorrectCount}</span>
+                      <span style={{ fontSize: 10.5, color: '#94a3b8', marginLeft: 'auto' }}>{'选中即判分揭示（不可改选）· 节奏自控'}</span>
+                    </div>
+                    <QwZoomHost children={
+                      <QwPaperMode
+                        mode="practice"
+                        questions={detail.questions || []}
+                        current={learnIdx}
+                        onJump={(i) => { setLearnIdx(i); setLearnSel(null); setLearnReveal(false) }}
+                        paperMeta={{ exam: detail.exam, year: detail.year, subject: detail.subject, paperType: detail.paperType }}
+                        selected={learnSel || undefined}
+                        right={lCorrect || undefined}
+                        revealed={learnReveal}
+                        onSelect={(L) => {
+                          if (learnReveal) return   // 已揭示不可改选（practice 同构语义）
+                          setLearnSel(L)
+                          setLearnReveal(true)
+                          setLearnAnsweredCount(n => n + 1)
+                          if (lCorrect != null && L === lCorrect) setLearnCorrectCount(n => n + 1)
+                        }}
+                      />}
+                    />
+                    {learnReveal && lCorrect ? (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ ...KV_TAG, background: lIsCorrect ? 'rgba(16,185,129,.14)' : 'rgba(239,68,68,.14)', color: lIsCorrect ? '#059669' : '#dc2626', fontWeight: 700 }}>
+                          {lIsCorrect ? '✅ 回答正确（卷面：' + lCorrect + '）' : '❌ 回答错误 · 卷面答案：' + lCorrect}
+                        </span>
+                        <button
+                          style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, fontWeight: 700 }}
+                          disabled={learnIdx >= (detail.questions || []).length - 1}
+                          onClick={() => { setLearnIdx(i => i + 1); setLearnSel(null); setLearnReveal(false) }}
+                          data-kg-learn-next="1"
+                        >{learnIdx >= (detail.questions || []).length - 1 ? '已是最后一题' : '下一题 →'}</button>
+                        <button style={KV_BTN} onClick={() => { setLearnSel(null); setLearnReveal(false) }}>{'↺ 重做此题'}</button>
+                      </div>
+                    ) : !hasOpts ? (
+                      // 申论形态题（无选项）：学习模式不支持在线判分，引导全卷模式 + 跳下一题（防死路）
+                      <div style={{ marginTop: 8, fontSize: 11.5, color: '#94a3b8', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span>{'本题为主观题（无选项），学习模式不支持在线判分 —— 请切「📖 全卷模式」查看材料与参考答案'}</span>
+                        <button
+                          style={KV_BTN}
+                          disabled={learnIdx >= (detail.questions || []).length - 1}
+                          onClick={() => { setLearnIdx(i => i + 1); setLearnSel(null); setLearnReveal(false) }}
+                          data-kg-learn-skip="1"
+                        >{learnIdx >= (detail.questions || []).length - 1 ? '已是最后一题' : '跳过此题 →'}</button>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })()
+            ) : paperMode === 'answer' ? (
+              // ── 📝 答题模式（复用 exam 域；未开始给引导，交卷后给报告+解析）──
+              !answerExam && !answerReport ? (
+                <Card title="📝 答题模式（未开始）">
+                  <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.8 }}>
+                    {'点击上方「▶ 开始作答」进入限时答题：' + ((detail.questions || []).length) + ' 题 · 行测 ' + 120 + ' 分钟 / 申论 ' + 150 + ' 分钟'}
+                    <br />{'作答中答案不下发（防作弊）；交卷后服务端判分，错题逐题显示卷面答案与解析。'}
+                    <br />{'中途切回「📖 全卷模式」不会清空作答记录；换卷才会重置。'}
+                  </div>
+                </Card>
+              ) : answerReport ? (
+                // 交卷报告（复用 exam 域判分结果；解析逐题揭示走 detail.questions.analysis）
+                <div>
+                  <Card title={'📊 答题报告 · ' + (answerReport.subject || detail.subject) + ' ' + (answerReport.year || detail.year)}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 36, fontWeight: 800, color: (answerReport.rate || 0) >= 75 ? '#10b981' : (answerReport.rate || 0) >= 50 ? '#6366f1' : '#f59e0b' }}>{(answerReport.rate || 0) + '%'}</span>
+                      <span style={{ fontSize: 13, color: '#64748b' }}>{'答 ' + answerReport.answered + ' 题 · 对 ' + answerReport.correct + ' 题 · 用时 ' + fmtAnswerClock(answerReport.elapsedSec || 0)}</span>
+                      <button style={{ ...KV_BTN, marginLeft: 'auto' }} onClick={() => { setAnswerReport(null); setAnswerExam(null); setAnswerSel({}); setAnswerFlags(new Set()); setAnswerIdx(0) }}>{'↺ 再来一次'}</button>
+                    </div>
+                    {(answerReport.modules || []).map(m =>
+                      <div key={m.type} style={{ marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                          <span>{m.type + (m.total ? '（' + m.total + ' 题）' : '')}</span>
+                          <span style={{ color: '#64748b' }}>{m.correct + '/' + m.answered + ' · ' + m.rate + '%'}</span>
+                        </div>
+                        <Bar pct={m.rate} color={m.rate >= 75 ? 'linear-gradient(135deg,#10b981,#34d399)' : m.rate >= 50 ? undefined : 'linear-gradient(135deg,#ef4444,#f87171)'} />
+                      </div>)}
+                  </Card>
+                  <Card title="📝 逐题回顾（含卷面答案与解析）">
+                    {answerQ ? (
+                      <QwZoomHost children={
+                        <QwPaperMode
+                          mode="browse"
+                          questions={detail.questions || []}
+                          current={detail.questions.findIndex(q => q.no === answerQ.no) >= 0 ? detail.questions.findIndex(q => q.no === answerQ.no) : 0}
+                          onJump={(i) => setAnswerIdx(answerExam.questions.findIndex(q => q.no === (detail.questions[i] && detail.questions[i].no)) >= 0 ? answerExam.questions.findIndex(q => q.no === (detail.questions[i] && detail.questions[i].no)) : i)}
+                          paperMeta={{ exam: detail.exam, year: detail.year, subject: detail.subject, paperType: detail.paperType }}
+                          selected={(answerSel[answerQ.no] || null)}
+                          right={answerDetailRow ? answerDetailRow.right : null}
+                          revealed={answerRevealed}
+                          browseAnswers={answerSel}
+                          onSelect={(letter) => setAnswerSel(m => ({ ...m, [answerQ.no]: letter }))}
+                        />}
+                      />
+                    ) : <div style={{ fontSize: 12, color: '#64748b' }}>{'题目索引异常'}</div>}
+                  </Card>
+                </div>
+              ) : answerExam ? (
+                // 考试中：倒计时 + QwPaperMode exam 态（交互四态 + 答题卡）
+                <div>
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800, color: answerLeft < 300 ? '#ef4444' : 'var(--text-primary,#0f172a)' }}>{'⏱ ' + fmtAnswerClock(answerLeft)}</span>
+                    <span style={KV_TAG}>{(answerExam.subject || detail.subject) + ' ' + (answerExam.year || detail.year)}</span>
+                    <button
+                      style={{ ...KV_BTN, marginLeft: 'auto', background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff', border: 0, padding: '6px 16px', fontWeight: 700 }}
+                      disabled={answerBusy} onClick={submitAnswerMode} data-kg-answer-submit="1"
+                    >{answerBusy ? '交卷中…' : '交卷'}</button>
+                  </div>
+                  {answerQ ? (
+                    <QwZoomHost children={
+                      <QwPaperMode
+                        mode="exam"
+                        questions={answerExam.questions}
+                        current={answerIdx}
+                        onJump={(i) => setAnswerIdx(i)}
+                        paperMeta={{ exam: detail.subject, year: answerExam.year || detail.year, subject: detail.subject }}
+                        answers={answerSel}
+                        flags={answerFlags}
+                        onSelect={(L) => setAnswerSel(a => ({ ...a, [answerQ.no]: L }))}
+                        onToggleFlag={(no) => setAnswerFlags(f => { const n = new Set(f); n.has(no) ? n.delete(no) : n.add(no); return n })}
+                      />}
+                    />
+                  ) : <div style={{ fontSize: 12, color: '#64748b' }}>{'题目加载异常'}</div>}
+                </div>
+              ) : null
+            ) : (
+              // ── 📖 全卷模式（cycle-30 自答对照，原形态不变）──
+              <>
             <Card title="📝 题目与参考答案（整卷模式：材料区 · 题目区 · 切换区 · 答题卡区）">
               {/* cycle-27：整卷模式接入 QwPaperMode browse 态——整卷由单题组合成，
                   材料区随当前题组切换（无组材料的题隐藏）、只读答题卡跳转、题间导航。
@@ -324,6 +566,8 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                 </div>
               ) : null}
             </Card>
+              </>
+            )}
           </div>
         )
       }
