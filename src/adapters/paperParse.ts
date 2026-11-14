@@ -202,7 +202,7 @@ export function parsePaperText(content, meta) {
       const text = groupMats.get(matRanges[i].no) || ''
       if (!nos.length || !text) continue
       for (const q of questions) {
-        if (nos.includes(q.no)) q.groupMaterial = text
+        if (nos.includes(q.no)) { q.groupMaterial = text; q.groupMaterialNo = matRanges[i].no }
       }
     }
   }

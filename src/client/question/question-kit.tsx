@@ -397,9 +397,15 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
   const isPractice = mode === 'practice'
   // 题组材料：同组题共享同一段文本；无组材料的题整区隐藏
   const groupMaterial = String(q.groupMaterial || '')
-  // 该材料被多少题共享（组感知文案；O(N) 顺序遍历，确定性）
+  // 该材料被多少题共享 + 当前题在组内的位置（O(N) 顺序遍历，确定性）
   let groupCount = 0
-  if (groupMaterial) for (const x of questions) if (x.groupMaterial === q.groupMaterial) groupCount++
+  let groupPos = 0
+  if (groupMaterial) {
+    for (const x of questions) if (x.groupMaterial === q.groupMaterial) groupCount++
+    // 组内位置：本组内排在当前题之前的题数 + 1（同组按题目顺序）
+    for (let i = 0; i < current && i < questions.length; i++) if (questions[i].groupMaterial === q.groupMaterial) groupPos++
+    groupPos++
+  }
   const wide = typeof window !== 'undefined' && (window as any).innerWidth >= 1100
 
   return (
@@ -430,7 +436,11 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
         {/* 材料区：宽屏左栏 38%；key=材料文本头 → 同组切题不重挂（折叠态保留） */}
         {groupMaterial ? (
           <div key={qwMatKey(groupMaterial)} style={wide ? { width: '38%', flexShrink: 0 } : { marginBottom: 10 }}>
-            <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 4 }}>{'📄 题组材料 · 共 ' + groupCount + ' 题用此材料'}</div>
+            <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 4 }}>
+              {'📄 题组材料 · 共 ' + groupCount + ' 题用此材料 · 本组第 ' + groupPos + '/' + groupCount + ' 题'}
+              {/* 组边界提示：下一题是否仍在同组（首/尾题特别标注，用户可预期材料区即将隐藏/切换） */}
+              {current + 1 < questions.length && questions[current + 1].groupMaterial === q.groupMaterial ? '' : current > 0 && questions[current - 1].groupMaterial === q.groupMaterial ? ' · 下一题换材料' : ''}
+            </div>
             <QwMaterial text={groupMaterial} matRef={'材料 ' + String(q.groupMaterialNo || '')} />
           </div>
         ) : null}
@@ -440,7 +450,7 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
             mode={mode}
             interactive={isExam || isPractice}
             q={{
-              no: q.no, score: q.score, type: q.type,
+              no: q.no, score: q.score, type: q.type, groupMaterialNo: q.groupMaterialNo || 0,
               exam: isExam || isPractice ? (paperMeta && paperMeta.subject) || q.exam : q.exam,
               year: isExam || isPractice ? (paperMeta && paperMeta.year) || q.year : q.year,
               module: q.module,

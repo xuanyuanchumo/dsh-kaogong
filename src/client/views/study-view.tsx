@@ -323,6 +323,7 @@ function KgMemBanner(props: KgMemBannerProps) {
                   source: x.source, exam: x.exam, year: x.year, region: x.region, paperFile: x.paperFile,
                   stem: x.stem, options: x.options, answer: x.correctAnswer || x.answer, analysis: x.analysis,
                   groupMaterial: x.groupMaterial || '',
+                  groupMaterialNo: x.groupMaterialNo || 0,
                 })),
               ]}
               current={0}

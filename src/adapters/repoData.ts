@@ -148,7 +148,8 @@ export function parseQuestions(filePath, maxQ = 20) {
     // cycle-26 D-1b：题组材料正文——该题块之前「最近的材料段」文本（资料分析多题共享一段材料；
     // 无前置材料段的题此字段为空串，QwQuestionCard 有则渲染跳段）
     let groupMaterial = ''
-    for (const t of matTextTable) { if (t.at < at) groupMaterial = t.text; else break }
+    let groupMaterialNo = 0
+    for (const t of matTextTable) { if (t.at < at) { groupMaterial = t.text; groupMaterialNo = t.no } else break }
     if (finalStem && Object.keys(options).length > 0) {
       // cycle-21：题库出处标注（用户要求「每道题标明出处」）——
       // source=数据库名（xingcezhenti），exam/year/region 已由 frontmatter 提供；
@@ -160,7 +161,7 @@ export function parseQuestions(filePath, maxQ = 20) {
         exam: meta.试卷 || '', region: meta.地区 || '', year: meta.年份 || '',
         source: 'xingcezhenti', paperFile,
         stem: finalStem, options, correctAnswer, analysis,
-        groupMaterial,
+        groupMaterial, groupMaterialNo,
       })
     }
   }
