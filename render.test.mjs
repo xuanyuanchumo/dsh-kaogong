@@ -709,7 +709,20 @@ try {
       await act(async () => { await new Promise(r => setTimeout(r, 30)) })
       const t2 = JSON.stringify(tr.toJSON())
       if (!t2.includes('对照答案（卷面：B）')) throw new Error('RENDER-PP-30 重做后未回未揭示态（自选 B 保留）')
-      ok('RENDER-PP-30: browse 自答对照全旅程（点选B→揭示判色→解析展开→重做回退）零降级')
+      // cycle-31（解析省略根治）：未对照时（未点「对照答案」）解析/参考答案就必须完整显示
+      //——browse 本就是看卷面答案的场景，占位行只属于 practice 考试中。
+      // 回到第 1 题（申论形态，有 reference）验证未对照也有内容渲染。
+      const prevBtn = tr.root.findAllByType('button').find(b => String(b.props.children) === '← 上一题')
+      if (!prevBtn) throw new Error('RENDER-PP-31 切换区「← 上一题」缺失')
+      await act(async () => { prevBtn.props.onClick() })
+      await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+      const tUnrevealed = JSON.stringify(tr.toJSON())
+      if (tUnrevealed.includes('提交作答后显示答案与解析')) {
+        throw new Error('RENDER-PP-31 browse 未对照态出现占位行（解析被省略——回归）')
+      }
+      // 第 1 题是申论形态（reference='参考答案内容'）→ 未对照也应有参考答案 details
+      if (!tUnrevealed.includes('参考答案')) throw new Error('RENDER-PP-31 browse 未对照态参考答案缺失（解析省略回归）')
+      ok('RENDER-PP-31: browse 未对照态解析/参考答案完整显示（占位语义收敛到 practice 考试中）')
     }
   }
 

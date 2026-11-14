@@ -1684,6 +1684,19 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   check('C30b-04 排程崩溃安全：try/catch 收敛 {error} + 空计划守卫',
     schedSrc30.includes('catch (e: any)') && schedSrc30.includes('计划为空'))
 
+  // ── cycle-31 静态守卫（C31）：解析省略根治 + T-028 镜像回落 ──
+  const kitSrc31 = fs.readFileSync('src/client/question/question-kit.tsx', 'utf-8')
+  const rmSrc31 = fs.readFileSync('src/server/repoManager.ts', 'utf-8')
+  // C31-01 占位语义收敛：占位行只在「无平铺内容」时出现（browse/single 解析不再被吞）
+  check('C31-01 解析省略根治：占位分支条件 !hasPlain（非 !hasDims），解析有值即完整渲染',
+    kitSrc31.includes('if (!revealed && !hasPlain) {') && !kitSrc31.includes('if (!revealed && !hasDims) {'))
+  // C31-02 镜像回落：镜像作业失败自动切直连重试（T-028），direct 通道防再包裹
+  check('C31-02 镜像回落直连：close 失败钩子 auto-retry + startJob direct 通道',
+    rmSrc31.includes('auto-retry') && rmSrc31.includes('{ direct: true }') && rmSrc31.includes('opts.direct'))
+  // C31-03 防环：回落作业不再二次回落（retriedFrom 防环标记）
+  check('C31-03 回落防环：retriedFrom 判据（直连失败不无限重试）',
+    rmSrc31.includes('!job.retriedFrom') && rmSrc31.includes('.retriedFrom = job.url'))
+
 
   // ── cycle-26 静态守卫（C26）：行测材料双形态 + 真题卷加载死循环根治 ──
 

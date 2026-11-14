@@ -115,8 +115,9 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
     } catch { /* 清理失败：保留现场，用户可从「浏览」查看或手动删除 */ }
   }
 
-  /** 启动一个 git 作业（clone/pull）；同 key 在跑则拒绝；全局并发护栏 */
-  function startJob(key: string, action: string, url: string, target: string) {
+  /** 启动一个 git 作业（clone/pull）；同 key 在跑则拒绝；全局并发护栏。
+   *  cycle-31：opts.direct=true 时跳过镜像前缀（失败回落直连的强制通道，防 applyMirror 再包裹）。 */
+  function startJob(key: string, action: string, url: string, target: string, opts: any = {}) {
     if (jobs.has(key) && jobs.get(key).state === 'running') {
       return { error: `仓库 ${key} 已有作业在运行（${jobs.get(key).action}），请等待或取消` }
     }
@@ -124,7 +125,7 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
       return { error: `并发作业已满（${MAX_CONCURRENT}），请稍后再试或取消进行中的作业` }
     }
     const cfg = readReposConfig()
-    const mirror = String(cfg.mirror || '')
+    const mirror = (opts && opts.direct) ? '' : String(cfg.mirror || '')
     const useUrl = applyMirror(url, mirror)
     const args = action === 'clone'
       ? ['clone', '--depth', '1', '--single-branch', useUrl, target]
@@ -166,6 +167,19 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
       } else {
         job.state = 'failed'; job.error = `git 退出码 ${code}`; job.finishedAt = Date.now()
         cleanupHalfClone(job)
+        // cycle-31（T-028 清偿）：失败自动回落——镜像作业失败切直连重试一次（镜像不可用
+        // 是最常见的失败形态）；直连作业失败不无限重试（弱网场景交给用户手动或稍后再试）。
+        // 判据：job.url 含镜像前缀 → 原始 url 直连重跑同 action；重试作业复用 startJob 的
+        // 崩溃安全语义（递归一层，retryFrom 防环）。归档先行：用户在作业历史里能看到完整链路。
+        const mirror = String(readReposConfig().mirror || '')
+        const bareUrl = mirror && job.url.startsWith(mirror) ? job.url.slice(mirror.replace(/\/+$/, '').length + 1) : null
+        if (bareUrl && !job.retriedFrom) {
+          job.log.push('[auto-retry] 镜像失败，自动回落直连重试: ' + bareUrl)
+          const retry = startJob(key, action, bareUrl, target, { direct: true })
+          if (retry && retry.job) (jobs.get(key) || {}).retriedFrom = job.url
+          archiveJob(key, job)
+          return
+        }
       }
       archiveJob(key, job)
       try { onJobSettled(key) } catch { /* 队列补位失败不影响作业结论 */ }

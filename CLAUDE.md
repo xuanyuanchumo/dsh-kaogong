@@ -188,3 +188,7 @@
 
 ## cycle-30 发布段教训（v1.27.0）
 - **（C30-npm publish 成功后的 E404 误判）**：vault_run 首次 `npm publish` 实际成功，但认证通道 `npm view` 短暂返回 `latest: 1.26.0`（registry 副本传播延迟）→ 误判失败并重试 publish → 报 `You cannot publish over the previously published versions: 1.27.0` + 前一次重试报 `PUT 404`。**正确判定顺序：`cannot publish over` 是「已发布成功」的机器证据（409 语义）；404/陈值都可能是传播延迟。教训：发布成功判定 = ① `+ pkg@ver` 输出 ② 重试时出现 `cannot publish over` ③ 认证通道 view 复验（三者任一即成功，传播延迟等 30s+ 再验）。
+
+## cycle-31 事故与教训（v1.28.0 解析省略 + T-028）
+- **（C31-占位语义的适用范围）**：QwAnswerDims 的「提交作答后显示答案与解析」占位行本意是 practice 考试中防偷看，但旧条件 `(!revealed && !hasDims)` 只检查五维——真题卷题走平铺 analysis（hasPlain=true、dims 恒缺）→ 未对照时整段解析被占位吞掉（用户报「解析不能省略」）。**修法：占位仅当 `!hasPlain`（无任何可显示内容）时出现**；browse/single 是「看卷面答案」的场景，解析/参考答案未揭示也完整渲染，对照按钮只控制判色不控制内容隐藏。守卫 C31-01 + RENDER-PP-31（未对照态断言无占位行）。**教训：条件分支的语义边界要按「场景」枚举（practice 考试中≠browse 浏览），不能按「字段缺失」一刀切；共享组件的每条分支要逐 mode 推演。**
+- **（C31-镜像回落的设计）**：T-028 落点不是「增量 git fetch」（用户场景是镜像不可用，不是仓库太大）——失败回落比断点续传更高频。落法：close 失败钩子检测 job.url 含镜像前缀 → 剥前缀直连重跑（startJob opts.direct 跳过 applyMirror 防二次包裹——**回落通道必须显式绕过自动包装，否则回落 URL 又被拼回镜像**）；retriedFrom 防环（直连失败不无限重试）；日志留 [auto-retry] 行让作业历史可追溯完整链路。
