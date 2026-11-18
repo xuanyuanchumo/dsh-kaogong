@@ -108,7 +108,10 @@ export function poolHealth(db: any, extra: { bytes?: number, path?: string, buil
   const withReasoning = Number((q1(db, "SELECT COUNT(*) c FROM question WHERE LENGTH(reasoning) > 0") || {}).c || 0)
   const multiSource = Number((q1(db, 'SELECT COUNT(*) c FROM (SELECT canonical_id FROM question_source GROUP BY canonical_id HAVING COUNT(DISTINCT source_id) > 1)') || {}).c || 0)
   const orphanQuestions = Number((q1(db, 'SELECT COUNT(*) c FROM question q WHERE NOT EXISTS (SELECT 1 FROM question_source s WHERE s.canonical_id = q.canonical_id)') || {}).c || 0)
-  const selfLoops = Number((q1(db, 'SELECT COUNT(*) c FROM relation WHERE src_kind = dst_kind AND src_id = dst_id') || {}).c || 0)
+  // cycle-36 O3：自环改为**存在性探测**（LIMIT 1）——写入侧 putRelation 已禁自环
+  // （UNIQUE 五元组 + 自环早退），运行期指标语义 = 「增量校验」而非「全量重算」：
+  // 原 71-94ms 全表扫描 → <1ms。发现任何一条自环即判 FAIL（足够定位）。
+  const selfLoops = (q1(db, 'SELECT 1 AS c FROM relation WHERE src_kind = dst_kind AND src_id = dst_id LIMIT 1') || {}).c != null ? 1 : 0
   const unknownRel = relTypes.filter(r => !r.known).length
 
   const quality = [

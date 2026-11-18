@@ -260,6 +260,9 @@
 - **（原地重建语义）**：`rebuild:true` = DELETE FROM 全部业务表（连接保持有效），**不是删文件**——Windows 上同进程连接也锁文件（EPERM），删文件重建语义不可达（handle.exe 取证实证）。SMOKE-KGDB-07b 已按 v2 口径固化。
 - **（kadian→方法论连接 = 数据驱动）**：kadian 首段是**大类**（图形推理/人文常识）不是模块名——按字面猜 0/10552 命中；正解经所属题 module 众数反查（10541 命中）。**数据里已有的映射不要按字面猜**。
 - **（模块别名单一事实源）**：「言语理解与表达」≠「言语理解」——`normalizeModule`（poolSourceKnowledge.ts）集中登记，新增别名只改一处。
+- **（cycle-36 性能守则）**：统计型查询**必须走快照缓存**（`getCachedStats`/`invalidateStatsCache`，数据写入后失效）——51211 题规模下 status 三处重复全量重算实测 1006ms，缓存后 31ms。**关系邻域查询必须配单列索引**（复合索引 (src_kind,src_id) 对单列 WHERE src_id=? 无效 → 全表扫 90ms/次；schema v3 的 ix_rel_src_id/dst_id 后 0.5ms）。**无过滤随机采样禁用 ORDER BY RANDOM()**（全表随机键排序 215ms）→ 随机 rowid 采样（22ms）。守卫 SMOKE-PERF-01..04。
+- **（性能优化口径纪律）**：缓存的只是**计算结果**不是**采样值**——统计必须精确（O5 降采样被拒绝，R06 不降级）；失效钩子与数据写入点配对（rebuild/review 两处），漏配对 = 面板显示陈旧数字（比慢更糟）。
+
 - **（桌面端全量重建走宿主端点）**：`POST /kaogong/api/pool/rebuild`（宿主进程内复用连接，无跨进程锁冲突）；外部进程 rebuild 会 EPERM（宿主持有句柄是**常态**不是异常）。
 
 - **（阶段 4 前置缺口 C5）**：研究 11 的 `ctx.llm` 方案落地时，`src/host/index.ts` 的 `export const inject = ['tools']` **必须扩为 `['tools','llm']`**——DSH `ctx.inject` 语义：未声明的服务在 `ctx.get` 中取不到。不修则第一行代码就失败。

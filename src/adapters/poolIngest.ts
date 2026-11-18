@@ -22,7 +22,7 @@
  */
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
-import { openPoolDb, rebuildFts, setMeta, poolStats, withTx, POOL_SCHEMA_VERSION } from './poolDb.js'
+import { openPoolDb, rebuildFts, setMeta, poolStats, withTx, invalidateStatsCache, POOL_SCHEMA_VERSION } from './poolDb.js'
 import { ingestAll, registrySnapshot, SOURCE_REGISTRY } from './poolSources.js'
 
 export { stripHtmlKeepImg, extractImages } from './poolSourceImpls.js'
@@ -64,6 +64,8 @@ export async function rebuildPool(repoRoot: string, dataDir: string, opts: { reb
     setMeta(db, 'ingest_stats', JSON.stringify(sources))
     const totalQ = Object.values(sources).reduce((s: number, x: any) => s + ((x && x.questions) || 0), 0)
     setMeta(db, 'source_fingerprint', String(totalQ) + ':' + String(stats.relations))
+    // cycle-36 O1：数据已变更 → 统计快照全部失效（下次查询重算，保证口径新鲜）
+    invalidateStatsCache('rebuild')
     return {
       ok: true, schemaVersion: POOL_SCHEMA_VERSION, elapsedMs: Date.now() - t0,
       sources, stats,

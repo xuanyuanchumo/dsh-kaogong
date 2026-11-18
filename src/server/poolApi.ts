@@ -19,7 +19,7 @@
  *   既有端点字段零删改；新能力全部走 `/api/pool/*`。
  *   任何异常收敛为 `{ error }`（HTTP 200），绝不向路由层冒泡（崩溃安全纪律）。
  */
-import { poolDb, poolDbStatus, poolStats, poolDbBytes, getMeta, POOL_TABLES, POOL_SCHEMA_VERSION } from '../adapters/poolDb.js'
+import { poolDb, poolDbStatus, poolStats, poolDbBytes, getMeta, getCachedStats, invalidateStatsCache, POOL_TABLES, POOL_SCHEMA_VERSION } from '../adapters/poolDb.js'
 import { rebuildPool, incrementalRebuild, registrySnapshot } from '../adapters/poolIngest.js'
 import { poolHealth, ingestDiagnostics, REL_TYPE_META } from './poolObservability.js'
 
@@ -74,7 +74,9 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
           health: poolHealth(null, { bytes: poolDbBytes(dataDir) }),
         }
       }
-      const stats = poolStats(db)
+      // cycle-36 O1：统计走快照缓存（重建/写入时失效；二次查询 <5ms）
+      const statsSnap = getCachedStats('poolStats', () => poolStats(db))
+      const stats = statsSnap.data
       const builtAt = getMeta(db, 'built_at')
       const sourceFingerprint = getMeta(db, 'source_fingerprint')
       let ingestStats: any = null
@@ -84,7 +86,7 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
         builtAt, sourceFingerprint, ingestStats,
         stats,
         // 白盒健康快照（可观测）：表行数/关系分布/数据质量指标/源覆盖
-        health: poolHealth(db, { bytes: poolDbBytes(dataDir), path: poolDbStatus().path, builtAt }),
+        health: getCachedStats('poolHealth', () => poolHealth(db, { bytes: poolDbBytes(dataDir), path: poolDbStatus().path, builtAt })).data,
         // 源注册表快照（可扩展性）：已注册哪些源、各自可用性——新增源无需改本文件
         registry: registrySnapshot({ repoRoot, dataDir }),
         upstream: { naokuDb: poolDbStatus().path, repoRoot },
@@ -95,8 +97,12 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
     if (path === '/api/pool/health') {
       const db = requireDb()
       const builtAt = db ? getMeta(db, 'built_at') : null
+      // cycle-36 O1：健康快照缓存（与 status 共享同一失效钩子）
+      const healthSnap = getCachedStats('poolHealth', () => poolHealth(db, { bytes: poolDbBytes(dataDir), path: poolDbStatus().path, builtAt }))
       return {
-        ...poolHealth(db, { bytes: poolDbBytes(dataDir), path: poolDbStatus().path, builtAt }),
+        ...healthSnap.data,
+        cached: healthSnap.cached,
+        snapshotBuiltAt: healthSnap.builtAt,
         relTypeMeta: REL_TYPE_META,
       }
     }
@@ -115,8 +121,32 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       if (kadian) { where.push('kadian = ?'); args.push(kadian) }
       if (source && source !== 'all') { where.push('source_id = ?'); args.push(source) }
       const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
-      // 候选集上限：分层抽题不需要全表扫（性能守卫——研究 13 §4.4「检索响应 < 50ms」）
-      const cand = db.prepare(`SELECT canonical_id, source_id, module, kadian, qid, paper, stem FROM question ${w} ORDER BY RANDOM() LIMIT 500`).all(...args)
+      // 候选集上限：分层抽题不需要全表扫（性能守卫——研究 13 §4.4「检索响应 < 50ms」）。
+      //
+      // cycle-36 O3c（研究 17）：无过滤条件时 `ORDER BY RANDOM()` 需为全表 51211 行
+      // 生成随机键再排序 = 实测 **215ms**（questions 端点 p50 203ms 的主体）。
+      // 正解 = **随机 rowid 采样**：先取 id 区间，均匀撒 N 个随机点逐点取行
+      // （索引 seek，实测 22ms，10 倍）。分布近似均匀（id 空洞由三倍尝试兜底）。
+      // 带过滤条件（module/kadian/source）时结果集小，保留 RANDOM()（~23ms，简单可靠）。
+      let cand: any[]
+      if (where.length === 0) {
+        const span = db.prepare('SELECT COUNT(*) c, MIN(id) mn, MAX(id) mx FROM question').get() as any
+        const want = 500
+        const seen = new Set<number>()
+        const pick = db.prepare('SELECT canonical_id, source_id, module, kadian, qid, paper, stem FROM question WHERE id >= ? LIMIT 1')
+        cand = []
+        let attempts = 0
+        while (cand.length < want && attempts < want * 3) {
+          attempts++
+          const rid = Math.floor(Number(span.mn) + Math.random() * (Number(span.mx) - Number(span.mn) + 1))
+          if (seen.has(rid)) continue
+          seen.add(rid)
+          const r = pick.get(rid)
+          if (r) cand.push(r)
+        }
+      } else {
+        cand = db.prepare(`SELECT canonical_id, source_id, module, kadian, qid, paper, stem FROM question ${w} ORDER BY RANDOM() LIMIT 500`).all(...args)
+      }
       if (!cand.length) return { questions: [], count: 0, fallback: false, hint: '统一池内无匹配题（放宽 module/kadian 过滤）' }
 
       // 权重：按模块弱点（SRS 同源 1/(rate+0.15)）× 同题多出处加成（跨源聚合优先）
@@ -127,12 +157,17 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
         if (!s || !s.answered) return 0
         return Math.max(0, Math.min(1, (s.correct || 0) / s.answered))
       }
-      const srcCount = new Map<string, number>()
-      try {
-        for (const r of db.prepare('SELECT canonical_id, COUNT(DISTINCT source_id) c FROM question_source GROUP BY canonical_id').all() as any[]) {
-          srcCount.set(String(r.canonical_id), Number(r.c))
-        }
-      } catch { /* 无出处表则不加成 */ }
+      // cycle-36 O2：srcCount 预聚合走进程内缓存（原每请求 87ms 全表 GROUP BY → 命中 <0.1ms；
+      // 与 O1 同一失效钩子——rebuild 后首查重算）
+      const srcCount = getCachedStats('srcCount', () => {
+        const m = new Map<string, number>()
+        try {
+          for (const r of db.prepare('SELECT canonical_id, COUNT(DISTINCT source_id) c FROM question_source GROUP BY canonical_id').all() as any[]) {
+            m.set(String(r.canonical_id), Number(r.c))
+          }
+        } catch { /* 无出处表则不加成 */ }
+        return m
+      }).data
       const weights = cand.map((r: any) => {
         const m = String(r.module || '')
         const w0 = weaknessOf(moduleRate(m))
@@ -223,7 +258,8 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
       let rows: any[] = []
       try { rows = db.prepare(`SELECT rel_type, src_kind, src_id, dst_kind, dst_id, weight, evidence FROM relation ${w} LIMIT ?`).all(...args, limit) } catch { /* 忽略 */ }
-      const stats = poolStats(db)
+      // cycle-36 O1：relations 的 relTypes/total 与 status 共享同一快照（不再三处重复全算）
+      const stats = getCachedStats('poolStats', () => poolStats(db)).data
       return { relations: rows, count: rows.length, relTypes: stats.relTypes, total: stats.relations }
     }
 
@@ -307,6 +343,8 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
           `INSERT INTO review(canonical_id,official_answer,verified_answer,status,at) VALUES(?,?,?,?,?)
            ON CONFLICT(canonical_id) DO UPDATE SET verified_answer=excluded.verified_answer, status=excluded.status, at=excluded.at`,
         ).run(canonicalId, String((post && post.officialAnswer) || ''), verifiedAnswer, String((post && post.status) || 'confirmed'), at)
+        // cycle-36 O1：review 写入也变更数据 → 统计快照失效（口径新鲜）
+        invalidateStatsCache('review-write')
         return { ok: true, canonicalId, verifiedAnswer, at }
       } catch (e: any) {
         return { error: '写入失败: ' + (e && e.message ? e.message : String(e)) }

@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
 /** 存储层 schema 版本（变更必须 bump；与 manifest 声明对账——SMOKE-KGDB-01） */
-export const POOL_SCHEMA_VERSION = 2
+export const POOL_SCHEMA_VERSION = 3
 
 /** 库文件基名（研究 15 §1.1 统一口径：`.kaogong.db`） */
 export const POOL_DB_NAME = '.kaogong.db'
@@ -122,6 +122,11 @@ CREATE TABLE IF NOT EXISTS relation (
 );
 CREATE INDEX IF NOT EXISTS ix_rel_src ON relation(src_kind, src_id);
 CREATE INDEX IF NOT EXISTS ix_rel_dst ON relation(dst_kind, dst_id);
+-- cycle-36 研究 17 O3b：单列索引——关系邻域查询（WHERE src_id=? OR dst_id=?）此前
+-- 只能用复合索引前缀失效 → 全表扫 80-90ms/次 × 每题 detail 2 次 = questions 端点 936ms 的元凶。
+-- 加独立单列索引后走 index seek（<1ms）。
+CREATE INDEX IF NOT EXISTS ix_rel_src_id ON relation(src_id);
+CREATE INDEX IF NOT EXISTS ix_rel_dst_id ON relation(dst_id);
 CREATE INDEX IF NOT EXISTS ix_rel_type ON relation(rel_type);
 
 CREATE TABLE IF NOT EXISTS material (id INTEGER PRIMARY KEY, mid TEXT UNIQUE, title TEXT, body TEXT, path TEXT);
@@ -456,7 +461,39 @@ export function rebuildFts(db: any): void {
   try { db.exec("INSERT INTO question_fts(question_fts) VALUES('rebuild')") } catch { /* 无 FTS5 时降级 */ }
 }
 
-/* ══ 统计 ══ */
+/* ══ 统计快照缓存（cycle-36 · 研究 17 O1）══
+ *
+ * R44（结构性根因）：统计型查询全表扫描且无缓存——status/health/relations 三端点
+ * 各自全量重算（51211 题规模下 status 实测 1006ms、health 788ms），
+ * 同一份数据一秒内被算 3 次。正解 = **快照缓存**：算一次，四处共享，
+ * 数据变更（重建/增量/写入）时失效。缓存的只是「计算结果」，不是「采样值」——
+ * 数字口径不变（R06 不降级）。
+ */
+interface StatsCacheEntry { data: any, builtAt: number }
+const statsCache = new Map<string, StatsCacheEntry>()
+
+/** 取统计快照（命中返回缓存；未命中由 compute 回填） */
+export function getCachedStats<T>(key: string, compute: () => T): { data: T, builtAt: number, cached: boolean } {
+  const hit = statsCache.get(key)
+  if (hit) return { data: hit.data as T, builtAt: hit.builtAt, cached: true }
+  const data = compute()
+  statsCache.set(key, { data, builtAt: Date.now() })
+  return { data, builtAt: statsCache.get(key)!.builtAt, cached: false }
+}
+
+/** 失效全部统计快照（rebuild 完成 / 增量重建 / question·relation 写入后必须调用） */
+export function invalidateStatsCache(reason = ''): number {
+  const n = statsCache.size
+  statsCache.clear()
+  return n
+}
+
+/** 快照状态（白盒透出：面板显示「快照缓存命中率/构建时间」） */
+export function statsCacheStatus(): { entries: number, keys: string[], builtAt: Record<string, number> } {
+  const builtAt: Record<string, number> = {}
+  for (const [k, v] of statsCache.entries()) builtAt[k] = v.builtAt
+  return { entries: statsCache.size, keys: [...statsCache.keys()], builtAt }
+}
 
 /** 库内容统计（白盒：/api/pool/status 消费） */
 export function poolStats(db: any): any {

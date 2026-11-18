@@ -1460,6 +1460,60 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
     }
   }
 
+  // ═══ SMOKE-PERF（cycle-36）：性能守卫（研究 17 O1/O2/O3c 落地固化）═══
+  {
+    const readSrc = (rel) => fs.readFileSync(new URL('./' + rel, import.meta.url), 'utf-8')
+    const pdbSrcP = readSrc('src/adapters/poolDb.ts')
+    const poolApiSrcP = readSrc('src/server/poolApi.ts')
+    const obsSrcP = readSrc('src/server/poolObservability.ts')
+
+    // PERF-01：统计快照缓存存在（status/health/relations 共享；失效钩子在 rebuild/review）
+    check('SMOKE-PERF-01 统计快照缓存落地（getCachedStats + invalidateStatsCache + 双失效钩子）',
+      pdbSrcP.includes('getCachedStats') && pdbSrcP.includes('invalidateStatsCache') &&
+      poolApiSrcP.includes("getCachedStats('poolStats'") && poolApiSrcP.includes("getCachedStats('poolHealth'") &&
+      poolApiSrcP.includes('invalidateStatsCache('),
+      '缓存 API 或接线缺失')
+
+    // PERF-02：questions 不再每请求全表 GROUP BY（srcCount 缓存）
+    check('SMOKE-PERF-02 srcCount 预聚合走缓存（多出处权重不再 87ms/请求）',
+      poolApiSrcP.includes("getCachedStats('srcCount'"),
+      'srcCount 仍逐请求聚合')
+
+    // PERF-02b：无过滤候选走随机 rowid 采样（全表 ORDER BY RANDOM 215ms → 22ms）
+    check('SMOKE-PERF-02b 无过滤候选随机 rowid 采样（全表 RANDOM 退化路径已替换）',
+      poolApiSrcP.includes('WHERE id >= ? LIMIT 1') && /where\.length === 0/.test(poolApiSrcP),
+      '无过滤路径仍走 ORDER BY RANDOM()')
+
+    // PERF-02c：关系邻域单列索引（schema v3——OR 查询 90ms → 0.5ms）
+    check('SMOKE-PERF-02c 关系邻域单列索引（ix_rel_src_id / ix_rel_dst_id）',
+      pdbSrcP.includes('ix_rel_src_id ON relation(src_id)') && pdbSrcP.includes('ix_rel_dst_id ON relation(dst_id)'),
+      '单列索引缺失（relation OR 查询将全表扫 ~90ms/次）')
+
+    // PERF-03：自环存在性探测（不再全表 COUNT）
+    check('SMOKE-PERF-03 自环改存在性探测（LIMIT 1；写入侧 putRelation 已禁自环）',
+      obsSrcP.includes('LIMIT 1') && /src_kind = dst_kind AND src_id = dst_id LIMIT 1/.test(obsSrcP),
+      '自环仍全表 COUNT（71-94ms/次）')
+
+    // PERF-04：运行时延迟断言（真实 fetch；二查命中路径。阈值按验收标准，
+    // 放宽到 3 倍裕度防 CI 环境抖动——研究 17 §4 的 <50ms → 本断言 150ms）
+    {
+      const t0 = Date.now()
+      await J(`${B}/api/pool/status?ws=${CX}`)   // 首查（可能构建缓存）
+      const t1 = Date.now()
+      await J(`${B}/api/pool/status?ws=${CX}`)   // 二查（必须命中）
+      const t2 = Date.now()
+      await J(`${B}/api/pool/questions?count=3&ws=${CX}`)
+      const t3 = Date.now()
+      await J(`${B}/api/pool/questions?count=3&ws=${CX}`)   // 二查
+      const t4 = Date.now()
+      const statusSecond = t2 - t1
+      const questionsSecond = t4 - t3
+      check('SMOKE-PERF-04 运行时延迟（status 二查 <150ms · questions 二查 <300ms）',
+        statusSecond < 150 && questionsSecond < 300,
+        `status 二查 ${statusSecond}ms · questions 二查 ${questionsSecond}ms`)
+    }
+  }
+
   // ═══ SMOKE-IMG 题图占位（issue #1）：parseQuestions 保留 img → kgimg:// 占位 + /api/kg-img ═══
   {
     const rdSrc = fs.readFileSync(new URL('./src/adapters/repoData.ts', import.meta.url), 'utf-8')
