@@ -51,6 +51,12 @@ function weightedPick<T>(items: T[], weights: number[], n: number): T[] {
 export function makePoolApi({ repoRoot, dataDir, store }) {
   const { loadProgress } = store
 
+  // ── T-032 重建作业状态（repoManager 同构：进行中单槽 + 归档环形 10）──
+  // 教训㊸：作业表只存「进行中」，完成态必须另存归档——「上次重建是什么结果」
+  // 在只存当前态的系统里永远无法回答。单槽（同一时刻至多一个重建）防并发重建互相清库。
+  const rebuildJobs = new Map<string, any>()
+  const rebuildHistory: any[] = []
+
   /** 库就绪门（未重建时诚实降级，不臆造数据） */
   function requireDb(): any {
     const db = poolDb()
@@ -197,10 +203,16 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
         // FTS5 trigram：中文全命中（实测 SQLite 3.51.2）。
         // 短查询（<3 字）trigram 无法命中 → 降级 LIKE（诚实降级，不静默返回空）
         if (q.length >= 3) {
+          // cycle-37 T-033（研究 17 遗留检索质量信号）：纯图源（gk-tuxing）的合成题干
+          // 「【图形推理 · cat】出处：…」精确命中查询词 → BM25 排满前列，真实带图题干
+          // 被挤出（实测 0/20 带图）。正解 = **合成 stem 排序降级**（CASE 置后，非过滤——
+          // 低置信结果不丢弃纪律㉜的推广）；真实题干回归前列（实测 20/20 带图，18.9ms）。
           rows = db.prepare(
             `SELECT q.canonical_id, q.qid, q.source_id, q.module, q.category, q.kadian, q.stem, q.analysis, q.paper, q.region, q.year
              FROM question_fts f JOIN question q ON q.id = f.rowid
-             WHERE question_fts MATCH ? ORDER BY bm25(question_fts) LIMIT ?`,
+             WHERE question_fts MATCH ?
+             ORDER BY CASE WHEN q.stem LIKE '【%' THEN 1 ELSE 0 END, bm25(question_fts)
+             LIMIT ?`,
           ).all(q, limit * 3)
         }
         if (!rows.length) {
@@ -319,14 +331,77 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
     }
 
     /* ── POST /api/pool/rebuild ── */
+    /* ── POST /api/pool/rebuild（T-032 异步作业化）──
+     * 研究 17 O4：全量重建 220-326s 同步阻塞 HTTP——超时风险 + 遥测 p95 被单次长任务
+     * 污染（全局 p95=220850ms 全来自它）。正解 = **作业化**（repoManager 同构模式）：
+     * 立即返回 jobId，重建在后台跑，`/api/pool/rebuild/status?jobId=` 轮询。
+     * 兼容硬约束：`{ async: false }` 保留同步路径（旧客户端/一次性脚本零改动）。 */
     if (path === '/api/pool/rebuild' && method === 'POST') {
       const mode = String((post && post.mode) || 'full')
       const maxFiles = post && post.maxFiles ? parseInt(post.maxFiles) : undefined
+      const asyncMode = !(post && post.async === false)
+      if (asyncMode) {
+        const jobId = 'pool-rb-' + Date.now().toString(36)
+        if (rebuildJobs.has('running') && rebuildJobs.get('running').state === 'running') {
+          return { error: '已有重建作业在运行（' + rebuildJobs.get('running').jobId + '），请等待完成或稍后再试' }
+        }
+        const job: any = { jobId, state: 'running', mode, maxFiles: maxFiles ?? null, startedAt: Date.now(), finishedAt: 0, result: null, error: null }
+        rebuildJobs.set('running', job)
+        // 后台执行（fire-and-forget 但内部全捕获——作业状态机是唯一出口，绝不冒泡）
+        ;(async () => {
+          try {
+            const r = mode === 'incremental'
+              ? await incrementalRebuild(repoRoot, dataDir)
+              : await rebuildPool(repoRoot, dataDir, { rebuild: true, maxFiles })
+            job.result = r
+            job.state = r && r.ok ? 'done' : 'failed'
+            if (r && r.error) job.error = r.error
+          } catch (e: any) {
+            job.state = 'failed'
+            job.error = '重建异常: ' + (e && e.message ? e.message : String(e))
+          } finally {
+            job.finishedAt = Date.now()
+            // 归档（环形 10）——「上次重建是什么结果」在只存当前态的系统里无法回答（教训㊸）
+            rebuildHistory.push(job)
+            if (rebuildHistory.length > 10) rebuildHistory.shift()
+            if (rebuildJobs.get('running') === job) rebuildJobs.delete('running')
+          }
+        })().catch(() => { /* 双保险：async 内已全捕获，此处永不触发 */ })
+        return { ok: true, jobId, state: 'running', mode, poll: '/api/pool/rebuild/status?jobId=' + jobId }
+      }
+      // 同步路径（兼容保留：{async:false}）
       const r = mode === 'incremental'
         ? await incrementalRebuild(repoRoot, dataDir)
         : await rebuildPool(repoRoot, dataDir, { rebuild: true, maxFiles })
       // 可观测：重建结果附逐阶段诊断（失败时给根因线索，不只说「失败」）
       return { ...r, diagnostics: ingestDiagnostics(r) }
+    }
+
+    /* ── GET /api/pool/rebuild/status（作业轮询 + 归档历史）── */
+    if (path === '/api/pool/rebuild/status') {
+      const jobId = String(params.get('jobId') || '')
+      const running = rebuildJobs.get('running')
+      if (running && (!jobId || running.jobId === jobId)) {
+        return { jobId: running.jobId, state: running.state, mode: running.mode, startedAt: running.startedAt, elapsedMs: Date.now() - running.startedAt }
+      }
+      if (jobId) {
+        const done = rebuildHistory.find(j => j.jobId === jobId)
+        if (done) {
+          return {
+            jobId: done.jobId, state: done.state, mode: done.mode,
+            startedAt: done.startedAt, elapsedMs: done.finishedAt - done.startedAt,
+            error: done.error,
+            // 完成态附摘要（不回带全量 result——诊断走 done.result 的 stats/diagnostics）
+            summary: done.result ? { ok: done.result.ok, elapsedMs: done.result.elapsedMs, stats: done.result.stats, diagnostics: ingestDiagnostics(done.result) } : null,
+          }
+        }
+        return { error: '作业不存在或已过归档窗口: ' + jobId, jobs: rebuildHistory.map(j => ({ jobId: j.jobId, state: j.state, mode: j.mode, startedAt: j.startedAt })) }
+      }
+      // 无参数：返回当前作业 + 归档清单（运维视角：「上次重建是什么结果」）
+      return {
+        running: running ? { jobId: running.jobId, state: running.state, mode: running.mode, startedAt: running.startedAt, elapsedMs: Date.now() - running.startedAt } : null,
+        history: rebuildHistory.map(j => ({ jobId: j.jobId, state: j.state, mode: j.mode, startedAt: j.startedAt, elapsedMs: j.finishedAt - j.startedAt, error: j.error })),
+      }
     }
 
     /* ── POST /api/pool/review（人工校验写入）── */

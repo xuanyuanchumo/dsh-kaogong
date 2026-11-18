@@ -129,7 +129,8 @@ export const CAPABILITIES = {
     { path: '/api/pool/question', label: '统一池单题聚合视图', consumers: ['ui:pool'] },
     { path: '/api/pool/relations', label: '统一池关系查询', consumers: ['ui:pool'] },
     { path: '/api/pool/graph', label: '统一池关系子图', consumers: ['ui:pool'] },
-    { path: '/api/pool/rebuild', label: '统一池重建', consumers: ['ui:pool'] },
+    { path: '/api/pool/rebuild', label: '统一池重建(异步作业)', consumers: ['ui:pool'] },
+    { path: '/api/pool/rebuild/status', label: '统一池重建作业轮询', consumers: ['ui:pool'] },
     { path: '/api/pool/review', label: '统一池人工校验', consumers: ['ui:pool'] },
     { path: '/api/graph', label: '图谱数据', consumers: ['ui:graph'] },
     // v1.8 交互式图谱三端点 + 生命周期状态机（白盒链路：client 视图消费）

@@ -289,13 +289,35 @@ export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
     finally { if (aliveRef.current) setBusy(false) }
   }, [api, module])
 
+  // cycle-37 T-032：重建改**异步作业**——立即返回 jobId，轮询至终态再刷新。
+  // 旧同步模式会阻塞 HTTP 220-326s（研究 17 O4）；服务端保留 {async:false} 兼容路径，
+  // 客户端默认走异步（长任务不站柜台）。
   const doRebuild = React.useCallback(async () => {
     setBusy(true)
     try {
       const d = await api('/pool/rebuild', { method: 'POST', body: JSON.stringify({ mode: 'full' }) })
       if (!aliveRef.current) return
-      setSt((prev: any) => ({ ...(prev || {}), ...d, health: d.health, stats: d.stats }))
-      await load()
+      // 兼容：若服务端直接返回同步结果（旧构建），按旧路径处理
+      if (d && d.jobId) {
+        const jobId = String(d.jobId)
+        // 轮询（2s 间隔；终态 done/failed 退出；上限 15 分钟防泄漏）
+        for (let i = 0; i < 450; i++) {
+          await new Promise(r => setTimeout(r, 2000))
+          if (!aliveRef.current) return
+          const st = await api('/pool/rebuild/status?jobId=' + encodeURIComponent(jobId)).catch(() => null)
+          if (!st) continue
+          if (st.state === 'done' || st.state === 'failed') {
+            if (st.state === 'failed') setErr('重建失败: ' + (st.error || '未知错误'))
+            break
+          }
+        }
+        await load()
+      } else if (d && (d.ok !== undefined)) {
+        setSt((prev: any) => ({ ...(prev || {}), ...d, health: d.health, stats: d.stats }))
+        await load()
+      } else if (d && d.error) {
+        setErr(String(d.error))
+      }
     } catch (e: any) { if (aliveRef.current) setErr(String((e && e.message) || e)) }
     finally { if (aliveRef.current) setBusy(false) }
   }, [api, load])

@@ -1512,6 +1512,42 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
         statusSecond < 150 && questionsSecond < 300,
         `status 二查 ${statusSecond}ms · questions 二查 ${questionsSecond}ms`)
     }
+
+    // ═══ cycle-37：T-033 检索降权 + T-032 重建作业化 ═══
+    // PERF-05（T-033）：合成 stem 排序降级——BM25 让「【图形推理 · cat】」合成题干
+    // 排满前列（实测 0/20 带图真实题干），CASE 置后让真实题干回归。
+    const obsSrc37 = readSrc('src/server/poolObservability.ts')
+    void obsSrc37
+    {
+      const poolApiSrc37 = readSrc('src/server/poolApi.ts')
+      check('SMOKE-PERF-05 检索合成 stem 降权（CASE WHEN stem LIKE 置后，非过滤——低置信不丢弃）',
+        poolApiSrc37.includes("ORDER BY CASE WHEN q.stem LIKE '【%' THEN 1 ELSE 0 END, bm25(question_fts)"),
+        '合成 stem 仍按 BM25 裸排（挤掉真实题干）')
+      // 运行时：检索首条应为真实题干（非合成「【图形推理 · …」标签行）
+      const sr37 = await J(`${B}/api/pool/search?q=${encodeURIComponent('图形推理')}&limit=10&ws=${CX}`)
+      const first37 = (sr37.results || [])[0]
+      check('SMOKE-PERF-05b 检索首条为真实题干（合成标签行不占榜首）',
+        !!first37 && !String(first37.stem || '').startsWith('【图形推理 ·'),
+        String((first37 && first37.stem) || '').slice(0, 40))
+    }
+    // PERF-06（T-032）：重建异步作业化（jobId + 轮询 + 归档 + 同步兼容）
+    {
+      const poolApiSrc37 = readSrc('src/server/poolApi.ts')
+      check('SMOKE-PERF-06 重建作业化（jobId 立即返回 + status 轮询 + 归档环形 + async:false 兼容）',
+        poolApiSrc37.includes('rebuildJobs') && poolApiSrc37.includes("rebuildJobs.set('running'") &&
+        poolApiSrc37.includes('/api/pool/rebuild/status') &&
+        poolApiSrc37.includes("post && post.async === false") &&
+        poolApiSrc37.includes('rebuildHistory.push'),
+        '作业模型缺失（rebuild 仍同步阻塞 HTTP）')
+      // 运行时：无参数 status 返回 running/history 结构
+      const st37 = await J(`${B}/api/pool/rebuild/status?ws=${CX}`)
+      check('SMOKE-PERF-06b 作业轮询结构（running + history 字段齐备，不臆造）',
+        typeof st37.running !== 'undefined' && Array.isArray(st37.history),
+        'running/history 字段缺失')
+      check('SMOKE-PERF-06c 重建端点已声明（manifest + 新 status 端点登记）',
+        readSrc('src/shared/manifest.ts').includes("path: '/api/pool/rebuild/status'"),
+        'manifest 漏登记 /api/pool/rebuild/status（影子端点）')
+    }
   }
 
   // ═══ SMOKE-IMG 题图占位（issue #1）：parseQuestions 保留 img → kgimg:// 占位 + /api/kg-img ═══
@@ -1930,8 +1966,8 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   const { join } = await import('node:path')
   const rd = join(process.cwd(), 'docs', 'research')
   // R-DOC 守卫：10 篇研究文档 + 索引存在（声明 → 实体零断链，R28 族同纪律）
-  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md', '11-统一存储与模型自选架构.md', '12-统一题目池与多源抽题.md', '13-kaogong-db统一知识库.md', '14-内核边界契约.md', '15-全局整合分析.md']
-  check('RDOC-01 研究文档 10 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
+  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md', '11-统一存储与模型自选架构.md', '12-统一题目池与多源抽题.md', '13-kaogong-db统一知识库.md', '14-内核边界契约.md', '15-全局整合分析.md', '16-题库覆盖审计.md', '17-性能研究白盒面板.md', '18-研究迭代闭环T032T033.md']
+  check('RDOC-01 研究文档 18 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
   // RDOC-01b（cycle-34）：**研究文档落地闭环**——研究 11/12/13/14/15 的关键断言
   // 必须能在**已实现的代码**里找到对应物（研究已定 → 代码已落 → 守卫固化）。
   // 这是「研究文档不是空谈」的机器化：文档说要做 X，代码里就得有 X 的实现痕迹。
