@@ -85,14 +85,11 @@
 - 现状：主题/倒计时/每日目标等无用户可调面（README 能力矩阵登记为 ⏸）。
 - 目标：`ctx.settings` 配置表单（宿主能力矩阵「未用缝」的正当启用场景）。
 
-### T-033 · 统一池检索：合成 stem 降权（cycle-36 检索质量信号）
-- 现状：gk-tuxing 等纯图源的合成题干（「【图形推理 · cat】出处：…」）精确命中查询词 → BM25 排满前列，真实带图题干被挤出（smoke IMG-04 实证 0/20）。
-- 目标：knowledge 类合成 stem（`【…】` 开头）在 pool/search 排序中降权（或对 has_image=1 的真实题干加权）；检索质量回归用例固化。
+### T-033 · 统一池检索：合成 stem 降权 ✅（cycle-37 清偿）
+- 落地：检索 ORDER BY 对合成 stem（【 开头）排序置后（非过滤——纪律㉜推广）；实测首条回归真实带图题干（naoku 20/20，18.9ms）。守卫 SMOKE-PERF-05/05b。详见 docs/research/18。
 
-### T-032 · pool/rebuild 异步作业化（研究 17 O4 · 性能周期遗留）
-- 现状：rebuild 同步阻塞 HTTP（实测 220-326s），遥测 p95 被单次长任务污染（全局 p95=220850ms 全来自它）、HTTP 有超时风险。
-- 目标：复用 repoManager 作业模型（立即返回 jobId + 轮询进度 + 归档历史）。
-- 缓解（已做）：告警文案注明「长任务预期」；外部进程改走宿主端点通道。
+### T-032 · pool/rebuild 异步作业化 ✅（cycle-37 清偿）
+- 落地：POST /api/pool/rebuild 立即返回 jobId（单槽防并发），GET /api/pool/rebuild/status 轮询 + 归档环形 10；async:false 同步兼容；客户端 pool-view 轮询接线。守卫 SMOKE-PERF-06/06b/06c。详见 docs/research/18。
 
 ## 统一存储主线 · 后续阶段（研究 15 §1.2 单条主线 · 阶段 2-4）
 
