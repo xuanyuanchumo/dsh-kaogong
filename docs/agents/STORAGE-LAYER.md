@@ -6,7 +6,7 @@
 > [../../docs/research/15-全局整合分析.md](../../docs/research/15-全局整合分析.md)
 > 设计契约：[../../docs/design/unified-storage-architecture.md](../../docs/design/unified-storage-architecture.md) §9c
 
-**当前基线**：v1.30.0 / cycle-34（76 端点 · 16 视图 · 6 工具；统一库 27506 题 / 222894 关系边 / 59093 出处）
+**当前基线**：v1.30.0 / cycle-35（76 端点 · 16 视图 · 6 工具；统一库 **51211 题 / 346797 关系边 / 141489 出处 / 10588 知识节点**；schema v2 含 knowledge 表 + USES_METHOD/REFERENCES_DOC 关系；**9 摄入源**全注册）
 
 ---
 
@@ -47,7 +47,10 @@ L1 数据源层（Source）  16 个第三方仓库（只读，永不修改）
 |---|---|---|---|
 | `src/adapters/poolDb.ts` | L3 | schema / 连接 / UPSERT / canonical_id / 事务 | ~380 |
 | `src/adapters/poolSources.ts` | L2 | **源注册表**（可扩展性枢纽） | ~140 |
-| `src/adapters/poolSourceImpls.ts` | L2 | 各源摄入实现（naoku / xingcezhenti） | ~420 |
+| `src/adapters/poolSourceImpls.ts` | L2 | 题目源实现（naoku / xingcezhenti） | ~420 |
+| `src/adapters/poolSourceJson.ts` | L2 | JSON 题目源实现（xingce-app / gk-tuxing / qiuzhao / cea） | ~230 |
+| `src/adapters/poolSourceKnowledge.ts` | L2 | 知识层实现（方法论 / kadian 考点 / 文档资产） | ~230 |
+| `src/adapters/poolUpsert.ts` | L2 | 共享 UPSERT（只填空位合并语义单一事实源） | ~120 |
 | `src/adapters/poolIngest.ts` | L2 | **编排器**（重建/增量重建） | ~120 |
 | `src/server/poolApi.ts` | 服务端 | `/api/pool/*` 九端点 + 供数给练习链路 | ~470 |
 | `src/server/poolObservability.ts` | 服务端 | 白盒健康快照 + 摄入诊断 | ~190 |

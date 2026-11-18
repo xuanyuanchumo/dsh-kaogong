@@ -255,4 +255,11 @@
 - **（内核边界已机器化）**：研究 14 六不变量 → `SMOKE-KERNEL-01..06b`（客户端/内核禁 fs 读 · 内核禁第三方字面量 · 媒体走 safeImagePath · 抽题存储层优先 · 上游零写）。
 - **（分配类算法守恒·修正）**：逐项 `Math.round` **不保恒**（实测 Σ=31≠30）→ 改**最大余数法**（floor + 余数按小数部分降序补齐；Σfloor ≤ B ≤ Σfloor+n）。守卫 `SMOKE-SCHED-04`（当日）+ `06`（全部 30 天）。
 - **（测试清理段必须跟随数据位置）**：用户数据外置后，清理段也必须同波次改路径（本项目 `data/progress/` → `~/.dsh/kaogong/progress/`），否则残留永远清不掉 → 下一轮断言假红（`SMOKE-MEM-01` 实测）。清理段按**同一 slug+sha1 规则**算文件名，不硬编码哈希。
+- **（cycle-35 schema v2 · 知识层）**：`knowledge` 表（方法论/技能/考点节点）+ `USES_METHOD`/`REFERENCES_DOC` 关系（统一边表零 DDL 增补）。池总量 **51211 题 / 346797 边 / 10588 知识节点**；「题→考点→方法论」端到端可查（q:10057 → 定义判断 → hs13:panduan-tuili 实测）。**方法论/skill 必须入库**——否则「这道题用哪个方法」永远无法跨源查询。
+- **（独立 id 命名空间纪律）**：粉笔系（naoku/xingcezhenti/kaogongzhentizhengliu）共享 qid 命名空间 → `q:<qid>`；其它源（xingce-app/qiuzhao/cea/gk-tuxing）**独立命名空间** → `q:<sourceId>:<qid>`（SourceSpec.qidNamespace）。跨源等价走 SAME_AS 边——**合并靠认亲（证据），不靠重名（id 撞库）**。
+- **（原地重建语义）**：`rebuild:true` = DELETE FROM 全部业务表（连接保持有效），**不是删文件**——Windows 上同进程连接也锁文件（EPERM），删文件重建语义不可达（handle.exe 取证实证）。SMOKE-KGDB-07b 已按 v2 口径固化。
+- **（kadian→方法论连接 = 数据驱动）**：kadian 首段是**大类**（图形推理/人文常识）不是模块名——按字面猜 0/10552 命中；正解经所属题 module 众数反查（10541 命中）。**数据里已有的映射不要按字面猜**。
+- **（模块别名单一事实源）**：「言语理解与表达」≠「言语理解」——`normalizeModule`（poolSourceKnowledge.ts）集中登记，新增别名只改一处。
+- **（桌面端全量重建走宿主端点）**：`POST /kaogong/api/pool/rebuild`（宿主进程内复用连接，无跨进程锁冲突）；外部进程 rebuild 会 EPERM（宿主持有句柄是**常态**不是异常）。
+
 - **（阶段 4 前置缺口 C5）**：研究 11 的 `ctx.llm` 方案落地时，`src/host/index.ts` 的 `export const inject = ['tools']` **必须扩为 `['tools','llm']`**——DSH `ctx.inject` 语义：未声明的服务在 `ctx.get` 中取不到。不修则第一行代码就失败。
