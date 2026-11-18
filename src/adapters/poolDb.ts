@@ -386,6 +386,64 @@ export function putQuestionSource(
   } catch { /* 出处登记失败不阻塞整轮摄入 */ }
 }
 
+/* ══ 学习事件写入（cycle-38 阶段 2 · 研究 15 C7）══ */
+
+/**
+ * 记录一次学习事件（答题/错题/掌握/升箱/补录）到 `study_event` 表。
+ *
+ * ── 双写期语义（研究 15 C7 阶段 2 口径）──
+ *   **只写表，不改读路径**：progress json 仍是统计/错题本的事实源（阶段 1 起作用），
+ *   study_event 是为阶段 3 的「按知识点诊断」沉淀流水（kadian 维度聚合需要事件粒度）。
+ *   双写期**必须显式**：两个事实源写同一动作，读侧只用 progress——
+ *   切读路径是阶段 3 的独立决策（带数据迁移），不在本轮偷偷做。
+ *
+ * 崩溃安全：写失败静默（学习流水丢失不影响判分主链路——progress 是权威事实源）。
+ */
+export function putStudyEvent(
+  db: any,
+  ev: { ws?: string, qid?: string, canonicalId?: string, module?: string, kadian?: string,
+        action: string, userAnswer?: string, correctAnswer?: string, isCorrect?: boolean | null,
+        box?: number, consecutive?: number, durationMs?: number },
+): boolean {
+  if (!db || !ev || !ev.action) return false
+  try {
+    db.prepare(
+      `INSERT INTO study_event(at, ws, qid, canonical_id, module, kadian, action,
+         user_answer, correct_answer, is_correct, box, consecutive, duration_ms)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      new Date().toISOString(), String(ev.ws || ''), String(ev.qid || ''), String(ev.canonicalId || ''),
+      String(ev.module || ''), String(ev.kadian || ''), String(ev.action),
+      String(ev.userAnswer || ''), String(ev.correctAnswer || ''),
+      ev.isCorrect === null || ev.isCorrect === undefined ? null : (ev.isCorrect ? 1 : 0),
+      ev.box == null ? null : Number(ev.box), ev.consecutive == null ? null : Number(ev.consecutive),
+      ev.durationMs == null ? null : Number(ev.durationMs),
+    )
+    return true
+  } catch { return false }
+}
+
+/** 学习事件统计（阶段 3 预研：按 kadian 聚合的正确率——读侧尚未切，仅供白盒观测） */
+export function studyEventStats(db: any, limit = 20): any {
+  if (!db) return null
+  try {
+    const total = db.prepare('SELECT COUNT(*) c FROM study_event').get().c
+    const byAction = db.prepare('SELECT action, COUNT(*) c FROM study_event GROUP BY action ORDER BY c DESC').all()
+    const byKadian = db.prepare(
+      `SELECT kadian, COUNT(*) c, SUM(is_correct) ok FROM study_event
+       WHERE LENGTH(kadian) > 0 GROUP BY kadian ORDER BY c DESC LIMIT ?`).all(limit)
+    return {
+      total: Number(total),
+      byAction: byAction.map((r: any) => ({ action: r.action, count: Number(r.c) })),
+      topKadian: byKadian.map((r: any) => ({
+        kadian: String(r.kadian), count: Number(r.c),
+        correct: Number(r.ok || 0),
+        rate: Number(r.c) ? Math.round(Number(r.ok || 0) / Number(r.c) * 100) : null,
+      })),
+    }
+  } catch { return null }
+}
+
 /* ══ 知识节点 / 资产登记（cycle-35 schema v2）══ */
 
 /**

@@ -35,7 +35,7 @@ import { makeRepoManager } from './repoManager.js'
 import { makeHistoryApi } from './historyApi.js'
 import { makePoolApi } from './poolApi.js'
 import { createTelemetry, isDeclaredEndpoint, recordRequest, telemetrySnapshot, UNMATCHED_BUCKET } from './telemetry.js'
-import { initPoolDb, resetPoolDb } from '../adapters/poolDb.js'
+import { initPoolDb, resetPoolDb, putStudyEvent, poolDb } from '../adapters/poolDb.js'
 import { schedulePlan } from './planSchedule.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
@@ -399,6 +399,24 @@ function coreApi(path, params, post, method, wsRaw, port) {
       if (item) wrongEvent = { type: item.mastered ? 'mastered' : 'promoted', sig: item.sig, box: item.box, consecutive: item.consecutive }
     }
     domains.store.saveProgress(wsRaw, progress)
+    // cycle-38 阶段 2（研究 15 C7）：学习事件**双写**——progress json 仍是统计/错题本
+    // 的权威事实源（读路径零改动），study_event 只沉淀事件流水（阶段 3 按 kadian
+    // 诊断的原料）。写失败静默（流水丢失不影响判分主链路）。
+    try {
+      putStudyEvent(poolDb(), {
+        ws: domains.store.wsKey(wsRaw),
+        qid: String((q as any).qid || ''),
+        canonicalId: String((q as any).id || '').startsWith('q:') ? String((q as any).id) : '',
+        module: String(q.module || ''),
+        kadian: String((q as any).dims && (q as any).dims.kadian || ''),
+        action: isCorrect ? (wrongEvent && wrongEvent.type === 'mastered' ? 'mastered' : wrongEvent && wrongEvent.type === 'promoted' ? 'promoted' : 'answer') : (wrongEvent ? 'collected' : 'wrong'),
+        userAnswer: answer,
+        correctAnswer: String(q.correctAnswer || ''),
+        isCorrect,
+        box: wrongEvent && wrongEvent.box != null ? Number(wrongEvent.box) : null,
+        consecutive: wrongEvent && wrongEvent.consecutive != null ? Number(wrongEvent.consecutive) : null,
+      })
+    } catch { /* 流水写失败不影响判分返回 */ }
     return { isCorrect, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongEvent, progress: { answered: progress.answered, correct: progress.correct, wrong: progress.wrong, rate: Math.round(progress.correct / progress.answered * 100) } }
   }
   if (path === '/api/progress' && method === 'GET') {

@@ -19,7 +19,7 @@
  *   既有端点字段零删改；新能力全部走 `/api/pool/*`。
  *   任何异常收敛为 `{ error }`（HTTP 200），绝不向路由层冒泡（崩溃安全纪律）。
  */
-import { poolDb, poolDbStatus, poolStats, poolDbBytes, getMeta, getCachedStats, invalidateStatsCache, POOL_TABLES, POOL_SCHEMA_VERSION } from '../adapters/poolDb.js'
+import { poolDb, poolDbStatus, poolStats, poolDbBytes, getMeta, getCachedStats, invalidateStatsCache, studyEventStats, POOL_TABLES, POOL_SCHEMA_VERSION } from '../adapters/poolDb.js'
 import { rebuildPool, incrementalRebuild, registrySnapshot } from '../adapters/poolIngest.js'
 import { poolHealth, ingestDiagnostics, REL_TYPE_META } from './poolObservability.js'
 
@@ -95,6 +95,8 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
         health: getCachedStats('poolHealth', () => poolHealth(db, { bytes: poolDbBytes(dataDir), path: poolDbStatus().path, builtAt })).data,
         // 源注册表快照（可扩展性）：已注册哪些源、各自可用性——新增源无需改本文件
         registry: registrySnapshot({ repoRoot, dataDir }),
+        // cycle-38 阶段 2：学习事件流水概览（双写期白盒观测——读侧尚未切，透明）
+        studyEvents: studyEventStats(db),
         upstream: { naokuDb: poolDbStatus().path, repoRoot },
       }
     }
@@ -450,34 +452,33 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
     const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
     let rows: any[] = []
     try {
+      // cycle-38 阶段 2（研究 15 阶段 2）：SELECT 补五维列——练习卡片要贯通
+      // 「解题思路/最快解法/易错陷阱/母题思维」（ROADMAP 阶段 2 缺口 ①）
       rows = db.prepare(
         `SELECT canonical_id, qid, source_id, local_key, module, category, kadian, qtype,
-           stem, options, answer, analysis, group_material, group_material_no,
-           images, paper, region, year, freq
+           stem, options, answer, analysis, reasoning, fastest, pitfalls, mother, doubt, ask_model,
+           group_material, group_material_no,
+           images, has_image, paper, region, year, freq
          FROM question ${w} ORDER BY RANDOM() LIMIT ?`,
       ).all(...args, n * 3)
     } catch { return { error: '统一池查询失败' } }
     if (!rows.length) return { error: '统一池内无匹配题（module=' + (module || 'all') + '）' }
 
-    // 优先选**带图**的题（练习链路体验：图推/资料分析题有图才有价值）
-    // —— 目录路径抽题时图占比随机，统一池可显式提升（首次出现图即停）
+    // 优选排序（练习链路体验）：带图 / 带五维标注的题优先——图推与资料分析的
+    // 「有图才可作答」「有思路链才有深度」是内容价值，统一池可显式提升。
+    // 分层：候选按 (rich=带图∨带五维) → 顺序填充，rich 不足时普通题补足到 n。
+    const richScore = (r: any): number => {
+      const stem = String(r.stem || '')
+      const hasImg = stem.includes('kgimg://') || Number(r.has_image || 0) === 1
+      const hasDims = !!(String(r.reasoning || '').trim() || String(r.fastest || '').trim() || String(r.pitfalls || '').trim())
+      return (hasImg ? 2 : 0) + (hasDims ? 1 : 0)
+    }
+    const scored = rows
+      .map(r => ({ r, q: poolRowToQuestion(r), rich: richScore(r) }))
+      .filter(x => x.q)
+    scored.sort((a, b) => b.rich - a.rich)
     const picked: any[] = []
-    const withImg: any[] = []
-    for (const r of rows) {
-      const q = poolRowToQuestion(r)
-      if (!q) continue
-      if (String(q.stem || '').includes('kgimg://')) { withImg.push(q); if (picked.length < n && withImg.length <= n) picked.push(q) }
-      else if (picked.length < n) picked.push(q)
-      if (picked.length >= n) break
-    }
-    // 无图题补足到 n
-    if (picked.length < n) {
-      for (const r of rows) {
-        if (picked.length >= n) break
-        const q = poolRowToQuestion(r)
-        if (q && !picked.includes(q)) picked.push(q)
-      }
-    }
+    for (const x of scored) { if (picked.length < n) picked.push(x.q) }
     if (!picked.length) return { error: '统一池内无可用题' }
     const file = picked[0] && picked[0].paperFile ? String(picked[0].paperFile) : 'pool'
     return { file, count: picked.length, questions: picked }
@@ -497,6 +498,21 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
  */
 export function poolRowToQuestion(r: any): any {
   if (!r) return null
+  // cycle-38 阶段 2：五维标注注入 dims（形状对齐客户端 QwAnswerDims 契约——
+  // study-view 的 QwQuestionCard 已消费 q.dims，零客户端改动即贯通）
+  const dims: any = {}
+  const reasoning = String(r.reasoning || '').trim()
+  const fastest = String(r.fastest || '').trim()
+  const pitfalls = String(r.pitfalls || '').trim()
+  const mother = String(r.mother || '').trim()
+  const kadian = String(r.kadian || '').trim()
+  const doubt = String(r.doubt || '').trim()
+  if (reasoning) dims.reasoning = reasoning
+  if (fastest) dims.fastest = fastest
+  if (pitfalls) dims.pitfalls = pitfalls
+  if (mother) dims.mother = mother
+  if (kadian) dims.kadian = kadian
+  if (doubt) dims.doubt = doubt
   let options: any = {}
   const rawOpt = String(r.options || '').trim()
   if (rawOpt) {
@@ -534,6 +550,7 @@ export function poolRowToQuestion(r: any): any {
     options,
     correctAnswer: answer,
     analysis: String(r.analysis || ''),
+    dims: Object.keys(dims).length ? dims : undefined,
     groupMaterial: String(r.group_material || ''),
     groupMaterialNo: Number(r.group_material_no || 0),
   }

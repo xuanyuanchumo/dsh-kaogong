@@ -1548,6 +1548,50 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
         readSrc('src/shared/manifest.ts').includes("path: '/api/pool/rebuild/status'"),
         'manifest 漏登记 /api/pool/rebuild/status（影子端点）')
     }
+
+    // ═══ SMOKE-S2（cycle-38 阶段 2）：五维贯通 + study_event 双写 ═══
+    {
+      const CXS2 = 'PROJ_S2'   // S2 独立命名空间——HIST 段（PROJ_C21）断言 answered===0，判分必须分槽（教训⑨）
+      const poolApiSrcS2 = readSrc('src/server/poolApi.ts')
+      const httpSrcS2 = readSrc('src/server/http.ts')
+      // S2-01（静态）：池供数 SELECT 含五维列 + poolRowToQuestion 注入 dims
+      check('SMOKE-S2-01 五维贯通（池供数 SELECT 含 reasoning/fastest/pitfalls/mother + dims 注入）',
+        poolApiSrcS2.includes('reasoning, fastest, pitfalls, mother, doubt, ask_model') &&
+        poolApiSrcS2.includes('dims.reasoning = reasoning'),
+        '池供数未注入五维')
+      // S2-02（运行时）：练习链路抽题带 dims（定向：判断推理池内五维覆盖 99.6%）
+      {
+        const qs = await J(`${B}/api/questions?module=判断推理&count=6&ws=${CXS2}`)
+        const withDims = (qs.questions || []).filter((q) => q.dims && (q.dims.reasoning || q.dims.fastest)).length
+        check('SMOKE-S2-02 练习链路五维贯通（池供数抽题带 dims——练习卡零客户端改动消费）',
+          withDims > 0, `抽 6 题带 dims ${withDims} 题`)
+      }
+      // S2-03（静态）：判分双写（progress 权威不变 + study_event 流水）
+      check('SMOKE-S2-03 判分双写（saveProgress 权威路径保留 + putStudyEvent 流水接入）',
+        httpSrcS2.includes('putStudyEvent(poolDb()') && httpSrcS2.includes('domains.store.saveProgress(wsRaw, progress)'),
+        '双写路径缺失')
+      // S2-04（运行时）：判对/判错各产生一条 study_event（白盒 studyEvents.total 单调递增）
+      {
+        const before = await J(`${B}/api/pool/status?ws=${CXS2}`)
+        const beforeN = before.studyEvents ? before.studyEvents.total : 0
+        const qs = await J(`${B}/api/questions?module=判断推理&count=1&ws=${CXS2}`)
+        const q0 = (qs.questions || [])[0]
+        if (q0) {
+          await P(`${B}/api/check?ws=${CXS2}`, { question: q0, answer: q0.correctAnswer })
+          const after = await J(`${B}/api/pool/status?ws=${CXS2}`)
+          const afterN = after.studyEvents ? after.studyEvents.total : 0
+          check('SMOKE-S2-04 学习事件流水（判分 → study_event +1，白盒可观测）',
+            afterN > beforeN, `before=${beforeN} after=${afterN}`)
+        } else {
+          check('SMOKE-S2-04 学习事件流水（无题可抽 → 跳过）', true, '环境无判断推理题')
+        }
+      }
+      // S2-05（静态）：双写期语义显式（注释声明读侧未切——防阶段 3 被偷偷做）
+      check('SMOKE-S2-05 双写期语义显式（putStudyEvent 注释声明 progress 仍是权威事实源）',
+        readSrc('src/adapters/poolDb.ts').includes('progress json 仍是统计/错题本') &&
+        readSrc('src/adapters/poolDb.ts').includes('只写表，不改读路径'),
+        '双写期语义未显式声明（切读路径必须独立决策）')
+    }
   }
 
   // ═══ SMOKE-IMG 题图占位（issue #1）：parseQuestions 保留 img → kgimg:// 占位 + /api/kg-img ═══
@@ -1966,8 +2010,8 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   const { join } = await import('node:path')
   const rd = join(process.cwd(), 'docs', 'research')
   // R-DOC 守卫：10 篇研究文档 + 索引存在（声明 → 实体零断链，R28 族同纪律）
-  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md', '11-统一存储与模型自选架构.md', '12-统一题目池与多源抽题.md', '13-kaogong-db统一知识库.md', '14-内核边界契约.md', '15-全局整合分析.md', '16-题库覆盖审计.md', '17-性能研究白盒面板.md', '18-研究迭代闭环T032T033.md']
-  check('RDOC-01 研究文档 18 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
+  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md', '11-统一存储与模型自选架构.md', '12-统一题目池与多源抽题.md', '13-kaogong-db统一知识库.md', '14-内核边界契约.md', '15-全局整合分析.md', '16-题库覆盖审计.md', '17-性能研究白盒面板.md', '18-研究迭代闭环T032T033.md', '19-阶段2取题层升级.md']
+  check('RDOC-01 研究文档 19 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
   // RDOC-01b（cycle-34）：**研究文档落地闭环**——研究 11/12/13/14/15 的关键断言
   // 必须能在**已实现的代码**里找到对应物（研究已定 → 代码已落 → 守卫固化）。
   // 这是「研究文档不是空谈」的机器化：文档说要做 X，代码里就得有 X 的实现痕迹。
