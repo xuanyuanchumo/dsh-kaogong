@@ -22,6 +22,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { ingestNaokuSource, ingestXingceSource } from './poolSourceImpls.js'
+import { ingestXingceAppSource, ingestTuxingSource, ingestQiuzhaoSource, ingestCeaSource } from './poolSourceJson.js'
+import { ingestMethodologySource, ingestKadianNodes, ingestDocAssetsSource } from './poolSourceKnowledge.js'
 
 /** 源上下文（注入给每个源实现；源不应自己去找路径） */
 export interface SourceContext {
@@ -58,6 +60,14 @@ export interface SourceSpec {
   label: string
   /** 上游地址（白盒透出，用户可溯源） */
   upstream?: string
+  /**
+   * qid 命名空间（cycle-35 研究 16 §2.2）。
+   * · **不填**（共享命名空间）：qid 跨仓一致（粉笔系 naoku/xingcezhenti/kaogongzhentizhengliu
+   *   共享一个命名空间——这正是合并键）→ canonical_id = `q:<qid>`。
+   * · **填 sourceId 自身**（独立命名空间）：id 只在本源唯一 → canonical_id = `q:<sourceId>:<qid>`，
+   *   永不与其它源撞库；跨源等价走 SAME_AS 边（合并靠认亲，不靠重名）。
+   */
+  qidNamespace?: string
   /** 是否可用（探针；返回 false 时主流程记 skipped 并继续——**不中断整轮**） */
   available(ctx: SourceContext): boolean
   /** 执行摄入（可同步或异步——naoku 需 await import('node:sqlite')） */
@@ -88,6 +98,66 @@ export const SOURCE_REGISTRY: SourceSpec[] = [
     upstream: 'https://github.com/HuangJunJie/xingcezhenti',
     available: (ctx) => existsSync(join(ctx.repoRoot, 'xingcezhenti')),
     ingest: (ctx) => ingestXingceSource(ctx),
+  },
+  // ── cycle-35 新增源（研究 16 摄入矩阵 P1-P5）——全部独立 id 命名空间 ──
+  {
+    id: 'xingce-app',
+    tier: 'recommended',
+    label: '离线行测刷题 App 题库（xingce-app）',
+    upstream: 'xiaogaostu（数据根 xingce-app/web/public/data）',
+    qidNamespace: 'xingce-app',
+    available: (ctx) => existsSync(join(ctx.repoRoot, 'xingce-app', 'web', 'public', 'data', 'manifest.json')),
+    ingest: (ctx) => ingestXingceAppSource(ctx),
+  },
+  {
+    id: 'gk-tuxing',
+    tier: 'required',
+    label: '图形推理专项（gk-tuxing）',
+    upstream: 'gk-tuxing（数据根 assets/data.js）',
+    qidNamespace: 'gk-tuxing',
+    available: (ctx) => existsSync(join(ctx.repoRoot, 'gk-tuxing', 'assets', 'data.js')),
+    ingest: (ctx) => ingestTuxingSource(ctx),
+  },
+  {
+    id: 'qiuzhao-epi-bank',
+    tier: 'optional',
+    label: '秋招 EPI 题库（qiuzhao-epi-bank）',
+    upstream: 'qiuzhao-epi-bank（数据根 data/*.json）',
+    qidNamespace: 'qiuzhao',
+    available: (ctx) => existsSync(join(ctx.repoRoot, 'qiuzhao-epi-bank', 'data', 'generated.json')),
+    ingest: (ctx) => ingestQiuzhaoSource(ctx),
+  },
+  {
+    id: 'civil-exam-agent',
+    tier: 'optional',
+    label: '公考督导题库（civil-exam-agent）',
+    upstream: 'civil-exam-agent（数据根 data/official_85_questions.json）',
+    qidNamespace: 'cea',
+    available: (ctx) => existsSync(join(ctx.repoRoot, 'civil-exam-agent', 'data', 'official_85_questions.json')),
+    ingest: (ctx) => ingestCeaSource(ctx),
+  },
+  // ── cycle-35 知识层（回答「方法论/skill 要不要入库」：要——knowledge 表 + USES_METHOD 边）──
+  {
+    id: 'huasheng13',
+    tier: 'required',
+    label: '花生十三体系方法论（25 篇 · knowledge 节点）',
+    upstream: 'WangJunqing-coder/huasheng13-skill',
+    available: (ctx) => existsSync(join(ctx.repoRoot, 'huasheng13')),
+    ingest: (ctx) => ingestMethodologySource(ctx),
+  },
+  {
+    id: 'kadian',
+    tier: 'recommended',
+    label: '考点知识节点（kadian 去重 → 考点↔方法论连接）',
+    available: () => true,   // 依赖库内已有 BELONGS_TO 边，探针恒真；实现内自查
+    ingest: (ctx) => ingestKadianNodes(ctx),
+  },
+  {
+    id: 'doc-assets',
+    tier: 'optional',
+    label: '纯文档仓资产账本（sakib/developer2gwy/Exam_Database/NovaForge/yunduanqiqu）',
+    available: () => true,
+    ingest: (ctx) => ingestDocAssetsSource(ctx),
   },
 ]
 

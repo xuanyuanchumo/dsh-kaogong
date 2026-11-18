@@ -38,7 +38,19 @@ export { stripHtmlKeepImg, extractImages } from './poolSourceImpls.js'
  */
 export async function rebuildPool(repoRoot: string, dataDir: string, opts: { rebuild?: boolean; maxFiles?: number } = {}): Promise<any> {
   const t0 = Date.now()
-  const db = await openPoolDb(dataDir, { rebuild: opts.rebuild !== false })
+  const opened = await openPoolDb(dataDir, { rebuild: opts.rebuild !== false })
+  if (opened.locked) {
+    // 重建语义不可达（旧库被其它进程持有——典型：宿主 link: 同库文件，测试进程重建）
+    // 响亮失败并给**可操作**的根因提示（白盒可观测：不说「失败」，说「为什么失败、怎么解」）
+    return {
+      ok: false,
+      error: '重建失败：库文件被其它进程占用（EPERM）——' + opened.lockPath +
+        '。请先停掉占用方（如另一 dsh 宿主/测试进程）再重建，或改用 incremental 模式。',
+      locked: true,
+      lockPath: opened.lockPath,
+    }
+  }
+  const db = opened.db
   if (!db) return { ok: false, error: '存储层不可用（node:sqlite 缺失或库打开失败）' }
   try {
     setMeta(db, 'schema_version', String(POOL_SCHEMA_VERSION))
@@ -66,7 +78,8 @@ export async function rebuildPool(repoRoot: string, dataDir: string, opts: { reb
  * 指纹 = 池内题数 + 关系边数（`meta.source_fingerprint`）；未变则跳过。
  */
 export async function incrementalRebuild(repoRoot: string, dataDir: string): Promise<any> {
-  const db = await openPoolDb(dataDir)
+  const opened = await openPoolDb(dataDir)
+  const db = opened.db
   if (!db) return { ok: false, error: '存储层不可用' }
   try {
     let fp = ''

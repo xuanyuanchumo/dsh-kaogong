@@ -222,6 +222,11 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
       naoku: { label: '深度题库', color: '#8b5cf6' },
       'gk-tuxing': { label: '图形推理专项', color: '#0ea5e9' },
       gwy_zhenti: { label: '真题卷', color: '#14b8a6' },
+      // cycle-35 新源（统一池接入；徽章色板与 pool-view 关系词表同风格）
+      'xingce-app': { label: '刷题 App 题库', color: '#22c55e' },
+      'qiuzhao-epi-bank': { label: '秋招 EPI', color: '#f59e0b' },
+      'civil-exam-agent': { label: '督导题库', color: '#ef4444' },
+      pool: { label: '统一题库', color: '#3b82f6' },
     }
     export function SourceBadge({ source, exam, year, region, paperFile, extra }) {
       const meta = KG_SOURCE_META[source]

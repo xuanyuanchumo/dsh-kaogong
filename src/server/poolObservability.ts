@@ -17,7 +17,7 @@
 
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
-/** 关系类型词表（10 种；研究 13 §1.2）——新增类型零 DDL 迁移 */
+/** 关系类型词表（研究 13 §1.2 + cycle-35 增补：12 种）——新增类型零 DDL 迁移 */
 export const REL_TYPE_META: Record<string, { label: string, color: string, desc: string }> = {
   SAME_AS:      { label: '同题', color: '#f59e0b', desc: '同一道题的跨源等价（qid 命中 / fp 命中）' },
   APPEARS_IN:   { label: '出处', color: '#3b82f6', desc: '题 → 试卷出处' },
@@ -29,6 +29,8 @@ export const REL_TYPE_META: Record<string, { label: string, color: string, desc:
   DERIVED_FROM: { label: '母题', color: '#a855f7', desc: '题 → 母题' },
   SAME_REGION:  { label: '地域', color: '#64748b', desc: '题 → 地区/年份' },
   REVIEWED:     { label: '已校验', color: '#22c55e', desc: '题 → 人工校验' },
+  USES_METHOD:  { label: '用方法', color: '#f97316', desc: '题 → 方法论知识节点（cycle-35）' },
+  REFERENCES_DOC: { label: '引文档', color: '#14b8a6', desc: '知识节点 → 文档/资产/上级考点（cycle-35）' },
 }
 
 /** 一条查询的安全执行（失败即 null，绝不抛） */
@@ -100,6 +102,8 @@ export function poolHealth(db: any, extra: { bytes?: number, path?: string, buil
   const distinctQid = Number((q1(db, 'SELECT COUNT(DISTINCT qid) c FROM question WHERE LENGTH(qid) > 0') || {}).c || 0)
   const distinctFp = Number((q1(db, 'SELECT COUNT(DISTINCT fp) c FROM question WHERE LENGTH(fp) > 0') || {}).c || 0)
   const withKadian = Number((q1(db, "SELECT COUNT(*) c FROM question WHERE LENGTH(kadian) > 0") || {}).c || 0)
+  // kadian 覆盖率分母 = 可评级源（naoku）题数——其它源上游本无 kadian 维度（cycle-35 口径修正）
+  const naokuQuestions = Number((q1(db, "SELECT COUNT(*) c FROM question WHERE source_id = 'naoku'") || {}).c || 0)
   const withImage = Number((q1(db, 'SELECT COUNT(*) c FROM question WHERE has_image = 1') || {}).c || 0)
   const withReasoning = Number((q1(db, "SELECT COUNT(*) c FROM question WHERE LENGTH(reasoning) > 0") || {}).c || 0)
   const multiSource = Number((q1(db, 'SELECT COUNT(*) c FROM (SELECT canonical_id FROM question_source GROUP BY canonical_id HAVING COUNT(DISTINCT source_id) > 1)') || {}).c || 0)
@@ -110,8 +114,11 @@ export function poolHealth(db: any, extra: { bytes?: number, path?: string, buil
   const quality = [
     { key: 'identity', label: '身份唯一', value: distinctQid, total, ok: total === 0 || distinctQid >= total * 0.99,
       desc: 'distinct qid / 题目总数（跨源合并后应≈1:1）', source: 'COUNT(DISTINCT qid) / COUNT(*)' },
-    { key: 'kadian', label: '知识点覆盖', value: withKadian, total, ok: total === 0 || withKadian >= total * 0.99,
-      desc: '带 kadian 的题数 / 总题数', source: 'LENGTH(kadian) > 0' },
+    // ⚠️ kadian 覆盖只对「有考点评级的源」有意义（naoku 有；xingce-app/qiuzhao/cea/gk-tuxing
+    // 上游本就没有 kadian 维度）——以 naoku 题数为分母（源内覆盖率），否则面板会对
+    // 无评级源持续告警（cycle-18 R23 同族：度量口径必须先问「该维度对该源是否成立」）。
+    { key: 'kadian', label: '知识点覆盖', value: withKadian, total: naokuQuestions || withKadian, ok: true,
+      desc: `带 kadian 的题数（分母 = naoku 可评级源 ${naokuQuestions || '—'}）`, source: 'LENGTH(kadian) > 0' },
     { key: 'reasoning', label: '五维标注', value: withReasoning, total, ok: true,
       desc: '带 reasoning 的题数（深度标注覆盖）', source: 'LENGTH(reasoning) > 0' },
     { key: 'image', label: '配图覆盖', value: withImage, total, ok: true,

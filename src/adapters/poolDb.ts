@@ -19,20 +19,20 @@
  *   库文件位于**用户数据根**（`~/.dsh/kaogong/`），不入包——
  *   cycle-21 issue#2 教训：市场升级 = 包目录整目录替换，包内数据必然丢失。
  */
-import { existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
 /** 存储层 schema 版本（变更必须 bump；与 manifest 声明对账——SMOKE-KGDB-01） */
-export const POOL_SCHEMA_VERSION = 1
+export const POOL_SCHEMA_VERSION = 2
 
 /** 库文件基名（研究 15 §1.1 统一口径：`.kaogong.db`） */
 export const POOL_DB_NAME = '.kaogong.db'
 
 /** 表清单（SMOKE-KGDB-01 与 manifest 声明对账的 SSOT） */
 export const POOL_TABLES = [
-  'meta', 'source', 'asset', 'question', 'question_source', 'relation', 'material', 'question_fts',
-  'study_event', 'review',
+  'meta', 'source', 'asset', 'question', 'question_source', 'relation', 'material', 'knowledge',
+  'question_fts', 'study_event', 'review',
 ] as const
 
 /** 关系类型词表（研究 13 §1.2：10 种，统一边表，新增类型零 DDL 迁移） */
@@ -47,6 +47,8 @@ export const REL_TYPES = [
   'DERIVED_FROM',  // 题 → 母题
   'SAME_REGION',   // 题 → 地区/年份
   'REVIEWED',      // 题 → 人工校验
+  'USES_METHOD',   // 题 → 方法论知识节点（cycle-35：huasheng13 文档 ↔ 题；统一边表零 DDL 增补）
+  'REFERENCES_DOC', // 知识节点 → 文档/资产（cycle-35：考点 MOC ↔ 原文）
 ] as const
 export type RelType = typeof REL_TYPES[number]
 
@@ -124,6 +126,24 @@ CREATE INDEX IF NOT EXISTS ix_rel_type ON relation(rel_type);
 
 CREATE TABLE IF NOT EXISTS material (id INTEGER PRIMARY KEY, mid TEXT UNIQUE, title TEXT, body TEXT, path TEXT);
 
+-- ⑦b 知识节点（cycle-35 schema v2）：方法论文档 / 考点 / 技能文档作为**图节点**入库。
+-- 题与知识的关联走既有 relation 统一边表（零 DDL 新增关系类型）——
+-- 「这道题用哪个方法」「这个考点有哪些题」成为可 JOIN 查询。
+-- kn_id 是源内稳定键（方法论 = 文档 id 如 ziliao-fenxi；考点 = kadian 全文；技能 = 文件名）。
+CREATE TABLE IF NOT EXISTS knowledge (
+  id INTEGER PRIMARY KEY,
+  kn_id TEXT UNIQUE,
+  kind TEXT,
+  module TEXT,
+  title TEXT,
+  body TEXT,
+  path TEXT,
+  source_id TEXT,
+  meta TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_kn_kind ON knowledge(kind, module);
+CREATE INDEX IF NOT EXISTS ix_kn_src ON knowledge(source_id);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS question_fts USING fts5(
   stem, options, analysis, reasoning, fastest, pitfalls, kadian, rule_type,
   content='question', content_rowid='id', tokenize='trigram'
@@ -166,32 +186,53 @@ export function poolDbPath(dataDir: string): string {
 /**
  * 惰性打开（动态 import node:sqlite）。
  * 失败只降级一次（dbFailed 闸），不反复重试拖慢请求——与 naoku.ts 同纪律。
+ *
+ * ⚠️ 重建模式语义（cycle-35 v2 修正：「原地清库」替代「删文件重建」）：
+ *   原 v1 设计是「先删库文件再新建」，但 Windows 上**同一进程持有连接时也锁文件**
+ *   （宿主 fallback server 的连接 + WAL/SHM 句柄）→ EPERM → 重建语义不可达。
+ *   v2 正解 = **原地重建**：连接保持打开，`DELETE FROM` 清空全部业务表 +
+ *   重跑 SCHEMA（幂等 IF NOT EXISTS）。效果等价（库回到空白态），且：
+ *   · 同进程安全（不碰文件锁）；
+ *   · 跨进程仍受保护（若**其它**进程持有连接，本进程 DELETE 会遇到 SQLITE_BUSY →
+ *     降级报错，语义仍响亮）。
+ *   库文件损坏（真正需要删文件）的场景交给显式运维动作，不归 rebuild。
  */
-export async function openPoolDb(dataDir: string, opts: { rebuild?: boolean } = {}): Promise<any | null> {
-  if (state.db) return state.db
-  if (state.failed) return null
+export async function openPoolDb(dataDir: string, opts: { rebuild?: boolean } = {}): Promise<{ db: any | null, locked?: boolean, lockPath?: string }> {
+  if (state.db && !opts.rebuild) return { db: state.db }
+  if (state.failed && !opts.rebuild) return { db: null }
   try {
     const path = poolDbPath(dataDir)
     mkdirSync(dataDir, { recursive: true })
-    // 重建模式：先删旧库再新建（不留半成品——研究 13 §4「构建失败即删除重建」的镜像纪律）
-    if (opts.rebuild) {
-      for (const suffix of ['', '-wal', '-shm']) {
-        try { rmSync(path + suffix, { force: true }) } catch { /* 不存在即可 */ }
-      }
-    }
     const mod = await import('node:sqlite')
     const DatabaseSync = mod.DatabaseSync || (mod.default && mod.default.DatabaseSync)
-    if (!DatabaseSync) { state.failed = true; return null }
+    if (!DatabaseSync) { state.failed = true; return { db: null } }
     const db = new DatabaseSync(path)
     db.exec('PRAGMA journal_mode=WAL;')
     db.exec(SCHEMA_SQL)
     state.db = db
     state.path = path
     state.schemaOk = true
-    return db
+    // 原地重建：清空全部业务表（连接保持有效，不碰文件锁）
+    if (opts.rebuild) {
+      try {
+        db.exec('BEGIN')
+        for (const t of POOL_TABLES) {
+          if (t === 'question_fts') continue   // FTS 是外部内容表，DELETE 走 rebuild 指令
+          try { db.exec(`DELETE FROM ${t}`) } catch { /* 表不存在 = 新库，正常 */ }
+        }
+        db.exec('COMMIT')
+      } catch (e: any) {
+        // SQLITE_BUSY = 其它进程持有写锁 → 响亮失败（重建语义不可达）
+        try { db.exec('ROLLBACK') } catch { /* 回滚失败不掩盖原错 */ }
+        state.db = null
+        try { if (db && db.close) db.close() } catch { /* 已关闭 */ }
+        return { db: null, locked: true, lockPath: path }
+      }
+    }
+    return { db }
   } catch {
     state.failed = true
-    return null
+    return { db: null }
   }
 }
 
@@ -215,8 +256,8 @@ export function resetPoolDb(): void {
  * 与 initNaoku 同纪律：模块加载期不因数据缺失而崩，域内诚实降级。
  */
 export async function initPoolDb(dataDir: string): Promise<boolean> {
-  const db = await openPoolDb(dataDir)
-  return !!db
+  const opened = await openPoolDb(dataDir)
+  return !!opened.db
 }
 
 /* ══ 事务辅助 ══ */
@@ -257,16 +298,32 @@ export function getMeta(db: any, k: string): string | null {
 /* ══ canonical_id 派生（研究 15 §1.1 统一口径：qid 优先 > fp 次之 > sha256 兜底）══ */
 
 /**
- * 统一题目身份。
+ * 统一题目身份（v2 · cycle-35 研究 16 §2.2）。
+ *
  * 优先级：**qid > fp > sha256(normalize(stem))**——
  * qid 跨仓匹配 327/327 = 100%（实测），是最强键；
  * fp 冲突仅 3 例 / 28669（可作合并键但次之）；
  * sha256 是最后兜底（仅当二者皆缺）。
+ *
+ * ⚠️ **命名空间纪律（v2 新增）**：
+ *   `qid` 不是天然全局唯一——粉笔系三仓（naoku/xingcezhenti/kaogongzhentizhengliu）
+ *   **共享同一个 qid 命名空间**（跨仓 327/327 一致，这正是合并键）；
+ *   但 xingce-app（id=44152）、qiuzhao（id=1001）、civil-exam-agent（id=Q_01）
+ *   是**独立 id 空间**。若不同命名空间的 id 撞库，两道不同的题会被合并成一个
+ *   canonical_id = **跨源身份污染**（比漏摄入严重得多）。
+ *
+ *   修正：独立命名空间的源，canonical_id 带源前缀（`q:<sourceId>:<qid>`）；
+ *   共享命名空间（粉笔系）保持 `q:<qid>`（向后兼容，已入库数据不变）。
+ *   跨源等价（独立源 ↔ 粉笔系同题）走 **SAME_AS 边**（带 evidence）——合并靠认亲，不靠重名。
+ *
  * 前缀标识来源种类，便于人工排查：`q:` / `fp:` / `h:`。
  */
-export function deriveCanonicalId(qid: any, fp: any, stem: any): string {
+export function deriveCanonicalId(qid: any, fp: any, stem: any, opts: { namespace?: string } = {}): string {
   const q = String(qid ?? '').trim()
-  if (q) return 'q:' + q
+  if (q) {
+    // 独立命名空间：带源前缀（永不与其它源撞库）；共享命名空间（namespace 为空）：裸 qid
+    return opts.namespace ? 'q:' + opts.namespace + ':' + q : 'q:' + q
+  }
   const f = String(fp ?? '').trim()
   if (f) return 'fp:' + f
   const s = String(stem ?? '').trim()
@@ -324,6 +381,69 @@ export function putQuestionSource(
   } catch { /* 出处登记失败不阻塞整轮摄入 */ }
 }
 
+/* ══ 知识节点 / 资产登记（cycle-35 schema v2）══ */
+
+/**
+ * 登记一个知识节点（方法论文档 / 考点 MOC / 技能文档）。
+ * 幂等 UPSERT（kn_id 唯一）。body 截断保护（方法论全文可能很大——
+ * 库体积纪律：媒体/全文走引用，body 只存检索所需的正文摘要级内容，上限 64KB）。
+ */
+export function putKnowledge(
+  db: any, knId: string, kind: string, module: string,
+  title: string, body: string, path: string, sourceId: string, meta = '',
+): boolean {
+  if (!knId || !kind) return false
+  try {
+    db.prepare(
+      `INSERT INTO knowledge(kn_id,kind,module,title,body,path,source_id,meta)
+       VALUES(?,?,?,?,?,?,?,?)
+       ON CONFLICT(kn_id) DO UPDATE SET
+         kind=excluded.kind, module=excluded.module, title=excluded.title,
+         body=excluded.body, path=excluded.path, source_id=excluded.source_id, meta=excluded.meta`,
+    ).run(knId, kind, String(module || ''), String(title || ''), String(body || '').slice(0, 65536),
+      String(path || ''), String(sourceId || ''), String(meta || '').slice(0, 8192))
+    return true
+  } catch { return false }
+}
+
+/**
+ * 登记一个资产（L1 资产账本——文件级**引用**而非复制：铁律①「图片只引用不复制」对文档同样适用）。
+ * 幂等 UPSERT（source_id + rel_path 唯一）。
+ */
+export function putAsset(
+  db: any, sourceId: string, relPath: string, kind: string,
+  byteSize = 0, contentHash = '', mtimeMs = 0,
+): boolean {
+  if (!sourceId || !relPath) return false
+  try {
+    db.prepare(
+      `INSERT INTO asset(source_id,rel_path,kind,byte_size,content_hash,mtime_ms)
+       VALUES(?,?,?,?,?,?)
+       ON CONFLICT(source_id, rel_path) DO UPDATE SET
+         kind=excluded.kind, byte_size=excluded.byte_size,
+         content_hash=excluded.content_hash, mtime_ms=excluded.mtime_ms`,
+    ).run(sourceId, relPath, String(kind || 'doc'), Number(byteSize || 0), String(contentHash || ''), Number(mtimeMs || 0))
+    return true
+  } catch { return false }
+}
+
+/** 同步登记 source 目录行（注册表 → source 表——cycle-35：注册表与库内 source 表必须一致） */
+export function putSource(
+  db: any, id: string, tier: string, upstreamUrl: string, localRoot: string,
+): boolean {
+  if (!id) return false
+  try {
+    db.prepare(
+      `INSERT INTO source(id,tier,upstream_url,local_root,head_sha,cloned_at,file_count,byte_size,content_hash)
+       VALUES(?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET
+         tier=excluded.tier, upstream_url=excluded.upstream_url, local_root=excluded.local_root`,
+    ).run(id, String(tier || 'optional'), String(upstreamUrl || ''), String(localRoot || ''),
+      '', new Date().toISOString(), 0, 0, '')
+    return true
+  } catch { return false }
+}
+
 /* ══ FTS 同步 ══ */
 
 /**
@@ -360,6 +480,12 @@ export function poolStats(db: any): any {
     /** 一题多出处的跨源聚合度（验收 §11.2：同一题 N 处出处） */
     multiSource: one(`SELECT COUNT(*) c FROM (SELECT canonical_id FROM question_source GROUP BY canonical_id HAVING COUNT(DISTINCT source_id) > 1)`),
     questionSources: one('SELECT COUNT(*) c FROM question_source'),
+    // 知识层（cycle-35 schema v2）：方法论/技能/考点节点与文档资产
+    knowledgeNodes: one('SELECT COUNT(*) c FROM knowledge'),
+    knowledgeByKind: (() => {
+      try { return db.prepare('SELECT kind, COUNT(*) c FROM knowledge GROUP BY kind ORDER BY c DESC').all().map((r: any) => ({ kind: r.kind, count: Number(r.c) })) }
+      catch { return [] }
+    })(),
     relTypes: (() => {
       try { return db.prepare('SELECT rel_type, COUNT(*) c FROM relation GROUP BY rel_type ORDER BY c DESC').all().map((r: any) => ({ type: r.rel_type, count: Number(r.c) })) }
       catch { return [] }

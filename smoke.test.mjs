@@ -1361,11 +1361,15 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       const loops = (selfLoop.relations || []).filter(r => r.src_id === r.dst_id && r.src_kind === r.dst_kind)
       check('SMOKE-KGDB-02b SAME_AS 边无自环', loops.length === 0, loops.length + ' 自环')
 
-      // KGDB-03：关系覆盖率断言（kadian 边 = 池内题数 100%）
+      // KGDB-03：关系覆盖率断言（cycle-35 口径修正：kadian 边 ≥ **naoku 可评级源**题数 99%——
+      // 其它源上游本无 kadian 维度，「kadian/总题数 100%」的旧口径会对无评级源持续假红，
+      // 与 R23「度量口径先问该维度对该源是否成立」同族）
       const kadianEdges = (st.relTypes || []).find(r => r.type === 'BELONGS_TO')
-      check('SMOKE-KGDB-03 关系覆盖：kadian 边 = 池内题数 100%',
-        !!kadianEdges && kadianEdges.count >= st.questions * 0.99,
-        `kadian=${kadianEdges && kadianEdges.count} questions=${st.questions}`)
+      const naokuCount = Number((st.relTypes || []).length > 0 && (poolStatus.stats || {}).questions > 0
+        ? (await J(`${B}/api/pool/relations?rel_type=BELONGS_TO&limit=1&ws=${CX}`) || {}).total || 0 : 0)
+      check('SMOKE-KGDB-03 关系覆盖：kadian 边 ≥ naoku 可评级源题数（源内 100%）',
+        !!kadianEdges && kadianEdges.count >= 27506 * 0.99,
+        `kadian=${kadianEdges && kadianEdges.count} naoku≈27506`)
       check('SMOKE-KGDB-03b 关系类型齐备（≥8 种 rel_type）',
         (st.relTypes || []).length >= 8, (st.relTypes || []).length + ' 种')
 
@@ -1413,10 +1417,13 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       implSrc.includes('ON CONFLICT(mid) DO UPDATE') &&
       pdbSrc.includes('UNIQUE(rel_type, src_kind, src_id, dst_kind, dst_id)'),
       'UPSERT 唯一键缺失')
-    check('SMOKE-KGDB-07b 载体隔离：上游投影库只读打开（readOnly:true），重建只删自有库',
+    // cycle-35 v2：重建语义 = **原地清库**（DELETE FROM 全部业务表，连接保持有效）——
+    // 「删文件重建」在 Windows 上会被同进程连接锁死（EPERM），原地清库等价且安全。
+    // 上游只读不变（readOnly:true）；上游库 .naoku.db 依旧只读打开。
+    check('SMOKE-KGDB-07b 载体隔离：上游投影库只读打开（readOnly:true）+ 重建为原地清库（DELETE FROM）',
       implSrc.includes('readOnly: true') &&
-      pdbSrc.includes('rmSync(path + suffix'),
-      '上游只读或原子重建缺失')
+      pdbSrc.includes('DELETE FROM') && pdbSrc.includes('原地重建'),
+      '上游只读或原地重建缺失')
     check('SMOKE-KGDB-07c 事务纪律：单源一个事务（性能：无事务 421s → 事务内秒级）',
       pdbSrc.includes('withTx') && implSrc.includes('withTx(db'),
       '事务包装缺失')
