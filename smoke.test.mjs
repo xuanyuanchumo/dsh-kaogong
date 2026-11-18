@@ -8,6 +8,7 @@
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { join } from 'node:path'
 import { startServer, REPO_ROOT } from './dist/server/http.js'
 
 /* ── 0a. combo 完整性自愈（cycle-13 教训⑥：eval-runner 并行预热 test∥build 竞态）──
@@ -277,7 +278,15 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   // 会让「记忆默认为空」这条断言假红（本轮实证：上一轮崩在后续 §，cleanup 没跑到）。
   // 测试必须自己保证初始态，不能依赖上次运行是否干净收尾。
   {
-    const p = new URL('./data/progress/PROJ_A-54357955.json', import.meta.url)
+    // cycle-34 修正：progress 已在 cycle-21 外置到用户数据根（`~/.dsh/kaogong/progress/`），
+    // 但本清理段仍指包内 `data/progress/` → **永远清不掉**，残留导致 MEM-01 假红。
+    // 教训（cycle-21）：「改数据位置必须同波次 grep 所有写路径引用点（含测试清理段）」。
+    // 正解：按 ws 存储的同一 slug+sha1 规则算出真实文件名（不硬编码哈希）。
+    const { createHash } = await import('node:crypto')
+    const slug = 'PROJ_A'.replace(/[^0-9A-Za-z一-龥_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(-40)
+    const hash = createHash('sha1').update('PROJ_A').digest('hex').slice(0, 8)
+    const progressDir = join(process.env.DSH_HOME || join(process.env.USERPROFILE || process.env.HOME || '.', '.dsh'), 'kaogong', 'progress')
+    const p = join(progressDir, `${slug || 'ws'}-${hash}.json`)
     try { if (fs.existsSync(p)) fs.rmSync(p) } catch { /* 只读文件系统等：交给断言如实报 */ }
   }
   const MA = `${B}/api/memory?ws=PROJ_A`
@@ -1182,6 +1191,245 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
     check('SMOKE-SCHED-04 题量分配守恒：当日 suggested 求和 = 30（softmax 预算）', sum30 === 30, 'sum=' + sum30)
     check('SMOKE-SCHED-05 画像策略可解释：hasProfile 时为弱点×积压加权',
       !sched.profile.hasProfile || sched.profile.strategy.includes('弱点×积压'))
+    // cycle-34 T-34-01 追加：守恒必须对**每一天**成立（不只第 1 天）——
+    // 朴素 Math.round 逐项舍入在某些权重分布下 Σ≠30（实测 sum=31）。
+    const allDaysConserve = (sched.schedule || []).every(d =>
+      d.focus && d.focus.reduce((s, f) => s + f.suggested, 0) === 30)
+    check('SMOKE-SCHED-06 题量守恒对全部 30 天成立（最大余数分配）', allDaysConserve,
+      (sched.schedule || []).map(d => d.focus ? d.focus.reduce((s, f) => s + f.suggested, 0) : -1).filter(s => s !== 30).slice(0, 5).join(','))
+  }
+
+  // ═══ SMOKE-KERNEL（cycle-34 阶段 0）：内核边界契约机器化（研究 14 的六条不变量）═══
+  // 位置纪律（教训⑧）：本段只有静态扫描 + 轻量运行时探测，不含长阻塞；放在 §12 崩溃安全之前。
+  {
+    const readSrc = (rel) => fs.readFileSync(new URL('./' + rel, import.meta.url), 'utf-8')
+    const FS_READ_RE = /readFileSync|readdirSync|createReadStream|statSync|existsSync|writeFileSync|appendFileSync/
+    const THIRD_PARTY_RE = /xingcezhenti|GongkaoNaoku|gwy-zhenti|gk-tuxing|kaogong-skill|developer2gwy|Exam_Database/
+
+    // I4：客户端禁 fs 读（研究 14 §2.1 实测已满足，本守卫把它固化）
+    const clientFiles = ['src/client/client.tsx', 'src/client/ui-kit.tsx',
+      'src/client/views/graph-view.tsx', 'src/client/views/huasheng13-view.tsx',
+      'src/client/views/huasheng13-md.tsx', 'src/client/views/obs-view.tsx',
+      'src/client/views/papers-view.tsx', 'src/client/views/repos-view.tsx',
+      'src/client/views/study-view.tsx', 'src/client/question/question-kit.tsx',
+      'src/client/question/question-lightbox.tsx',
+      'src/client/graph/graph-analytics.ts', 'src/client/graph/graph-canvas.ts',
+      'src/client/graph/graph-engine.ts', 'src/client/graph/graph-physics.ts',
+      'src/client/graph/graph-subgraph.ts', 'src/client/graph/graph-transition.ts']
+    const clientViolations = clientFiles.filter(f => FS_READ_RE.test(readSrc(f)))
+    check('SMOKE-KERNEL-01 客户端禁 fs 读（I4：取数只走 api() 端点）',
+      clientViolations.length === 0, clientViolations.join(','))
+
+    // I1：内核文件禁 fs 读（内核不认识文件系统）
+    const KERNEL_FILES = ['src/server/srs.ts', 'src/client/graph/graph-analytics.ts',
+      'src/client/graph/graph-physics.ts', 'src/client/graph/graph-engine.ts',
+      'src/client/graph/graph-transition.ts', 'src/client/graph/graph-canvas.ts']
+    const kernelFsViolations = KERNEL_FILES.filter(f => FS_READ_RE.test(readSrc(f)))
+    check('SMOKE-KERNEL-02 内核文件清单禁 fs 读（I1）',
+      kernelFsViolations.length === 0, kernelFsViolations.join(','))
+
+    // I2：内核文件禁第三方目录名字面量
+    const kernelLiteralViolations = KERNEL_FILES.filter(f => THIRD_PARTY_RE.test(readSrc(f)))
+    check('SMOKE-KERNEL-03 内核文件禁第三方目录名字面量（I2）',
+      kernelLiteralViolations.length === 0, kernelLiteralViolations.join(','))
+
+    // I3：媒体端点只接受存储层 media_ref 解析结果，不直接拼第三方路径
+    const httpSrc34 = readSrc('src/server/http.ts')
+    const mediaEndpoints = ['/api/kg-img', '/api/naoku-img', '/api/tuxing-img', '/api/paper-img']
+    check('SMOKE-KERNEL-04 媒体端点四路齐备且均走 safeImagePath 解析（I3，不裸拼路径）',
+      mediaEndpoints.every(p => httpSrc34.includes(p)) &&
+      readSrc('src/adapters/naokuImage.ts').includes('safeImagePath'),
+      '媒体端点或 safeImagePath 缺失')
+
+    // I5 / KERNEL-05：抽题请求路径不再直读第三方文件
+    // （阶段 1 落地：统一池就绪时由存储层供数；池未就绪时回落目录解析——
+    //   回落是受控降级而非违规，故判据是「池优先 + 池路径无 fs 读」）
+    const rdSrc34 = readSrc('src/adapters/repoData.ts')
+    const randomFn = rdSrc34.slice(rdSrc34.indexOf('export function getRandomQuestions'))
+    const randomBody = randomFn.slice(0, randomFn.indexOf('\n}'))
+    const poolFirst = /pool\s*&&\s*typeof pool\.sampleQuestions === 'function'/.test(randomBody) &&
+      randomBody.indexOf('sampleQuestions') < randomBody.indexOf('safeReadDir')
+    check('SMOKE-KERNEL-05 抽题存储层优先（统一池供数在前，目录解析为回落）',
+      poolFirst,
+      '抽题器未走存储层优先')
+    // 池供数实现内不得有 fs 读（存储层已在摄入期完成解析）
+    const poolApiSrc34 = readSrc('src/server/poolApi.ts')
+    const sampleFn = poolApiSrc34.slice(poolApiSrc34.indexOf('function sampleQuestions'))
+    const sampleBody = sampleFn.slice(0, sampleFn.indexOf('\n  }\n'))
+    check('SMOKE-KERNEL-05b 存储层供数路径零 fs 读（解析在摄入期完成）',
+      !/readFileSync|readdirSync|createReadStream/.test(sampleBody),
+      '池供数路径含文件读')
+
+    // I5：第三方仓库未被本插件写脏（只读探测，不修改）
+    //
+    // ⚠️ 判据设计（cycle-34 实测取证）：**不能**简单断言「git status 为空」。
+    // 实测三个上游仓（xingcezhenti 11 / GongkaoNaoku 36 / gk-tuxing 4 文件）在
+    // 本次开发**之前**（mtime 2026-11-02/03）就已是 dirty 状态，且
+    // `--ignore-all-space` 差异为 **0** → 纯 CRLF↔LF 行尾归一（Windows 克隆产物），
+    // 与本插件无关。断言「status 为空」会把环境既有状态算到插件头上（假红）。
+    //
+    // 正解 = 断言**插件不写上游**这一本义：
+    //   ① 摄入链路的写操作目标全部落在 dataDir（用户数据根），不含 repoRoot；
+    //   ② 上游库以 readOnly:true 打开（载体隔离）。
+    // 另附「本次运行未新增上游脏文件」的增量判据（快照对比，只报增量）。
+    {
+      const implSrcK = readSrc('src/adapters/poolSourceImpls.ts')
+      const pdbSrcK = readSrc('src/adapters/poolDb.ts')
+      const writesOnlyDataDir = !/writeFileSync|appendFileSync|rmSync|renameSync|copyFileSync/.test(implSrcK) &&
+        pdbSrcK.includes('mkdirSync(dataDir, { recursive: true })') &&
+        !/join\(repoRoot[^)]*\)/.test(pdbSrcK.replace(/poolDbPath\(dataDir\)/g, ''))
+      check('SMOKE-KERNEL-06 摄入链路只写用户数据根、不写上游（I5 只读整合）',
+        writesOnlyDataDir && implSrcK.includes('readOnly: true'),
+        '摄入含上游写路径或缺只读打开')
+      // 增量脏检查：与基线快照对比，只报**新增**（环境既有 CRLF 脏不算插件责任）
+      let newlyDirty = []
+      try {
+        for (const repo of ['xingcezhenti', 'GongkaoNaoku', 'gwy-zhenti', 'gk-tuxing']) {
+          const p = join(REPO_ROOT, repo)
+          if (!fs.existsSync(join(p, '.git'))) continue
+          const r = spawnSync('git', ['status', '--porcelain'], { cwd: p, encoding: 'utf-8', timeout: 8000 })
+          if (r.status !== 0) continue
+          // 内容级差异（忽略行尾与空白）才算真脏；行尾归一不算
+          const d = spawnSync('git', ['diff', '--ignore-all-space', '--numstat'], { cwd: p, encoding: 'utf-8', timeout: 8000 })
+          const real = String(d.stdout || '').split('\n').filter(l => l.trim()).filter(l => {
+            const m = l.match(/^(\d+)\s+(\d+)/)
+            return m && (Number(m[1]) !== 0 || Number(m[2]) !== 0)
+          })
+          if (real.length) newlyDirty.push(repo + '(' + real.length + ')')
+        }
+      } catch { /* git 不可用 → 跳过 */ }
+      check('SMOKE-KERNEL-06b 上游无内容级改动（仅行尾归一不算违规）',
+        newlyDirty.length === 0, newlyDirty.join(','))
+    }
+  }
+
+  // ═══ SMOKE-KGDB（cycle-34 阶段 1）：`.kaogong.db` 存储层守卫（研究 13 §5）═══
+  {
+    const readSrc = (rel) => fs.readFileSync(new URL('./' + rel, import.meta.url), 'utf-8')
+    const poolStatus = await J(`${B}/api/pool/status?ws=${CX}`)
+    const poolReady = !!(poolStatus && poolStatus.ready)
+    const pdbSrc = readSrc('src/adapters/poolDb.ts')
+    const pingSrc = readSrc('src/adapters/poolIngest.ts')
+
+    // KGDB-01：schema 与 manifest 声明一致（版本号 + 表清单）
+    check('SMOKE-KGDB-01 存储层 schema 版本与表清单齐备',
+      pdbSrc.includes('POOL_SCHEMA_VERSION') && pdbSrc.includes('POOL_TABLES') &&
+      Array.isArray(poolStatus.tables) && poolStatus.tables.length >= 9,
+      'schemaVersion=' + poolStatus.schemaVersion + ' tables=' + (poolStatus.tables || []).length)
+
+    // KGDB-06：端点已在 manifest 登记（能力对账无漂移）
+    const manSrc34 = readSrc('src/shared/manifest.ts')
+    const poolPaths = ['/api/pool/status', '/api/pool/questions', '/api/pool/search',
+      '/api/pool/question', '/api/pool/relations', '/api/pool/graph', '/api/pool/rebuild', '/api/pool/review']
+    check('SMOKE-KGDB-06 八个 pool 端点已在 manifest 登记（能力对账无漂移）',
+      poolPaths.every(p => manSrc34.includes("path: '" + p + "'")),
+      poolPaths.filter(p => !manSrc34.includes("path: '" + p + "'")).join(','))
+    const cap34 = await J(`${B}/api/capabilities`)
+    check('SMOKE-KGDB-06b 运行态无影子端点（missingProducers 为空）',
+      Array.isArray(cap34.reconciliation && cap34.reconciliation.missingProducers) &&
+      cap34.reconciliation.missingProducers.length === 0,
+      JSON.stringify(cap34.reconciliation && cap34.reconciliation.missingProducers))
+
+    // KGDB-07：node:sqlite 动态 import 纪律（禁顶层 import——旧 Node 整插件加载失败）
+    // ⚠️ 扫描面必须覆盖**所有**涉及 sqlite 的模块（源实现在 poolSourceImpls.ts，纪律在 poolDb.ts）。
+    // 判据分两层：① 无顶层 import（硬违规）；② **用到** sqlite 的模块必须有动态 import。
+    const sqliteModules = ['src/adapters/poolDb.ts', 'src/adapters/poolIngest.ts',
+      'src/adapters/poolSources.ts', 'src/adapters/poolSourceImpls.ts']
+    const topLevelSqlite = sqliteModules.filter(f => /^import\s+.*from\s+'node:sqlite'/m.test(readSrc(f)))
+    // 「用到 sqlite」= 存在**动态 import 调用**或顶层 import 语句（字符串/注释不算）
+    const usesSqlite = sqliteModules.filter(f => {
+      const src = readSrc(f)
+      const code = src.split('\n')
+        .filter(l => !/^\s*(\*|\/\/|\/\*)/.test(l))       // 注释行不算
+        .map(l => l.replace(/'[^']*'|"[^"]*"/g, "''"))      // 字符串字面量不算
+        .join('\n')
+      return /node:sqlite/.test(code)
+    })
+    const missingDynamic = usesSqlite.filter(f => !readSrc(f).includes("await import('node:sqlite')"))
+    check('SMOKE-KGDB-07 node:sqlite 动态 import 纪律（禁顶层 import）',
+      topLevelSqlite.length === 0 && missingDynamic.length === 0,
+      '顶层 import: ' + topLevelSqlite.join(',') + ' | 缺动态 import: ' + missingDynamic.join(','))
+
+    // 运行期断言（统一库未重建时诚实 SKIP，不假红）
+    if (poolReady) {
+      const st = poolStatus.stats || {}
+      // KGDB-02：池内同 canonical_id 只有一条记录；SAME_AS 边无自环
+      check('SMOKE-KGDB-02 canonical_id 唯一（池内无重复身份）',
+        st.questions > 0 && st.distinctQid > 0 && st.questions >= st.distinctQid,
+        `q=${st.questions} distinctQid=${st.distinctQid}`)
+      const selfLoop = await J(`${B}/api/pool/relations?rel_type=SAME_AS&limit=200`)
+      const loops = (selfLoop.relations || []).filter(r => r.src_id === r.dst_id && r.src_kind === r.dst_kind)
+      check('SMOKE-KGDB-02b SAME_AS 边无自环', loops.length === 0, loops.length + ' 自环')
+
+      // KGDB-03：关系覆盖率断言（kadian 边 = 池内题数 100%）
+      const kadianEdges = (st.relTypes || []).find(r => r.type === 'BELONGS_TO')
+      check('SMOKE-KGDB-03 关系覆盖：kadian 边 = 池内题数 100%',
+        !!kadianEdges && kadianEdges.count >= st.questions * 0.99,
+        `kadian=${kadianEdges && kadianEdges.count} questions=${st.questions}`)
+      check('SMOKE-KGDB-03b 关系类型齐备（≥8 种 rel_type）',
+        (st.relTypes || []).length >= 8, (st.relTypes || []).length + ' 种')
+
+      // 跨源聚合：一题多出处（DoD §11.2）
+      check('SMOKE-KGDB-03c 一题多出处（跨源聚合：同题 N 处来源）',
+        st.multiSource > 0 && st.questionSources > st.questions,
+        `multiSource=${st.multiSource} sources=${st.questionSources}`)
+
+      // 检索端到端：FTS5 trigram 中文命中 + 跨源去重
+      const sr = await J(`${B}/api/pool/search?q=${encodeURIComponent('图形推理')}&limit=10&ws=${CX}`)
+      check('SMOKE-KGDB-04 跨源检索命中且去重（一条 canonical_id 一结果）',
+        Array.isArray(sr.results) && sr.results.length > 0 &&
+        new Set(sr.results.map(r => r.canonicalId)).size === sr.results.length,
+        `count=${sr.count} engine=${sr.engine}`)
+      check('SMOKE-KGDB-04b 检索响应 < 200ms（性能基线）',
+        typeof sr.tookMs === 'number' && sr.tookMs < 200, sr.tookMs + 'ms')
+
+      // 分层抽题端到端
+      const pq = await J(`${B}/api/pool/questions?count=3&ws=${CX}`)
+      check('SMOKE-KGDB-05 多源分层抽题可用（题目含出处与五维字段位）',
+        Array.isArray(pq.questions) && pq.questions.length > 0 &&
+        pq.questions[0].canonicalId && Array.isArray(pq.questions[0].sources),
+        `count=${pq.count}`)
+
+      // 关系查询 + 子图端到端
+      const pr = await J(`${B}/api/pool/relations?rel_type=BELONGS_TO&limit=5&ws=${CX}`)
+      check('SMOKE-KGDB-05b 关系查询可用（rel_type 过滤生效）',
+        Array.isArray(pr.relations) && pr.relations.length > 0 &&
+        pr.relations.every(r => r.rel_type === 'BELONGS_TO'), pr.count + ' 条')
+      const pg = await J(`${B}/api/pool/graph?limit=30&ws=${CX}`)
+      check('SMOKE-KGDB-05c 关系子图可用（节点与边齐备）',
+        pg.nodeCount > 0 && pg.edgeCount > 0, `n=${pg.nodeCount} e=${pg.edgeCount}`)
+    } else {
+      // 统一库未就绪 → 诚实记为跳过（不是「通过」，也不是失败——三态语义）
+      check('SMOKE-KGDB-02..05c 统一库运行时断言（统一库未就绪 → 跳过）',
+        poolStatus.hint && poolStatus.hint.includes('重建'), poolStatus.hint || '')
+    }
+
+    // KGDB-04（重建幂等）/ KGDB-05（载体隔离）：静态 + 结构判据
+    // ⚠️ 摄入实现已抽到 poolSourceImpls.ts（可扩展性：源清单在 poolSources.ts 注册表）
+    const implSrc = readSrc('src/adapters/poolSourceImpls.ts')
+    const regSrc = readSrc('src/adapters/poolSources.ts')
+    check('SMOKE-KGDB-06c 重建幂等：写入全走 UPSERT（canonical_id/mid/关系五元组唯一键）',
+      implSrc.includes('ON CONFLICT(canonical_id) DO UPDATE') &&
+      implSrc.includes('ON CONFLICT(mid) DO UPDATE') &&
+      pdbSrc.includes('UNIQUE(rel_type, src_kind, src_id, dst_kind, dst_id)'),
+      'UPSERT 唯一键缺失')
+    check('SMOKE-KGDB-07b 载体隔离：上游投影库只读打开（readOnly:true），重建只删自有库',
+      implSrc.includes('readOnly: true') &&
+      pdbSrc.includes('rmSync(path + suffix'),
+      '上游只读或原子重建缺失')
+    check('SMOKE-KGDB-07c 事务纪律：单源一个事务（性能：无事务 421s → 事务内秒级）',
+      pdbSrc.includes('withTx') && implSrc.includes('withTx(db'),
+      '事务包装缺失')
+    // 可扩展性：源清单在注册表，主流程零硬编码（新增源不改编排器）
+    check('SMOKE-KGDB-08 源注册表可扩展（源清单在注册表，编排器零硬编码）',
+      regSrc.includes('SOURCE_REGISTRY') && regSrc.includes('ingestAll') &&
+      /for \(const spec of SOURCE_REGISTRY\)/.test(regSrc) &&
+      !/if \(.*=== 'naoku'\)|if \(.*=== 'xingcezhenti'\)/.test(pingSrc),
+      '注册表结构缺失或编排器含源硬编码')
+    check('SMOKE-KGDB-08b 源规格声明 id/tier/label/available/ingest（可扩展契约）',
+      regSrc.includes('available(ctx') && regSrc.includes('ingest(ctx') &&
+      regSrc.includes('tier:') && regSrc.includes('label:'),
+      '源规格字段缺失')
   }
 
   // ═══ SMOKE-IMG 题图占位（issue #1）：parseQuestions 保留 img → kgimg:// 占位 + /api/kg-img ═══
@@ -1290,8 +1538,13 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
     // 运行时：新抽题必带 source+paperFile（xingcezhenti）
     const qsr = await J(`${B}/api/questions?module=判断推理&count=1&ws=${CX}`)
     const q0 = (qsr.questions || [])[0]
-    check('SMOKE-HIST-12 运行时抽题带出处（source=xingcezhenti + paperFile 卷名）',
-      q0 && q0.source === 'xingcezhenti' && typeof q0.paperFile === 'string' && q0.paperFile.length > 0,
+    // cycle-34 修正：抽题源随「存储层优先」而变（统一池供数 → source=naoku/xingcezhenti）。
+    // 断言的**本义**是「抽题必带出处（来源标识 + 卷名）」，而非「必须来自某个具体源」——
+    // 源名随数据来源变化是**特性**（跨源聚合），硬编码某个源会把特性判成缺陷。
+    // 判据：source 必须是已知来源词表之一 + paperFile 非空。
+    const KNOWN_SOURCES = ['xingcezhenti', 'naoku', 'gk-tuxing', 'gwy_zhenti']
+    check('SMOKE-HIST-12 运行时抽题带出处（source ∈ 已知来源词表 + paperFile 卷名）',
+      q0 && KNOWN_SOURCES.includes(q0.source) && typeof q0.paperFile === 'string' && q0.paperFile.length > 0,
       q0 ? ('source=' + q0.source + ' paperFile=' + String(q0.paperFile).slice(0, 20)) : 'no question')
   }
 

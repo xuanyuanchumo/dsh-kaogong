@@ -120,6 +120,17 @@ export const CAPABILITIES = {
     { path: '/api/history/entries', label: '纸质补录(逐题/批量)', consumers: ['ui:deepbank'] },
     { path: '/api/history/undo', label: '补录批次撤销', consumers: ['ui:deepbank'] },
     { path: '/api/history/batches', label: '补录批次台账', consumers: ['ui:deepbank'] },
+    // cycle-34 阶段 1：统一题目池（`.kaogong.db` 存储层；设计 §9c.4 八端点）
+    // 端点四步纪律：manifest → server → UI → smoke（manifest 是唯一事实源，对账只认声明）
+    { path: '/api/pool/status', label: '统一池状态(库/构建/覆盖)', consumers: ['ui:pool', 'tool:kaogong_launch'] },
+    { path: '/api/pool/health', label: '统一池健康快照(白盒)', consumers: ['ui:pool', 'ui:observability'] },
+    { path: '/api/pool/questions', label: '统一池多源分层抽题', consumers: ['ui:pool'] },
+    { path: '/api/pool/search', label: '统一池跨源检索(去重聚合)', consumers: ['ui:pool'] },
+    { path: '/api/pool/question', label: '统一池单题聚合视图', consumers: ['ui:pool'] },
+    { path: '/api/pool/relations', label: '统一池关系查询', consumers: ['ui:pool'] },
+    { path: '/api/pool/graph', label: '统一池关系子图', consumers: ['ui:pool'] },
+    { path: '/api/pool/rebuild', label: '统一池重建', consumers: ['ui:pool'] },
+    { path: '/api/pool/review', label: '统一池人工校验', consumers: ['ui:pool'] },
     { path: '/api/graph', label: '图谱数据', consumers: ['ui:graph'] },
     // v1.8 交互式图谱三端点 + 生命周期状态机（白盒链路：client 视图消费）
     { path: '/api/graph/neighborhood', label: '图谱·k跳邻域', consumers: ['ui:graph'] },

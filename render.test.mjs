@@ -73,6 +73,51 @@ globalThis.fetch = async (url) => {
   if (u.includes('/api/status')) return { json: async () => ({ app: 'dsh-kaogong', port: 8400, repos: { ready: 15, total: 15 }, uptimeSec: 5 }) }
   if (u.includes('/api/questions')) return { json: async () => ({ questions: [{ module: '判断推理', type: '逻辑', stem: '测试题干', options: { A: 'a', B: 'b' }, correctAnswer: 'A' }] }) }
   if (u.includes('/api/check')) return { json: async () => ({ isCorrect: true }) }
+  // cycle-34 统一题库：mock 必须给**真实形状**（含 health/quality/registry/relTypes），
+  // 否则字段级降级分支测不到（教训：mock 形状即契约——R12 同款纪律）。
+  if (u.includes('/api/pool/status')) return { json: async () => ({
+    ready: true, built: true, schemaVersion: 1, bytes: 399196160,
+    builtAt: '2026-11-18T05:00:00.000Z',
+    stats: { questions: 27506, relations: 222894, questionSources: 59093, withKadian: 27506, multiSource: 70 },
+    registry: [
+      { id: 'naoku', tier: 'required', label: '深度题库（GongkaoNaoku）', available: true },
+      { id: 'xingcezhenti', tier: 'required', label: '行测真题库（xingcezhenti）', available: true },
+    ],
+    health: {
+      available: true, snapshotMs: 12,
+      tables: [{ name: 'question', rows: 27506 }, { name: 'relation', rows: 222894 }],
+      relTypes: [
+        { type: 'BELONGS_TO', count: 27506, label: '知识点', color: '#10b981', known: true },
+        { type: 'APPEARS_IN', count: 59020, label: '出处', color: '#3b82f6', known: true },
+        { type: 'NEWREL', count: 12, label: 'NEWREL', color: '#94a3b8', known: false },
+      ],
+      modules: [{ module: '判断推理', count: 7749 }, { module: '资料分析', count: 3120 }],
+      sources: [{ sourceId: 'naoku', questions: 27506, occurrences: 59020 }],
+      quality: [
+        { key: 'identity', label: '身份唯一', value: 27506, total: 27506, ok: true, desc: 'distinct qid / 题目总数' },
+        { key: 'orphan', label: '出处完整', value: 27458, total: 27506, ok: false, desc: '有出处登记的题数' },
+      ],
+      topKadian: [{ kadian: '人文常识', edges: 2698 }],
+    },
+  }) }
+  if (u.includes('/api/pool/search')) return { json: async () => ({
+    query: '图形推理', count: 2, tookMs: 19, engine: 'fts5-trigram',
+    results: [
+      { canonicalId: 'q:10204454', module: '判断推理', category: '图形推理', kadian: '图形推理 / 数量规律', stem: '从所给的四个选项中，选择最合适的一个填入问号处', sources: [{ source: 'naoku', paper: '2024年甘肃公务员录用考试《行测》题', region: '甘肃', year: '2024' }, { source: 'xingcezhenti', paper: '甘肃卷', region: '甘肃', year: '2024' }] },
+      { canonicalId: 'q:10204455', module: '判断推理', category: '图形推理', kadian: '图形推理 / 位置规律', stem: '下列图形的变化规律是', sources: [{ source: 'naoku', paper: '2023年某卷', region: '江苏', year: '2023' }] },
+    ],
+  }) }
+  if (u.includes('/api/pool/questions')) return { json: async () => ({
+    count: 1, candidates: 500, strategy: '模块弱点（SRS 1/(rate+0.15)）× 多出处加成',
+    questions: [{ canonicalId: 'q:10204454', module: '判断推理', stem: '抽到的统一池题目', answer: 'C', sourceCount: 8 }],
+  }) }
+  if (u.includes('/api/pool/question')) return { json: async () => ({
+    canonicalId: 'q:10204454', module: '判断推理', category: '图形推理', kadian: '图形推理 / 数量规律',
+    stem: '从所给的四个选项中，选择最合适的一个填入问号处', analysis: '元素组成相同，考虑数量规律。',
+    dims: { reasoning: '第1步：元素组成不同', fastest: '⚡ 做和法', pitfalls: '- ⚠ 只看黑球', mother: '🧩 母题', askModel: '', doubt: '' },
+    sources: [{ source_id: 'naoku', paper: '2024年甘肃卷', region: '甘肃', year: '2024' }, { source_id: 'xingcezhenti', paper: '甘肃卷', region: '甘肃', year: '2024' }],
+    sourceCount: 2, relations: [{ rel_type: 'BELONGS_TO', src_id: 'q:10204454', dst_id: '图形推理' }, { rel_type: 'APPEARS_IN', dst_id: '2024年甘肃卷' }],
+  }) }
   // R12：以下三类端点的真实形状必须 mock 到，否则 prop 形状缺陷测不出
   // v1.8.0：图谱 mock 必须带 nodes/edges（否则 canvas 分支不执行，新图谱逻辑测不到），
   // 且包含 nodeMeta/analytics/layout 以覆盖「服务端字段优先」路径。
@@ -452,6 +497,57 @@ try {
   if (!/回答正确|回答错误/.test(afterSubmit)) throw new Error('提交后未展示判分反馈（v1.7 修复点失效）: ' + afterSubmit.slice(0, 150))
   if (!afterSubmit.includes('解析')) throw new Error('提交后未展示解析')
   ok('真实 client.js: 作答→提交→就地判分+解析（v1.7 刷题修复验证）')
+
+  // RENDER-POOL-34（cycle-34 阶段 1）：统一题库视图旅程
+  // 覆盖：导航可达 → 库状态（白盒指标 + 源注册表 + 关系词表）→ 跨源检索（去重聚合 +
+  // 多出处标注）→ 单题聚合详情（五维标注 + 出处 + 关系邻居）→ 零降级。
+  {
+    const poolBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('统一题库'))
+    if (!poolBtn) throw new Error('RENDER-POOL-34 未找到「统一题库」导航按钮')
+    await act(async () => { poolBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 90)) })
+    const t = JSON.stringify(tr.toJSON())
+    const alert = tr.root.findAll(n => n.props && n.props.role === 'alert')
+    if (alert.length) {
+      const kids = alert[0].props.children
+      const flat = (Array.isArray(kids) ? kids : [kids]).map(c => typeof c === 'string' ? c : '').join(' ')
+      throw new Error('RENDER-POOL-34 统一题库视图渲染降级: ' + flat.slice(0, 160))
+    }
+    if (!t.includes('统一库状态')) throw new Error('RENDER-POOL-34 库状态卡未渲染')
+    if (!t.includes('27506')) throw new Error('RENDER-POOL-34 题目计数未透出（白盒指标缺失）')
+    if (!t.includes('已注册源')) throw new Error('RENDER-POOL-34 源注册表未渲染（可扩展性可见面缺失）')
+    if (!t.includes('深度题库')) throw new Error('RENDER-POOL-34 源注册表未列出 naoku 源')
+    if (!t.includes('数据质量')) throw new Error('RENDER-POOL-34 数据质量指标区未渲染（可观测性缺失）')
+    if (!t.includes('关系类型分布')) throw new Error('RENDER-POOL-34 关系类型分布未渲染')
+    ok('RENDER-POOL-34a: 统一题库视图渲染（库状态 + 源注册表 + 数据质量 + 关系词表）')
+
+    // 检索旅程：输入关键词 → 检索 → 结果含「N 处出处」聚合标注
+    const input = tr.root.findAllByType('input').find((i) => String(i.props.placeholder || '').includes('关键词'))
+    if (!input) throw new Error('RENDER-POOL-34 检索输入框缺失')
+    await act(async () => { input.props.onChange({ target: { value: '图形推理' } }) })
+    await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+    const searchBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('检索'))
+    if (!searchBtn) throw new Error('RENDER-POOL-34 检索按钮缺失')
+    await act(async () => { searchBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 90)) })
+    const t2 = JSON.stringify(tr.toJSON())
+    if (!t2.includes('处出处')) throw new Error('RENDER-POOL-34 检索结果缺「N 处出处」聚合标注（跨源聚合未呈现）')
+    if (!t2.includes('fts5-trigram')) throw new Error('RENDER-POOL-34 检索引擎未透出（观测性缺项）')
+    ok('RENDER-POOL-34b: 跨源检索旅程（结果 + N 处出处聚合 + 引擎/耗时透出）')
+
+    // 单题聚合详情：点结果 → 五维标注 + 出处清单 + 关系邻居
+    const rows = tr.root.findAll(n => n.props && typeof n.props.onClick === 'function' &&
+      String(n.props.children || '').includes('从所给的四个选项中'))
+    if (!rows.length) throw new Error('RENDER-POOL-34 检索结果行不可点（onClick 断裂）')
+    await act(async () => { rows[0].props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 90)) })
+    const t3 = JSON.stringify(tr.toJSON())
+    if (!t3.includes('单题聚合视图')) throw new Error('RENDER-POOL-34 单题详情未打开')
+    if (!t3.includes('五维标注')) throw new Error('RENDER-POOL-34 五维标注区未渲染')
+    if (!t3.includes('出处（')) throw new Error('RENDER-POOL-34 出处清单未渲染')
+    if (!t3.includes('关系邻居')) throw new Error('RENDER-POOL-34 关系邻居未渲染')
+    ok('RENDER-POOL-34c: 单题聚合详情（五维标注 + 出处清单 + 关系邻居）')
+  }
 
   // RENDER-WB-33（cycle-33）：错题本工作台旅程——筛选/展开/双入口。在快速切换序列后
   // 单独进入错题本断言新形态（mock wrong 已升级为 1 条非空条目）。

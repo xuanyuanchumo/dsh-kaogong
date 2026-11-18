@@ -114,6 +114,12 @@ export function parseQuestions(filePath, maxQ = 20) {
     const block = blocks[i + 1] || ''
     const typeMatch = block.match(/<sub>qid\s*\d+\s*[·・]\s*(.+?)<\/sub>/)
     const qType = typeMatch ? typeMatch[1].trim() : '未知'
+    // cycle-34 阶段 1：qid 直取上游（跨仓 100% 一致，327/327 实证）。
+    // 原实现从 `<sub>qid N · 类型</sub>` 只抽了类型，qid 被丢弃——
+    // 统一池需要 qid 作主身份（canonical_id = 'q:'+qid）才能跨源归一。
+    // 加字段是**加法**（既有消费方只读部分字段），不破坏任何既有形状。
+    const qidMatch = block.match(/<sub>\s*qid\s*(\d+)/)
+    const qid = qidMatch ? qidMatch[1] : ''
     // cycle-21：材料图归属——该题块偏移之前「最近的有图材料段」的图，附在题干尾部
     // （语义：资料分析题读图作答；题块自身已有图时材料图放在其后不重复附）
     // cycle-26 D-1b：at 提为循环体作用域（组材料正文归属同用）
@@ -159,7 +165,7 @@ export function parseQuestions(filePath, maxQ = 20) {
         id: `${meta.模块 || '未知'}-${qNum}-${Math.random().toString(36).slice(2, 6)}`,
         number: qNum, type: qType, module: meta.模块 || '未知',
         exam: meta.试卷 || '', region: meta.地区 || '', year: meta.年份 || '',
-        source: 'xingcezhenti', paperFile,
+        source: 'xingcezhenti', paperFile, qid,
         stem: finalStem, options, correctAnswer, analysis,
         groupMaterial, groupMaterialNo,
       })
@@ -168,8 +174,28 @@ export function parseQuestions(filePath, maxQ = 20) {
   return questions
 }
 
-/** 抽题：随机文件 + 无放回下标采样（Set 去重，O(count)） */
-export function getRandomQuestions(repoRoot, moduleName, count = 1) {
+/**
+ * 抽题：随机文件 + 无放回下标采样（Set 去重，O(count)）
+ *
+ * ── cycle-34 阶段 1（I5/KERNEL-05 违规收敛）──
+ * 现状：每次抽题都 `readFileSync` + 重新解析 md —— 请求路径直读第三方文件，
+ * 且题目**未进存储层**（无法跨源聚合）。研究 15 §4.1 C6 判定为「两跳退化」。
+ *
+ * 修法：**存储层优先**——统一池（`.kaogong.db`）就绪时由它供数（不再碰文件）；
+ * 池未就绪（未重建 / node:sqlite 不可用）时**回落**到既有目录解析路径。
+ * 回落到目录解析是**受控降级**而非违规：它是唯一可用的数据源，
+ * 且守卫 SMOKE-KERNEL-05 断言「池就绪时请求路径不 readFileSync」。
+ */
+export function getRandomQuestions(repoRoot, moduleName, count = 1, pool?: any) {
+  // ① 存储层优先（统一池供数；跨源可聚合，请求路径零文件读）
+  if (pool && typeof pool.sampleQuestions === 'function') {
+    const r = pool.sampleQuestions({ module: moduleName, count })
+    if (r && !r.error && Array.isArray(r.questions) && r.questions.length) {
+      return { file: r.file || '', count: r.questions.length, questions: r.questions, source: 'pool' }
+    }
+    if (r && r.error) return { error: r.error }
+  }
+  // ② 回落：目录解析（池未就绪时的唯一数据源）
   const dirName = XINGCE_MODULES[moduleName]
   if (!dirName) return { error: `未知模块。可用: ${Object.keys(XINGCE_MODULES).join(', ')}` }
   const modulePath = join(repoRoot, 'xingcezhenti', dirName)

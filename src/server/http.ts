@@ -33,6 +33,8 @@ import { makeMethodologyApi } from './methodologyApi.js'
 import { resolveReposRoot, USER_DATA_ROOT, PROGRESS_DIR_USER, migratePkgData, dataLocationReport } from './dataRoot.js'
 import { makeRepoManager } from './repoManager.js'
 import { makeHistoryApi } from './historyApi.js'
+import { makePoolApi } from './poolApi.js'
+import { initPoolDb, resetPoolDb } from '../adapters/poolDb.js'
 import { schedulePlan } from './planSchedule.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
@@ -61,10 +63,14 @@ const MIGRATION = migratePkgData()
 let domains: any = null
 function buildDomains(root: string) {
   const store = makeWsStore(PROGRESS_DIR)
+  // cycle-34 阶段 1：统一题目池域（`.kaogong.db` 存储层）
+  // ⚠️ 装配顺序：**必须先于 srsApi**——SRS 抽题走存储层优先（I5/KERNEL-05），
+  // 需要引用 poolApi.sampleQuestions（换根时随域一起重建，cycle-16 教训⑬）。
+  const poolApi = makePoolApi({ repoRoot: root, dataDir: DATA_DIR, store })
   const d = {
     root,
     store,
-    srsApi: makeSrsApi({ repoRoot: root, store }),
+    srsApi: makeSrsApi({ repoRoot: root, store, pool: poolApi }),
     dataApi: makeDataApi({ repoRoot: root, planFile: PLAN_FILE }),
     paperApi: makePaperApi({ repoRoot: root, store }),
     naokuApi: makeNaokuApi({ repoRoot: root, dataDir: DATA_DIR, store }),
@@ -75,9 +81,12 @@ function buildDomains(root: string) {
     methodologyApi: makeMethodologyApi({ pkgRoot: PKG_ROOT, repoRoot: root, dataDir: DATA_DIR, store }),
     // cycle-21 纸质补录域（issue #3）：搜索/补录/撤销，指纹与错题本同源
     historyApi: makeHistoryApi({ store, repoRoot: root }),
+    poolApi,
     studyPlan: makeStudyPlan(PLAN_FILE),
   }
   initNaoku(root, DATA_DIR).catch(() => {})
+  // cycle-34 阶段 1：统一库惰性打开（失败只降级——域内诚实报「未就绪」，绝不崩宿主）
+  initPoolDb(DATA_DIR).catch(() => {})
   return d
 }
 export function getRepoRoot(): string {
@@ -92,6 +101,7 @@ function rebuildDomains() {
   if (changed) {
     resetPaperIndex()
     resetNaoku()
+    resetPoolDb()
     graphCache.clear()
   }
   return { root: next, changed }
@@ -431,6 +441,10 @@ async function handleApi(path, params, post, method, wsRaw, port) {
   return domains.methodologyApi.handle(path, params, post, method, wsRaw)
     ?? domains.srsApi(path, params, post, method, wsRaw)
     ?? domains.historyApi.handle(path, params, post, method, wsRaw)
+    // cycle-34 阶段 1：统一题目池域——插在 historyApi 之后、tuxingApi 之前
+    // （研究 15 §2.3：`/api/pool/*` 前缀独立无冲突，但语义上「统一池」先于各专项域命中）
+    // ⚠️ 异步域：handle 返回 Promise → 必须 await（cycle-16 教训⑯：异步路由改造要同步改全部调用点）
+    ?? await domains.poolApi.handle(path, params, post, method, wsRaw)
     ?? domains.tuxingApi.handle(path, params)
     ?? domains.naokuApi.handle(path, params, post, method, wsRaw)
     ?? domains.paperApi.handle(path, params, post, method, wsRaw)
@@ -452,7 +466,15 @@ function coreApi(path, params, post, method, wsRaw, port) {
     }
   }
   if (path === '/api/questions' && method === 'GET') {
-    return getRandomQuestions(domains.root, params.get('module') || '判断推理', parseInt(params.get('count') || params.get('limit') || '1'))
+    // cycle-34 阶段 1（I5/KERNEL-05）：存储层优先供数——统一池就绪时不再直读第三方 md；
+    // 池未就绪时回落目录解析（受控降级，唯一可用数据源）。
+    // ⚠️ 兼容硬约束：响应形状零变化（options/correctAnswer/stem 的 kgimg:// 占位全保留）。
+    return getRandomQuestions(
+      domains.root,
+      params.get('module') || '判断推理',
+      parseInt(params.get('count') || params.get('limit') || '1'),
+      domains.poolApi,
+    )
   }
   if (path === '/api/check' && method === 'POST') {
     const q = post.question

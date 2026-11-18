@@ -29,6 +29,8 @@ import { NativeExamView, NativePapersView, NativeTopicsView, NativeEssayView } f
 import { NativeGraphView } from './views/graph-view.js'
 import { NativeObsView } from './views/obs-view.js'
 import { NativeReposView } from './views/repos-view.js'
+// cycle-34 阶段 1：统一题库视图（`.kaogong.db` 存储层的可见面）
+import { NativePoolView } from './views/pool-view.js'
 // cycle-18 花生十三体系方法论（消费 /api/huasheng13/*，自管数据视图）
 import { NativeHuasheng13View } from './views/huasheng13-view.js'
 
@@ -134,6 +136,8 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
         deepbank: { comp: NativeDeepBankView, key: t => 'dp' + t, props: () => ({ api, initialModule: viewParams.module || '', initialCategory: viewParams.category || '' }) },
         tuxing: { comp: NativeTuxingView, key: t => 'tx' + t, props: () => ({ api }) },
         repos: { comp: NativeReposView, key: t => 'rp' + t, props: () => ({ api }) },
+        // cycle-34 阶段 1：统一题库（不进一级导航——收敛进「题库」组，与 discipline㉛ 一致）
+        pool: { comp: NativePoolView, key: t => 'pl' + t, props: () => ({ api, initialModule: viewParams.module || '' }) },
         huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t, props: () => ({ api, initialSection: viewParams.section || '', onGo: (v: any, params?: any) => setView(v, params || {}) }) },
         topics: { comp: NativeTopicsView, key: t => 'tp' + t, props: () => ({ api, onGo: (v: any, params?: any) => setView(v, params || {}), initialModule: viewParams.module || '' }) },
         essay: { comp: NativeEssayView, key: t => 'es' + t + JSON.stringify(viewParams), props: () => ({ api, initialType: viewParams.type || '' }) },
@@ -156,7 +160,8 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
       // view==='huasheng13' 的分发保留，用于深链与枢纽内跳转。
       const NAV_GROUPS: Array<{ id: string; label: string; items: Array<[string, string]> }> = [
         { id: 'learn', label: '学习', items: [['dashboard', '📊 仪表盘'], ['exam', '⏱ 模考']] },
-        { id: 'bank', label: '题库', items: [['papers', '📚 真题卷'], ['topics', '🎯 专题']] },
+        // cycle-34 阶段 1：统一题库收敛进「题库」组（纪律㉛：新增业务视图不新增一级导航）
+        { id: 'bank', label: '题库', items: [['papers', '📚 真题卷'], ['topics', '🎯 专题'], ['pool', '🗄️ 统一题库']] },
         { id: 'review', label: '复盘', items: [['wrongbook', '📕 错题本'], ['graph', '🕸️ 图谱'], ['obs', '📡 可观测']] },
         { id: 'admin', label: '管理', items: [['repos', '📦 题库管理']] },
       ]

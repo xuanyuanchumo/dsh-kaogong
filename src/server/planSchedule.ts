@@ -60,12 +60,29 @@ export function schedulePlan(plan: any, byModule: any, wrongBook: any[]): any {
 
     // ── 每日侧重：按天轮转 basis（确定性；第 d 天主攻 basis[d % basis.length]），
     //    建议题量按 softmax 比例分配到当天 30 题默认预算（可被用户日任务覆盖）。
+    //
+    // cycle-34 T-34-01（修 SMOKE-SCHED-04 既有失败）：朴素 `Math.round(30*w)` 逐项舍入
+    // **不保恒**——6 模块各自舍入后求和可能 29/31/32（实测 sum=31）。分配类算法必须有
+    // 守恒断言，否则 UI 上「各模块建议题量之和」与「今日 30 题」自相矛盾。
+    // 正解 = **最大余数法（Hamilton apportionment）**：先取整（floor），再把剩余名额
+    // 按小数部分从大到小逐个 +1（并列时按 basis 既有稳定序，保证确定性）。
+    // 守恒证明：Σfloor ≤ B 且 Σfloor ≥ B-n，剩余 R = B-Σfloor ∈ [0, n)，逐个 +1 后恰为 B。
+    const DAILY_BUDGET = 30
     const schedule = days.map((d, i) => {
       const primary = basis[i % basis.length]
-      const focus = basis.map(x => ({
+      // 最大余数法：守恒且确定性（同输入两次输出深相等——并列项按 basis 序稳定）
+      const exact = basis.map(x => (DAILY_BUDGET * x.W) / sumW)
+      const floors = exact.map(v => Math.floor(v))
+      let remainder = DAILY_BUDGET - floors.reduce((s, v) => s + v, 0)
+      // 余数分配序：按小数部分降序；并列时按 basis 原序（稳定）
+      const order = exact
+        .map((v, idx) => ({ idx, frac: v - Math.floor(v) }))
+        .sort((a, b) => b.frac - a.frac || a.idx - b.idx)
+      for (let k = 0; k < order.length && remainder > 0; k++, remainder--) floors[order[k].idx]++
+      const focus = basis.map((x, xi) => ({
         module: x.module,
         weight: +(x.W / sumW).toFixed(4),
-        suggested: Math.max(0, Math.round(30 * x.W / sumW)),
+        suggested: Math.max(0, floors[xi]),
         primary: x.module === primary.module,
       })).filter(x => x.suggested > 0)
       return {
