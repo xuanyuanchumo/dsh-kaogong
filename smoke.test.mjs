@@ -1837,6 +1837,41 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   // R-DOC 守卫：10 篇研究文档 + 索引存在（声明 → 实体零断链，R28 族同纪律）
   const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md', '11-统一存储与模型自选架构.md', '12-统一题目池与多源抽题.md', '13-kaogong-db统一知识库.md', '14-内核边界契约.md', '15-全局整合分析.md']
   check('RDOC-01 研究文档 10 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
+  // RDOC-01b（cycle-34）：**研究文档落地闭环**——研究 11/12/13/14/15 的关键断言
+  // 必须能在**已实现的代码**里找到对应物（研究已定 → 代码已落 → 守卫固化）。
+  // 这是「研究文档不是空谈」的机器化：文档说要做 X，代码里就得有 X 的实现痕迹。
+  {
+    const poolDbSrc = fs.readFileSync('src/adapters/poolDb.ts', 'utf-8')
+    const poolRegSrc = fs.readFileSync('src/adapters/poolSources.ts', 'utf-8')
+    const poolObsSrc = fs.readFileSync('src/server/poolObservability.ts', 'utf-8')
+    const httpSrc34 = fs.readFileSync('src/server/http.ts', 'utf-8')
+    const manifestSrc34 = fs.readFileSync('src/shared/manifest.ts', 'utf-8')
+    const landing = [
+      // 研究 13：canonical_id 统一口径（qid 优先）+ 10 表 schema + FTS5 trigram + 统一边表
+      ['R13 canonical_id qid 优先', poolDbSrc.includes("'q:'") && poolDbSrc.includes("'fp:'") && poolDbSrc.includes("'h:'")],
+      ['R13 十表 schema', poolDbSrc.includes('CREATE TABLE IF NOT EXISTS question') &&
+        poolDbSrc.includes('CREATE TABLE IF NOT EXISTS relation') &&
+        poolDbSrc.includes('CREATE TABLE IF NOT EXISTS question_source') &&
+        poolDbSrc.includes('CREATE VIRTUAL TABLE IF NOT EXISTS question_fts')],
+      ['R13 FTS5 trigram', poolDbSrc.includes("tokenize='trigram'")],
+      ['R13 统一边表 + 10 rel_type', poolDbSrc.includes('REL_TYPES') && poolDbSrc.includes('SAME_AS') && poolDbSrc.includes('BELONGS_TO')],
+      // 研究 14：四层 + 六不变量 → 守卫已机器化
+      ['R14 六不变量守卫', fs.readFileSync(new URL('./smoke.test.mjs', import.meta.url), 'utf-8').includes('SMOKE-KERNEL-01') &&
+        fs.readFileSync(new URL('./smoke.test.mjs', import.meta.url), 'utf-8').includes('SMOKE-KERNEL-06b')],
+      // 研究 15：域链位置（poolApi 在 historyApi 之后 tuxingApi 之前）+ 阶段 0 守卫先行
+      ['R15 poolApi 域链位置', httpSrc34.includes('domains.historyApi.handle') &&
+        httpSrc34.indexOf('domains.poolApi.handle') > httpSrc34.indexOf('domains.historyApi.handle') &&
+        httpSrc34.indexOf('domains.poolApi.handle') < httpSrc34.indexOf('domains.tuxingApi.handle')],
+      ['R15 端点已登记 manifest', manifestSrc34.includes("path: '/api/pool/status'") && manifestSrc34.includes("path: '/api/pool/questions'")],
+      // 可扩展性：源注册表 + 编排器零硬编码
+      ['R15 源注册表可扩展', poolRegSrc.includes('SOURCE_REGISTRY') && !/=== 'naoku'/.test(fs.readFileSync('src/adapters/poolIngest.ts', 'utf-8'))],
+      // 可观测性：白盒健康快照 + 质量指标判据来源
+      ['R15 白盒健康快照', poolObsSrc.includes('REL_TYPE_META') && poolObsSrc.includes('source:') && poolObsSrc.includes('quality')],
+    ]
+    const landingHit = landing.filter(x => x[1]).length
+    check('RDOC-01b 研究 11-15 落地闭环：关键断言在已实现代码中可查（≥8/9）',
+      landingHit >= 8, `命中 ${landingHit}/${landing.length}: ` + landing.filter(x => !x[1]).map(x => x[0]).join(','))
+  }
   // R-DOC 事实抽验（R14 纪律）：文档引用的代码符号 ≥5 条在源码真实存在
   const rdocBody = rdocExpected.map(f => { try { return fs.readFileSync(join(rd, f), 'utf-8') } catch { return '' } }).join('\n')
   const graphAnalytics = fs.readFileSync('src/client/graph/graph-analytics.ts', 'utf-8')

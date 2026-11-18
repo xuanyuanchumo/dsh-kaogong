@@ -238,3 +238,21 @@
 - **（C7·双写风险）**：存储层落地必然经历「旧 progress json + 新 study_event 表」双写期，**必须明确谁写谁读**（阶段 1 先只写表、读仍走 json；阶段 2 再切读路径），否则同一份学习记录会出两个事实源——违反本项目「单一事实源」纪律。
 
 设计契约与研究文档：`docs/design/unified-storage-architecture.md`（分层存储 + 模型自选契约）、`docs/research/11-统一存储与模型自选架构.md`（五段式研究）。
+
+## cycle-34 事实基线（v1.30.0 统一题目池存储层 · 阶段 0+1）
+
+- **（`.kaogong.db` 已落地）**：项目自有统一知识库，**10 表 + FTS5 trigram**（meta/source/asset/question/question_source/relation/material/question_fts/study_event/review）· 实测 **27506 题 / 222894 关系边 / 59093 出处 / 1578 材料 / 53 校验** · 库 399MB · **位于用户数据根 `~/.dsh/kaogong/`（不入包，同 cycle-21 纪律）**。设计契约 `docs/agents/STORAGE-LAYER.md`。
+- **（canonical_id 统一口径）**：`q:<qid>` 优先 → `fp:<fp>` 次之 → `h:<sha256前16>` 兜底（研究 15 §1.1）。⚠️ 上游 `fp` 实测是 **SHA-1 40-hex**（不是 SHA-256）。
+- **（`.naoku.db` 禁写自有表）**：它是**上游投影**（整库重建，自有表被静默冲掉）；`.kaogong.db` 是**项目自有派生物**。两者以 `qid` 关联（ATTACH 可用）。
+- **（源注册表 = 可扩展性枢纽）**：源清单只在 `src/adapters/poolSources.ts`；源实现在 `poolSourceImpls.ts`；编排器 `poolIngest.ts` **零源硬编码**。新增源 = 写一个 `ingestXxxSource(ctx)` + 注册表加一条 → 主流程/面板/守卫全零改动。⚠️ **注册表 `ingest` 必须 `await`**（漏 await → 展开 Promise → 计数全丢 → 静默少摄入，本轮实测踩坑）。
+- **（白盒健康快照 = 可观测性）**：`GET /api/pool/health` → `src/server/poolObservability.ts`。8 项质量指标（身份唯一/知识点覆盖/五维标注/配图覆盖/跨源聚合/出处完整/无自环边/关系词表齐备），**每项附判据 SQL**。纪律：只读、口径唯一（客户端不二次裁剪）、不臆造（不可探测用 null 不用 0）。
+- **（性能真相）**：全量摄入 27506 题 + 22 万边 **41s**（单源一个事务）；**无事务时 421s**（逐条 fsync，10 倍差）。FTS5 检索 **19–38ms**。研究文档的性能数字是**线索**不是**结论**——实测差 28 倍时先问「少了哪个系统级机制」（本例=事务）。
+- **（SQL 纪律·重申）**：空串判定用 `LENGTH(x) > 0`，**不可用双引号空串**（SQLite 视为标识符 → 查询报错 → 静默恒 0）。且**异常吞掉后返回值必须可区分于真实零值**。
+- **（上游洁净判定）**：**不可**断言「第三方仓库 `git status` 为空」——Windows 克隆普遍 CRLF 行尾归一（`--ignore-all-space` 差异为 0，mtime 早于本次开发），属环境既有状态，算到插件头上是**假红**（假红比没守卫更糟——训练团队忽略守卫）。正解：断言「摄入只写用户数据根」+「上游无**内容级**改动」。
+- **（端点声明纪律 v2）**：端点用**查询参数**而非路径参数（`/api/pool/question?id=` 而非 `/:id`）——能力对账以 manifest **精确路径**集合为准，路径参数端点会被判「影子端点」制造假漂移。
+- **（跨源合并语义）**：同一 `canonical_id` 的 UPSERT **只填空位**（`CASE WHEN LENGTH(现有)>0 THEN 现有 ELSE 新值 END`）——否则「最后写入者赢」会把先到源的富字段（五维标注）洗掉。
+- **（`/api/questions` 兼容）**：练习链路现走**存储层优先**（池就绪时请求路径零 fs 读），但响应**形状零变化**（options {A:文本} / correctAnswer / stem 含 kgimg:// / paperFile）；`source` 字段**回填真实上游源名**（不可填 'pool'——客户端按源名渲染出处徽章）。
+- **（内核边界已机器化）**：研究 14 六不变量 → `SMOKE-KERNEL-01..06b`（客户端/内核禁 fs 读 · 内核禁第三方字面量 · 媒体走 safeImagePath · 抽题存储层优先 · 上游零写）。
+- **（分配类算法守恒·修正）**：逐项 `Math.round` **不保恒**（实测 Σ=31≠30）→ 改**最大余数法**（floor + 余数按小数部分降序补齐；Σfloor ≤ B ≤ Σfloor+n）。守卫 `SMOKE-SCHED-04`（当日）+ `06`（全部 30 天）。
+- **（测试清理段必须跟随数据位置）**：用户数据外置后，清理段也必须同波次改路径（本项目 `data/progress/` → `~/.dsh/kaogong/progress/`），否则残留永远清不掉 → 下一轮断言假红（`SMOKE-MEM-01` 实测）。清理段按**同一 slug+sha1 规则**算文件名，不硬编码哈希。
+- **（阶段 4 前置缺口 C5）**：研究 11 的 `ctx.llm` 方案落地时，`src/host/index.ts` 的 `export const inject = ['tools']` **必须扩为 `['tools','llm']`**——DSH `ctx.inject` 语义：未声明的服务在 `ctx.get` 中取不到。不修则第一行代码就失败。

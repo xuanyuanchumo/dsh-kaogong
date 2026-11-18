@@ -153,7 +153,7 @@ plugin_manager remove_bundle dsh-kaogong     # 仅移除插件
 git --version                     # 题库管理前置
 # 插件侧：确认版本与能力注册
 curl -s http://127.0.0.1:51093/kaogong/api/capabilities | head -c 300
-# 预期含 "version":"1.13.1"、6 个工具、57 个端点
+# 预期含 "version":"1.30.0"、6 个工具、76 个端点
 ```
 
 界面自检：左栏出现「📚 考公学习」图标 → 点击进入 → 「📦 题库管理」显示仓库清单（16 项）即正常。
@@ -163,6 +163,7 @@ curl -s http://127.0.0.1:51093/kaogong/api/capabilities | head -c 300
 | | |
 |---|---|
 | 🏠 **宿主原生** | DSH Web GUI 双入口：左栏「考公学习」全屏沉浸面板 + 右侧 Sidebar 并排标签；同源路由零 CORS，**非 iframe** |
+| 🗄️ **统一题目池** | **`.kaogong.db` 项目自有知识库**（v1.30）：27,506 题 + **222,894 条关系边** + 59,093 处出处 · **跨源去重聚合**（同一道题多源出现 → 合并为 1 条 + 列出 N 处出处）· **FTS5 中文全文检索**（19–38ms）· **分层抽题**（复用 SRS 弱点权重）· 白盒健康快照（8 项质量指标，判据来自 SQL）· **可重建**（上游只读，全量重建 41s） |
 | 📦 **一键式题库管理** | 必选/推荐/可选三级分装 · `git` 浅克隆/更新/删除 · 目录浏览 · 自定义数据根 · 镜像代理 · 作业实时日志与取消 · **「关于本项目」卡**（GitHub/Release/Issue/npm 一键跳转） |
 | 🔒 **跨项目隔离** | 进度 / 专项记忆 / 图谱缓存 / 方法论链路计数全部按工作区命名空间分槽——不同项目互不污染；Windows 子进程静默（`windowsHide`，无控制台闪现） |
 | ✏️ **智能刷题** | 58,890 题行测真题 · 五箱 SRS 错题本（答错收集 → 回炉升箱 → 掌握）· 弱点加权抽题 · 键盘流 |
@@ -226,13 +227,19 @@ src/
 ├── shared/manifest.ts     # 能力单一事实源：端点/工具/视图/lifecycle + REPOS_META(16) + HUASHENG13_META(25 篇) + 图算法族
 ├── adapters/              # 数据源适配层（16 仓库只读隔离）
 │   ├── repoData / paperData(索引+快照+分块预热) / paperParse / naoku(node:sqlite) / tuxing
-│   └── huasheng13(BM25+覆盖矩阵) / huasheng13-text(分词等纯函数)
+│   ├── huasheng13(BM25+覆盖矩阵) / huasheng13-text(分词等纯函数)
+│   ├── poolDb.ts          # L3 存储层：.kaogong.db schema(10 表+FTS5) / UPSERT / 事务
+│   ├── poolSources.ts     # 源注册表（可扩展性：新增源=加一条，主流程零改动）
+│   ├── poolSourceImpls.ts # 各源摄入实现（L2：唯一认识上游格式处）
+│   └── poolIngest.ts      # 摄入编排器（重建/增量重建，无源硬编码）
 ├── server/
 │   ├── dataRoot.ts        # 数据根四级解析 + repos-config 持久化
 │   ├── repoManager.ts     # 题库管理域：git 作业/校验/镜像/浏览/删除
 │   ├── methodologyApi.ts  # 花生十三体系方法论域（6 端点 + trace 分槽）
 │   ├── http.ts            # 域链分发 + 信标 + 遥测 + 图谱 + 崩溃安全启动 + 同源挂载
 │   ├── ws.ts / srs.ts     # 工作区命名空间隔离 / 五箱 SRS + 专项记忆
+│   ├── poolApi.ts         # 统一题目池域（9 个 /api/pool/* 端点 + 供数练习链路）
+│   ├── poolObservability.ts # 白盒健康快照（8 项质量指标 + 摄入诊断）
 │   └── paperApi / naokuApi / tuxingApi / dataApi / topicTree
 ├── host/index.ts          # Cordis Host 半：同源路由(主) + 端口兜底 + 6 个工具
 ├── client/                # Cordis Client 半（14 模块，构建期合并为宿主单 combo）
@@ -240,7 +247,8 @@ src/
 │   ├── study-view / papers-view / graph-{view,engine,physics,transition,canvas,analytics}
 │   ├── huasheng13-view + huasheng13-md   # 方法论五分区 + 零依赖 markdown 渲染
 │   ├── obs-view           # 白盒管理面板
-│   └── repos-view         # 题库管理面板
+│   ├── repos-view         # 题库管理面板
+│   └── pool-view          # 统一题库视图（库状态+跨源检索+单题聚合）
 └── ui/                    # 零依赖 SPA 兜底页（独立端口通道）
 ```
 

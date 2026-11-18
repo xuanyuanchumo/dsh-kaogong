@@ -2,7 +2,7 @@
 
 > 本目录是 **面向 AI agent 与本项目开发者** 的事实基线，与代码同源、随迭代更新。
 > 目的：让任何接手者（人或 agent）在不读完全部代码的前提下，能正确修改本插件而不引入回归。
-> 当前基线：v1.29.1 / cycle-32b（16 仓库 · 67 端点 · 6 工具（全部接入 presentCall/presentResult 展示契约）· 16 视图；smoke 371 + render 62；真题卷三模式：📝答题（exam 域限时判分）/ 🎓学习（单题即判即析）/ 📖全卷（自答对照）；/api/plan/schedule 智能排程）。
+> 当前基线：v1.30.0 / cycle-34（16 仓库 · **76 端点** · 6 工具（全部接入 presentCall/presentResult 展示契约）· **16 视图**；smoke **404** + render **66**；**统一题目池 `.kaogong.db` 落地**（27506 题 / 222894 关系边 / 59093 出处 · 9 个 `/api/pool/*` 端点 · 跨源检索 19–38ms · 摄入 41s）；内核边界六不变量已机器化为 `SMOKE-KERNEL-01..06b`）。
 
 ## 阅读路径（按任务选）
 
@@ -10,6 +10,8 @@
 |---|---|---|
 | 第一次接触本项目 | [ARCHITECTURE.md](./ARCHITECTURE.md) | [DATA-SOURCES.md](./DATA-SOURCES.md) |
 | 加/改 HTTP 端点 | [API-REFERENCE.md](./API-REFERENCE.md) | [CONVENTIONS.md](./CONVENTIONS.md) §端点契约纪律 |
+| **改统一题目池 / 存储层 / 关系层** | [**STORAGE-LAYER.md**](./STORAGE-LAYER.md) | [API-REFERENCE.md](./API-REFERENCE.md) §九c |
+| **接入新数据源到统一池** | [**STORAGE-LAYER.md**](./STORAGE-LAYER.md) §5 | [DATA-SOURCES.md](./DATA-SOURCES.md) |
 | **改/扩方法论（花生十三）语料或检索** | [METHODOLOGY.md](./METHODOLOGY.md) | [API-REFERENCE.md](./API-REFERENCE.md) §七 |
 | 改客户端 UI（视图/交互） | [CONVENTIONS.md](./CONVENTIONS.md) §客户端纪律 | [ARCHITECTURE.md](./ARCHITECTURE.md) §combo 工厂 |
 | 用宿主能力（侧栏/工具/路由） | [DSH-HOST-CAPABILITIES.md](./DSH-HOST-CAPABILITIES.md) | — |
@@ -23,7 +25,8 @@
 | 文档 | 内容 | 维护触发条件 |
 |---|---|---|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 双半结构、combo 工厂、域工厂重建与数据根四级解析、方法论域装配与边界 | 新增分层/入口/域时 |
-| [API-REFERENCE.md](./API-REFERENCE.md) | 57 个端点 + 6 个工具 + 16 个视图的契约（含 6 个 `/api/huasheng13/*`） | 改端点时（必须同步） |
+| [**STORAGE-LAYER.md**](./STORAGE-LAYER.md) | **统一题目池 `.kaogong.db`：四层依赖 + 六不变量 + schema + 源注册表（可扩展）+ 白盒健康快照（可观测）+ 兼容硬约束 + 坑速查** | **改存储层/关系层/新增源时必读** |
+| [API-REFERENCE.md](./API-REFERENCE.md) | **76 个端点** + 6 个工具 + 16 个视图的契约（含 `/api/pool/*` 九端点与 6 个 `/api/huasheng13/*`） | 改端点时（必须同步） |
 | [**METHODOLOGY.md**](./METHODOLOGY.md) | 花生十三体系适配库：数据来源/授权、25 篇清单、单一事实源四步法、BM25+bigram、覆盖矩阵口径、74 题练习、降级语义 | **新增/修改方法论语料或检索时必读** |
 | [CONVENTIONS.md](./CONVENTIONS.md) | 编码规范、技术选型理由、纪律条款（含 `hs13/Hs13` 前缀与导航收敛） | 引入新约定时 |
 | [DSH-HOST-CAPABILITIES.md](./DSH-HOST-CAPABILITIES.md) | 宿主能力盘点：已用/可用未用/市场合规 | 发现新宿主能力时 |
