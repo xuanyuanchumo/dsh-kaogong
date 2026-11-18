@@ -36,7 +36,7 @@ export { stripHtmlKeepImg, extractImages } from './poolSourceImpls.js'
  * 性能纪律（cycle-34 实测）：**单源一个事务**——逐条 INSERT 无事务时
  * 27506 题 + 22 万关系边耗时 421 秒（每条各自 fsync），事务内降到 41 秒。
  */
-export async function rebuildPool(repoRoot: string, dataDir: string, opts: { rebuild?: boolean; maxFiles?: number } = {}): Promise<any> {
+export async function rebuildPool(repoRoot: string, dataDir: string, opts: { rebuild?: boolean; maxFiles?: number; maxPapers?: number } = {}): Promise<any> {
   const t0 = Date.now()
   const opened = await openPoolDb(dataDir, { rebuild: opts.rebuild !== false })
   if (opened.locked) {

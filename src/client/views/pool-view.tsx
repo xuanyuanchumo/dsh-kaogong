@@ -58,16 +58,16 @@ function PoolMetric({ label, value, total, ok, desc }: any) {
   const color = ok === false ? '#dc2626' : '#059669'
   return (
     <div style={{ minWidth: 132 }}>
-      <div style={{ fontSize: 10, color: '#64748b' }}>{label}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)' }}>{label}</div>
       <div style={{ fontSize: 15, fontWeight: 700, color: ok === false ? '#dc2626' : '#0f172a' }}>
-        {String(value ?? '—')}{Number(total) > 0 ? <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}> / {String(total)}</span> : null}
+        {String(value ?? '—')}{Number(total) > 0 ? <span style={{ fontSize: 10, color: 'var(--text-faint,#94a3b8)', fontWeight: 400 }}> / {String(total)}</span> : null}
       </div>
       {pct !== null ? (
         <div style={{ height: 3, background: 'rgba(148,163,184,.25)', borderRadius: 2, marginTop: 3, overflow: 'hidden' }}>
           <div style={{ width: Math.min(100, pct) + '%', height: '100%', background: color }} />
         </div>
       ) : null}
-      {desc ? <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>{desc}</div> : null}
+      {desc ? <div style={{ fontSize: 9, color: 'var(--text-faint,#94a3b8)', marginTop: 2 }}>{desc}</div> : null}
     </div>
   )
 }
@@ -96,14 +96,14 @@ function PoolStatusCard({ st, onRebuild, busy }: any) {
             <Stat l="知识点覆盖" v={stats ? stats.withKadian : '—'} />
             <Stat l="库体积" v={poolSize(st.bytes) || '—'} />
           </div>
-          <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-faint,#94a3b8)', marginBottom: 8 }}>
             构建于 {poolTime(st.builtAt) || '—'} · schema v{st.schemaVersion ?? '—'} · 快照 {health && health.snapshotMs != null ? health.snapshotMs + 'ms' : '—'}
             <button style={{ ...KV_BTN, marginLeft: 8 }} disabled={busy} onClick={onRebuild}>{busy ? '⏳ 重建中…' : '🔨 重建'}</button>
           </div>
           {/* 源注册表（可扩展性的可见面：新增源自动出现，本视图零改动） */}
           {registry.length ? (
             <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>已注册源（新增源自动出现在此，无需改前端）</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 4 }}>已注册源（新增源自动出现在此，无需改前端）</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {registry.map((r: any) => (
                   <span key={r.id} style={{ ...KV_TAG, background: r.available ? 'rgba(16,185,129,.12)' : 'rgba(148,163,184,.14)', color: r.available ? '#059669' : '#64748b' }}>
@@ -116,7 +116,7 @@ function PoolStatusCard({ st, onRebuild, busy }: any) {
           {/* 数据质量指标（每条附判据来源——可解释） */}
           {health && health.quality && health.quality.length ? (
             <div>
-              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 5 }}>数据质量（判据来自服务端 SQL，口径唯一）</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 5 }}>数据质量（判据来自服务端 SQL，口径唯一）</div>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {health.quality.map((q: any) => (
                   <PoolMetric key={q.key} label={q.label} value={q.value} total={q.total} ok={q.ok} desc={q.desc} />
@@ -127,7 +127,7 @@ function PoolStatusCard({ st, onRebuild, busy }: any) {
           {/* 关系类型分布（词表在服务端；未登记类型显式标出——可扩展性守卫的可见面） */}
           {health && health.relTypes && health.relTypes.length ? (
             <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>关系类型分布</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 4 }}>关系类型分布</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {health.relTypes.map((r: any) => (
                   <span key={r.type} style={{ ...KV_TAG, background: (r.color || '#94a3b8') + '18', color: r.color || '#64748b' }}
@@ -158,9 +158,9 @@ function PoolSearchRow({ r, onPick }: any) {
           {sources.length} 处出处
         </span>
       </div>
-      {r.kadian ? <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2, marginLeft: 4 }}>知识点：{r.kadian}</div> : null}
+      {r.kadian ? <div style={{ fontSize: 9.5, color: 'var(--text-faint,#94a3b8)', marginTop: 2, marginLeft: 4 }}>知识点：{r.kadian}</div> : null}
       {sources.length ? (
-        <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, marginLeft: 4 }}>
+        <div style={{ fontSize: 9, color: 'var(--text-faint,#94a3b8)', marginTop: 2, marginLeft: 4 }}>
           {sources.slice(0, 4).map((s: any, i: number) => (
             <span key={i} style={{ marginRight: 8 }}>{s.source}{s.paper ? ' · ' + String(s.paper).slice(0, 26) : ''}{s.year ? ' · ' + s.year : ''}</span>
           ))}
@@ -182,7 +182,7 @@ function PoolDetail({ d, onClose }: any) {
   return (
     <Card title="🔎 单题聚合视图">
       <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6 }}><button style={KV_BTN} onClick={onClose}>关闭</button></div>
-      <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>
+      <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 4 }}>
         {d.module || '未分类'} · {d.category || '—'} · {d.qtype || '—'} · {d.sourceCount} 处出处
       </div>
       {d.kadian ? <div style={{ fontSize: 10, color: '#6366f1', marginBottom: 6 }}>知识点：{d.kadian}</div> : null}
@@ -195,20 +195,20 @@ function PoolDetail({ d, onClose }: any) {
       ) : null}
       {dimRows.length ? (
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>五维标注</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 3 }}>五维标注</div>
           {dimRows.map((r: any, i: number) => (
             <details key={i} style={{ marginBottom: 3 }}>
               <summary style={{ fontSize: 10.5, color: '#059669', cursor: 'pointer' }}>{r[0]}</summary>
-              <div style={{ fontSize: 10.5, lineHeight: 1.7, marginTop: 3, whiteSpace: 'pre-wrap', color: '#475569' }}>{String(r[1]).slice(0, 800)}</div>
+              <div style={{ fontSize: 10.5, lineHeight: 1.7, marginTop: 3, whiteSpace: 'pre-wrap', color: 'var(--text-secondary,#475569)' }}>{String(r[1]).slice(0, 800)}</div>
             </details>
           ))}
         </div>
       ) : null}
       {d.sources && d.sources.length ? (
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>出处（{d.sources.length} 处）</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 3 }}>出处（{d.sources.length} 处）</div>
           {d.sources.map((s: any, i: number) => (
-            <div key={i} style={{ fontSize: 10, color: '#475569', lineHeight: 1.7 }}>
+            <div key={i} style={{ fontSize: 10, color: 'var(--text-secondary,#475569)', lineHeight: 1.7 }}>
               · {s.source_id}{s.paper ? ' · ' + s.paper : ''}{s.region ? ' · ' + s.region : ''}{s.year ? ' · ' + s.year : ''}
             </div>
           ))}
@@ -216,7 +216,7 @@ function PoolDetail({ d, onClose }: any) {
       ) : null}
       {d.relations && d.relations.length ? (
         <div>
-          <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>关系邻居（{d.relations.length}）</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 3 }}>关系邻居（{d.relations.length}）</div>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
             {d.relations.slice(0, 24).map((r: any, i: number) => (
               <span key={i} style={KV_TAG} title={String(r.src_id).slice(0, 40)}>
@@ -375,7 +375,7 @@ export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
             {results.results.map((r: any) => <PoolSearchRow key={r.canonicalId} r={r} onPick={pick} />)}
           </div>
         ) : results && results.results && !results.results.length ? (
-          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>未命中「{results.query}」——换用更长的关键词或先重建统一库。</div>
+          <div style={{ fontSize: 11, color: 'var(--text-faint,#94a3b8)', marginTop: 8 }}>未命中「{results.query}」——换用更长的关键词或先重建统一库。</div>
         ) : null}
       </Card>
 
@@ -383,7 +383,7 @@ export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
       {sampled && sampled.questions && sampled.questions.length ? (
         <Card title="🎲 分层抽题">
           <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6 }}><span style={KV_TAG}>{sampled.strategy || '—'}</span></div>
-          <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 6 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-faint,#94a3b8)', marginBottom: 6 }}>
             候选 {sampled.candidates ?? '—'} 题 · 策略：{sampled.strategy || '—'}（权重复用 SRS 的 1/(rate+0.15)，与错题本同源）
           </div>
           {sampled.questions.map((qq: any) => (
@@ -391,7 +391,7 @@ export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
               <div style={{ fontSize: 11, lineHeight: 1.6, cursor: 'pointer' }} onClick={() => pick(qq.canonicalId)}>
                 {String(qq.stem || '').slice(0, 130)}
               </div>
-              <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2 }}>
+              <div style={{ fontSize: 9.5, color: 'var(--text-faint,#94a3b8)', marginTop: 2 }}>
                 {qq.module || '—'} · {qq.sourceCount} 处出处 · 答案 {qq.answer || '—'}
               </div>
             </div>
@@ -401,7 +401,7 @@ export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
 
       {detail ? <PoolDetail d={detail} onClose={() => setDetail(null)} /> : null}
 
-      <div style={{ fontSize: 9.5, color: '#94a3b8', lineHeight: 1.7 }}>
+      <div style={{ fontSize: 9.5, color: 'var(--text-faint,#94a3b8)', lineHeight: 1.7 }}>
         统一题库是**派生层**：全部内容可从上游重建（上游仓库只读，永不修改）。
         统一身份 = qid 优先 → fp 次之 → 内容哈希兜底；同一道题在多源出现时合并为一条并列出 N 处出处。
       </div>

@@ -21,7 +21,7 @@
  */
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { ingestNaokuSource, ingestXingceSource } from './poolSourceImpls.js'
+import { ingestNaokuSource, ingestXingceSource, ingestGwyZhentiSource } from './poolSourceImpls.js'
 import { ingestXingceAppSource, ingestTuxingSource, ingestQiuzhaoSource, ingestCeaSource } from './poolSourceJson.js'
 import { ingestMethodologySource, ingestKadianNodes, ingestDocAssetsSource } from './poolSourceKnowledge.js'
 
@@ -33,8 +33,8 @@ export interface SourceContext {
   dataDir: string
   /** 目标库连接 */
   db: any
-  /** 本源摄入选项（maxFiles 等） */
-  opts: { maxFiles?: number }
+  /** 本源摄入选项（maxFiles / maxPapers 等） */
+  opts: { maxFiles?: number, maxPapers?: number }
 }
 
 /** 源计数（各源统一返回形状——面板可按同一模板渲染） */
@@ -135,6 +135,16 @@ export const SOURCE_REGISTRY: SourceSpec[] = [
     qidNamespace: 'cea',
     available: (ctx) => existsSync(join(ctx.repoRoot, 'civil-exam-agent', 'data', 'official_85_questions.json')),
     ingest: (ctx) => ingestCeaSource(ctx),
+  },
+  // ── cycle-39：真题卷 md 全量入池（研究 20 §1 端到端缺口——最后一个「直读目录」源收敛）──
+  {
+    id: 'gwy-zhenti',
+    tier: 'recommended',
+    label: '真题卷库（gwy-zhenti · 1683 卷 md）',
+    upstream: 'gwy-zhenti（粉笔题库整理版）',
+    qidNamespace: 'gwy-zhenti',
+    available: (ctx) => existsSync(join(ctx.repoRoot, 'gwy-zhenti')),
+    ingest: (ctx) => ingestGwyZhentiSource(ctx),
   },
   // ── cycle-35 知识层（回答「方法论/skill 要不要入库」：要——knowledge 表 + USES_METHOD 边）──
   {

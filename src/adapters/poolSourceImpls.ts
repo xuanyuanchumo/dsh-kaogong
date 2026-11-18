@@ -13,7 +13,8 @@
  */
 import { existsSync, statSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { deriveCanonicalId, putRelation, putQuestionSource, setMeta, withTx } from './poolDb.js'
+import { deriveCanonicalId, putRelation, putQuestionSource, putSource, setMeta, withTx } from './poolDb.js'
+import { prepareQuestionUpsert, upsertQuestionBundle } from './poolUpsert.js'
 import { parseQuestions, XINGCE_MODULES } from './repoData.js'
 
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
@@ -347,3 +348,90 @@ export function ingestXingceSource(ctx: any): any {
   return { source: 'xingcezhenti', ...stats, ...(lastError ? { lastError } : {}) }
 }
 
+/* ══ P6 · gwy-zhenti（真题卷 md 全量入池 · cycle-39）══ */
+
+/**
+ * 摄入 gwy-zhenti 真题卷 → `.kaogong.db`。
+ *
+ * ── 动机（研究 20 §1 端到端审计）──
+ *   此前真题卷/专题视图走 paperApi **直读第三方目录**（loadPaper 逐卷 readFileSync）——
+ *   题目未进存储层（研究 15 C6「两跳退化」最后一个未收敛源）。
+ *   入池后：真题卷题与 naoku/xingce-app **同池可查**（SAME_AS 由 qid 命中自动成立——
+ *   粉笔系同 qid 命名空间），统一检索覆盖全部 7 题源。
+ *
+ * ── 形状对齐 ──
+ *   loadPaper 题目形状（no/stem/type/options{A:文本}/correctAnswer/analysis/groupMaterial）
+ *   与练习链路同形——直接映射。无 qid → canonical_id = `q:gwy-zhenti:<paperId>#<no>`
+ *   （源内唯一键：卷+题号；namespace 隔离防撞库）。
+ *   题面保留 `<details>`/img 占位（stripHtmlKeepImg 同模板）。
+ *   申论题（无 options）入池：options 空、answer=空、reference 保留——与练习链路降级一致。
+ *
+ * ── 性能 ──
+ *   loadPaper 首查触发 paperIndex 构建（快照命中 ~ms/卷）；1683 卷全量摄入走单事务。
+ */
+export async function ingestGwyZhentiSource(ctx: any): Promise<any> {
+  const { repoRoot, db, opts = {} } = ctx
+  // 动态 import（paperData 体量大；R33 教训：必须在事务外 await）
+  let loadPaper: any = null, buildPaperIndex: any = null
+  try {
+    ;({ loadPaper, buildPaperIndex } = await import('./paperData.js'))
+  } catch (e: any) {
+    return { source: 'gwy-zhenti', skipped: true, reason: 'paperData 模块加载失败: ' + (e && e.message), questions: 0, relations: 0 }
+  }
+  let papers: any[] = []
+  try {
+    const idx = buildPaperIndex(repoRoot)
+    papers = idx.papers || []
+  } catch (e: any) {
+    return { source: 'gwy-zhenti', skipped: true, reason: '卷索引构建失败: ' + (e && e.message), questions: 0, relations: 0 }
+  }
+  if (!papers.length) return { source: 'gwy-zhenti', skipped: true, reason: '卷索引为空（数据根无 gwy-zhenti）', questions: 0, relations: 0 }
+
+  const maxPapers = opts.maxPapers && opts.maxPapers > 0 ? opts.maxPapers : papers.length
+  const stats = { questions: 0, relations: 0, papers: 0, skipped: false, files: 0, lastError: '' }
+  const insQ = prepareQuestionUpsert(db)
+  const ev = JSON.stringify({ src: 'gwy-zhenti', rule: 'loadPaper' })
+
+  withTx(db, () => {
+    putSource(db, 'gwy-zhenti', 'recommended', 'gwy-zhenti（真题卷 md）', join(repoRoot, 'gwy-zhenti'))
+    // 逐卷：loadPaper → 题目映射 → UPSERT（单源一个事务）
+    for (const meta of papers.slice(0, maxPapers)) {
+      try {
+        const paper = loadPaper(repoRoot, meta.id)
+        if (!paper || paper.error || !Array.isArray(paper.questions)) continue
+        stats.papers++
+        for (const q of paper.questions) {
+          const no = Number(q.no || 0)
+          const qid = 'gwy:' + meta.id + '#' + no   // 源内唯一键（卷+题号）
+          const canon = deriveCanonicalId(qid, '', stripHtmlKeepImg(q.stem) || undefined, { namespace: 'gwy-zhenti' })
+          // gwy 卷面无 qid 上游键——但与 xingcezhenti/naoku 的同题可能内容一致：
+          // SAME_AS 不在此建（无强证据键），留给 fp 命中或人工校验（合并靠认亲）。
+          const relations: Array<{ type: any, dstKind: string, dstId: string, weight?: number }> = []
+          relations.push({ type: 'IN_MODULE', dstKind: 'module', dstId: String(paper.subject || '行测') })
+          if (paper.exam) relations.push({ type: 'APPEARS_IN', dstKind: 'paper', dstId: meta.id })
+          if (paper.region) relations.push({ type: 'SAME_REGION', dstKind: 'region', dstId: String(paper.region) })
+          if (String(q.type || '').trim()) relations.push({ type: 'IN_MODULE', dstKind: 'category', dstId: String(q.type) })
+          const optsMap = q.options && typeof q.options === 'object' && !Array.isArray(q.options) ? JSON.stringify(q.options) : ''
+          const imgs = extractImages(q.stem)
+          const r = upsertQuestionBundle(insQ, {
+            qid, canonicalId: canon, sourceId: 'gwy-zhenti', localKey: meta.id + '#' + no,
+            module: String(paper.subject || '行测'), qtype: String(q.type || ''),
+            stem: stripHtmlKeepImg(q.stem), options: optsMap,
+            answer: String(q.correctAnswer || '').toUpperCase(),
+            analysis: stripHtmlKeepImg(q.analysis),
+            groupMaterial: stripHtmlKeepImg(q.groupMaterial || ''),
+            images: JSON.stringify(imgs), hasImage: imgs.length ? 1 : 0,
+            paper: meta.id, region: String(paper.region || ''), year: String(paper.year || ''),
+            seq: no,
+          }, { evidence: ev, relations }, { db, localKey: meta.id + '#' + no, paper: meta.id, region: String(paper.region || ''), year: String(paper.year || ''), seq: no })
+          if (r.ok) stats.questions++
+          stats.relations += relations.length
+        }
+      } catch (e: any) {
+        stats.lastError = '卷 ' + meta.id + ': ' + (e && e.message ? e.message : String(e))
+        /* 单卷失败不阻塞整轮（单源内继续） */
+      }
+    }
+  })
+  return { source: 'gwy-zhenti', ...stats }
+}

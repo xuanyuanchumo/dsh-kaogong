@@ -218,10 +218,25 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
           ).all(q, limit * 3)
         }
         if (!rows.length) {
-          rows = db.prepare(
-            `SELECT canonical_id, qid, source_id, module, category, kadian, stem, analysis, paper, region, year
-             FROM question WHERE stem LIKE ? OR analysis LIKE ? LIMIT ?`,
-          ).all('%' + q + '%', '%' + q + '%', limit * 3)
+          // cycle-39：LIKE 降级同样要**跨源**——裸 LIMIT 会按 rowid 序被单源占满
+          // （实测「和谐」30/30 全 naoku；gwy-zhenti 的 322 条命中在更高 rowid 区间被截断）。
+          // 正解：按源 LIMIT 子查询轮转（每源 limit/源数 条），UNION 后仍保相关序不可得
+          // （LIKE 无 bm25）——按源序拼接（轮转层会再配额，此处只需保证各源都有候选）。
+          try {
+            const srcRows = db.prepare('SELECT DISTINCT source_id FROM question').all()
+            const per = Math.max(1, Math.ceil((limit * 3) / Math.max(1, srcRows.length)))
+            rows = []
+            for (const sr of srcRows) {
+              const srcId = String(sr.source_id)
+              try {
+                const part = db.prepare(
+                  `SELECT canonical_id, qid, source_id, module, category, kadian, stem, analysis, paper, region, year
+                   FROM question WHERE source_id = ? AND (stem LIKE ? OR analysis LIKE ?) LIMIT ?`,
+                ).all(srcId, '%' + q + '%', '%' + q + '%', per)
+                rows.push(...part)
+              } catch { /* 单源失败不阻塞 */ }
+            }
+          } catch { /* 逐源失败 → 保持空（诚实降级） */ }
         }
       } catch { /* FTS 不可用 → 保持空 */ }
       // 跨源去重聚合：同一 canonical_id 只出现一次，并汇总 N 处出处
@@ -236,8 +251,37 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
           sources: [{ source: r.source_id, paper: r.paper, region: r.region, year: r.year }],
         })
       }
-      const results = [...seen.values()].slice(0, limit)
-      return { query: q, results, count: results.length, tookMs: Date.now() - t0, engine: q.length >= 3 ? 'fts5-trigram' : 'like-fallback' }
+      // cycle-39（研究 20 §1）：**源多样性轮转**——验收 §11.1「一次查询命中 ≥3 源」。
+      // 裸 bm25 会让同卷近似题干霸榜（实测「同比增长」前 10 全 xingce-app，naoku 941 条
+      // 命中被挤出）。正解：先按源轮转保底（每源最多 ceil(limit/源数) 条），再把剩余
+      // 名额按相关度序填满——跨源对比是统一检索的核心价值，不是副产品。
+      const all = [...seen.values()]
+      const bySource = new Map<string, any[]>()
+      for (const r of all) {
+        const k = String((r.sources && r.sources[0] && r.sources[0].source) || 'unknown')
+        if (!bySource.has(k)) bySource.set(k, [])
+        bySource.get(k)!.push(r)
+      }
+      const srcKeys = [...bySource.keys()].sort()   // 稳定序（字典序，避免 Map 插入序抖动）
+      const quota = Math.max(1, Math.ceil(limit / Math.max(1, srcKeys.length)))
+      const pickedIds = new Set<string>()
+      const results: any[] = []
+      // 第一轮：每源保底 quota 条（源内按相关度原序）
+      for (const k of srcKeys) {
+        for (const r of bySource.get(k)!.slice(0, quota)) {
+          if (results.length >= limit) break
+          results.push(r); pickedIds.add(r.canonicalId)
+        }
+        if (results.length >= limit) break
+      }
+      // 第二轮：相关度序填满剩余名额
+      for (const r of all) {
+        if (results.length >= limit) break
+        if (!pickedIds.has(r.canonicalId)) { results.push(r); pickedIds.add(r.canonicalId) }
+      }
+      return { query: q, results, count: results.length, tookMs: Date.now() - t0, engine: q.length >= 3 ? 'fts5-trigram' : 'like-fallback',
+        sources: srcKeys,   // 白盒：本次命中的源清单（面板可显示「命中 N 个源」）
+        rotation: srcKeys.length > 1 ? 'source-round-robin' : 'single-source' }
     }
 
     /* ── GET /api/pool/question（单题聚合视图）──
@@ -341,20 +385,21 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
     if (path === '/api/pool/rebuild' && method === 'POST') {
       const mode = String((post && post.mode) || 'full')
       const maxFiles = post && post.maxFiles ? parseInt(post.maxFiles) : undefined
+      const maxPapers = post && post.maxPapers ? parseInt(post.maxPapers) : undefined
       const asyncMode = !(post && post.async === false)
       if (asyncMode) {
         const jobId = 'pool-rb-' + Date.now().toString(36)
         if (rebuildJobs.has('running') && rebuildJobs.get('running').state === 'running') {
           return { error: '已有重建作业在运行（' + rebuildJobs.get('running').jobId + '），请等待完成或稍后再试' }
         }
-        const job: any = { jobId, state: 'running', mode, maxFiles: maxFiles ?? null, startedAt: Date.now(), finishedAt: 0, result: null, error: null }
+        const job: any = { jobId, state: 'running', mode, maxFiles: maxFiles ?? null, maxPapers: maxPapers ?? null, startedAt: Date.now(), finishedAt: 0, result: null, error: null }
         rebuildJobs.set('running', job)
         // 后台执行（fire-and-forget 但内部全捕获——作业状态机是唯一出口，绝不冒泡）
         ;(async () => {
           try {
             const r = mode === 'incremental'
               ? await incrementalRebuild(repoRoot, dataDir)
-              : await rebuildPool(repoRoot, dataDir, { rebuild: true, maxFiles })
+              : await rebuildPool(repoRoot, dataDir, { rebuild: true, maxFiles, maxPapers })
             job.result = r
             job.state = r && r.ok ? 'done' : 'failed'
             if (r && r.error) job.error = r.error
@@ -374,7 +419,7 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       // 同步路径（兼容保留：{async:false}）
       const r = mode === 'incremental'
         ? await incrementalRebuild(repoRoot, dataDir)
-        : await rebuildPool(repoRoot, dataDir, { rebuild: true, maxFiles })
+        : await rebuildPool(repoRoot, dataDir, { rebuild: true, maxFiles, maxPapers })
       // 可观测：重建结果附逐阶段诊断（失败时给根因线索，不只说「失败」）
       return { ...r, diagnostics: ingestDiagnostics(r) }
     }

@@ -307,6 +307,84 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
           } catch { return DICTS.zh[k] || k }
         }
 
+        // ══ 主题适配层（cycle-39 · 研究 20 §2）══
+        // 取证（沙箱 GUI + emulateMedia）：宿主**从不定义** kaogong 用的
+        // --surface-card/--text-primary 等变量——暗色模式下全部视图靠 fallback
+        // 白底黑字渲染（暗色适配从未真正生效）。宿主的真机制 = prefers-color-scheme
+        // + color-scheme + --dsw-alias-* 令牌（暗色实测 bg-layer-1=#232324）。
+        // 正解 = 本插件**自注入映射层**：宿主 dsw 令牌 → kaogong 变量；
+        // dsw 缺席（独立端口兜底页）时按 color-scheme 推导。
+        // 铺底纪律：kaogong 面板自带半透明语义底（rgba），暗色下天然融合，
+        // 这里只映射「面板底 + 四级文本」五个核心变量。
+        // ⚠️ DOM 守卫：render.test 走 TestRenderer（无 document）——
+        // 主题层只在实际浏览器挂载时注入（教训 R4/R9 同族：环境探测先于环境 API 调用）。
+        const HAS_DOM = typeof document !== 'undefined' && !!document.head
+        const theme = HAS_DOM ? (() => {
+          const style = document.createElement('style')
+          style.id = 'kg-theme-adapter'
+          document.head.appendChild(style)
+          let mq = null
+          // 「当前是否暗色」的判据要**三通道**：宿主在 html.style 上写 color-scheme
+          // （JS 强制），系统偏好走 matchMedia——两者可能不一致（宿主初始化时序竞态，
+          // cycle-39 亮色回归实证：apply 时 dsw 尚未加载/被取到 #fff 残值）。
+          const isDark = () => {
+            try {
+              const csDoc = getComputedStyle(document.documentElement).colorScheme
+              if (csDoc) return csDoc.includes('dark')
+            } catch { /* colorScheme 属性缺失（旧浏览器） */ }
+            return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          }
+          const apply = () => {
+            const cs = getComputedStyle(document.body)
+            const dark = isDark()
+            const read = (v, darkFallback, lightFallback) => {
+              const dsw = cs.getPropertyValue(v).trim()
+              // ⚠️ dsw 值必须与当前 scheme 明暗**方向**一致才可用（亮度守卫，双向判）：
+              //   · 暗色下拒收「暗文本」（实测 label-primary-foreground=#0f1115 未跟随 → 暗底暗字）
+              //   · 亮色下拒收「亮文本」（实测同令牌=#fff 残值 → 白底白字）
+              // 空值/非 6-hex 一律走推算。拒收即推算，不猜令牌语义。
+              if (dsw) {
+                const m = dsw.match(/^#([0-9a-f]{6})$/i)
+                if (m) {
+                  const n = parseInt(m[1], 16)
+                  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
+                  if (dark && lum < 0.5) return darkFallback    // 暗底配暗字 → 推算
+                  if (!dark && lum >= 0.5) return lightFallback // 亮底配亮字 → 推算
+                  return dsw                                     // 方向一致 → 采纳
+                }
+                return dark ? darkFallback : lightFallback       // 非 hex（空/异常）→ 推算
+              }
+              return dark ? darkFallback : lightFallback
+            }
+            // 面板底：亮 #fff / 暗 #232324（dsw bg-layer-1 同值域）
+            // 文本四级：主 primary（亮白）> secondary > muted > faint——**暗色下层级翻转**
+            //（faint 最接近底色）。全部经亮度判据防「暗底暗字」。
+            style.textContent = `
+              :root{
+                --surface-card:${read('--dsw-alias-bg-layer-1', '#232324', '#fff')};
+                --text-primary:${read('--dsw-alias-label-primary-foreground', dark ? '#e2e8f0' : '#0f172a', '#0f172a')};
+                --text-secondary:${dark ? '#cbd5e1' : '#475569'};
+                --text-muted:${dark ? '#94a3b8' : '#64748b'};
+                --text-faint:${dark ? '#64748b' : '#94a3b8'};
+              }`
+          }
+          apply()
+          try {
+            mq = window.matchMedia('(prefers-color-scheme: dark)')
+            const onChange = () => apply()
+            if (mq.addEventListener) mq.addEventListener('change', onChange)
+            else if (mq.addListener) mq.addListener(onChange)
+            // 宿主 JS 强制主题走 html.style（color-scheme: light/dark）——MutationObserver 补通道
+            // （cycle-39 实证：宿主初始化晚于插件 apply → 首次 apply 拿到残值，必须重算）
+            const mo = new MutationObserver(() => apply())
+            mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme'] })
+            // 初始化竞态兜底：宿主样式晚加载时 dsw 残值会在几百 ms 内变化 → 延迟重算两次
+            setTimeout(apply, 300)
+            setTimeout(apply, 1200)
+          } catch { /* matchMedia/MutationObserver 缺席 → 首次 apply 已兜底 */ }
+          return { apply }
+        })() : { apply: () => {} }
+
         // 样式注入双保险（R11 取证：combo 环境 `styles` 内置全局可能不存在，
         // 直接 styles.insert 抛 ReferenceError → 条目激活失败）
         const CSS = `
@@ -388,4 +466,4 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
       },
     }
   },
-})
+})
