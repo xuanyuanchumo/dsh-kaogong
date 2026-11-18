@@ -2568,9 +2568,90 @@
       "stdout": "Archived cycle-36 to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\archive\\cycle-36\n  Ledger untouched (append-only hash chain, INV-9).\n",
       "stderr": "",
       "durationMs": 100
+    },
+    {
+      "flowId": "init-cycle-2026-11-18T16:56:04.835Z-125",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:56:04.835Z",
+      "cycle": "cycle-36",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T16:56:04.835Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:56:04.950Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-37 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-37\n",
+      "stderr": "",
+      "durationMs": 109
+    },
+    {
+      "flowId": "eval-runner-2026-11-18T16:56:44.933Z-126",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:56:44.933Z",
+      "cycle": "cycle-37",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T16:56:44.933Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:57:11.094Z",
+      "exitCode": 0,
+      "stdout": "[eval-runner] cache miss (source changed: 7/113 files (e.g. smoke.test.mjs, src\\client\\views\\pool-view.tsx, src\\server\\poolApi.ts)) — will run: test, lint, build\n[eval-runner] sampling hint: partial (6.2% of 113 source files changed)\n[eval-runner] parallel warm-up: test, lint, build started in detached children (Amdahl: wall time ≈ max T_i instead of Σ T_i)\n[eval-runner] results cached to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json (keyed by Merkle root b966df1d8b01…)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-37\\项目评估报告.md\n\nAll 16 evaluated dimension(s) passed.\n",
+      "stderr": "",
+      "durationMs": 26155
+    },
+    {
+      "flowId": "gate-check-2026-11-18T16:57:16.713Z-127",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:57:16.713Z",
+      "cycle": "cycle-37",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-18T16:57:16.713Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:57:20.276Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-37 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 PASS recorded (hash 05b2c0e2ff4e3257...)\n[PASS] G1: All 14 tasks completed §cycle-37\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 PASS recorded (hash b970f84c997169a4...)\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-37\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 PASS recorded (hash 2d966636df3f9324...)\n[PASS] G3: Build passed: npm run build §cycle-37 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 PASS recorded (hash d3a1f3087d7b6d9a...)\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 3556
+    },
+    {
+      "flowId": "hitl-audit-2026-11-18T16:57:26.500Z-128",
+      "script": "hitl-audit",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:57:26.500Z",
+      "cycle": "cycle-37",
+      "phase": "plan",
+      "gate": "H1",
+      "attribution": {
+        "at": "2026-11-18T16:57:26.500Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:57:26.905Z",
+      "exitCode": 0,
+      "stdout": "=== HITL Audit (Fix-First Strategy) ===\n\n[PASS] H1: No security-sensitive operations detected\n[PASS] H2: No destructive operations detected\n[PASS] H3: All gates green, audit log present\n[PASS] H4: Gate evidence sufficient, no conflicts\n\nAll HITL audits PASSED.\n",
+      "stderr": "",
+      "durationMs": 400
     }
   ],
-  "counter": 124,
+  "counter": 128,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,
