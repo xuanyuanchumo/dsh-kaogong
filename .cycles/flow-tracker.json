@@ -2446,9 +2446,131 @@
       "stdout": "[eval-runner] cache miss (source changed: 11/116 files (e.g. smoke.test.mjs, src\\adapters\\poolDb.ts, src\\adapters\\poolIngest.ts)) — will run: test, lint, build\n[eval-runner] sampling hint: partial (9.5% of 116 source files changed)\n[eval-runner] parallel warm-up: test, lint, build started in detached children (Amdahl: wall time ≈ max T_i instead of Σ T_i)\n[eval-runner] results cached to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json (keyed by Merkle root c5889482601c…)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-36\\项目评估报告.md\n",
       "stderr": "\n2 dimension(s) failed: E3, E8\n",
       "durationMs": 25817
+    },
+    {
+      "flowId": "eval-runner-2026-11-18T16:40:50.574Z-119",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "FAILED",
+      "startedAt": "2026-11-18T16:40:50.574Z",
+      "cycle": "cycle-36",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T16:40:50.574Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:40:53.596Z",
+      "exitCode": 1,
+      "stdout": "[eval-runner] source Merkle root unchanged — reusing cached results for: test, lint, build (evidence: D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-36\\项目评估报告.md\n",
+      "stderr": "\n2 dimension(s) failed: E3, E8\n",
+      "durationMs": 3016
+    },
+    {
+      "flowId": "eval-runner-2026-11-18T16:41:09.868Z-120",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "FAILED",
+      "startedAt": "2026-11-18T16:41:09.868Z",
+      "cycle": "cycle-36",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T16:41:09.868Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:41:13.182Z",
+      "exitCode": 1,
+      "stdout": "[eval-runner] source Merkle root unchanged — reusing cached results for: test, lint, build (evidence: D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-36\\项目评估报告.md\n",
+      "stderr": "\n2 dimension(s) failed: E3, E8\n",
+      "durationMs": 3308
+    },
+    {
+      "flowId": "eval-runner-2026-11-18T16:41:47.090Z-121",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:41:47.090Z",
+      "cycle": "cycle-36",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T16:41:47.090Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:42:12.068Z",
+      "exitCode": 0,
+      "stdout": "[eval-runner] cache miss (first run (no cache)) — will run: test, lint, build\n[eval-runner] sampling hint: full (no baseline)\n[eval-runner] parallel warm-up: test, lint, build started in detached children (Amdahl: wall time ≈ max T_i instead of Σ T_i)\n[eval-runner] results cached to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json (keyed by Merkle root c5889482601c…)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-36\\项目评估报告.md\n\nAll 16 evaluated dimension(s) passed.\n",
+      "stderr": "",
+      "durationMs": 24972
+    },
+    {
+      "flowId": "gate-check-2026-11-18T16:42:19.269Z-122",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:42:19.269Z",
+      "cycle": "cycle-36",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-18T16:42:19.269Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:42:22.903Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-36 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 PASS recorded (hash c7f35538fa8d8fc9...)\n[PASS] G1: All 17 tasks completed §cycle-36\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 PASS recorded (hash e8b47396d8903ea7...)\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-36\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 PASS recorded (hash 6e0666696827617b...)\n[PASS] G3: Build passed: npm run build §cycle-36 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 PASS recorded (hash d95dc89663a8508b...)\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 3628
+    },
+    {
+      "flowId": "hitl-audit-2026-11-18T16:42:29.315Z-123",
+      "script": "hitl-audit",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:42:29.315Z",
+      "cycle": "cycle-36",
+      "phase": "plan",
+      "gate": "H1",
+      "attribution": {
+        "at": "2026-11-18T16:42:29.315Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:42:29.777Z",
+      "exitCode": 0,
+      "stdout": "=== HITL Audit (Fix-First Strategy) ===\n\n[PASS] H1: No security-sensitive operations detected\n[PASS] H2: No destructive operations detected\n[PASS] H3: All gates green, audit log present\n[PASS] H4: Gate evidence sufficient, no conflicts\n\nAll HITL audits PASSED.\n",
+      "stderr": "",
+      "durationMs": 457
+    },
+    {
+      "flowId": "archive-cycle-2026-11-18T16:42:36.271Z-124",
+      "script": "archive-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--cycle",
+        "36"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:42:36.271Z",
+      "cycle": "cycle-36",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T16:42:36.271Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:42:36.377Z",
+      "exitCode": 0,
+      "stdout": "Archived cycle-36 to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\archive\\cycle-36\n  Ledger untouched (append-only hash chain, INV-9).\n",
+      "stderr": "",
+      "durationMs": 100
     }
   ],
-  "counter": 118,
+  "counter": 124,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

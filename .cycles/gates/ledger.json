@@ -1718,7 +1718,43 @@
       "timestamp": "2026-11-18T16:05:14.217Z",
       "previousHash": "3c158f12832c20524882b76555f089c9b4a322aaef92508b13df7d65b9bbef8a",
       "hash": "356e34519ea8908a25b3c6cd056bb6d164b7ccd14ae99f968fc0e48c7560828c"
+    },
+    {
+      "gate": "G0",
+      "gateName": "评估收敛门",
+      "result": "PASS",
+      "detail": "Evaluation report found in cycle-36 (16 dimension rows) [Q1:PASS,Q5:PASS]",
+      "timestamp": "2026-11-18T16:42:19.375Z",
+      "previousHash": "356e34519ea8908a25b3c6cd056bb6d164b7ccd14ae99f968fc0e48c7560828c",
+      "hash": "c7f35538fa8d8fc93cc07b2bafa897d2a1bad96cf56638620e6e6ba318210b34"
+    },
+    {
+      "gate": "G1",
+      "gateName": "任务收敛门",
+      "result": "PASS",
+      "detail": "All 17 tasks completed §cycle-36 [Q7:PASS]",
+      "timestamp": "2026-11-18T16:42:19.387Z",
+      "previousHash": "c7f35538fa8d8fc93cc07b2bafa897d2a1bad96cf56638620e6e6ba318210b34",
+      "hash": "e8b47396d8903ea7390df17e708adda78ef620aa32f60e68a30fd52b8329e839"
+    },
+    {
+      "gate": "G2",
+      "gateName": "测试收敛门",
+      "result": "PASS",
+      "detail": "Zero failures, zero errors (测试报告.md) §cycle-36 [Q2:PASS]",
+      "timestamp": "2026-11-18T16:42:19.397Z",
+      "previousHash": "e8b47396d8903ea7390df17e708adda78ef620aa32f60e68a30fd52b8329e839",
+      "hash": "6e0666696827617b1cd179c1172a861b9fd9073b9fab445677c2f075a36c99e7"
+    },
+    {
+      "gate": "G3",
+      "gateName": "构建收敛门",
+      "result": "PASS",
+      "detail": "Build passed: npm run build §cycle-36 [dist=absent] [Q3:PASS,Q4:PASS]",
+      "timestamp": "2026-11-18T16:42:22.892Z",
+      "previousHash": "6e0666696827617b1cd179c1172a861b9fd9073b9fab445677c2f075a36c99e7",
+      "hash": "d95dc89663a8508b6c41b89bb89a3d4fe287e71851fc40314c8d67166a85cd3d"
     }
   ],
-  "chainHead": "356e34519ea8908a25b3c6cd056bb6d164b7ccd14ae99f968fc0e48c7560828c"
+  "chainHead": "d95dc89663a8508b6c41b89bb89a3d4fe287e71851fc40314c8d67166a85cd3d"
 }
