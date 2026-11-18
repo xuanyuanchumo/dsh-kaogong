@@ -2076,9 +2076,193 @@
       "stdout": "Initialized cycle-34 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-34\n",
       "stderr": "",
       "durationMs": 103
+    },
+    {
+      "flowId": "eval-runner-2026-11-18T06:26:31.064Z-101",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "FAILED",
+      "startedAt": "2026-11-18T06:26:31.064Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T06:26:31.064Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:27:09.368Z",
+      "exitCode": 1,
+      "stdout": "[eval-runner] cache miss (source changed: 31/122 files (e.g. render.test.mjs, smoke.test.mjs, src\\adapters\\poolDb.ts)) — will run: test, lint, build\n[eval-runner] sampling hint: full (25.4% of 122 source files changed)\n[eval-runner] parallel warm-up: test, lint, build started in detached children (Amdahl: wall time ≈ max T_i instead of Σ T_i)\n[eval-runner] results cached to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json (keyed by Merkle root abf459f5c93f…)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-34\\项目评估报告.md\n",
+      "stderr": "\n1 dimension(s) failed: Q2\n",
+      "durationMs": 38299
+    },
+    {
+      "flowId": "eval-runner-2026-11-18T06:28:02.977Z-102",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T06:28:02.977Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T06:28:02.977Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:28:08.936Z",
+      "exitCode": 0,
+      "stdout": "[eval-runner] source Merkle root unchanged — reusing cached results for: test, lint, build (evidence: D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-34\\项目评估报告.md\n\nAll 16 evaluated dimension(s) passed.\n",
+      "stderr": "",
+      "durationMs": 5955
+    },
+    {
+      "flowId": "gate-check-2026-11-18T06:28:14.136Z-103",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--quality",
+        "--record"
+      ],
+      "status": "FAILED",
+      "startedAt": "2026-11-18T06:28:14.136Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-18T06:28:14.136Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:28:19.591Z",
+      "exitCode": 1,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-34 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 PASS recorded (hash e17b8e47172426f8...)\n[FAIL] G1: No task entries found (fill the task tables in 任务清单.md) §cycle-34\n  [LEDGER] G1 FAIL recorded (hash 080d0ed3c9df807d...)\n[FAIL] G2: Test report summary not recognized: 测试报告.md has no 通过/失败 rows (expected the §2 汇总 table) §cycle-34\n  [LEDGER] G2 FAIL recorded (hash 994160aab095cced...)\n[PASS] G3: Build passed: npm run build §cycle-34 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 PASS recorded (hash 7435014b6e165864...)\n",
+      "stderr": "\nGate check FAILED. Fix issues before proceeding.\n",
+      "durationMs": 5451
+    },
+    {
+      "flowId": "gate-check-2026-11-18T06:29:33.702Z-104",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--quality",
+        "--record"
+      ],
+      "status": "FAILED",
+      "startedAt": "2026-11-18T06:29:33.702Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-18T06:29:33.702Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:29:38.843Z",
+      "exitCode": 1,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-34 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[FAIL] G1: No task entries found (fill the task tables in 任务清单.md) §cycle-34\n  [LEDGER] G1 unchanged, not re-recorded\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-34\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 PASS recorded (hash 529fc52aa38beef2...)\n[PASS] G3: Build passed: npm run build §cycle-34 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n",
+      "stderr": "\nGate check FAILED. Fix issues before proceeding.\n",
+      "durationMs": 5136
+    },
+    {
+      "flowId": "gate-check-2026-11-18T06:30:08.164Z-105",
+      "script": "gate-check",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--quality",
+        "--record"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-18T06:30:08.164Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "gate": "G0",
+      "attribution": {
+        "at": "2026-11-18T06:30:08.164Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:30:13.386Z",
+      "exitCode": 0,
+      "stdout": "[PASS] G0: Evaluation report found in cycle-34 (16 dimension rows)\n  [PASS] G0-Quality: Quality dimensions passed: Q1, Q5\n  [LEDGER] G0 unchanged, not re-recorded\n[PASS] G1: All 33 tasks completed §cycle-34\n  [PASS] G1-Quality: Quality dimensions passed: Q7\n  [LEDGER] G1 PASS recorded (hash 1c272a57c6005396...)\n[PASS] G2: Zero failures, zero errors (测试报告.md) §cycle-34\n  [PASS] G2-Quality: Quality dimensions passed: Q2\n  [LEDGER] G2 unchanged, not re-recorded\n[PASS] G3: Build passed: npm run build §cycle-34 [dist=absent]\n  [PASS] G3-Quality: Quality dimensions passed: Q3, Q4\n  [LEDGER] G3 unchanged, not re-recorded\n\nAll gates PASSED.\n",
+      "stderr": "",
+      "durationMs": 5217
+    },
+    {
+      "flowId": "hitl-audit-2026-11-18T06:30:20.004Z-106",
+      "script": "hitl-audit",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T06:30:20.004Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "gate": "H1",
+      "attribution": {
+        "at": "2026-11-18T06:30:20.004Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:30:20.490Z",
+      "exitCode": 0,
+      "stdout": "=== HITL Audit (Fix-First Strategy) ===\n\n[PASS] H1: No security-sensitive operations detected\n[PASS] H2: No destructive operations detected\n[PASS] H3: All gates green, audit log present\n[PASS] H4: Gate evidence sufficient, no conflicts\n\nAll HITL audits PASSED.\n",
+      "stderr": "",
+      "durationMs": 481
+    },
+    {
+      "flowId": "fact-base-verify-2026-11-18T06:30:25.138Z-107",
+      "script": "fact-base-verify",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T06:30:25.138Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T06:30:25.138Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:30:25.322Z",
+      "exitCode": 0,
+      "stdout": "Fact-base verification: 5/5 passed (0 skipped, 25 excluded)\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [PASS] path: _tmp/journey-notinstalled.mjs (OK (_tmp/journey-notinstalled.mjs))\n  [SKIP] 25 reference(s) excluded (historical artifact / glob / absolute path)\n\nAll fact-base references verified.\n",
+      "stderr": "",
+      "durationMs": 179
+    },
+    {
+      "flowId": "band-detector-2026-11-18T06:30:34.848Z-108",
+      "script": "band-detector",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T06:30:34.848Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T06:30:34.848Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:30:34.997Z",
+      "exitCode": 0,
+      "stdout": "Complexity Band Detection Report\n  Total complexity score: 3675\n  Average per file: 75.0\n  Budget: 180 | Upper band: 207 | Lower band: 153\n  Status: WARNING\n  History snapshots: 50\n  Statistical Control:\n    Mean: 82.05 | StdDev: 2.96\n    1σ: [79.1, 85.0]\n    2σ: [76.1, 88.0]\n    3σ: [73.2, 90.9]\n\nWESTERN ELECTRIC RULE VIOLATIONS (57):\n  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #48, value=75.00)\n  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #49, value=75.00)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #12, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #13, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #14, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #15, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #16, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #17, value=82.82)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #12, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #13, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #14, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #15, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #16, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #17, value=82.82)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #18, value=83.13)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #19, value=83.23)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #20, value=83.41)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #21, value=83.46)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #22, value=83.87)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #23, value=83.87)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #24, value=83.87)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #25, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #26, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #27, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #28, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #29, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #30, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #31, value=82.58)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #39, value=79.17)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #40, value=79.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #41, value=79.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #42, value=79.40)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #43, value=79.40)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #44, value=79.71)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #45, value=79.71)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #46, value=79.71)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #47, value=75.00)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #48, value=75.00)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #49, value=75.00)\n  Rule 5: 连续 6 点持续递增或递减 (at snapshot #22, value=83.87)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #31, value=82.58)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #32, value=80.63)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #33, value=80.63)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #34, value=80.63)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #35, value=80.66)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #36, value=80.66)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #37, value=80.66)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #38, value=79.17)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #39, value=79.17)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #40, value=79.43)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #41, value=79.43)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #42, value=79.40)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #43, value=79.40)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #44, value=79.71)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #45, value=79.71)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #46, value=79.71)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #16, value=85.43)\n\nCOMPLEXITY HOTSPOTS (top 8):\n  [201] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\server\\http.ts (branches: 117, functions: 42)\n  [200] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\views\\graph-view.tsx (branches: 156, functions: 22)\n  [182] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\shared\\manifest.ts (branches: 132, functions: 25)\n  [180] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\graph\\graph-physics.ts (branches: 126, functions: 27)\n  [179] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\server\\methodologyApi.ts (branches: 103, functions: 38)\n  [175] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\adapters\\huasheng13.ts (branches: 123, functions: 26)\n  [175] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\graph\\graph-engine.ts (branches: 107, functions: 34)\n  [164] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\server\\repoManager.ts (branches: 104, functions: 30)\n\nWarning: 8 complexity hotspots detected. Consider refactoring.\n\n57 Western Electric rule violation(s) detected. Process may be out of statistical control.\n\nMode: report (default) | alarms: WARNING(8 hotspots), WE_VIOLATIONS(57)\nReport mode: alarms surfaced as report data, exit 0 (use --strict for gate semantics).\n",
+      "stderr": "",
+      "durationMs": 144
+    },
+    {
+      "flowId": "band-detector-2026-11-18T06:33:12.316Z-109",
+      "script": "band-detector",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T06:33:12.316Z",
+      "cycle": "cycle-34",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T06:33:12.316Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T06:33:12.442Z",
+      "exitCode": 0,
+      "stdout": "Complexity Band Detection Report\n  Total complexity score: 3677\n  Average per file: 73.5\n  Budget: 180 | Upper band: 207 | Lower band: 153\n  Status: WARNING\n  History snapshots: 50\n  Statistical Control:\n    Mean: 81.95 | StdDev: 3.16\n    1σ: [78.8, 85.1]\n    2σ: [75.6, 88.3]\n    3σ: [72.5, 91.4]\n\nWESTERN ELECTRIC RULE VIOLATIONS (60):\n  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #47, value=75.00)\n  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #48, value=75.00)\n  Rule 2: 连续 2/3 点在同侧 2σ 外 (at snapshot #49, value=73.54)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #11, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #12, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #13, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #14, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #15, value=85.43)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #16, value=82.82)\n  Rule 3: 连续 4/5 点在同侧 1σ 外 (at snapshot #49, value=73.54)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #11, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #12, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #13, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #14, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #15, value=85.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #16, value=82.82)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #17, value=83.13)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #18, value=83.23)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #19, value=83.41)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #20, value=83.46)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #21, value=83.87)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #22, value=83.87)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #23, value=83.87)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #24, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #25, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #26, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #27, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #28, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #29, value=84.79)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #30, value=82.58)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #38, value=79.17)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #39, value=79.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #40, value=79.43)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #41, value=79.40)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #42, value=79.40)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #43, value=79.71)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #44, value=79.71)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #45, value=79.71)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #46, value=75.00)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #47, value=75.00)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #48, value=75.00)\n  Rule 4: 连续 8 点在中心线同侧 (at snapshot #49, value=73.54)\n  Rule 5: 连续 6 点持续递增或递减 (at snapshot #21, value=83.87)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #30, value=82.58)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #31, value=80.63)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #32, value=80.63)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #33, value=80.63)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #34, value=80.66)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #35, value=80.66)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #36, value=80.66)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #37, value=79.17)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #38, value=79.17)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #39, value=79.43)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #40, value=79.43)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #41, value=79.40)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #42, value=79.40)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #43, value=79.71)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #44, value=79.71)\n  Rule 7: 连续 15 点在 1σ 内（变异过小） (at snapshot #45, value=79.71)\n  Rule 8: 连续 8 点在 1σ 外（变异过大） (at snapshot #15, value=85.43)\n\nCOMPLEXITY HOTSPOTS (top 8):\n  [200] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\views\\graph-view.tsx (branches: 156, functions: 22)\n  [182] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\shared\\manifest.ts (branches: 132, functions: 25)\n  [180] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\graph\\graph-physics.ts (branches: 126, functions: 27)\n  [179] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\server\\methodologyApi.ts (branches: 103, functions: 38)\n  [177] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\server\\http.ts (branches: 101, functions: 38)\n  [175] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\adapters\\huasheng13.ts (branches: 123, functions: 26)\n  [175] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\client\\graph\\graph-engine.ts (branches: 107, functions: 34)\n  [164] D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\src\\server\\repoManager.ts (branches: 104, functions: 30)\n\nWarning: 8 complexity hotspots detected. Consider refactoring.\n\n60 Western Electric rule violation(s) detected. Process may be out of statistical control.\n\nMode: report (default) | alarms: WARNING(8 hotspots), WE_VIOLATIONS(60)\nReport mode: alarms surfaced as report data, exit 0 (use --strict for gate semantics).\n",
+      "stderr": "",
+      "durationMs": 122
     }
   ],
-  "counter": 100,
+  "counter": 109,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

@@ -1430,6 +1430,27 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       regSrc.includes('available(ctx') && regSrc.includes('ingest(ctx') &&
       regSrc.includes('tier:') && regSrc.includes('label:'),
       '源规格字段缺失')
+    // 复杂度预算守卫（cycle-13 教训① + cycle-29 C29 教训）：band-detector 是**异步**的
+    // （独立进程），smoke 无法直接读它的输出 → 用**结构性近似**判据：
+    // 关键大文件的「分支数 + 函数数」不得超过预算 180。
+    // 判据与 band-detector 口径一致（branches + functions），但用静态扫描近似——
+    // 目的是**在提交前**挡住「把逻辑塞进已有大文件」的反模式（cycle-34 http.ts 201 → 外提 177）。
+    {
+      const BUDGET = 180
+      const approxComplexity = (rel) => {
+        const src = readSrc(rel)
+        const branches = (src.match(/\b(if|else if|for|while|case|catch)\b/g) || []).length
+        const functions = (src.match(/\bfunction\b/g) || []).length
+        return { branches, functions, score: branches + functions }
+      }
+      const bigFiles = ['src/server/http.ts', 'src/shared/manifest.ts', 'src/client/views/graph-view.tsx',
+        'src/server/methodologyApi.ts', 'src/adapters/huasheng13.ts', 'src/server/repoManager.ts',
+        'src/client/graph/graph-physics.ts', 'src/client/graph/graph-engine.ts']
+      const overBudget = bigFiles.map(f => ({ f, ...approxComplexity(f) })).filter(x => x.score > BUDGET)
+      check('SMOKE-KGDB-09 复杂度预算：关键大文件分支+函数 ≤ 180（防「塞进大文件」反模式）',
+        overBudget.length === 0,
+        overBudget.map(x => `${x.f}(${x.branches}+${x.functions}=${x.score})`).join(', '))
+    }
   }
 
   // ═══ SMOKE-IMG 题图占位（issue #1）：parseQuestions 保留 img → kgimg:// 占位 + /api/kg-img ═══
