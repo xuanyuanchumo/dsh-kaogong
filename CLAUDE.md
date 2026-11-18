@@ -204,3 +204,37 @@
 - **（C33-「功能存在」≠「功能可用」：环境矩阵验证缺失）**：issue#3 补录搜索两条通道在真实用户环境双双失效——①naoku DB 由 GongkaoNaoku 的 Python 合并脚本生成，只装真题库的用户恒缺；②目录兜底用 getRandomQuestions 随机抽 12 题再过滤关键词（511 文件随机抽 12 → 命中率≈0）。harness 测试全绿（mock DB 就绪）掩盖了「只装真题库」主流配置的不可用——**issue 关闭前必须跑真实环境矩阵（教训⑱在 issue 验证环节的强制化）**。修法：第三通道真题卷全文扫描（buildPaperIndex 快照 + loadPaper 逐卷 18ms + 年份倒序限量 80 卷早停 + paperId/year/no 溯源元数据），547ms 命中浙江卷实证。
 - **（C33-随机抽样不能当搜索兜底）**：`getRandomQuestions` 是抽题器不是搜索器——「随机抽 N 条再按关键词过滤」的兜底在数据集大于 N 时命中率趋近于零。兜底通道必须真的是搜索（全文扫描/索引查询），并写明性能上界（80 卷 × 18ms ≈ 1.4s 早停实测 0.5s）。
 - **（C33-错题本=复习工作台不是展示柜）**：错题本页面只有统计+列表（45 行）——用户收「错题已进错题本」后回错题本却无处可去。重写为工作台：模块/状态筛选 + SRS 回炉入口（跳 practice）+ 内嵌补录卡（复用 KgHistoryImport）+ 条目展开全文 + 📥 纸质补录来源标签。
+
+## cycle-34 事实基线（v1.30.0 研究评估 · 统一存储 + 模型自选 + 图推形态实测修正）
+
+- **（统一身份层已存在·勿再误判「无统一数据层」）**：`data/.naoku.db` 已实现跨源身份——`questions.qid` 27506 全唯一 + `appearances` 58890 条（`qid`→`fp` 指纹+paper/region/year/seq/path），与 xingcezhenti 58890 题完全对应，**join 命中率 100%**，1204 个 qid 跨卷复用。真正的缺口是**统一检索层/统一索引层**（三通道各搜各的，不通过 qid 串联）。**规矩：凡「是否已有 X 层」的判断，先查 `.naoku.db` schema 与实查统计，不要从架构印象推断。**
+- **（图推形态实测·推翻旧判断）**：真题卷图推**不是**「段落大图」——`国考/2026/行测-副省级.md` 135 题中 17 题带图，图片归属 `### 第 N 题` 块内（每题 1–4 张），题干文字完整。naoku 图推 1895 题、1883（99.4%）有题干图，但**选项图 = 0**（上游未收录）。gk-tuxing 354 题是**纯图无题干文字**、整图含选项。**规律：图推的「显示」已打通（kgimg/kg-img + tuxing-img），「检索」靠解析文本特征而非图像。**
+- **（图推检索=解析特征·非图像检索）**：图推题干区分度≈0（真题卷 135 道题干几乎同一句「从所给的四个选项中…使之呈现一定的规律性：」），**解析文本区分度极高**（「元素组成基本相同，优先考虑位置规律…十六宫格…」「面数量依次为0、1、2、3」）。⇒ 图推图片搜题 = 模型读图产出「规律类型+特征描述」→ 匹配解析列，**不需要图像 embedding**；仅 gk-tuxing 纯图部分不可行。
+- **（FTS5 trigram=零依赖中文检索最优解·实测）**：SQLite 3.51.2 FTS5 可用，`tokenize='trigram'` 对中文**全命中**（位置规律/十六宫格/三视图/同比增长/多面体），全量检索 <1ms，摄入 **0.56ms/题**（300 文件→12737 题 7.16s）。项目零 npm 运行时依赖约束下，这是唯一免外部依赖的中文全文方案；短查询（<3 字）需降级。**教训㊜仍适用：中文匹配噪声分数可能高于真实短查询，只裁尾、永留首条、低置信度不丢弃。**
+- **（存储分层·L3 不做）**：工作区 7820MB / 27441 md / **216266 图**。L1 资产账本（源/文件/版本/content_hash）+ L2 统一文本索引**做**；**L3 媒体 BLOB 不做**——图片已是内容寻址（sha256 文件名），复制进库丧失跨源去重且备份体积翻倍，正确做法是登记 `rel_path+hash` 做引用。
+- **（PDF 源分层）**：AdministrativeAptitudeTest 1403 个 PDF / 1929.7MB，年份 2000–2024，与真题卷文件名规范化后**零重叠**；**独有 2000–2007 早期真题**（真题卷从 2008 起）+ 独立「答案及解析」版。2008–2022 段与 md 源同题 → **不做正文入库**；全部 PDF 先做 L1 登记；2000–2007 OCR 入库列为**可选项非阻塞**。图推选项图的正解是 gk-tuxing 现有 354 张整图，**不值得为 PDF 另建渲染管线**。
+- **（模型自选走宿主路由·不自建凭据）**：宿主契约——`ctx.llm`（`inject:['llm']`，provider+model 身份）、`ContentBlock` 含 `ImageBlock`（图片一等模态）、`ImageAttachmentAccess.readonlyPath`（模型工具读图规范路径）、`ctx.attachments` → `<DSH_HOME>/attachments/v1`（**内容寻址引用**，不含 base64）、`event:model/selection`、`agent-default-model` 的 `provider/model/reasoningEffort` Config 形状、`@Remote`/`ctx.remote` + `remoteAccess` 做 Host↔Client 通信。插件侧模型选择**仅作用于本插件 AI 增强，不影响 DSH 主对话**；现有 `kaogong_ai_*` 是「素材供模型加工」（长文本点评），图片识别需 **schema 约束的结构化输出** ⇒ 走 `ctx.llm` 直连**并存**而非替代。
+- **（既有失败登记）**：`node smoke.test.mjs` 当前 **375/376**，`SMOKE-SCHED-04`（当日 suggested 求和=30，实测 sum=31）失败——经 stash 验证为 **v1.30.0 提交自带**（与研究评估改动无关），疑似排程守恒依赖当前日期的漂移，**未擅自修改**，需单独立项。
+
+- **（练习链路锁单源·issue #5）**：`getRandomQuestions` 硬编码 `join(repoRoot, 'xingcezhenti', dirName)`，`/api/questions` 参数仅 `module`/`count`/`sort`（**无来源参数**）；且算法是「**随机文件 → 只解析前 30 题 → 再随机取 count**」⇒ 可达集被压缩、考点轮换极慢，且**不装 xingcezhenti 则专题刷题直接不可用**（#3「功能存在≠功能可用」同族）。其它入口各锁一源：`/api/naoku/*`→GongkaoNaoku、`/api/tuxing/*`→gk-tuxing、`/api/papers/*`→gwy-zhenti。**教训：抽题器必须先答「可达集有多大、分布是否偏斜」，不能只看「能不能抽到题」。**
+- **（跨仓 qid 已是事实标准·关键实测）**：`xingcezhenti` 题干内嵌 `<sub>qid N · 类型</sub>`，与 `naoku.qid` 匹配 **327/327 = 100%** ⇒ **两个独立第三方仓库共享同一套题目 ID 体系**。**规矩：跨源身份优先消费上游 qid，不要自造 canonical_id**；`fp`（同 fp 多 qid 仅 **3 例** / 28669 fp）可作合并键；sha256 归一哈希仅最后兜底。
+- **（`.naoku.db` 是上游投影·不可写自有表）**：`naoku.ts` 合并逻辑 = `if (existsSync(target)) return target` + `writeFileSync(target, Buffer.concat(bufs))` ⇒ 上游一变**整库重建**。**往其写项目自有表会被静默冲掉**。边界纪律：**上游投影留上游库，项目派生物进自有库，两者以 qid 关联**（统一池走独立 `.unified.db`，守卫 SMOKE-POOL-06 防误写）。
+- **（解析是瓶颈不是写入）**：批量插入 **12.3ms/千题** vs 解析 **0.56ms/题**（差 45 倍）⇒ 优化方向是**增量解析**（按 hash+mtime）与解析复用，**不是数据库调优**。FTS5 外部内容表（`content='q'`）与 ATTACH 均已实测可用。
+- **（统一题目模型须容纳四源差异）**：gk-tuxing **纯图无题干文字**（整图 + 13 类规律标签）｜材料组（资料分析/篇章）**必须保留 groupMaterial 绑定**否则题与材料失联｜图片两套协议（`kgimg://` / `img_refs`）须归一为 `images[{source,relPath,hash}]`｜naoku 五维（reasoning/fastest/pitfalls/mother）**可空不作必填**。
+
+- **（`.kaogong.db` 架构升级·cycle-35）**：新建**项目自有统一知识库** `data/.kaogong.db`，承载「统一题目池 + 关系边表 + 资产账本 + FTS5 索引 + 用户态（study_event/review）」。与 `.naoku.db` 的**硬边界**：后者是**上游投影**（整库重建，禁写自有表），前者是**自有派生物**（可全量重建），两者以 `qid` 关联（`ATTACH` 实测可用）。**规矩：凡是「我们的判断」（校验/复习记录/画像）只能写自有库，绝不写上游投影库。**
+- **（关系层=把既有字段显式化为边表）**：`.naoku.db` 实查——`kadian` 27506（100%，**10552 个不同知识点**）｜`related` **7922**｜`material`/`material_ref` 7327/7315｜`materials` 表 **1578**｜`doubt` **1577**｜`reasoning`/`fastest`/`mother`/`ask_model` **11282**｜`pitfalls` 11278｜`review_verified` **53**｜distinct module/category/region/year = 6/25/**36**/**19**。⇒ 关系不是新造概念，是把既有散字段**显式化**为统一边表（SAME_AS/APPEARS_IN/BELONGS_TO/IN_MODULE/HAS_MATERIAL/RELATED_TO/HAS_DOUBT/DERIVED_FROM/SAME_REGION/REVIEWED），新增关系类型**零 DDL 迁移**。
+- **（`.kaogong.db` 技术可行性·全实测通过）**：UPSERT 5 万行 **244ms**｜增量更新 5000 行 **20ms**｜FTS5 外部内容表 rebuild 5 万行 **311ms**｜`ATTACH` 上游库联合查询 ✅｜WAL ✅｜5 万行体积 ~14.8MB+WAL 8.3MB。⇒ 技术无阻碍；**解析（0.56ms/题）仍是瓶颈**，写入不是。
+- **（新库必须沿用的既有纪律）**：① `node:sqlite` **必须动态 import**（顶层 import 会让旧 Node 整插件加载失败）② 新域进 `buildDomains(root)` 工厂装配（换根随域重建，教训⑬）③ 新端点**四步纪律** manifest→server→UI→smoke（否则能力对账漂移）④ 客户端 `VIEW_ROUTES` 加一行、视图自治 fetch、早退在所有 hook 之后 ⑤ **归一铁律**：图片只引用不复制、HTML 剥除必须枚举字段（img 占位保留）、可空字段不臆造（缺即空，不用 0 冒充）⑥ 两条命门守卫：**重建幂等**（连续两次全量重建结果相等）+ **载体隔离**（重建 `.naoku.db` 后自有库不受影响）。
+
+- **（内核边界契约·四层依赖）**：`L4 内核`（原生算法与领域模型）→ `L3 存储层`（`.kaogong.db`，唯一事实源）→ `L2 适配层`（8 adapter + poolIngest）→ `L1 数据源层`（16 第三方仓，只读）——**只能向下依赖，不得越级**。内核判定三标准：表达领域语义 K1 / 对题目表示形式无关 K2 / 可用构造数据独立测试 K3；反之（知道具体上游文件名/字段名/正则）即属适配。
+- **（六条核心不变量）**：I1 内核禁 fs 读｜I2 内核禁第三方目录名与格式常量｜I3 媒体一律经存储层 `media_ref`｜**I4 客户端禁直接读第三方文件**｜**I5 第三方仓永远只读**｜I6 存储层可完全删除重建（派生性）。**I4/I5 当前已满足**（客户端全部经 `api('/…')` 端点，实测无 fs 直读）。
+- **（内核违规点·实测取证）**：① `repoData.getRandomQuestions` **每次请求 `readFileSync` 且该 adapter 无缓存**（paperData 有磁盘快照 / huasheng13 有 fixtureHash / tuxing 有进程内缓存——**repoData 是唯一无缓存者**）② 四个图片端点（`/api/kg-img`·`/api/naoku-img`·`/api/tuxing-img`·`/api/paper-img`）**直接拼第三方目录流出二进制**（`safeImagePath`/`resolveNaokuImage` + `createReadStream`）③ `paperApi.loadPaper` 逐卷读 md（有 `.paper-index.json` 兜底）。⇒ 收敛阶段：K-1/K-5（抽题与题面）、K-1/K-3（图片）。
+
+- **（研究须合读·总纲在研究 15）**：docs/research 的 **11/12/13/14/15 五篇是同一件事的五个面**——14 分层原则 → 13 存储载体 → 12 取题算法 → 11 模型接入，15 为总纲（统一口径 + 单条主线 + 与真实代码一致性核对）。**规矩：读任一篇前先读 15；实施按 15 的「阶段 0-4」主线走，不按各篇自定的 S/P/K 编号。**
+- **（统一口径·已作废旧口径）**：canonical_id 主键 = **qid 优先**（跨仓实测 327/327 一致）→ fp → sha256 兜底（研究 11 初版的「sha256 为主」作废）；存储层名 = **`.kaogong.db`**（`.unified.db` 作废）；阶段编号 = **阶段 0-4**（S1-S5 / P-1~P-4 / K-1~K-7 三套并存编号作废）。
+- **（C5·Host 半未声明 llm 注入）**：`src/host/index.ts` 现状 `export const inject = ['tools']`——**未声明 `llm`**。DSH 语义「未声明的服务取不到」⇒ 研究 11 的 `ctx.llm` 直连方案落地前**必须**扩为 `['tools', 'llm']`，否则第一行就取不到。这与「manifest 未登记即对账漂移」是同一条纪律两面：**声明是取用的前提**。
+- **（C6·存储层缺失=三层退化两跳）**：现状「域 → 适配器 → 第三方文件」；目标「域 → 存储层(.kaogong.db) → 适配器 → 第三方文件」。**唯一关键改造点**：适配层职责不变（仍解析第三方格式），但**输出从「直接返回给域」改为「写入存储层」**。`poolApi` 插桩位置 = `buildDomains(root)` 内；域链插入点建议 `historyApi` 之后、`tuxingApi` 之前（`/api/pool/*` 前缀独立无冲突）。
+- **（C7·双写风险）**：存储层落地必然经历「旧 progress json + 新 study_event 表」双写期，**必须明确谁写谁读**（阶段 1 先只写表、读仍走 json；阶段 2 再切读路径），否则同一份学习记录会出两个事实源——违反本项目「单一事实源」纪律。
+
+设计契约与研究文档：`docs/design/unified-storage-architecture.md`（分层存储 + 模型自选契约）、`docs/research/11-统一存储与模型自选架构.md`（五段式研究）。

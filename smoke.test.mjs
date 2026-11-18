@@ -1582,7 +1582,7 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   const { join } = await import('node:path')
   const rd = join(process.cwd(), 'docs', 'research')
   // R-DOC 守卫：10 篇研究文档 + 索引存在（声明 → 实体零断链，R28 族同纪律）
-  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md']
+  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md', '11-统一存储与模型自选架构.md', '12-统一题目池与多源抽题.md', '13-kaogong-db统一知识库.md', '14-内核边界契约.md', '15-全局整合分析.md']
   check('RDOC-01 研究文档 10 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
   // R-DOC 事实抽验（R14 纪律）：文档引用的代码符号 ≥5 条在源码真实存在
   const rdocBody = rdocExpected.map(f => { try { return fs.readFileSync(join(rd, f), 'utf-8') } catch { return '' } }).join('\n')
