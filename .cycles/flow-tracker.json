@@ -2408,9 +2408,47 @@
       "stdout": "Archived cycle-35 to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\archive\\cycle-35\n  Ledger untouched (append-only hash chain, INV-9).\n",
       "stderr": "",
       "durationMs": 108
+    },
+    {
+      "flowId": "init-cycle-2026-11-18T16:36:20.640Z-117",
+      "script": "init-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "DONE",
+      "startedAt": "2026-11-18T16:36:20.640Z",
+      "cycle": "cycle-35",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T16:36:20.640Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:36:20.755Z",
+      "exitCode": 0,
+      "stdout": "Initialized cycle-36 workspace in D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-36\n",
+      "stderr": "",
+      "durationMs": 109
+    },
+    {
+      "flowId": "eval-runner-2026-11-18T16:37:06.409Z-118",
+      "script": "eval-runner",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [],
+      "status": "FAILED",
+      "startedAt": "2026-11-18T16:37:06.409Z",
+      "cycle": "cycle-36",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-18T16:37:06.409Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-18T16:37:32.231Z",
+      "exitCode": 1,
+      "stdout": "[eval-runner] cache miss (source changed: 11/116 files (e.g. smoke.test.mjs, src\\adapters\\poolDb.ts, src\\adapters\\poolIngest.ts)) — will run: test, lint, build\n[eval-runner] sampling hint: partial (9.5% of 116 source files changed)\n[eval-runner] parallel warm-up: test, lint, build started in detached children (Amdahl: wall time ≈ max T_i instead of Σ T_i)\n[eval-runner] results cached to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\.eval-cache.json (keyed by Merkle root c5889482601c…)\nEvaluation report written to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\cycles\\cycle-36\\项目评估报告.md\n",
+      "stderr": "\n2 dimension(s) failed: E3, E8\n",
+      "durationMs": 25817
     }
   ],
-  "counter": 116,
+  "counter": 118,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,

