@@ -524,6 +524,28 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
     scored.sort((a, b) => b.rich - a.rich)
     const picked: any[] = []
     for (const x of scored) { if (picked.length < n) picked.push(x.q) }
+    // cycle-41（IMG-04 间歇假红根治）：候选池只 n*3 行，带图占比 15% 时 18 行候选
+    // 可能 0 带图 → rich 排序无从优选。修法：富行**定向补捞**——rich 题不足 n/2 时
+    // 追加一次「带图/带五维定向查询」，把富行灌入 picked 头部。
+    const richCount = picked.filter(q => String(q.stem || '').includes('kgimg://') || (q.dims && Object.keys(q.dims).length)).length
+    if (richCount < Math.ceil(n / 2)) {
+      try {
+        const richRows = db.prepare(
+          `SELECT canonical_id, qid, source_id, local_key, module, category, kadian, qtype,
+             stem, options, answer, analysis, reasoning, fastest, pitfalls, mother, doubt, ask_model,
+             group_material, group_material_no,
+             images, has_image, paper, region, year, freq
+           FROM question ${w} AND (stem LIKE '%kgimg://%' OR LENGTH(reasoning) > 0)
+           ORDER BY RANDOM() LIMIT ?`,
+        ).all(...args, n)
+        for (const rr of richRows) {
+          if (picked.length >= n) break
+          const q = poolRowToQuestion(rr)
+          if (q && !picked.some(x => x.canonicalId === q.canonicalId)) picked.unshift(q)
+        }
+        if (picked.length > n) picked.length = n
+      } catch { /* 补捞失败 → 保留原 picked */ }
+    }
     if (!picked.length) return { error: '统一池内无可用题' }
     const file = picked[0] && picked[0].paperFile ? String(picked[0].paperFile) : 'pool'
     return { file, count: picked.length, questions: picked }

@@ -16,7 +16,7 @@ import { putRelation, putQuestionSource } from './poolDb.js'
 /** question 表列清单（33 个绑定参数，与 prepare 顺序严格一致） */
 export const QUESTION_COLS = `qid,fp,canonical_id,source_id,local_key,module,category,kadian,rule_type,qtype,ask_model,
   stem,options,answer,analysis,reasoning,fastest,pitfalls,mother,doubt,related,
-  group_material,group_material_no,material_ref,images,has_image,freq,paper,region,year,seq,n_paper,updated_at`
+  group_material,group_material_no,material_ref,images,has_image,freq,paper,region,year,seq,n_paper,updated_at,content_fp`
 
 /** 统一题目 UPSERT（只填空位合并语义；所有源实现共用） */
 export function prepareQuestionUpsert(db: any) {
@@ -61,7 +61,7 @@ export function questionRow(q: {
   reasoning?: any, fastest?: any, pitfalls?: any, mother?: any, doubt?: any, related?: any,
   groupMaterial?: any, groupMaterialNo?: any, materialRef?: any,
   images?: any, hasImage?: any, freq?: any,
-  paper?: any, region?: any, year?: any, seq?: any, nPaper?: any,
+  paper?: any, region?: any, year?: any, seq?: any, nPaper?: any, contentFp?: any,
 }): any[] {
   return [
     String(q.qid ?? ''), String(q.fp ?? ''), String(q.canonicalId), String(q.sourceId), String(q.localKey ?? ''),
@@ -72,6 +72,7 @@ export function questionRow(q: {
     String(q.images ?? '[]'), Number(q.hasImage ?? 0), Number(q.freq ?? 0),
     String(q.paper ?? ''), String(q.region ?? ''), String(q.year ?? ''), Number(q.seq ?? 0), Number(q.nPaper ?? 0),
     new Date().toISOString(),
+    String(q.contentFp ?? ''),
   ]
 }
 
@@ -81,7 +82,29 @@ export function upsertQuestionBundle(
   q: Parameters<typeof questionRow>[0],
   extras: { evidence?: string, relations?: Array<{ type: any, dstKind: string, dstId: string, weight?: number }> } = {},
   putQs?: { db: any, localKey?: string, paper?: string, region?: string, year?: string, seq?: number, path?: string },
-): { ok: boolean } {
+): { ok: boolean, mergedInto?: string } {
+  const db = putQs && putQs.db
+  const cfp = String(q.contentFp ?? '').trim()
+  // ── cycle-40 跨源去重（研究 21 §2 纪律②）：内容指纹命中已有行 → **归并而非新行**。
+  // canonical_id 靠 qid/namespace 隔离防撞库（跨源天然不同）——内容级同题的合并靠
+  // content_fp 查重：命中则把本源出处挂到已有 canonical 下（来源标记不丢），本行不插入。
+  if (db && cfp) {
+    try {
+      const existing = db.prepare('SELECT canonical_id FROM question WHERE content_fp = ? LIMIT 1').get(cfp)
+      if (existing && existing.canonical_id && String(existing.canonical_id) !== String(q.canonicalId)) {
+        const canon = String(existing.canonical_id)
+        if (putQs && putQs.db) {
+          putQuestionSource(db, canon, String(q.sourceId), putQs.localKey || String(q.localKey ?? ''),
+            putQs.paper || String(q.paper ?? ''), putQs.region || String(q.region ?? ''),
+            putQs.year || String(q.year ?? ''), putQs.seq ?? Number(q.seq ?? 0), putQs.path || '')
+        }
+        for (const r of extras.relations || []) {
+          putRelation(db, r.type, 'question', canon, r.dstKind, r.dstId, r.weight ?? 1.0, extras.evidence || '')
+        }
+        return { ok: true, mergedInto: canon }   // 合并未插行——出处已挂
+      }
+    } catch { /* 查重失败 → 走正常插入（不去重但不丢数据） */ }
+  }
   try {
     insQ.run(...questionRow(q))
   } catch {

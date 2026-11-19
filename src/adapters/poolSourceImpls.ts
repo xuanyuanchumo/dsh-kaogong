@@ -13,7 +13,7 @@
  */
 import { existsSync, statSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { deriveCanonicalId, putRelation, putQuestionSource, putSource, setMeta, withTx } from './poolDb.js'
+import { deriveCanonicalId, putRelation, putQuestionSource, putSource, putAnalysis, contentFingerprint, setMeta, withTx } from './poolDb.js'
 import { prepareQuestionUpsert, upsertQuestionBundle } from './poolUpsert.js'
 import { parseQuestions, XINGCE_MODULES } from './repoData.js'
 
@@ -83,7 +83,7 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
     return { source: 'naoku', skipped: true, reason: '上游库打开失败: ' + (e && e.message) }
   }
 
-  const stats = { questions: 0, relations: 0, materials: 0, appearances: 0, reviews: 0, skipped: false }
+  const stats: any = { questions: 0, relations: 0, materials: 0, appearances: 0, reviews: 0, skipped: false, lastError: '', errorCount: 0, dbgIns: 0, dbgMerge: 0 }
   try {
     // ① 源登记
     const upstreamUrl = 'https://github.com/Hongyy177/GongkaoNaoku'
@@ -114,32 +114,10 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
       }
     } catch { /* 集合缺失 → 全部走兜底 */ }
 
-    const insQ = db.prepare(
-      `INSERT INTO question(qid,fp,canonical_id,source_id,local_key,module,category,kadian,rule_type,qtype,ask_model,
-        stem,options,answer,analysis,reasoning,fastest,pitfalls,mother,doubt,related,
-        group_material,group_material_no,material_ref,images,has_image,freq,paper,region,year,seq,n_paper,updated_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(canonical_id) DO UPDATE SET
-         -- 同上：只填空位，不覆盖已有富字段（跨源合并语义）
-         stem=CASE WHEN LENGTH(question.stem) > 0 THEN question.stem ELSE excluded.stem END,
-         options=CASE WHEN LENGTH(question.options) > 0 THEN question.options ELSE excluded.options END,
-         answer=CASE WHEN LENGTH(question.answer) > 0 THEN question.answer ELSE excluded.answer END,
-         analysis=CASE WHEN LENGTH(question.analysis) > 0 THEN question.analysis ELSE excluded.analysis END,
-         reasoning=CASE WHEN LENGTH(question.reasoning) > 0 THEN question.reasoning ELSE excluded.reasoning END,
-         fastest=CASE WHEN LENGTH(question.fastest) > 0 THEN question.fastest ELSE excluded.fastest END,
-         pitfalls=CASE WHEN LENGTH(question.pitfalls) > 0 THEN question.pitfalls ELSE excluded.pitfalls END,
-         mother=CASE WHEN LENGTH(question.mother) > 0 THEN question.mother ELSE excluded.mother END,
-         doubt=CASE WHEN LENGTH(question.doubt) > 0 THEN question.doubt ELSE excluded.doubt END,
-         related=CASE WHEN LENGTH(question.related) > 0 THEN question.related ELSE excluded.related END,
-         images=CASE WHEN LENGTH(question.images) > 2 THEN question.images ELSE excluded.images END,
-         has_image=CASE WHEN question.has_image = 1 THEN 1 ELSE excluded.has_image END,
-         freq=CASE WHEN question.freq > 0 THEN question.freq ELSE excluded.freq END,
-         paper=CASE WHEN LENGTH(question.paper) > 0 THEN question.paper ELSE excluded.paper END,
-         region=CASE WHEN LENGTH(question.region) > 0 THEN question.region ELSE excluded.region END,
-         year=CASE WHEN LENGTH(question.year) > 0 THEN question.year ELSE excluded.year END,
-         n_paper=CASE WHEN question.n_paper > 0 THEN question.n_paper ELSE excluded.n_paper END,
-         updated_at=excluded.updated_at`,
-    )
+    // cycle-40b：换共享 prepareQuestionUpsert（34 列含 content_fp——研究 21 去重合并键）。
+    // 原 33 列私有版与新 schema（35 列含 content_fp）错位：updated_at 位收到 cfOwn → 全量 27506 行
+    // 「column index out of range」被 catch 吞 → naoku 行 0（R45）。
+    const insQ = prepareQuestionUpsert(db)
 
     const rows = upstream.prepare('SELECT * FROM questions').all()
     // 单源一个事务（设计 §9c.5；性能关键：无事务时逐条 fsync → 421s，事务内 → 秒级）
@@ -148,10 +126,51 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
       const qid = String(r.qid ?? '').trim()
       const fp = fpByQid.get(qid) || ''
       const stem = stripHtmlKeepImg(r.stem)
-      const canon = deriveCanonicalId(qid, fp, stem)
+      // cycle-40b：naoku 也走 cf 合并（与 xingce-app/gwy 同题内容归一）——
+      // naoku 排在注册表首位，是「主行持有者」；其后源命中 cf 挂到 naoku 行下。
+      // naoku 自身内部姊妹题（上游同文双题）也归并——cf 指纹首见为准。
+      const cfOwn = contentFingerprint(stem, normalizeOptions(r.options))
+      const canon0 = deriveCanonicalId(qid, fp, stem)
+      let mergeTarget: string | null = null
+      if (cfOwn) {
+        try {
+          const ex = db.prepare('SELECT canonical_id FROM question WHERE content_fp = ? LIMIT 1').get(cfOwn)
+          if (ex && ex.canonical_id && String(ex.canonical_id) !== canon0) mergeTarget = String(ex.canonical_id)
+        } catch { /* 查重失败 → 正常 */ }
+      }
+      const canon = mergeTarget || canon0
+      void canon0
       const imgs = extractImages(r.stem)
       const materialRef = String(r.material_ref ?? '').trim()
       try {
+        if (mergeTarget) {
+          stats.dbgMerge++
+          // ── cycle-40b 修复：归并分支**绝不 insQ.run**——
+          // 原实现 canonical=mergeTarget 仍走 INSERT → canonical_id UNIQUE 冲突 →
+          // DO UPDATE「吸进」主行（source_id 保持主行值）→ naoku 行全部消失（实测 0 行）。
+          // 正解 = 归并只做**贡献合并**：出处挂载 + 解析版本 + **富字段回填**——
+          // naoku 是富源（五维标注/fp/n_paper），主行（xingce-app 先入库）缺的 dims
+          // 正好由 naoku 补齐（跨源合并的第二重红利：富源后到也能 enrich 主行）。
+          putQuestionSource(db, mergeTarget, 'naoku', qid, String(r.paper ?? ''), String(r.region ?? ''), String(r.year ?? ''), 0, String(r.path ?? ''))
+          putAnalysis(db, mergeTarget, 'naoku', qid, stripHtmlKeepImg(r.analysis), String(r.answer ?? ''))
+          // 富字段回填（只填空位——与 UPSERT 合并语义一致）
+          db.prepare(
+            `UPDATE question SET
+               fp=CASE WHEN LENGTH(question.fp) = 0 THEN ? ELSE question.fp END,
+               reasoning=CASE WHEN LENGTH(question.reasoning) = 0 THEN ? ELSE question.reasoning END,
+               fastest=CASE WHEN LENGTH(question.fastest) = 0 THEN ? ELSE question.fastest END,
+               pitfalls=CASE WHEN LENGTH(question.pitfalls) = 0 THEN ? ELSE question.pitfalls END,
+               mother=CASE WHEN LENGTH(question.mother) = 0 THEN ? ELSE question.mother END,
+               doubt=CASE WHEN LENGTH(question.doubt) = 0 THEN ? ELSE question.doubt END,
+               kadian=CASE WHEN LENGTH(question.kadian) = 0 THEN ? ELSE question.kadian END,
+               n_paper=CASE WHEN question.n_paper = 0 THEN ? ELSE question.n_paper END
+             WHERE canonical_id = ?`,
+          ).run(fp, stripHtmlKeepImg(r.reasoning), stripHtmlKeepImg(r.fastest), stripHtmlKeepImg(r.pitfalls),
+            stripHtmlKeepImg(r.mother), stripHtmlKeepImg(r.doubt), String(r.kadian ?? ''),
+            Number(r.n_paper || 0), mergeTarget)
+          stats.questions++
+          continue
+        }
         insQ.run(
           qid, fp, canon, 'naoku', qid,
           String(r.module ?? ''), String(r.category ?? ''), String(r.kadian ?? ''), '', String(r.qtype ?? ''),
@@ -162,10 +181,17 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
           '', 0, materialRef,
           JSON.stringify(imgs), imgs.length ? 1 : 0,
           Number(r.freq || 0), String(r.paper ?? ''), String(r.region ?? ''), String(r.year ?? ''),
-          0, Number(r.n_paper || 0), new Date().toISOString(),
+          0, Number(r.n_paper || 0), new Date().toISOString(), cfOwn,
         )
+        stats.dbgIns++
         stats.questions++
-      } catch { /* 单条失败不阻塞整轮 */ }
+        putAnalysis(db, canon, 'naoku', qid, stripHtmlKeepImg(r.analysis), String(r.answer ?? ''))
+      } catch (e: any) {
+        if (stats.errorCount === 0) console.error('[naoku-dbg] 首错行详情:', JSON.stringify({ qid, fp: (fp || '').slice(0, 8), cfOwn: (cfOwn || '').slice(0, 8), stemLen: stem.length, optsLen: String(normalizeOptions(r.options) || '').length, argsLen: 34 }))
+        if (!stats.errorCount) stats.errorCount = 0
+        stats.errorCount++
+        if (stats.errorCount <= 3) console.error('[naoku-ingest] 首批插入失败详情:', e && e.message)
+      }
 
       // ②b 出处兜底登记（孤儿题治理）：上游 `appearances` 表并非覆盖全部题——
       // 实测 48 题无 appearance 行（多为早年卷/联考卷），若只依赖 appearances
@@ -245,7 +271,9 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
         } catch { /* 单条失败不阻塞 */ }
       }
     } catch { /* review 缺失不影响 */ }
-    })  // ← 事务闭合（单源一个事务；失败回滚该源，不留半成品源）
+    })
+    console.log('[naoku-dbg] insert=' + stats.dbgIns + ' merge=' + stats.dbgMerge + ' rows=' + rows.length)
+    // ← 事务闭合（单源一个事务；失败回滚该源，不留半成品源）
   } finally {
     try { if (upstream && upstream.close) upstream.close() } catch { /* 已关闭 */ }
   }
@@ -265,31 +293,9 @@ export function ingestXingceSource(ctx: any): any {
   if (!existsSync(srcDir)) return { source: 'xingcezhenti', skipped: true, reason: '源目录不存在' }
   const stats = { questions: 0, relations: 0, files: 0, skipped: false }
 
-  const insQ = db.prepare(
-    `INSERT INTO question(qid,fp,canonical_id,source_id,local_key,module,category,kadian,rule_type,qtype,ask_model,
-      stem,options,answer,analysis,reasoning,fastest,pitfalls,mother,doubt,related,
-      group_material,group_material_no,material_ref,images,has_image,freq,paper,region,year,seq,n_paper,updated_at)
-     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-     ON CONFLICT(canonical_id) DO UPDATE SET
-       -- 【合并语义·只填空位】同一 canonical_id 的跨源命中（qid 相同），
-       -- naoku 先入库且带五维标注（reasoning/fastest/pitfalls/mother）；
-       -- xingcezhenti 后到，**只能填空位，不得覆盖**已有富字段——
-       -- 否则「统一题目模型」会退化成「最后写入者赢」，把深度标注洗掉。
-       -- 判据：现有值非空则保留（LENGTH(...) > 0），空则取本源值。
-       stem=CASE WHEN LENGTH(question.stem) > 0 THEN question.stem ELSE excluded.stem END,
-       options=CASE WHEN LENGTH(question.options) > 0 THEN question.options ELSE excluded.options END,
-       answer=CASE WHEN LENGTH(question.answer) > 0 THEN question.answer ELSE excluded.answer END,
-       analysis=CASE WHEN LENGTH(question.analysis) > 0 THEN question.analysis ELSE excluded.analysis END,
-       group_material=CASE WHEN LENGTH(question.group_material) > 0 THEN question.group_material ELSE excluded.group_material END,
-       images=CASE WHEN LENGTH(question.images) > 2 THEN question.images ELSE excluded.images END,
-       has_image=CASE WHEN question.has_image = 1 THEN 1 ELSE excluded.has_image END,
-       category=CASE WHEN LENGTH(question.category) > 0 THEN question.category ELSE excluded.category END,
-       paper=CASE WHEN LENGTH(question.paper) > 0 THEN question.paper ELSE excluded.paper END,
-       region=CASE WHEN LENGTH(question.region) > 0 THEN question.region ELSE excluded.region END,
-       year=CASE WHEN LENGTH(question.year) > 0 THEN question.year ELSE excluded.year END,
-       qtype=CASE WHEN LENGTH(question.qtype) > 0 THEN question.qtype ELSE excluded.qtype END,
-       updated_at=excluded.updated_at`,
-  )
+  // cycle-40b：换共享 prepareQuestionUpsert（34 列含 content_fp；原 33 列私有版
+  // 列序与新 schema 错位 → xingcezhenti 全量 1636 题 R45 复发（column index out of range）。
+  const insQ = prepareQuestionUpsert(db)
 
   // 全量默认不限（maxFiles=0 表示不限）；smoke/测试用小值提速。
   // ⚠️ 教训（cycle-34 实测）：原先的 `break` 只跳出**内层**文件循环，
@@ -318,19 +324,38 @@ export function ingestXingceSource(ctx: any): any {
       for (const q of qs) {
         // qid：parseQuestions 已从 `<sub>qid N · 类型</sub>` 直取上游 qid（cycle-34 加字段）
         const qid = String((q as any).qid || '').trim()
-        const canon = deriveCanonicalId(qid, '', q.stem)
+        // cycle-40：内容指纹（粉笔系 qid 命中已合并 naoku；与 gwy/xingce-app 内容同题走 cf 合并）
+        const cfp = contentFingerprint(q.stem, JSON.stringify(q.options || {}))
+        const canon = deriveCanonicalId(qid, '', q.stem, { contentFp: cfp || undefined })
         const imgs = extractImages(q.stem)
         try {
+          // cycle-40：跨源去重第二层——content_fp 命中已有 canonical（他源已入库同题）→ 归并
+          let mergeTarget: string | null = null
+          if (cfp) {
+            try {
+              const ex = db.prepare('SELECT canonical_id FROM question WHERE content_fp = ? LIMIT 1').get(cfp)
+              if (ex && ex.canonical_id && String(ex.canonical_id) !== canon) mergeTarget = String(ex.canonical_id)
+            } catch { /* 查重失败 → 正常插入 */ }
+          }
+          // cycle-40b：cf 命中跨源主行时**不 insQ.run**（同 naoku 修复——UPSERT 会吸进主行）
+          if (mergeTarget) {
+            putQuestionSource(db, mergeTarget, 'xingcezhenti', f + '#' + q.number, String(q.paperFile || f), String(q.region || ''), String(q.year || ''), Number(q.number || 0), full)
+            putAnalysis(db, mergeTarget, 'xingcezhenti', f + '#' + q.number, String(q.analysis || ''), String(q.correctAnswer || ''))
+            stats.questions++
+            continue
+          }
+          const finalCanon = canon
           insQ.run(
-            qid, '', canon, 'xingcezhenti', f + '#' + q.number,
+            qid, '', finalCanon, 'xingcezhenti', f + '#' + q.number,
             String(q.module || moduleName), '', '', '', String(q.type || ''), '',
             String(q.stem || ''), JSON.stringify(q.options || {}), String(q.correctAnswer || ''),
             String(q.analysis || ''), '', '', '', '', '', '',
             String(q.groupMaterial || ''), Number(q.groupMaterialNo || 0), '',
             JSON.stringify(imgs), imgs.length ? 1 : 0,
             0, String(q.paperFile || ''), String(q.region || ''), String(q.year || ''),
-            Number(q.number || 0), 0, new Date().toISOString(),
+            Number(q.number || 0), 0, cfp, new Date().toISOString(),
           )
+          putAnalysis(db, finalCanon, 'xingcezhenti', f + '#' + q.number, String(q.analysis || ''), String(q.correctAnswer || ''))
           stats.questions++
         } catch (e: any) { lastError = 'insert: ' + (e && e.message) }
         // 一题多出处：登记本源出处（跨源聚合——同一 canonical_id 可有 N 行）
@@ -403,7 +428,10 @@ export async function ingestGwyZhentiSource(ctx: any): Promise<any> {
         for (const q of paper.questions) {
           const no = Number(q.no || 0)
           const qid = 'gwy:' + meta.id + '#' + no   // 源内唯一键（卷+题号）
-          const canon = deriveCanonicalId(qid, '', stripHtmlKeepImg(q.stem) || undefined, { namespace: 'gwy-zhenti' })
+          // cycle-40：内容指纹——与 xingce-app/naoku 同题内容归一（出处保留，解析多版本）
+          const stemNorm = stripHtmlKeepImg(q.stem)
+          const cfp = contentFingerprint(stemNorm, q.options)
+          const canon = deriveCanonicalId(qid, '', stemNorm || undefined, { namespace: 'gwy-zhenti', contentFp: cfp || undefined })
           // gwy 卷面无 qid 上游键——但与 xingcezhenti/naoku 的同题可能内容一致：
           // SAME_AS 不在此建（无强证据键），留给 fp 命中或人工校验（合并靠认亲）。
           const relations: Array<{ type: any, dstKind: string, dstId: string, weight?: number }> = []
@@ -418,13 +446,14 @@ export async function ingestGwyZhentiSource(ctx: any): Promise<any> {
             module: String(paper.subject || '行测'), qtype: String(q.type || ''),
             stem: stripHtmlKeepImg(q.stem), options: optsMap,
             answer: String(q.correctAnswer || '').toUpperCase(),
-            analysis: stripHtmlKeepImg(q.analysis),
+            analysis: stripHtmlKeepImg(q.analysis), contentFp: cfp,
             groupMaterial: stripHtmlKeepImg(q.groupMaterial || ''),
             images: JSON.stringify(imgs), hasImage: imgs.length ? 1 : 0,
             paper: meta.id, region: String(paper.region || ''), year: String(paper.year || ''),
             seq: no,
           }, { evidence: ev, relations }, { db, localKey: meta.id + '#' + no, paper: meta.id, region: String(paper.region || ''), year: String(paper.year || ''), seq: no })
           if (r.ok) stats.questions++
+          putAnalysis(db, canon, 'gwy-zhenti', meta.id + '#' + no, String(q.analysis || ''), String(q.correctAnswer || '').toUpperCase())
           stats.relations += relations.length
         }
       } catch (e: any) {

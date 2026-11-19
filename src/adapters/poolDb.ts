@@ -24,14 +24,14 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
 /** 存储层 schema 版本（变更必须 bump；与 manifest 声明对账——SMOKE-KGDB-01） */
-export const POOL_SCHEMA_VERSION = 3
+export const POOL_SCHEMA_VERSION = 4
 
 /** 库文件基名（研究 15 §1.1 统一口径：`.kaogong.db`） */
 export const POOL_DB_NAME = '.kaogong.db'
 
 /** 表清单（SMOKE-KGDB-01 与 manifest 声明对账的 SSOT） */
 export const POOL_TABLES = [
-  'meta', 'source', 'asset', 'question', 'question_source', 'relation', 'material', 'knowledge',
+  'meta', 'source', 'asset', 'question', 'question_source', 'question_analysis', 'relation', 'material', 'knowledge',
   'question_fts', 'study_event', 'review',
 ] as const
 
@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS question (
   images TEXT,
   has_image INTEGER,
   freq REAL, paper TEXT, region TEXT, year TEXT, seq INTEGER, n_paper INTEGER,
-  updated_at TEXT
+  updated_at TEXT,
+  content_fp TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_q_qid ON question(qid);
 CREATE INDEX IF NOT EXISTS ix_q_fp ON question(fp);
@@ -96,6 +97,7 @@ CREATE INDEX IF NOT EXISTS ix_q_canon ON question(canonical_id);
 CREATE INDEX IF NOT EXISTS ix_q_mod ON question(module, category);
 CREATE INDEX IF NOT EXISTS ix_q_kadian ON question(kadian);
 CREATE INDEX IF NOT EXISTS ix_q_source ON question(source_id, local_key);
+CREATE INDEX IF NOT EXISTS ix_q_cfp ON question(content_fp);
 
 -- ④b 一题多出处（跨源聚合——设计 §9b.4 pool_sources）
 -- 同一 canonical_id 在多个源/多套卷出现时，题目本体只存一份，出处存这张表。
@@ -128,6 +130,23 @@ CREATE INDEX IF NOT EXISTS ix_rel_dst ON relation(dst_kind, dst_id);
 CREATE INDEX IF NOT EXISTS ix_rel_src_id ON relation(src_id);
 CREATE INDEX IF NOT EXISTS ix_rel_dst_id ON relation(dst_id);
 CREATE INDEX IF NOT EXISTS ix_rel_type ON relation(rel_type);
+
+-- ⑦c 解析多版本（cycle-40 · 研究 21 §2 纪律③：解析差异必须保留）
+-- 跨源合并后，同一 canonical_id 的解析可能有 N 个版本（不同来源的解析质量/角度不同）。
+-- question.analysis 保留「首个入库」的解析（主版本）；所有版本（含主版本）在此全量留痕，
+-- 每条带 source_id 溯源——「这道题的解析有哪些版本、来自哪个题库」可查。
+CREATE TABLE IF NOT EXISTS question_analysis (
+  id INTEGER PRIMARY KEY,
+  canonical_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  local_key TEXT,
+  analysis TEXT,
+  answer TEXT,
+  at TEXT,
+  UNIQUE(canonical_id, source_id, local_key)
+);
+CREATE INDEX IF NOT EXISTS ix_qa_canon ON question_analysis(canonical_id);
+CREATE INDEX IF NOT EXISTS ix_qa_src ON question_analysis(source_id);
 
 CREATE TABLE IF NOT EXISTS material (id INTEGER PRIMARY KEY, mid TEXT UNIQUE, title TEXT, body TEXT, path TEXT);
 
@@ -323,16 +342,57 @@ export function getMeta(db: any, k: string): string | null {
  *
  * 前缀标识来源种类，便于人工排查：`q:` / `fp:` / `h:`。
  */
-export function deriveCanonicalId(qid: any, fp: any, stem: any, opts: { namespace?: string } = {}): string {
+export function deriveCanonicalId(qid: any, fp: any, stem: any, opts: { namespace?: string, contentFp?: string } = {}): string {
   const q = String(qid ?? '').trim()
   if (q) {
     // 独立命名空间：带源前缀（永不与其它源撞库）；共享命名空间（namespace 为空）：裸 qid
     return opts.namespace ? 'q:' + opts.namespace + ':' + q : 'q:' + q
   }
+  // cycle-40（研究 21）：内容指纹强合并键——**跨源同题去重**（qid 不同源天然不合并，
+  // 但内容完全相同就是同一道题）。优先级仍按统一口径：qid > fp > 内容指纹 > stem 哈希。
+  const cf = String(opts.contentFp ?? '').trim()
+  if (cf) return 'cf:' + cf
   const f = String(fp ?? '').trim()
   if (f) return 'fp:' + f
   const s = String(stem ?? '').trim()
   return 'h:' + hash32(s)
+}
+
+/**
+ * 内容指纹（cycle-40 跨源去重合并键）：sha1(normalize(stem) + '|' + normalize(options 规范序))。
+ * normalize = 去 HTML 标签与 kgimg 占位、去空白差异、小写拉丁——内容等价性判断，不是格式判断。
+ *
+ * ⚠️ 使用纪律（三原则，对应研究 21 §2）：
+ *   ① 只对「实质内容足够长」的题启用（stem 归一后 ≥ 40 字符）——短题干碰撞率高，
+ *      图推合成行禁用（'【图形推理 · cat】' 同类题干天然同文，合并会吞掉不同图）。
+ *   ② 合并 = canonical 归一 + **出处全保留**（question_source 每源一行——来源标记绝不丢）。
+ *   ③ 解析差异不覆盖：富字段合并只填空位；**解析不同版本走 analysis 多版本表**
+ *      （question_analysis，带 source 溯源——「解析有差异必须保留」是用户硬要求）。
+ */
+export function contentFingerprint(stem: any, options: any): string {
+  const norm = (t: any) => String(t ?? '')
+    .replace(/<[^>]+>/g, '')                    // 剥 HTML
+    .replace(/【图:kgimg:\/\/[^】]*】/g, '')     // 剥图占位（图片引用不入指纹）
+    .replace(/kgimg:\/\/[^】\s]*/g, '')
+    .replace(/\s+/g, '')                        // 去全部空白（含全角空格差异）
+    .toLowerCase()
+  const stemN = norm(stem)
+  // options 规范序：按 key 排序后拼值（A-D 选项顺序天然稳定，但 source 间可能有空值差异）
+  let optN = ''
+  try {
+    const parsed = typeof options === 'string' ? JSON.parse(options || '{}') : (options || {})
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      optN = Object.keys(parsed).sort().map(k => k + ':' + norm(parsed[k])).join('|')
+    } else if (Array.isArray(parsed)) {
+      optN = parsed.map((o: any) => String((o && (o.label ?? o.k ?? o.key)) || '') + ':' + norm(o && (o.text ?? o.t ?? o.html))).sort().join('|')
+    }
+  } catch { optN = norm(options) }
+  // cycle-40b：长度判据放**组合后**而非仅 stem——资料分析「材料+公式图+短问」剥图后
+  // stem 只剩 9 字（实测），但 options 内容足够区分 → 组合指纹照样唯一。
+  // 仅当组合后仍过短（<40）才放弃指纹（真·退化行：空题干/纯占位）。
+  const combined = stemN + '|' + optN
+  if (combined.replace(/\|/g, '').length < 40) return ''
+  return createHash('sha1').update(combined, 'utf-8').digest('hex').slice(0, 24)
 }
 
 /** 稳定 32-hex 哈希（sha256 前 16 位；用 node:crypto 标准库，零依赖） */
@@ -384,6 +444,31 @@ export function putQuestionSource(
          seq=excluded.seq, path=excluded.path`,
     ).run(canonicalId, sourceId, String(localKey || ''), paper, region, year, Number(seq || 0), path)
   } catch { /* 出处登记失败不阻塞整轮摄入 */ }
+}
+
+/* ══ 解析多版本（cycle-40 · 研究 21 纪律③）══ */
+
+/**
+ * 登记一条解析版本（幂等：canonical_id+source_id+local_key 唯一）。
+ * 主版本（question.analysis）由合并语义管理；本表是**全量留痕**——
+ * 不同来源的解析各存一行，删除/重建不丢（可追溯「谁说的」）。
+ */
+export function putAnalysis(
+  db: any, canonicalId: string, sourceId: string, localKey: string,
+  analysis: string, answer: string,
+): boolean {
+  if (!canonicalId || !sourceId) return false
+  const a = String(analysis ?? '').trim()
+  if (!a) return false   // 空解析不留版本（可空字段不臆造——㊲ 纪律）
+  try {
+    db.prepare(
+      `INSERT INTO question_analysis(canonical_id,source_id,local_key,analysis,answer,at)
+       VALUES(?,?,?,?,?,?)
+       ON CONFLICT(canonical_id,source_id,local_key) DO UPDATE SET
+         analysis=excluded.analysis, answer=excluded.answer, at=excluded.at`,
+    ).run(canonicalId, sourceId, String(localKey || ''), a.slice(0, 65536), String(answer || ''), new Date().toISOString())
+    return true
+  } catch { return false }
 }
 
 /* ══ 学习事件写入（cycle-38 阶段 2 · 研究 15 C7）══ */

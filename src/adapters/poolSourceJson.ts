@@ -16,7 +16,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { deriveCanonicalId, putRelation, putQuestionSource, withTx } from './poolDb.js'
+import { deriveCanonicalId, putRelation, putQuestionSource, putAnalysis, contentFingerprint, withTx } from './poolDb.js'
 import { prepareQuestionUpsert, upsertQuestionBundle } from './poolUpsert.js'
 
 /** JSON 文件安全读取（损坏/缺失 → null，绝不抛） */
@@ -104,7 +104,10 @@ export function ingestXingceAppSource(ctx: any): any {
       for (const q of qs) {
         const qid = String(q.id ?? '').trim()
         if (!qid) continue
-        const canon = deriveCanonicalId(qid, '', '', { namespace: 'xingce-app' })
+        // cycle-40：内容指纹合并键——跨源同题（与 gwy-zhenti/naoku 内容一致）归一 canonical，
+        // 出处全保留（question_source 每源一行）；解析差异走 question_analysis 多版本。
+        const cfp = contentFingerprint(q.stem, q.options)
+        const canon = deriveCanonicalId(qid, '', '', { namespace: 'xingce-app', contentFp: cfp || undefined })
         // options [{label,text,is_correct}] → {A:文本} + is_correct 推导 answer（与上游 answer 双源兜底）
         const { options, derivedAnswer } = optionsArrayToMap(q.options)
         const answer = String(q.answer ?? '').trim().toUpperCase() || derivedAnswer
@@ -128,9 +131,10 @@ export function ingestXingceAppSource(ctx: any): any {
           qid, canonicalId: canon, sourceId: 'xingce-app', localKey: String(q.id),
           module: moduleName, qtype, stem, options, answer, analysis,
           groupMaterial, images: JSON.stringify(imgs), hasImage: imgs.length ? 1 : 0,
-          paper, region: String(q.region ?? ''), year: String(q.year ?? ''),
+          paper, region: String(q.region ?? ''), year: String(q.year ?? ''), contentFp: cfp,
         }, { evidence: ev, relations }, { db, localKey: String(q.id), paper, region: String(q.region ?? ''), year: String(q.year ?? '') })
         if (r.ok) stats.questions++
+        putAnalysis(db, canon, 'xingce-app', String(q.id), String(q.analysis || ''), answer)
         stats.relations += relations.length
         if (matTitle && matBody) stats.materials++
       }
@@ -221,7 +225,8 @@ export function ingestQiuzhaoSource(ctx: any): any {
         const qid = String(q.id ?? '').trim()
         const stem = String(q.stem ?? '').trim()
         if (!qid && !stem) continue
-        const canon = deriveCanonicalId(qid, '', stem || undefined, { namespace: 'qiuzhao' })
+        const cfp = contentFingerprint(q.stem, q.options)
+        const canon = deriveCanonicalId(qid, '', stem || undefined, { namespace: 'qiuzhao', contentFp: cfp || undefined })
         const { options } = optionsArrayToMap(q.options)
         const relations: Array<{ type: any, dstKind: string, dstId: string, weight?: number }> = []
         const moduleName = String(q.module ?? '').trim()
@@ -233,9 +238,10 @@ export function ingestQiuzhaoSource(ctx: any): any {
           module: moduleName, qtype: topic,
           stem, options,
           answer: String(q.answer ?? '').trim().toUpperCase(),
-          analysis: stripKeepImg(q.analysis),
+          analysis: stripKeepImg(q.analysis), contentFp: cfp,
         }, { evidence: ev, relations }, { db, localKey: qid || name })
         if (r.ok) stats.questions++
+        putAnalysis(db, canon, 'qiuzhao-epi-bank', qid || name, String(q.analysis || ''), String(q.answer ?? '').toUpperCase())
         stats.relations += relations.length
       }
     }
@@ -261,7 +267,8 @@ export function ingestCeaSource(ctx: any): any {
       const qid = String(q.id ?? '').trim()
       const stem = stripKeepImg(q.stem)
       if (!qid && !stem) continue
-      const canon = deriveCanonicalId(qid, '', stem || undefined, { namespace: 'cea' })
+      const cfp = contentFingerprint(q.stem, q.options)
+      const canon = deriveCanonicalId(qid, '', stem || undefined, { namespace: 'cea', contentFp: cfp || undefined })
       const relations: Array<{ type: any, dstKind: string, dstId: string, weight?: number }> = []
       const moduleName = String(q.module ?? '').trim()
       if (moduleName) relations.push({ type: 'IN_MODULE', dstKind: 'module', dstId: moduleName })
@@ -272,9 +279,10 @@ export function ingestCeaSource(ctx: any): any {
         module: moduleName, qtype: sub,
         stem, options: optionsObjectToJson(q.options),
         answer: String(q.correct ?? '').trim().toUpperCase(),
-        analysis: stripKeepImg(q.analysis),
+        analysis: stripKeepImg(q.analysis), contentFp: cfp,
       }, { evidence: ev, relations }, { db, localKey: qid })
       if (r.ok) stats.questions++
+      putAnalysis(db, canon, 'civil-exam-agent', qid, String(q.analysis || ''), String(q.correct ?? '').toUpperCase())
       stats.relations += relations.length
     }
   })
