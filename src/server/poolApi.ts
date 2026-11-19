@@ -284,6 +284,35 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
         rotation: srcKeys.length > 1 ? 'source-round-robin' : 'single-source' }
     }
 
+    // cycle-40：解析多版本查询（研究 21 纪律③「解析差异必须保留」的可查化）
+    if (path === '/api/pool/analysis-versions') {
+      const id = params.get('id') || ''
+      if (!id) return { error: '缺 id 参数（canonical_id）' }
+      const db = requireDb()
+      if (!db) return { error: '统一池未就绪（先 POST /api/pool/rebuild）' }
+      try {
+        const rows = db.prepare(
+          `SELECT source_id AS sourceId, local_key AS localKey, analysis, answer, at
+           FROM question_analysis WHERE canonical_id = ? ORDER BY at DESC`,
+        ).all(id)
+        // 展示聚合：同 source+analysis 内容只保留一行（同源不同卷出处的重复解析合并展示，
+        // localKeys[] 汇总全部出处——研究 21 纪律②来源全标记在展示层不丢）
+        const byContent = new Map<string, any>()
+        for (const r of rows) {
+          const key = String(r.sourceId) + '|' + String(r.analysis || '')
+          if (byContent.has(key)) {
+            byContent.get(key).localKeys.push(r.localKey)
+          } else {
+            byContent.set(key, { sourceId: r.sourceId, localKey: r.localKey, localKeys: [r.localKey], analysis: r.analysis, answer: r.answer, at: r.at })
+          }
+        }
+        const versions = [...byContent.values()]
+        return { id, versions, count: versions.length, rawCount: rows.length }
+      } catch (e: any) {
+        return { error: '查询失败: ' + (e && e.message) }
+      }
+    }
+
     /* ── GET /api/pool/question（单题聚合视图）──
      * 端点用**查询参数**而非路径参数（`?id=`）：能力对账以 `CAPABILITIES.endpoints`
      * 的**精确路径**集合为准（`DECLARED_ENDPOINT_SET.has(path)`），

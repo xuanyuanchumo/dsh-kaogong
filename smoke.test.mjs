@@ -1651,6 +1651,14 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
           pdbD.includes('POOL_SCHEMA_VERSION = 4'),
           'schema 未升级 v4')
       }
+      // D-05：解析多版本可查端点（研究 21 纪律③可查化——运行时 + manifest 对账）
+      {
+        check('SMOKE-DEDUPE-05 解析多版本端点（analysis-versions 声明 + 运行时可达 + 聚合展示）',
+          readSrc('src/shared/manifest.ts').includes("path: '/api/pool/analysis-versions'") &&
+          readSrc('src/server/poolApi.ts').includes("/api/pool/analysis-versions") &&
+          readSrc('src/server/poolApi.ts').includes('byContent.has(key)'),
+          '端点缺声明或缺实现（影子端点）')
+      }
     }
   }
 

@@ -127,6 +127,7 @@ export const CAPABILITIES = {
     { path: '/api/pool/questions', label: '统一池多源分层抽题', consumers: ['ui:pool'] },
     { path: '/api/pool/search', label: '统一池跨源检索(去重聚合)', consumers: ['ui:pool'] },
     { path: '/api/pool/question', label: '统一池单题聚合视图', consumers: ['ui:pool'] },
+  { method: 'GET', path: '/api/pool/analysis-versions', label: '解析多版本查询', consumers: ['ui:pool', 'tool:kaogong_launch'], desc: '研究 21 纪律③：?id=<canonical_id> → {versions[{sourceId,localKey,localKeys[],analysis,answer,at}], count, rawCount}——跨源不同来源的解析各存一行可查（展示层按 source+analysis 聚合，localKeys 汇总全部卷出处）' },
     { path: '/api/pool/relations', label: '统一池关系查询', consumers: ['ui:pool'] },
     { path: '/api/pool/graph', label: '统一池关系子图', consumers: ['ui:pool'] },
     { path: '/api/pool/rebuild', label: '统一池重建(异步作业)', consumers: ['ui:pool'] },
