@@ -68,7 +68,7 @@
 
 ## 待办（按价值排序）
 
-### T-030 · awesome-dsh-plugin 收录 PR
+### T-030 · awesome-dsh-plugin 收录 PR（**用户指示暂缓**——2026-11-19「暂不T30，继续其他开发完善」）
 - 现状：合规项已全部就绪；条目 YAML 草案已写入 `docs/agents/MARKETPLACE-ENTRY.md`（category `tools`，无 `npm:` 键）。
 - 目标：向 awesome-dsh-plugin 提 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（一个 PR 一个文件；描述数字与 57 端点/6 工具/16 视图/16 仓库核对一致）。
 - 前置：仓库创建满 1 天（CI 自动查）、GitHub topic `dsh-plugin`、按 PR 当日复核。
