@@ -2958,9 +2958,31 @@
       "stdout": "=== HITL Audit (Fix-First Strategy) ===\n\n[PASS] H1: No security-sensitive operations detected\n[PASS] H2: No destructive operations detected\n[PASS] H3: All gates green, audit log present\n[PASS] H4: Gate evidence sufficient, no conflicts\n\nAll HITL audits PASSED.\n",
       "stderr": "",
       "durationMs": 753
+    },
+    {
+      "flowId": "archive-cycle-2026-11-19T16:06:58.912Z-144",
+      "script": "archive-cycle",
+      "workspace": "D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong",
+      "args": [
+        "--cycle",
+        "40"
+      ],
+      "status": "DONE",
+      "startedAt": "2026-11-19T16:06:58.912Z",
+      "cycle": "cycle-40",
+      "phase": "plan",
+      "attribution": {
+        "at": "2026-11-19T16:06:58.912Z",
+        "source": "workflow-state"
+      },
+      "endedAt": "2026-11-19T16:06:59.056Z",
+      "exitCode": 0,
+      "stdout": "Archived cycle-40 to D:\\Projects\\TraeProjects\\kaogong\\dsh-kaogong\\.cycles\\archive\\cycle-40\n  Ledger untouched (append-only hash chain, INV-9).\n",
+      "stderr": "",
+      "durationMs": 136
     }
   ],
-  "counter": 143,
+  "counter": 144,
   "watermark": {
     "evictedThrough": null,
     "evictedTotal": 0,
