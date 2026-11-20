@@ -1,4 +1,4 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.30.0
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.31.0
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
@@ -362,6 +362,12 @@ npm run test:all     # 上面两步一起跑
 ```
 
 **沙箱验证（禁主力直测）**：`node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`
+
+## 🤝 贡献
+
+欢迎 issue 与 PR。请先读 [CONTRIBUTING.md](./CONTRIBUTING.md)（gitflow 双线模型 + Conventional Commits + PR 清单）
+与 [分支策略](./docs/agents/BRANCHING-STRATEGY.md)（develop 为统一开发主线，feature/* → develop，release → main）。
+版本变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ANIC 质量流程：`.cycles/`（intent → spec → plan → G0–G3 门禁 → 归档；L4 全自主 + 人类门禁授权）。
 工程纪律与事故簿见 [CLAUDE.md](./CLAUDE.md)，Agent 开发文档见 [docs/agents/](./docs/agents/)（含 [METHODOLOGY.md](./docs/agents/METHODOLOGY.md) 适配库规范）。

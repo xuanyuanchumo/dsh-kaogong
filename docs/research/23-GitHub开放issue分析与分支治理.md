@@ -1,14 +1,14 @@
 # 23 · GitHub 开放 issues 分析 + 分支治理落地（gitflow PR #7）
 
 > dsh-kaogong 研究文档 · cycle-42b · 目标驱动（GitHub issues + 分支合并 + 规范文档）
-> 状态：**✅ 已实施**
+> 状态：**⚠️ 部分实施**（issue #6 已修；#5 待补练习卡透传/守卫；见 §7 评审修正）
 
 ## 1. GitHub 开放 issues 取证（2026-11-20，3 个）
 
 | # | 标题 | 是否仍复现 | 处置 |
 |---|---|---|---|
 | **#6** | Windows 题库管理安装/删除/浏览全报「路径越界」 | ✅ **仍复现**（本地 6 组边界实测 4/6，子路径与混合分隔符失败） | **已修**（isInside → path.relative）+ SMOKE-ISSUE6 守卫 + issue 留说明，随 PR #7 |
-| **#5** | 练习链路单源锁死（xingcezhenti）+ 分布偏斜 | ❌ **不再复现**（cycle-34~40 统一池已解决） | issue 留状态说明（10 题覆盖 4 源、4 题多源聚合），待 maintainer 验收关闭 |
+| **#5** | 练习链路单源锁死 + 分布偏斜 | ⚠️ **部分解决**：①②（可达集/脱钩）在**池就绪时**消除；③五维贯通本轮才补练习卡透传；守卫 POOL-03/04 本轮新增 | issue 已留**更正**评论（撤回「大部分落地」等失实表述） |
 | **#4** | 上传图片搜题（资料分析/图形推理） | ✅ 仍为空白（阶段 4 未做） | 不越界实现；依赖 `ctx.llm` inject + ImageBlock + 图推桥接（ROADMAP 前置缺口 C5 已标注） |
 
 ## 2. issue #6 修复要点
@@ -76,3 +76,16 @@ PR 从 `develop` 直连 `main`（非 release bridge 权宜）。
 ---
 
 *本文结论基于 2026-11-20 实测：GitHub 3 个开放 issue 逐条分析、isInside 6 组边界、9 分支祖先验证、无共同祖先 PR 拒绝与血缘修复、PR #7 创建。*
+
+## 7. 智能团队评审修正（cycle-43 · 4 名独立评审员）
+
+| 评审员 | 结论 | 关键发现与处置 |
+|---|---|---|
+| reviewer-code | PASS | F3/F4：`!!rel` 使「同路径大小写不同」假阴性 → 改 `rel === ''`；守卫扩到 13 组（含 UNC/末尾分隔符/大小写）+ 源码静态断言防 dist 陈旧 |
+| reviewer-git | CHANGES-REQUESTED | **P0**：合并取 develop 丢了 main 的 `.gitignore` 规则（`.cycles/*`）→ 已恢复 + 取消 384 个工件/`progress.json`/`cordis.local.yml` 跟踪；文档自相矛盾/数字/定性（「gitflow 标准」→「一次性血缘嫁接」）已校准；补 release/回滚 runbook |
+| reviewer-issues | CHANGES-REQUESTED | `source`/`kadian` 过滤越界（补足路径忽略）→ 已修 + `SMOKE-POOL-03` 守卫；练习卡未透传 `dims` → 已补；1987 孤儿出处 → rebuild 自动清理 + `SMOKE-POOL-02b`；#5 评论措辞已更正 |
+| reviewer-release | CHANGES-REQUESTED | **P0** 版本未 bump → 已 bump 1.31.0 三锚点 + CHANGELOG；无回滚 runbook → 已补；质量门实测 429/429 ×2、66/66、eval 16/16、账本哈希链完整（无 stale cache） |
+
+**数据事实补充**：13 个跨 canonical 重复 qid（如 `q:10057` 与 `q:xingce-app:10057` 同 qid）——
+是**命名空间隔离设计**的已知取舍（研究 16：防跨源撞库误合并），非脏数据；量级 13/86454（0.015%），
+在 `SMOKE-POOL-02b` 中按「孤儿出处=0」不变量守护，qid 重复作为设计说明记录。

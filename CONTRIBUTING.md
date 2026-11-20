@@ -41,7 +41,9 @@ cycle(41): IMG-04 确定性配额 + 门禁闭环（eval 16/16 · G0-G3 全绿）
 1. 目标分支：`feature/*` → `develop`（默认）；hotfix → `main` + `develop`。
 2. 标题遵循提交规范；描述使用 [PR 模板](./.github/PULL_REQUEST_TEMPLATE.md)，逐项填写不删节。
 3. 合并前置：类型门 + 构建门 + `npm run test:all` 全绿；ANIC 16 维评估与门禁 PASS（本项目质量基线）。
-4.  squash 合并仅用于 release（develop → main）；feature → develop 用普通 merge 保留 cycle 轨迹。
+4.  **合并方式**：feature PR（feature/* → develop）用 **squash**（develop 线性可读）；release PR（develop → main）
+    用 **merge commit（--no-ff）**——squash release 会让 main 产生 develop 不含的提交，导致下次 PR 血缘断裂。
+    若坚持 squash release，**发布后必须把 main 回灌 develop**（详见 BRANCHING-STRATEGY §6）。
 5. 自合并 PR 也需走完整清单——机器人不是免检理由。
 
 ## 四、本地开发纪律
