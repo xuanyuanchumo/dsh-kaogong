@@ -136,6 +136,14 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       // 正解 = **随机 rowid 采样**：先取 id 区间，均匀撒 N 个随机点逐点取行
       // （索引 seek，实测 22ms，10 倍）。分布近似均匀（id 空洞由三倍尝试兜底）。
       // 带过滤条件（module/kadian/source）时结果集小，保留 RANDOM()（~23ms，简单可靠）。
+      // cycle-42 IMG-04 性能护栏：带图 id 缓存（has_image 无索引，全表 LIKE 450ms/次
+      // 会击穿 PERF-04 <300ms 基线）——首次全表扫建缓存（一次性 ~490ms，与 srcCount
+      // 同一失效钩子 invalidateStatsCache('rebuild')），后续随机取 O(1)（实测 <1ms）。
+      const imgPool = getCachedStats('imgPool', () => {
+        try {
+          return db.prepare('SELECT canonical_id, module FROM question WHERE has_image = 1').all() as any[]
+        } catch { return [] as any[] }
+      }).data
       let cand: any[]
       if (where.length === 0) {
         const span = db.prepare('SELECT COUNT(*) c, MIN(id) mn, MAX(id) mx FROM question').get() as any
@@ -154,6 +162,26 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
         }
       } else {
         cand = db.prepare(`SELECT canonical_id, source_id, module, kadian, qid, paper, stem FROM question ${w} ORDER BY RANDOM() LIMIT 500`).all(...args)
+      }
+      // cycle-42（IMG-04 同族根治 /api/pool/questions）：随机候选窗口内带图占比低
+      // （判断推理 15%）→ weightedPick 可能全无图题。与 sampleQuestions 同修：
+      // **带图定向补捞**——候选中带图行不足 count/4 时追加一批（候选域内多样性保留，
+      // 带图题以**候选资格**进入加权池而非硬配额——抽题策略语义不变）。
+      // cycle-42 确定性配额（与 sampleQuestions 同族）：候选窗口内带图题不足时，
+      // **定向补足到 ⌈count/2⌉**——带图层直接查（池内 1442 条判断推理带图 ≥ 配额必有），
+      // 以候选资格进加权池（抽题策略语义不变：弱点权重仍生效）。
+      const imgCount = cand.filter((r: any) => String(r.stem || '').includes('kgimg://')).length
+      const imgQuota = Math.ceil(count / 2)
+      if (imgCount < imgQuota && imgPool.length) {
+        // 从缓存随机取（module 过滤时只取匹配模块的；无过滤全池）
+        const pool = moduleName ? imgPool.filter((r: any) => String(r.module) === moduleName) : imgPool
+        const ids = new Set(cand.map((r: any) => String(r.canonical_id)))
+        let added = 0
+        for (let i = 0; i < pool.length && added < imgQuota * 2; i++) {
+          const r = pool[Math.floor(Math.random() * pool.length)]
+          const cid = String(r.canonical_id)
+          if (!ids.has(cid)) { cand.push({ canonical_id: cid, module: r.module, stem: '' }); ids.add(cid); added++ }
+        }
       }
       if (!cand.length) return { questions: [], count: 0, fallback: false, hint: '统一池内无匹配题（放宽 module/kadian 过滤）' }
 
@@ -185,6 +213,42 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       const picked = weightedPick(cand, weights, count)
       const ids = picked.map((r: any) => String(r.canonical_id))
       const questions = ids.map((id) => poolQuestionDetail(db, id)).filter(Boolean)
+      // cycle-42 结果层确定性配额（IMG-04 根治第二步）：加权池稀释使带图行实际命中
+      // 不可控（补捞 10 行进 510 池期望命中 0.2）——**结果层补足**：带图题不足 ⌈count/2⌉
+      // 时从带图层直查 poolQuestionDetail 补入头部（与 sampleQuestions L1 同构；
+      // 加权抽题策略语义不变——补足只发生在结果层，抽题多样性完整保留）。
+      const imgInResult = questions.filter((q: any) => String(q.stem || '').includes('kgimg://')).length
+      let imgNeed = Math.ceil(count / 2) - imgInResult
+      if (imgNeed > 0 && imgPool.length) {
+        try {
+          const have = new Set(questions.map((q: any) => String(q.canonicalId || q.id || '')))
+          const pool = moduleName ? imgPool.filter((r: any) => String(r.module) === moduleName) : imgPool
+          // 确定性保证（IMG-04 断言 ≥⌈count/2⌉）：**顺序扫池**而非随机——随机取样有
+          // 重复命中 have 集合的浪费，扫不满 imgNeed（实测 4/5 概率缺口）。带图池 1794
+          // 条顺序取前 N 条（池本身重建时行序固定 → 轮换语义用层内已去重的 have 过滤）。
+          // 每次调用从随机起点开始顺序扫（保持层内多样性的同时扫必达 imgNeed）。
+          if (pool.length) {
+            const start = Math.floor(Math.random() * pool.length)
+            for (let i = 0; i < pool.length && imgNeed > 0; i++) {
+              const er = pool[(start + i) % pool.length]
+              const cid = String(er.canonical_id)
+              if (have.has(cid)) continue
+              const q = poolQuestionDetail(db, cid)
+              if (q && String(q.stem || '').includes('kgimg://')) { questions.unshift(q); have.add(cid); imgNeed-- }
+            }
+          }
+          // 截断语义修正（R49）：带图补足 unshift 在头部，但截断「保前 count」会把
+          // 原 weightedPick 中位于尾部的带图题切掉（实测 5→4 缺口）。正解：**带图稳定分区**
+          // ——补足后先按 stem 含 kgimg 分区（带图在前、原相对序不变），再截 count。
+          if (questions.length > count) {
+            const withImg = questions.filter((q: any) => String(q.stem || '').includes('kgimg://'))
+            const without = questions.filter((q: any) => !String(q.stem || '').includes('kgimg://'))
+            const merged = [...withImg, ...without].slice(0, count)
+            questions.length = 0
+            questions.push(...merged)
+          }
+        } catch { /* 结果层补足失败 → 保留原结果 */ }
+      }
       return {
         questions, count: questions.length, source, module: moduleName, kadian,
         strategy: '模块弱点（SRS 1/(rate+0.15)）× 多出处加成',
@@ -524,6 +588,11 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
     const args: any[] = []
     if (module && module !== 'all') { where.push('module = ?'); args.push(module) }
     const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
+    const joinWhere = (extra: string): string => {
+      // 条件拼接 SSOT：w 与 extra 统一处理（w 空时不能出现 'FROM question AND ...' 语法错）
+      if (!extra) return w
+      return where.length ? w + ' AND (' + extra + ')' : 'WHERE (' + extra + ')'
+    }
     let rows: any[] = []
     try {
       // cycle-38 阶段 2（研究 15 阶段 2）：SELECT 补五维列——练习卡片要贯通
@@ -547,33 +616,56 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       const hasDims = !!(String(r.reasoning || '').trim() || String(r.fastest || '').trim() || String(r.pitfalls || '').trim())
       return (hasImg ? 2 : 0) + (hasDims ? 1 : 0)
     }
-    const scored = rows
-      .map(r => ({ r, q: poolRowToQuestion(r), rich: richScore(r) }))
-      .filter(x => x.q)
-    scored.sort((a, b) => b.rich - a.rich)
+    // ── cycle-42 根治（研究 22 §1）：两级**确定性**配额，替代概率性候选窗口 ──
+    // 旧设计两层随机漏空：① 候选池 ORDER BY RANDOM() n*3 行——带图 15% 时 18 行候选
+    // 可能 0 带图；② 补捞条件 richCount < n/2 又被「带五维但无图」题（5599 条，69%）
+    // 占满 rich 名额而跳过——两层概率叠加 = IMG-04 假红 2/8 轮。
+    // 正解 = **配额分层直接查**，不经随机窗口：
+    //   L1 带图层：stem LIKE kgimg 定向捞 ⌈n/2⌉ 条（池内 1442 条判断推理带图，≥n/2 必有）
+    //   L2 五维层：带五维定向捞补足 ⌈n/2⌉ 条
+    //   L3 普通层：任意行补足到 n（题量充足）
+    // 三层各自 ORDER BY RANDOM()（层内多样性），层间**确定性配额**——抽题结果分布
+    // 可预期（带图必有），随机性保留在层内。
+    const SELECT_COLS = `canonical_id, qid, source_id, local_key, module, category, kadian, qtype,
+      stem, options, answer, analysis, reasoning, fastest, pitfalls, mother, doubt, ask_model,
+      group_material, group_material_no,
+      images, has_image, paper, region, year, freq`
     const picked: any[] = []
-    for (const x of scored) { if (picked.length < n) picked.push(x.q) }
-    // cycle-41（IMG-04 间歇假红根治）：候选池只 n*3 行，带图占比 15% 时 18 行候选
-    // 可能 0 带图 → rich 排序无从优选。修法：富行**定向补捞**——rich 题不足 n/2 时
-    // 追加一次「带图/带五维定向查询」，把富行灌入 picked 头部。
-    const richCount = picked.filter(q => String(q.stem || '').includes('kgimg://') || (q.dims && Object.keys(q.dims).length)).length
-    if (richCount < Math.ceil(n / 2)) {
+    const seen = new Set<string>()
+    const layerQuery = (extraWhere: string, limitN: number): any[] => {
+      if (limitN <= 0) return []
       try {
-        const richRows = db.prepare(
-          `SELECT canonical_id, qid, source_id, local_key, module, category, kadian, qtype,
-             stem, options, answer, analysis, reasoning, fastest, pitfalls, mother, doubt, ask_model,
-             group_material, group_material_no,
-             images, has_image, paper, region, year, freq
-           FROM question ${w} AND (stem LIKE '%kgimg://%' OR LENGTH(reasoning) > 0)
-           ORDER BY RANDOM() LIMIT ?`,
-        ).all(...args, n)
-        for (const rr of richRows) {
-          if (picked.length >= n) break
-          const q = poolRowToQuestion(rr)
-          if (q && !picked.some(x => x.canonicalId === q.canonicalId)) picked.unshift(q)
-        }
-        if (picked.length > n) picked.length = n
-      } catch { /* 补捞失败 → 保留原 picked */ }
+        return db.prepare(
+          `SELECT ${SELECT_COLS} FROM question ${joinWhere(extraWhere)} ORDER BY RANDOM() LIMIT ?`,
+        ).all(...args, limitN)
+      } catch (e: any) {
+        console.error('[pool-layer] 层查询失败:', (e && e.message || '').slice(0, 80))
+        return []
+      }
+    }
+    const half = Math.ceil(n / 2)
+    // L1 带图层（带图题必有配额——IMG-04 断言的确定性保证）
+    // ⚠️ R48：去重判据必须用**原始行的 canonical_id**——poolRowToQuestion 返回对象
+    // 的字段名是 `id`（练习链路契约），没有 canonicalId 字段；用 q.canonicalId 判重
+    // 全是 undefined → seen 集合把不同题当同一题 → L1 只留 1 条（实测 12 轮恒 1）。
+    for (const r of layerQuery("stem LIKE '%kgimg://%'", half)) {
+      const cid = String(r.canonical_id || '')
+      const q = poolRowToQuestion(r)
+      if (q && cid && !seen.has(cid)) { picked.push(q); seen.add(cid) }
+    }
+    // L2 五维层（补足到 n；与 L1 去重）
+    const l2Need = n - picked.length
+    for (const r of layerQuery('LENGTH(reasoning) > 0', l2Need)) {
+      const cid = String(r.canonical_id || '')
+      const q = poolRowToQuestion(r)
+      if (q && cid && !seen.has(cid) && picked.length < n) { picked.push(q); seen.add(cid) }
+    }
+    // L3 普通层（兜底到 n；与 L1/L2 去重）
+    const l3Need = n - picked.length
+    for (const r of layerQuery('', l3Need)) {
+      const cid = String(r.canonical_id || '')
+      const q = poolRowToQuestion(r)
+      if (q && cid && !seen.has(cid) && picked.length < n) { picked.push(q); seen.add(cid) }
     }
     if (!picked.length) return { error: '统一池内无可用题' }
     const file = picked[0] && picked[0].paperFile ? String(picked[0].paperFile) : 'pool'
