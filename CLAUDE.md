@@ -266,3 +266,8 @@
 - **（桌面端全量重建走宿主端点）**：`POST /kaogong/api/pool/rebuild`（宿主进程内复用连接，无跨进程锁冲突）；外部进程 rebuild 会 EPERM（宿主持有句柄是**常态**不是异常）。
 
 - **（阶段 4 前置缺口 C5）**：研究 11 的 `ctx.llm` 方案落地时，`src/host/index.ts` 的 `export const inject = ['tools']` **必须扩为 `['tools','llm']`**——DSH `ctx.inject` 语义：未声明的服务在 `ctx.get` 中取不到。不修则第一行代码就失败。
+
+## cycle-44 事故与教训（v1.31.0 前端组件化：三态/chips 基建）
+- **（三态/chips 单一事实源）**：视图层三态（kg-load ~10 处/红色错误 ~6 处/灰空态 ~10 处）与 chips（5 套手写）收敛为 ui-kit 基建族 **KgLoad/KgErr/KgEmpty/KgChips**（零 hook 纯组件——R9 安全：不改变调用方 hook 数）。守卫 C44-01..03（基建在 ui-kit/视图零手写 kg-load/消费面 ≥4 视图）。**规矩：三态样式口径全仓只有 ui-kit 一处；新增视图禁止再手写 className="kg-load"。**
+- **（组件不做场景推断）**：KgChips 的 active 态与配色由调用方声明（style 覆盖），KgEmpty 只渲染文案——C31 教训在组件契约的推广：**共享组件的每条分支要逐消费场景推演，场景语义留在调用方**。
+- **（宿主浏览器验证的现实边界）**：Desktop 载体的 GUI 凭据经父进程 IPC 交付（connection.authenticatedUrl 签名），独立浏览器实例天然拿不到 token（"dsh web authentication required" 属预期安全行为）——**浏览器级验证走 render.test（真实 React 18 + 真实 client.js 集成）+「宿主 link: 指向开发仓 → dist 含新符号」两段证据链**，不强行自动化登录。
