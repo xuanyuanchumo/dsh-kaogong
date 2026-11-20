@@ -3,7 +3,7 @@
  * 模考 / 真题卷库 / 专题 / 申论评改。
  */
 
-import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from '../ui-kit.js'
+import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
 // cycle-13 专题枢纽：行测刷题 / 图形推理 / 深度题库 三个既有视图嵌入本页分区（R9：h() 挂载）
 import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
 // cycle-18：专题枢纽「📖 方法论」分区直接挂花生十三体系（语料由「📦 题库管理」安装到数据根）。
@@ -119,7 +119,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       // ── 分支 2：考试中 ──
       if (exam) {
         const q = exam.questions[idx]
-        if (!q) return <div className="kg-load">{'题目加载异常'}</div>
+        if (!q) return <KgLoad label="题目加载异常" />
         {/* cycle-27：四区划分收敛进 QwPaperMode（区1 材料区·无则隐藏 / 区2 题目区 / 区3 切换区 / 区4 答题卡区）。
             QwZoomHost 整卡图片可放大；倒计时/交卷属宿主职责保留在容器外。 */}
         return (
@@ -313,7 +313,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       }, [openId, api])
 
       if (openId) {
-        if (!detail) return <div className="kg-load"><div className="kg-spin" />{'加载试卷…'}</div>
+        if (!detail) return <KgLoad label="加载试卷…" />
         return (
           <div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
@@ -776,7 +776,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
         </Card>)
 
       const overview = !tree
-        ? <div className="kg-load"><div className="kg-spin" />{'加载专题…'}</div>
+        ? <KgLoad label="加载专题…" />
         : <div>{head}{entriesCard}{...topicCards}</div>
 
       // 分区包裹：非当前分区 display:none 隐藏（保持挂载 → 状态不丢）

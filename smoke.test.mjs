@@ -2503,6 +2503,23 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
 
       return (pv.match(/collapsedMats/g) || []).length >= 6 && (pv.match(/toggleMat/g) || []).length >= 4 && /jumpToMaterial/.test(pv) })())
 
+  // ═══ C44（cycle-44 前端组件化）：三态/chips 基建组件单一事实源 ═══
+  // 组件定义在 ui-kit（C24-03 允许的唯一基建位置）；视图只消费不重复实现。
+  const kitSrc44 = fs.readFileSync('src/client/ui-kit.tsx', 'utf-8')
+  check('C44-01 三态/chips 基建组件在 ui-kit 定义（KgLoad/KgErr/KgEmpty/KgChips）',
+    /export function KgLoad/.test(kitSrc44) && /export function KgErr/.test(kitSrc44) &&
+    /export function KgEmpty/.test(kitSrc44) && /export function KgChips/.test(kitSrc44),
+    '基建组件缺失')
+  {
+    const viewFiles44 = ['obs-view', 'pool-view', 'repos-view', 'study-view', 'papers-view', 'huasheng13-view']
+      .map(n => 'src/client/views/' + n + '.tsx')
+    // 视图层不得再手写 kg-load 加载块（基建组件替代；kg-load 类名只允许出现在 ui-kit 与 client 壳）
+    const residual = viewFiles44.filter(f => /className="kg-load"|className: 'kg-load'/.test(fs.readFileSync(f, 'utf-8')))
+    check('C44-02 视图层零手写 kg-load（加载态走 KgLoad 基建）', residual.length === 0, residual.join(','))
+    const consumers44 = viewFiles44.filter(f => /KgLoad|KgErr|KgEmpty|KgChips/.test(fs.readFileSync(f, 'utf-8')))
+    check('C44-03 基建组件至少被 4 个视图消费（组件化不是摆设）', consumers44.length >= 4, consumers44.length + ' 个视图消费')
+  }
+
 }
 
 // ── 汇总 ──

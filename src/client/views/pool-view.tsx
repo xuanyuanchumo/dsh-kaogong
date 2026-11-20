@@ -17,7 +17,7 @@
  *   · props 窄口径：`{ api, initialModule? }`
  *   · 所有接口字段缺失即降级，绝不抛错进 ErrorBoundary
  */
-import { h, React, entries, Stat, Card, KV_TAG, KV_BTN } from '../ui-kit.js'
+import { h, React, entries, Stat, Card, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
 
 /** props（窄口径——父层只给 api 与可选初始模块） */
 interface NativePoolViewProps {
@@ -331,8 +331,9 @@ export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
   }, [api])
 
   // ⚠️ 早退在所有 hook 之后（cycle-24 C24-2）
+  // cycle-44：加载态走 ui-kit 基建组件（早退位置/条件零变化）
   if (st === null && !err) {
-    return h('div', { className: 'kg-load', style: { flex: 1 } }, h('div', { className: 'kg-spin', role: 'status' }))
+    return h(KgLoad, { flex: true })
   }
 
   const stats = st && st.stats ? st.stats : null

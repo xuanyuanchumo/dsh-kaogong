@@ -30,7 +30,7 @@
  *  ⑥ 配色只用既有 CSS 变量 + 接口返回的模块 color，不硬编码新色板。
  *  ⑦ 响应式：卡片网格 repeat(auto-fit,minmax(...)) 自适应（<720px 自然单列，>=720px 两栏）。
  */
-import { h, React, Stat, Bar, Card, KV_TAG, KV_BTN, OptionRow } from '../ui-kit.js';
+import { h, React, Stat, Bar, Card, KV_TAG, KV_BTN, OptionRow, KgLoad } from '../ui-kit.js';
 import { hs13Num, Hs13Markdown, Hs13Snippet } from './huasheng13-md.js';
 /* ═══════════════════ 常量（全部 hs13 前缀） ═══════════════════ */
 /** 五分区定义（顺序即展示顺序；label 带 emoji 与既有导航口径一致） */
@@ -358,7 +358,7 @@ function Hs13DocReader(props) {
         return <Card title={'📄 ' + file}><div style={{ fontSize: 12, color: '#b45309' }}>{'⚠ ' + err}</div><div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>请到「📦 题库管理」安装或重装必选包 huasheng13</div></Card>;
     }
     if (!doc) {
-        return <div className="kg-load" style={{ padding: 30 }}><div className="kg-spin" />读取语料…</div>;
+        return <KgLoad label="读取语料…" pad={30} />;
     }
     const markdown = String(doc.markdown || '');
     return (
@@ -732,7 +732,7 @@ function Hs13Practice(props) {
             {!items.length && !err && data
                 ? <div style={{ fontSize: 12, color: '#64748b', padding: '14px 0' }}>该语料没有可抽取的练习题，试试其他练习集。</div>
                 : null}
-            {!data && !err ? <div className="kg-load" style={{ padding: 26 }}><div className="kg-spin" />抽取练习题…</div> : null}
+            {!data && !err ? <KgLoad label="抽取练习题…" pad={26} /> : null}
             {cur ? <Card title={'✏️ ' + String(cur.title || '练习 ' + (idx + 1))}>
                 {/* 题头元信息 */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 9 }}>
@@ -857,7 +857,7 @@ function Hs13Trace(props) {
                 {tr && tr.at ? <span style={{ fontSize: 10, color: '#94a3b8' }}>{'采样 ' + hs13FmtTime(tr.at)}</span> : null}
             </div>
             {err ? <div style={{ fontSize: 11.5, color: '#b45309', marginBottom: 10 }}>{'⚠ ' + err}</div> : null}
-            {!tr && !err ? <div className="kg-load" style={{ padding: 26 }}><div className="kg-spin" />读取链路追踪…</div> : null}
+            {!tr && !err ? <KgLoad label="读取链路追踪…" pad={26} /> : null}
             {/* 量化卡 */}
             {tr ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, marginBottom: 14 }}>
                 <Stat v={totalHits} l="端点总命中" color="#6366f1" />
