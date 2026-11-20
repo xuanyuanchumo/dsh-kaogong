@@ -382,7 +382,7 @@ ANIC 质量流程：`.cycles/`（intent → spec → plan → G0–G3 门禁 →
 
 | 渠道 | 入口 | 备注 |
 |---|---|---|
-| **插件市场** | [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)（`category: usage`） | 条目声明 `dsh.bundle`，`dsh plugin add` 可装；收录由维护者评审 |
+| **插件市场** | [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)（已收录，`category: tools`） | 条目声明 `dsh.bundle`，`dsh plugin add` 可装；收录由维护者评审 |
 | **npm** | [`npm i dsh-kaogong`](https://www.npmjs.com/package/dsh-kaogong) | 预构建安装，免 `allowBuilds` 构建授权 |
 | **GitHub** | [xuanyuanchumo/dsh-kaogong](https://github.com/xuanyuanchumo/dsh-kaogong)（topic `dsh-plugin`） | 源码安装 / issue 反馈 |
 | **市场卡片** | `icon-180.png`（GitHub 托管位图）+ `screenshots.json`（4 图） | 符合市场图标与截图规范 |
