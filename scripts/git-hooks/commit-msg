@@ -1,0 +1,5 @@
+#!/bin/sh
+# git commit-msg 钩子包装器 —— 提交信息格式门禁（BL-PROC-02）
+# 为什么用 sh 包装：git 在 Windows 上通过 sh 执行钩子，直接执行无扩展名脚本会 Permission denied。
+# 包装器只负责定位 node 并转交给 commit-msg.mjs，逻辑全部在 .mjs 里（可单测、可复用）。
+exec node "$(dirname "$0")/commit-msg.mjs" "$@"

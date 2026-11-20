@@ -353,13 +353,13 @@ src/
 
 ```bash
 npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 17 模块为宿主单 combo
-node smoke.test.mjs  # 350 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
+node smoke.test.mjs  # 437 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
                      # 三布局/流动粒子/白盒三件套/题库管理 R-P-01..06/
                      # 方法论 HS13-01..10 六端点+降级语义+跨 ws 隔离/
                      # 工具展示契约 C29-01..03（presentCall/presentResult 6 工具全接线）/
                      # 图谱子图 C29-04..07（neighborhood+impact 消费闭环）/
                      # 打包卫生 R28: bundle patch 与随包模板必须入包、语料与调试 overlay 不得入包）
-node render.test.mjs # 59 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
+node render.test.mjs # 66 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
                      # 含 C18-01..08 方法论五分区 + 专题枢纽锚点 + 白盒链路卡 + C29 子图链）
 npm run test:all     # 上面两步一起跑
 ```
@@ -390,7 +390,7 @@ ANIC 质量流程：`.cycles/`（intent → spec → plan → G0–G3 门禁 →
 **能力事实（维护者可对代码核对）**：**78** 个 HTTP 端点 · **6** 个宿主工具 · **16** 个视图 ·
 **16** 个上游仓库（按需安装）· 统一题库池 **86,454** 题 / **229,732** 出处行 / **141,121** 解析版本 ·
 测试 **smoke 437 / render 66**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
-与 `.kaogong.db` 实测得出，不随文案改动。
+与 `docs/facts.json`（文档事实源，`node scripts/docs/gen-facts.mjs` 自动生成）实测得出，不随文案改动。
 
 ## ⚖️ 许可与免责
 

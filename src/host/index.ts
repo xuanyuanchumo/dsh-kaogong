@@ -18,7 +18,15 @@ import { CAPABILITIES } from '../shared/manifest.js'
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
-const PREFERRED_PORT = 8400
+// KG_PORT（cycle-44 测试隔离）：端口是运行期事实，禁止硬编码——
+// 默认 8400 保持兼容；Loader 测试设 KG_PORT=184xx 即可与主力 8400-8404 / smoke 8495 完全隔离，
+// 避免 adopt 到主力实例造成「测的其实是别人服务」的假阳性（与 §路径四级解析同一条纪律）。
+// 边界（reviewer-code 实测）：startServer 派生 +0..+4 五个端口，故上限 65531；非法值一律回退 8400，
+// 不静默接受负数/小数/超范围，也不把 `12abc` 这类拼写错误悄悄吞成默认值之外的怪值。
+const KG_PORT_RAW = Number(process.env.KG_PORT)
+const PREFERRED_PORT = Number.isInteger(KG_PORT_RAW) && KG_PORT_RAW >= 1 && KG_PORT_RAW <= 65531
+  ? KG_PORT_RAW
+  : 8400
 const MOUNT_PATH = '/kaogong'   // 宿主同源路由前缀（与 client 半的契约）
 const runtime = { port: null, server: null, adopted: false, boot: 'pending', tools: 0, mounted: false }
 

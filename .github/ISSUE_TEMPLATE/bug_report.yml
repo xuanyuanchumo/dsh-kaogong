@@ -1,0 +1,115 @@
+name: 🐞 Bug 报告
+description: 报告一个可复现的缺陷。请尽量填写环境矩阵——它能极大缩短定位时间。
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。**请先确认**：
+        1. 已搜索现有 issue（含已关闭的），避免重复
+        2. 已尝试「设置 → 插件」里对 dsh-kaogong 做一次 disable → enable（热重载）
+
+        本项目历史上多次出现「测试全绿但真实环境失效」（如 issue #3、#6），
+        所以**环境矩阵必填**——它是区分「功能存在」与「功能可用」的唯一依据。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象
+      description: 你看到了什么？越具体越好（错误文案、界面表现、控制台报错）
+      placeholder: 点击「📦 题库管理」的「安装必选包」后，按钮一直转圈，控制台报 path 越界
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你认为应该发生什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 从干净状态开始，逐步描述（编号）
+      placeholder: |
+        1. 全新安装 dsh-kaogong@1.31.0
+        2. 打开「📦 题库管理」
+        3. 点「安装必选包」
+        4. 观察：按钮转圈不结束
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: dsh-kaogong 版本
+      description: 插件管理页可见，或运行 `npm view dsh-kaogong version`
+      placeholder: "1.31.0"
+    validations:
+      required: true
+
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 宿主版本
+      description: 关于页可见。本项目声明范围 `>=0.2.0-rc.2 <0.4.0-0`
+      placeholder: "0.2.1-rc.5"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: "Windows 11 23H2 / macOS 14.4 / Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: checkbox
+    id: profile
+    attributes:
+      label: 是否在沙箱（独立 profile）中复现？
+      description: 沙箱 profile 与主力 profile 的插件/数据是隔离的；沙箱能复现说明是插件本身问题
+      options:
+        - label: 是，在独立 profile 中复现
+        - label: 否，只能在主力 profile 中复现
+
+  - type: input
+    id: data-root
+    attributes:
+      label: 数据根路径
+      description: 题库/进度所在目录。默认 `~/.dsh/kaogong/`；可用 `KG_DATA_DIR` 或 `KG_REPOS_DIR` 覆盖
+      placeholder: "~/.dsh/kaogong"
+
+  - type: dropdown
+    id: repos-installed
+    attributes:
+      label: 已安装的题库仓库
+      description: 在「📦 题库管理」勾选实际已装的（多选请在此说明）
+      multiple: true
+      options:
+        - xingcezhenti（行测真题）
+        - gwy-zhenti（真题卷）
+        - GongkaoNaoku（深度题库）
+        - gk-tuxing（图形推理）
+        - huasheng13（方法论）
+        - kaogong-skill
+        - 其他（在下方补充）
+        - 未安装任何仓库
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图
+      description: 控制台报错、白盒面板的异常信息、界面截图（可直接粘贴图片）
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充说明
+      description: 任何你认为相关的信息（最近的升级、改过配置、多工作区等）

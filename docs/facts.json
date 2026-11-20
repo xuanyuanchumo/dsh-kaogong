@@ -1,0 +1,23 @@
+{
+  "_comment": "文档事实源（自动生成，勿手改）。生成：node scripts/docs/gen-facts.mjs",
+  "_source": "dist/shared/manifest.js（运行时真实值）+ docs/facts.run.json（测试运行态通过数）",
+  "_generatedAt": "2026-11-20 10:26:42",
+  "version": "1.31.0",
+  "capabilities": {
+    "endpoints": 78,
+    "tools": 6,
+    "views": 16,
+    "repos": 16
+  },
+  "assertions": {
+    "smoke": 437,
+    "render": 66,
+    "loader": 17,
+    "_static": {
+      "smoke": 454,
+      "render": 65,
+      "loader": 11
+    },
+    "_note": "smoke/render/loader 为运行态通过数（取自 facts.run.json）；_static 为源码静态调用点数（含条件分支）。"
+  }
+}

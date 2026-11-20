@@ -1,0 +1,85 @@
+name: ✨ 功能建议
+description: 提出新能力或改进建议。带使用场景的建议更容易被采纳。
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢建议。本项目坚持「**功能存在 ≠ 功能可用**」——所以请重点描述**使用场景**，
+        而不只是功能名称。历史上 issue #3（补录搜索）与 #6（Windows 全功能失效）
+        都是因为场景描述具体，才能定位到真实根因。
+
+        提交前请先看 [BACKLOG.md](https://github.com/xuanyuanchumo/dsh-kaogong/blob/main/docs/agents/BACKLOG.md)，
+        确认不是已登记项。
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用场景（最重要的部分）
+      description: 你在做什么的时候感到不便？描述真实场景而不是抽象需求
+      placeholder: |
+        平时刷纸质卷，看到一道行测资料分析题，想在插件里找到原题和解析。
+        现在只能手打关键词搜，但图里的表格数据搜不出来。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的解决方式
+      description: 你希望它怎么工作？（不必考虑技术实现）
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你考虑过的替代方案
+      description: 现在怎么绕过这个问题的？
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及的模块
+      multiple: true
+      options:
+        - 题库管理（安装/更新/删除）
+        - 专题刷题
+        - 真题卷（答题/学习/全卷模式）
+        - 深度题库（五维标注）
+        - 图形推理
+        - 方法论（花生十三）
+        - 错题本 / SRS
+        - 学习计划 / 排程
+        - 知识图谱
+        - 白盒可观测面板
+        - AI 工具（6 个）
+        - 其他
+
+  - type: textarea
+    id: upstream
+    attributes:
+      label: 上游数据源线索（可选）
+      description: 如果知道相关数据在上游哪个仓库、用什么格式，请写出——这能大幅降低研究成本
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 你认为的优先级
+      options:
+        - P0 · 阻断使用
+        - P1 · 明显影响体验
+        - P2 · 有更好，没有也能用
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索现有 issue（含已关闭的），确认不是重复
+          required: true
+        - label: 我已查看 BACKLOG.md，确认不是已登记项
+          required: true

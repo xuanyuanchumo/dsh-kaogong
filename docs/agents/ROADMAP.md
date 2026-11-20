@@ -13,8 +13,8 @@
 | **内核边界** | 六不变量**已机器化**：`SMOKE-KERNEL-01..06b`（客户端/内核禁 fs 读 · 内核禁第三方字面量 · 媒体走 media_ref · 上游零写） |
 | **可扩展性** | **源注册表**（`poolSources.ts`）：新增源 = 写一个 ingest + 注册表加一条 → 主流程/面板/守卫零改动（`SMOKE-KGDB-08/08b`） |
 | **可观测性** | 白盒健康快照（`/api/pool/health`）：表行数 / 关系分布 / **8 项质量指标（每项附判据 SQL）** / 源覆盖 / Top 知识点 |
-| 端点/工具/视图 | **76 端点**（+9 `/api/pool/*`）/ 6 工具（**全部接入 presentCall/presentResult**）/ **16 视图**（+「🗄️ 统一题库」） |
-| 测试 | smoke **404**（+29）/ render **66**（+3 RENDER-POOL 旅程）；band-detector WARNING（零超预算文件） |
+| 端点/工具/视图 | **78 端点**（+9 `/api/pool/*`）/ 6 工具（**全部接入 presentCall/presentResult**）/ **16 视图**（+「🗄️ 统一题库」） |
+| 测试 | smoke **437**（+29）/ render **66**（+3 RENDER-POOL 旅程）；band-detector WARNING（零超预算文件） |
 | 真题卷 | 1683 套（申论 944 / 行测 739，2008–2026）；**v1.29 三模式**（📝答题 / 🎓学习 / 📖全卷） |
 | 深度题库 | 27506 题（知识点覆盖 100%，含图 3548；五维标注 11282 题） |
 | 方法论覆盖 | 六模块 overall **0.9756**（40/41；yanyu 0.889 为真实缺公式缺口） |
@@ -70,7 +70,7 @@
 
 ### T-030 · awesome-dsh-plugin 收录 PR（**用户指示暂缓**——2026-11-19「暂不T30，继续其他开发完善」）
 - 现状：合规项已全部就绪；条目 YAML 草案已写入 `docs/agents/MARKETPLACE-ENTRY.md`（category `tools`，无 `npm:` 键）。
-- 目标：向 awesome-dsh-plugin 提 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（一个 PR 一个文件；描述数字与 57 端点/6 工具/16 视图/16 仓库核对一致）。
+- 目标：向 awesome-dsh-plugin 提 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（一个 PR 一个文件；描述数字与 78 端点/6 工具/16 视图/16 仓库核对一致）。
 - 前置：仓库创建满 1 天（CI 自动查）、GitHub topic `dsh-plugin`、按 PR 当日复核。
 
 ### T-026 · 图谱「学习画像」叠加层
@@ -94,7 +94,7 @@
 ## 统一存储主线 · 后续阶段（研究 15 §1.2 单条主线 · 阶段 2-4）
 
 > 阶段 0（基线固化）与阶段 1（存储层落地）已于 **cycle-34** 完成。以下按研究 15 的统一主线推进。
-> 详细设计：[../docs/design/unified-storage-architecture.md](../docs/design/unified-storage-architecture.md) §9b/§9c
+> 详细设计：[../design/unified-storage-architecture.md](../design/unified-storage-architecture.md) §9b/§9c
 
 | 阶段 | 内容 | 状态 | 前置 |
 |---|---|---|---|

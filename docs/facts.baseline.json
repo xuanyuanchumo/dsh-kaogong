@@ -1,0 +1,9 @@
+{
+  "_comment": "断言数基线（只增不减门禁用）。BL-TEST-02。删断言必须在此降值并在 PR 说明理由。",
+  "_source": "docs/facts.json（运行态通过数）",
+  "assertions": {
+    "smoke": 437,
+    "render": 66,
+    "loader": 17
+  }
+}

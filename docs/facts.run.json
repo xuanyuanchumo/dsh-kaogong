@@ -1,0 +1,10 @@
+{
+  "_comment": "运行态断言数（从测试实际输出采集）。生成：node scripts/docs/sync-run-facts.mjs",
+  "_generatedAt": "2026-11-20 10:26:42",
+  "smoke": 437,
+  "smokeTotal": 437,
+  "render": 66,
+  "renderFailed": 0,
+  "loader": 17,
+  "loaderTotal": 17
+}
