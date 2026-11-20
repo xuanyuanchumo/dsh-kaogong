@@ -141,9 +141,16 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       // 同一失效钩子 invalidateStatsCache('rebuild')），后续随机取 O(1)（实测 <1ms）。
       const imgPool = getCachedStats('imgPool', () => {
         try {
-          return db.prepare('SELECT canonical_id, module FROM question WHERE has_image = 1').all() as any[]
+          // cycle-43（评审修复）：补 source_id/kadian——原只缓存 module，导致带图补足
+          // 忽略 source/kadian 过滤（实测 source=qiuzhao 10 条里 5 条主源是 xingce-app）。
+          return db.prepare('SELECT canonical_id, module, source_id, kadian FROM question WHERE has_image = 1').all() as any[]
         } catch { return [] as any[] }
       }).data
+      // 过滤谓词（SSOT）：module/source/kadian 三者都 honour —— 候选补足与结果层补足共用
+      const imgPoolFilter = (r: any): boolean =>
+        (!moduleName || String(r.module) === moduleName) &&
+        (!source || source === 'all' || String(r.source_id) === source) &&
+        (!kadian || String(r.kadian) === kadian)
       let cand: any[]
       if (where.length === 0) {
         const span = db.prepare('SELECT COUNT(*) c, MIN(id) mn, MAX(id) mx FROM question').get() as any
@@ -173,8 +180,8 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       const imgCount = cand.filter((r: any) => String(r.stem || '').includes('kgimg://')).length
       const imgQuota = Math.ceil(count / 2)
       if (imgCount < imgQuota && imgPool.length) {
-        // 从缓存随机取（module 过滤时只取匹配模块的；无过滤全池）
-        const pool = moduleName ? imgPool.filter((r: any) => String(r.module) === moduleName) : imgPool
+        // 从缓存随机取（honour module/source/kadian——防越界补足）
+        const pool = imgPool.filter(imgPoolFilter)
         const ids = new Set(cand.map((r: any) => String(r.canonical_id)))
         let added = 0
         for (let i = 0; i < pool.length && added < imgQuota * 2; i++) {
@@ -222,7 +229,7 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       if (imgNeed > 0 && imgPool.length) {
         try {
           const have = new Set(questions.map((q: any) => String(q.canonicalId || q.id || '')))
-          const pool = moduleName ? imgPool.filter((r: any) => String(r.module) === moduleName) : imgPool
+          const pool = imgPool.filter(imgPoolFilter)
           // 确定性保证（IMG-04 断言 ≥⌈count/2⌉）：**顺序扫池**而非随机——随机取样有
           // 重复命中 have 集合的浪费，扫不满 imgNeed（实测 4/5 概率缺口）。带图池 1794
           // 条顺序取前 N 条（池本身重建时行序固定 → 轮换语义用层内已去重的 have 过滤）。

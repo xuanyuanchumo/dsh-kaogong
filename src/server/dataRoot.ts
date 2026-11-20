@@ -106,7 +106,11 @@ export function isInside(base: string, candidate: string): boolean {
   // 正解 = path.relative 语义判定（跨平台）：相对路径为空/.. 开头/绝对（跨盘）都是外部。
   // 单一事实源：isInside 被 prepareInstall/remove/browse 三处共用，修这一处全恢复。
   const rel = relative(b, c)
-  return !!rel && rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel)
+  // F3/F4（cycle-43 评审修复）：`!!rel` 会把「同一路径但大小写不同」判为外部——
+  // Windows 路径大小写不敏感，path.win32.relative 对同一路径返回 ''，而 `!!''` 为 false
+  // （实测 isInside('C:\\Users\\Tester\\repos','c:\\users\\tester\\repos') → false，
+  // 应为 true）。正解 = `rel === ''` 视为内部（等价「同一路径」），与 c === b 快速路径同源。
+  return rel === '' || (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel))
 }
 
 /* ══ cycle-21 · 包内旧数据一次性迁移（issue #2 根治）══

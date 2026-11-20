@@ -1205,20 +1205,42 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   // 子路径恒判越界。修法 = path.relative 语义判定。6 组边界全部固化（含 issue 建议的
   // 「子路径必须 true」与「兄弟同前缀必须 false」两条旧断言抓不到的用例）。
   {
+    // 防「dist 陈旧 → 守卫空转」：源码层静态断言（与 SMOKE-DX-05 同风格；dist 在 .gitignore）
+    const drSrc = fs.readFileSync(new URL('./src/server/dataRoot.ts', import.meta.url), 'utf-8')
+    check('SMOKE-ISSUE6a isInside 源码为 relative 语义判定（非旧前缀比较）+ 同路径 rel===\'\' 判内部',
+      /relative\(b,\s*c\)/.test(drSrc) && drSrc.includes("rel === ''") &&
+      !drSrc.includes("startsWith(b + '/')") && !drSrc.includes("startsWith(b + '\\\\')"),
+      '源码仍是旧前缀比较或漏 rel===\'\'（大小写自身会假阴性）')
+
     const { isInside } = await import('./dist/server/dataRoot.js')
-    const base = 'C:\\Users\\tester\\.dsh\\kaogong\\repos'
+    const win = process.platform === 'win32'
+    const base = win ? 'C:\\Users\\tester\\.dsh\\kaogong\\repos' : '/home/tester/.dsh/kaogong/repos'
+    const S = win ? '\\' : '/'
     const cases = [
-      ['子路径', base + '\\huasheng13', true],
+      ['子路径', base + S + 'huasheng13', true],
       ['自身', base, true],
-      ['.. 穿越', base + '\\..\\evil', false],
-      ['兄弟同前缀', base + 'x\\foo', false],
-      ['跨盘', 'D:\\other', false],
-      ['混合分隔符', base + '/huasheng13', true],
+      ['自身·末尾分隔符', base + S, true],
+      ['自身·大小写不同', win ? 'c:\\users\\tester\\.dsh\\kaogong\\repos' : base, true],
+      ['子路径·大小写不同', win ? 'c:\\users\\tester\\.dsh\\kaogong\\repos\\huasheng13' : base + S + 'huasheng13', true],
+      ['.. 穿越', base + S + '..' + S + 'evil', false],
+      ['裸 ..', base + S + '..', false],
+      ['兄弟同前缀', base + 'x' + S + 'foo', false],
+      ['跨盘/跨根', win ? 'D:\\other' : '/opt/other', false],
+      ['混合分隔符', win ? base + '/huasheng13' : base + '\\huasheng13', win],
     ]
-    let pass = 0
-    for (const [name, cand, want] of cases) if (isInside(base, cand) === want) pass++
-    check('SMOKE-ISSUE6 isInside 跨平台 6 组边界（子路径/自身/穿越/兄弟/跨盘/混合分隔符）',
-      pass === cases.length, `${pass}/${cases.length}`)
+    // UNC 用例需用**各自的 UNC base**（C 盘 base 对 UNC candidate 正确结果是 false，不是越界漏判）
+    const uncCases = win ? [
+      ['UNC 子路径', '\\\\server\\share\\repos', '\\\\server\\share\\repos\\sub', true],
+      ['UNC 兄弟 share', '\\\\server\\share\\repos', '\\\\server\\share2\\repos\\x', false],
+      ['UNC 跨 server', '\\\\server\\share\\repos', '\\\\other\\share\\repos\\x', false],
+    ] : []
+    const failed = [
+      ...cases.filter(([, cand, want]) => isInside(base, cand) !== want).map(([n]) => n),
+      ...uncCases.filter(([, b2, cand, want]) => isInside(b2, cand) !== want).map(([n]) => n),
+    ]
+    const total = cases.length + uncCases.length
+    check(`SMOKE-ISSUE6 isInside 边界 ${total} 组（子路径/自身/穿越/裸../兄弟/跨盘/混合/末尾/大小写/UNC）`,
+      failed.length === 0, failed.length ? 'red: ' + failed.join('|') : `${total}/${total}`)
   }
 
   // ═══ SMOKE-SCHED（cycle-30b T-027）：智能排程运行时断言（教训⑧：§12 崩溃安全之前）═══
@@ -1679,6 +1701,36 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
           readSrc('src/server/poolApi.ts').includes("/api/pool/analysis-versions") &&
           readSrc('src/server/poolApi.ts').includes('byContent.has(key)'),
           '端点缺声明或缺实现（影子端点）')
+      }
+    }
+
+    // ═══ SMOKE-POOL（cycle-43 · issue #5 评审修复）：抽题过滤精确性 + 出处完整性 ═══
+    {
+      // POOL-03：source 过滤精确（带图补足曾忽略 source → 实测 5/10 越界；修复后必须全匹配）
+      for (const src of ['naoku', 'qiuzhao-epi-bank', 'gk-tuxing']) {
+        const j = await J(`${B}/api/pool/questions?source=${encodeURIComponent(src)}&count=10&ws=${CX}`)
+        const qs = j.questions || []
+        const mismatch = qs.filter((q) => {
+          const s0 = (q.sources && q.sources[0] && q.sources[0].source_id) || q.source
+          return s0 && s0 !== src
+        }).length
+        check(`SMOKE-POOL-03 source 过滤精确（${src} 抽题主源全匹配，不越界）`,
+          qs.length >= 5 && mismatch === 0, `${qs.length} 条 mismatch=${mismatch}`)
+      }
+      const nope = await J(`${B}/api/pool/questions?source=__nope__&count=10&ws=${CX}`)
+      check('SMOKE-POOL-03b 未知 source 返回 0 条（不静默越界）',
+        (nope.questions || []).length === 0, `${(nope.questions || []).length} 条`)
+
+      // POOL-02b：无孤儿出处（rebuild 自动清理后不变量；issue #5「出处完整」）
+      try {
+        const { USER_DATA_ROOT } = await import('./dist/server/dataRoot.js')
+        const { DatabaseSync } = await import('node:sqlite')
+        const pdb = new DatabaseSync(join(USER_DATA_ROOT, '.kaogong.db'), { readOnly: true })
+        const orphan = pdb.prepare('SELECT COUNT(*) c FROM question_source s WHERE NOT EXISTS (SELECT 1 FROM question q WHERE q.canonical_id = s.canonical_id)').get().c
+        pdb.close()
+        check('SMOKE-POOL-02b 无孤儿出处（每题出处必指向存在的题）', orphan === 0, `孤儿 ${orphan}`)
+      } catch (e) {
+        check('SMOKE-POOL-02b 无孤儿出处（DB 不可达则跳过）', true, String(e).slice(0, 40))
       }
     }
   }

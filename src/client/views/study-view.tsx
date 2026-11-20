@@ -324,6 +324,9 @@ function KgMemBanner(props: KgMemBannerProps) {
                   stem: x.stem, options: x.options, answer: x.correctAnswer || x.answer, analysis: x.analysis,
                   groupMaterial: x.groupMaterial || '',
                   groupMaterialNo: x.groupMaterialNo || 0,
+                  // cycle-43（评审修复 issue #5 后果③）：透传五维标注——API 已供 dims、
+                  // 共享卡 QwQuestionCard 已消费 q.dims，但本处组装练习卡时漏传 → 五维块不渲染。
+                  dims: x.dims,
                 })),
               ]}
               current={0}

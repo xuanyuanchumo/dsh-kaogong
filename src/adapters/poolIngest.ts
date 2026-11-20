@@ -58,6 +58,15 @@ export async function rebuildPool(repoRoot: string, dataDir: string, opts: { reb
     // 源注册表快照（可观测：白盒透出「已注册哪些源、各自可用性」）
     setMeta(db, 'source_registry', JSON.stringify(registrySnapshot({ repoRoot, dataDir })))
     const sources = await ingestAll({ repoRoot, dataDir, db, opts })
+    // cycle-43（评审修复）：清理孤儿出处——cf 归并/覆盖后可能有 question_source 行的
+    // canonical_id 已不在 question 表（评审实测 1987 条）。rebuild 后立即清理，
+    // 保证「每题必有出处，出处必指向存在的题」不变量（issue #5 POOL-02「出处完整」）。
+    let orphanSrc = 0
+    try {
+      const before = (db.prepare('SELECT COUNT(*) c FROM question_source').get() as any).c
+      db.exec('DELETE FROM question_source WHERE canonical_id NOT IN (SELECT canonical_id FROM question)')
+      orphanSrc = before - (db.prepare('SELECT COUNT(*) c FROM question_source').get() as any).c
+    } catch { /* 清理失败不阻塞重建 */ }
     // FTS 重建（外部内容表模式；实测 5 万行 311ms）
     rebuildFts(db)
     const stats = poolStats(db)
@@ -68,7 +77,7 @@ export async function rebuildPool(repoRoot: string, dataDir: string, opts: { reb
     invalidateStatsCache('rebuild')
     return {
       ok: true, schemaVersion: POOL_SCHEMA_VERSION, elapsedMs: Date.now() - t0,
-      sources, stats,
+      sources, stats, orphanCleaned: orphanSrc,
     }
   } catch (e: any) {
     return { ok: false, error: '重建失败: ' + (e && e.message ? e.message : String(e)) }
