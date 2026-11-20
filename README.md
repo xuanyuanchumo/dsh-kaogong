@@ -2,8 +2,10 @@
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-listed-6366f1)](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
+[![offline-first](https://img.shields.io/badge/offline-100%25-10b981)](#-快速开始3-步)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
-[![tests](https://img.shields.io/badge/tests-smoke%20350%20%C2%B7%20render%2059-10b981)](#-开发与验证)
+[![tests](https://img.shields.io/badge/tests-smoke%20437%20%C2%B7%20render%2066-10b981)](#-开发与验证)
 
 > **一句话**：把 **16 个**优秀开源考公仓库整合为 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）宿主内的**原生**学习平台 ——
 > 刷题 / SRS 错题本 / 真题卷 / 整卷模考 / 申论评改 / **花生十三体系方法论** / 可交互知识图谱 / 白盒可观测，**完全离线可用**。
@@ -32,6 +34,7 @@
 - [❓ 故障排查（FAQ）](#-故障排查faq)
 - [🙏 致敬上游](#-致敬上游全部数据与成果归原作者)
 - [🧪 开发与验证](#-开发与验证)
+- [🔎 收录与搜索（市场 / npm / GitHub）](#-收录与搜索市场--npm--github)
 - [⚖️ 许可与免责](#-许可与免责)
 
 ---
@@ -153,7 +156,7 @@ plugin_manager remove_bundle dsh-kaogong     # 仅移除插件
 git --version                     # 题库管理前置
 # 插件侧：确认版本与能力注册
 curl -s http://127.0.0.1:51093/kaogong/api/capabilities | head -c 300
-# 预期含 "version":"1.30.0"、6 个工具、76 个端点
+# 预期含 "version":"1.31.0"、6 个工具、78 个端点
 ```
 
 界面自检：左栏出现「📚 考公学习」图标 → 点击进入 → 「📦 题库管理」显示仓库清单（16 项）即正常。
@@ -371,6 +374,23 @@ npm run test:all     # 上面两步一起跑
 
 ANIC 质量流程：`.cycles/`（intent → spec → plan → G0–G3 门禁 → 归档；L4 全自主 + 人类门禁授权）。
 工程纪律与事故簿见 [CLAUDE.md](./CLAUDE.md)，Agent 开发文档见 [docs/agents/](./docs/agents/)（含 [METHODOLOGY.md](./docs/agents/METHODOLOGY.md) 适配库规范）。
+
+## 🔎 收录与搜索（市场 / npm / GitHub）
+
+**词条**：考公 · 公考 · 公务员考试 · 行测 · 申论 · 刷题 · 错题本 · 真题卷 · 花生十三 ·
+方法论 · 知识图谱 · 离线题库 · SRS 记忆 · DeepSeek Harness 插件 · DSH 插件。
+
+| 渠道 | 入口 | 备注 |
+|---|---|---|
+| **插件市场** | [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)（`category: usage`） | 条目声明 `dsh.bundle`，`dsh plugin add` 可装；收录由维护者评审 |
+| **npm** | [`npm i dsh-kaogong`](https://www.npmjs.com/package/dsh-kaogong) | 预构建安装，免 `allowBuilds` 构建授权 |
+| **GitHub** | [xuanyuanchumo/dsh-kaogong](https://github.com/xuanyuanchumo/dsh-kaogong)（topic `dsh-plugin`） | 源码安装 / issue 反馈 |
+| **市场卡片** | `icon-180.png`（GitHub 托管位图）+ `screenshots.json`（4 图） | 符合市场图标与截图规范 |
+
+**能力事实（维护者可对代码核对）**：**78** 个 HTTP 端点 · **6** 个宿主工具 · **16** 个视图 ·
+**16** 个上游仓库（按需安装）· 统一题库池 **86,454** 题 / **229,732** 出处行 / **141,121** 解析版本 ·
+测试 **smoke 437 / render 66**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
+与 `.kaogong.db` 实测得出，不随文案改动。
 
 ## ⚖️ 许可与免责
 
