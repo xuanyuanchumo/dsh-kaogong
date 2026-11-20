@@ -25,23 +25,27 @@
 
 由于无共同祖先，直接 `git merge` 会报 `refusing to merge unrelated histories`。两种方案：
 
-### 方案 A（推荐）：内容优先的 release squash
+### 采用方案：gitflow 血缘修复 + develop → main 直连 PR（2026-11-20 实践）
 
-1. 在 `develop` 上完成所有工作并通过门禁
-2. 切 `release/v1.31` 分支（从 develop）
-3. `git checkout main && git merge --allow-unrelated-histories --squash release/v1.31`
-4. 解决冲突（若有——两线内容同源只是 commit 粒度不同，预期零冲突）
-5. `git commit -m "release: v1.31 ..."` + `git tag v1.31.0`
-6. push `main` + tag；PR 描述注明「squash of develop cycle-34~42」
+研究真实 git/GitHub 规范后发现：GitHub **拒绝无共同祖先的两分支 PR**
+（`PullRequest (custom): The develop branch has no history in common with main`）。
+虽然本地 `--allow-unrelated-histories --squash` 可合成发布 commit，但那会绕过 PR 评审流程——
+不符合「合理使用 git/GitHub 编写规范」的要求。
 
-**优点**：main 保持干净的发布历史（与既有 15 个 release commit 同构）；develop 保留完整 cycle 轨迹。
+正解（gitflow 标准实践）：
+1. `develop` 从当前工作线建立后，**先把 `origin/main` 合并进 develop**
+   （`git merge --allow-unrelated-histories origin/main`，冲突取 develop 版本——cycle 内容是
+   main 的功能超集）。这一步让 develop 获得 main 作为祖先，建立血缘。
+2. `git push origin develop`（远端 develop 从第一次推送就存在并保持更新）。
+3. 创建 PR **`develop` → `main`**（直连，标题遵循 Conventional Commits），
+   按 PR 模板逐项填写验收清单。
+4. 合并后 `main` 打 tag `v1.31.0`；develop 继续作为下一轮开发主线。
 
-### 方案 B：保留双亲 merge
+**已落地**：PR #7（develop → main）于 2026-11-20 创建；合并前复测 smoke 429/429 + render 66/66。
 
-`git merge --allow-unrelated-histories develop`（不 squash）——main 变成双线合流点。
-适合需要审计完整 cycle 轨迹的场景，但会让 main 历史突然膨胀 81 个提交。
-
-**本项目采用方案 A**。
+**为何不用 release bridge**：虽能从 main 建 `release/*` 合并 develop 后再提 PR（也有共同祖先），
+但那引入额外中间分支且偏离「develop 是唯一开发主线」的约定。直接让 develop 合并 main
+更符合 gitflow——develop 本来就该定期吸收 main 的发布变更。
 
 ## 4. 冲突预期与验证
 
