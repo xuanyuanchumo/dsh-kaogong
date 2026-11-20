@@ -115,23 +115,23 @@ BL-<域>-<两位序号>
 
 | 编号 | 完成时间 | 提交 | 验证方式 |
 |---|---|---|---|
-| BL-PROC-01 | 2026-11-20 | 本轮工作区·待 feature 提交 | 本文件存在；各条目三要素齐全 |
-| BL-PROC-02 | 2026-11-20 | 本轮工作区·待 feature 提交 | 三钩子脚本就位；负向验证（违规提交被拒）见 `docs/agents/REVIEW.md` §5 |
-| BL-PROC-03 | 2026-11-20 | 本轮工作区·待 feature 提交 | `docs/agents/REVIEW.md` + `reviews/` 目录；四员分工表可执行 |
-| BL-PROC-04 | 2026-11-20 | 本轮工作区·待 feature 提交 | `pre-push` 校验分支名；PR 模板含版本时序项 |
-| BL-PROC-05 | 2026-11-20 | 本轮工作区·待 feature 提交 | 两个 issue 模板含环境矩阵字段 |
-| BL-PROC-06 | 2026-11-20 | 本轮工作区·待 feature 提交 | `CONTRIBUTING.md` §六 变更连带义务表 |
-| BL-DOC-01 | 2026-11-20 | 本轮工作区·待 feature 提交 | `docs/facts.json` 单一事实源；`check-facts.mjs` 全绿 |
-| BL-DOC-02 | 2026-11-20 | 本轮工作区·待 feature 提交 | `check-docs.mjs` 六检；负向验证通过 |
-| BL-DOC-03 | 2026-11-20 | 本轮工作区·待 feature 提交 | `ARCH-LAYOUT.md` + `docs/README.md` |
-| BL-TEST-02 | 2026-11-20 | 本轮工作区·待 feature 提交 | `facts.json` 记断言基线；CI 校验只增不减 |
-| BL-TEST-03 | 2026-11-20 | 本轮工作区·待 feature 提交 | `REVIEW.md` §5 负向验证规程 + 3 例记录 |
-| BL-TEST-01 | 2026-11-20 | 本轮工作区·待 feature 提交 | `loader.test.mjs` 17/17；注入 export default → 5/17（负向验证） |
-| BL-SEC-01 | 2026-11-20 | 本轮工作区·待 feature 提交 | `ISOLATION.md` 三层隔离；KG_PORT 可配置；pid/port 断言；临时目录清理 OK |
+| BL-PROC-01 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | 本文件存在；各条目三要素齐全 |
+| BL-PROC-02 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | 三钩子脚本就位；负向验证（违规提交被拒）见 `docs/agents/REVIEW.md` §5 |
+| BL-PROC-03 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `docs/agents/REVIEW.md` + `reviews/` 目录；四员分工表可执行 |
+| BL-PROC-04 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `pre-push` 校验分支名；PR 模板含版本时序项 |
+| BL-PROC-05 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | 两个 issue 模板含环境矩阵字段 |
+| BL-PROC-06 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `CONTRIBUTING.md` §六 变更连带义务表 |
+| BL-DOC-01 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `docs/facts.json` 单一事实源；`check-facts.mjs` 全绿 |
+| BL-DOC-02 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `check-docs.mjs` 六检；负向验证通过 |
+| BL-DOC-03 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `ARCH-LAYOUT.md` + `docs/README.md` |
+| BL-TEST-02 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `facts.json` 记断言基线；CI 校验只增不减 |
+| BL-TEST-03 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `REVIEW.md` §5 负向验证规程 + 3 例记录 |
+| BL-TEST-01 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `loader.test.mjs` 17/17；注入 export default → 5/17（负向验证） |
+| BL-SEC-01 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `ISOLATION.md` 三层隔离；KG_PORT 可配置；pid/port 断言；临时目录清理 OK |
 
 ---
 
-| BL-TEST-04 | 2026-11-20 | 本轮工作区·待 feature 提交 | 端口边界单测通过（负数/小数/70000→8400） |
+| BL-TEST-04 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | 端口边界单测通过（负数/小数/70000→8400） |
 
 ---
 
