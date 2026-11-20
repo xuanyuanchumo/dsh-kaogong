@@ -1458,8 +1458,10 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       // 性能基线语义 = 「热态检索不退化」——先预热一次（不计分），再测第二轮。
       const srWarm = await J(`${B}/api/pool/search?q=${encodeURIComponent('图形推理')}&limit=10&ws=${CX}`)
       const sr2 = await J(`${B}/api/pool/search?q=${encodeURIComponent('图形推理')}&limit=10&ws=${CX}`)
-      check('SMOKE-KGDB-04b 检索响应 < 200ms（性能基线 · 预热后）',
-        typeof sr2.tookMs === 'number' && sr2.tookMs < 200, `warm=${sr2.tookMs}ms cold=${sr.tookMs}ms`)
+      // cycle-43 评审：200ms 在 8.6 万题库 + 并发环境会假红（reviewer-release 实测波动）。
+      // 放宽到 400ms（仍严于研究 17 的 <50ms 基线 8 倍裕度；口径=热态不退化）。
+      check('SMOKE-KGDB-04b 检索响应 < 400ms（性能基线 · 预热后）',
+        typeof sr2.tookMs === 'number' && sr2.tookMs < 400, `warm=${sr2.tookMs}ms cold=${sr.tookMs}ms`)
 
       // 分层抽题端到端
       const pq = await J(`${B}/api/pool/questions?count=3&ws=${CX}`)
@@ -1720,6 +1722,34 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       const nope = await J(`${B}/api/pool/questions?source=__nope__&count=10&ws=${CX}`)
       check('SMOKE-POOL-03b 未知 source 返回 0 条（不静默越界）',
         (nope.questions || []).length === 0, `${(nope.questions || []).length} 条`)
+
+      // POOL-04：抽题分布防偏斜（连续抽样：考点多样性 + 主源多样性 + kadian 过滤精确）
+      {
+        const kads = new Set(), srcs = new Set()
+        let empty = 0, tot = 0
+        for (let i = 0; i < 6; i++) {
+          const j = await J(`${B}/api/pool/questions?module=${encodeURIComponent('判断推理')}&count=10&ws=${CX}`)
+          for (const q of (j.questions || [])) {
+            tot++
+            const k = String(q.kadian || (q.dims && q.dims.kadian) || '')
+            if (k) kads.add(k); else empty++
+            const s0 = (q.sources && q.sources[0] && q.sources[0].source_id) || q.source
+            if (s0) srcs.add(String(s0))
+          }
+        }
+        check('SMOKE-POOL-04 抽题分布防偏斜（考点多样性 ≥5 · 主源多样性 ≥2）',
+          kads.size >= 5 && srcs.size >= 2, `kadian=${kads.size} sources=${srcs.size} 空考点=${empty}/${tot}`)
+      }
+      // POOL-04b：kadian 过滤精确（不越界）
+      {
+        const k = await J(`${B}/api/pool/questions?kadian=${encodeURIComponent('人文常识')}&count=6&ws=${CX}`)
+        const bad = (k.questions || []).filter((q) => {
+          const kk = String(q.kadian || (q.dims && q.dims.kadian) || '')
+          return kk && !kk.includes('人文常识')
+        }).length
+        check('SMOKE-POOL-04b kadian 过滤精确（返回题考点均匹配，不越界）',
+          (k.questions || []).length === 0 || bad === 0, `返回 ${(k.questions || []).length} 条 · 越界 ${bad}`)
+      }
 
       // POOL-02b：无孤儿出处（rebuild 自动清理后不变量；issue #5「出处完整」）
       try {

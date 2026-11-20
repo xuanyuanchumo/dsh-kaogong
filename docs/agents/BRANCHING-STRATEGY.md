@@ -6,7 +6,7 @@
 
 | 远端分支 | SHA | 角色 |
 |---|---|---|
-| `main`（默认） | `256b70f` | 发布线，tag v1.13~v1.30，15 个 squash 版本提交 |
+| `main`（默认） | `256b70f` | 发布线，tag v1.11~v1.30（v1.11.0 起），15 个 squash 版本提交 |
 | `dev-history` | `d08bf18` | 历史开发线（= 本地 `master`） |
 
 本地 `develop`（建立在 cycle-41 归档点 `21509d5`）是逐 cycle 开发提交的集成分支。
@@ -92,3 +92,24 @@
 | 回滚后 | **必须把 main 回灌 develop**（`git merge origin/main`），避免下次 release 再次血缘断裂 |
 
 > 回滚锚点：`v1.30.0` → `256b70f`（本地 + 远端 tag 均在）；develop 在 `origin/develop` 完整保留。
+
+## 7. 分支清理记录（2026-11-20 · cycle-43 评审后）
+
+9 个 `feature/*` 分支经 `git merge-base --is-ancestor` 逐条验证均为 develop 祖先（ahead=0），
+且内容行级核对通过——它们是**逐 cycle 的检查点分支**（非 PR 产物），已全部删除。
+保留 SHA 供审计链追溯（内容均在 develop 历史中可达，删除不丢失任何提交）：
+
+| 分支 | SHA | 说明 |
+|---|---|---|
+| feature/l4-autonomous-bootstrap-v1.31 | `7e518c6` | cycle-33 收口 |
+| feature/kaogong-db-storage-phase01-v1.31 | `8652b19` | cycle-34 统一池阶段 1 |
+| feature/pool-coverage-cycle35-v1.31 | `94ab6b0` | cycle-35 覆盖审计 |
+| feature/perf-cycle36-v1.31 | `20ad842` | cycle-36 性能 |
+| feature/iter-cycle37-v1.31 | `aa68659` | cycle-37 迭代 |
+| feature/pool-stage2-v1.31 | `765847b` | cycle-38 阶段 2 |
+| feature/e2e-theme-v1.31 | `251015f` | cycle-39 端到端+主题 |
+| feature/dedupe-v1.31 | `2889ab8` | cycle-40 去重治理 |
+| feature/img04-rootfix-v1.31 | `21509d5` | cycle-41 IMG-04（develop 即由此长出） |
+
+演练/bridge 分支 `merge-drain`(`33f36b7`) / `release/v1.31`(`b63cfe3`) 已于 cycle-42 删除（内容=develop 快照，无独有提交）。
+本文件同时固化「今后 release 分支承载版本 bump 时不可在 PR 合并前删除」。

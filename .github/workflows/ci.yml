@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install (no runtime deps — registry-free)
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+      - name: Type gate
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Smoke
+        run: node smoke.test.mjs
+      - name: Render
+        run: node render.test.mjs

@@ -156,7 +156,7 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
         const span = db.prepare('SELECT COUNT(*) c, MIN(id) mn, MAX(id) mx FROM question').get() as any
         const want = 500
         const seen = new Set<number>()
-        const pick = db.prepare('SELECT canonical_id, source_id, module, kadian, qid, paper, stem FROM question WHERE id >= ? LIMIT 1')
+        const pick = db.prepare('SELECT canonical_id, source_id, module, kadian, qid, paper, stem, LENGTH(reasoning) AS dim_len FROM question WHERE id >= ? LIMIT 1')
         cand = []
         let attempts = 0
         while (cand.length < want && attempts < want * 3) {
@@ -168,7 +168,7 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
           if (r) cand.push(r)
         }
       } else {
-        cand = db.prepare(`SELECT canonical_id, source_id, module, kadian, qid, paper, stem FROM question ${w} ORDER BY RANDOM() LIMIT 500`).all(...args)
+        cand = db.prepare(`SELECT canonical_id, source_id, module, kadian, qid, paper, stem, LENGTH(reasoning) AS dim_len FROM question ${w} ORDER BY RANDOM() LIMIT 500`).all(...args)
       }
       // cycle-42（IMG-04 同族根治 /api/pool/questions）：随机候选窗口内带图占比低
       // （判断推理 15%）→ weightedPick 可能全无图题。与 sampleQuestions 同修：
@@ -215,7 +215,11 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
         const m = String(r.module || '')
         const w0 = weaknessOf(moduleRate(m))
         const multi = srcCount.get(String(r.canonical_id)) || 1
-        return w0 * (1 + (multi - 1) * 0.25)   // 多出处题权重上浮 25%/额外源
+        // cycle-43（真机测试发现）：同题多源时若无差别抽题，可能抽到无五维的贫源版本
+        // （实测同题 naoku 版有五维 598/116/165/144，xingce-app 版全空）→ 练习卡看不到
+        // 解题推理链。富源优先：带五维题权重 ×1.5（与 sampleQuestions 的 rich 优选同族语义）。
+        const dimBoost = Number(r.dim_len || 0) > 0 ? 1.5 : 1
+        return w0 * (1 + (multi - 1) * 0.25) * dimBoost
       })
       const picked = weightedPick(cand, weights, count)
       const ids = picked.map((r: any) => String(r.canonical_id))
