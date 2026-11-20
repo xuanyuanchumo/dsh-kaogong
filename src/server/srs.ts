@@ -22,8 +22,11 @@ function upsertWrong(progress, q) {
   let item = progress.wrongBook.find(w => w.sig === sig)
   if (!item) {
     // cycle-21 出处标注：错题入库时快照题库出处（回炉时随题透出，UI 显示来源）
+    // cycle-43（材料保真）：快照补 groupMaterial/groupMaterialNo——资料分析题没有材料
+    // 不可复现作答语境（回炉重做时「根据材料作答」无从谈起）；字段可选，旧快照缺失降级不报错
     item = { sig, module: q.module || '未知', type: q.type || '', stem: q.stem, options: q.options, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongCount: 0, box: 1, consecutive: 0, mastered: false, lastAt: Date.now(),
-      source: q.source || null, exam: q.exam || null, year: q.year || null, paperFile: q.paperFile || null }
+      source: q.source || null, exam: q.exam || null, year: q.year || null, paperFile: q.paperFile || null,
+      groupMaterial: q.groupMaterial || '', groupMaterialNo: q.groupMaterialNo || 0 }
     progress.wrongBook.push(item)
   }
   item.wrongCount++
@@ -92,7 +95,9 @@ export function makeSrsApi({ repoRoot, store, pool }) {
       return { file: '(错题回炉)', count: due.length, srs: true, mode: 'retry',
         questions: due.map(w => ({ id: 'wrong-' + w.sig, number: 0, type: w.type, module: w.module, stem: w.stem, options: w.options, correctAnswer: w.correctAnswer, analysis: w.analysis, fromWrongBook: true, sig: w.sig, box: w.box, wrongCount: w.wrongCount,
           // cycle-21 出处标注：错题回炉继承入库时的题库出处（旧数据无 source 时按 module 推断显示）
-          source: w.source || null, exam: w.exam || null, year: w.year || null, paperFile: w.paperFile || null })) }
+          source: w.source || null, exam: w.exam || null, year: w.year || null, paperFile: w.paperFile || null,
+          // cycle-43 材料保真：回炉透出快照材料（旧快照无此字段 → 空串，QwQuestionCard 有则渲染跳段）
+          groupMaterial: w.groupMaterial || '', groupMaterialNo: w.groupMaterialNo || 0 })) }
     }
     let mod = moduleName
     if (!mod || mod === 'all') {

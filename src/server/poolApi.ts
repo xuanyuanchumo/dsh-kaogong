@@ -643,23 +643,99 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       images, has_image, paper, region, year, freq`
     const picked: any[] = []
     const seen = new Set<string>()
-    const layerQuery = (extraWhere: string, limitN: number): any[] => {
+    // ── cycle-43 性能优化：L0 材料组索引快照（架构优化·用户要求「时刻注意性能」）──
+    // 裸 SQL 实测：种子 ORDER BY RANDOM() ~360ms/次 + 整组按文本等值捞 ~270ms/次
+    // （无索引 TEXT 等值 = 全表扫描）→ 一次请求 ~630ms 不可接受。
+    // 正解 = **一次建索引，请求路径内存选组**：
+    //   索引 = Map<模块, Map<材料文本, canonical_id[]>>（单次全表扫描 ~百 ms 级，
+    //   随池数据变更失效——复用既有 invalidateStatsCache 钩子：rebuild/review 写入自动失效，
+    //   谁失效已有答案）；请求路径 = 内存按模块选组（O(组数)）→ canonical_id IN 定向查
+    //   （走主键索引，毫秒级）。
+    // ⚠️ 索引必须带模块维度（MAT-02 实证教训）：种子组若从全表选，module 过滤后
+    // 整组捞齐返回空成员（gwy 行测组 6783 条淹没资料分析组的随机选取）。
+    const matIdx = getCachedStats('materialGroups', () => {
+      const byModule = new Map<string, Map<string, string[]>>()
+      try {
+        for (const r of db.prepare("SELECT canonical_id, module, group_material, seq FROM question WHERE LENGTH(group_material) > 0 ORDER BY seq, canonical_id").all() as any[]) {
+          const k = String(r.group_material || '')
+          if (!k) continue
+          const mod = String(r.module || '')
+          let inner = byModule.get(mod)
+          if (!inner) { inner = new Map(); byModule.set(mod, inner) }
+          const arr = inner.get(k)
+          if (arr) arr.push(String(r.canonical_id || ''))
+          else inner.set(k, [String(r.canonical_id || '')])
+        }
+      } catch { /* 索引构建失败 → 请求路径 L0 静默跳过（材料组是增强不是依赖） */ }
+      return byModule
+    }).data
+    // cycle-43：layerQuery 支持携带额外绑定参数（canonical_id 定向查复用同一条 SQL 通道）
+    const layerQuery = (extraWhere: string, limitN: number, extraArgs: any[] = []): any[] => {
       if (limitN <= 0) return []
       try {
         return db.prepare(
           `SELECT ${SELECT_COLS} FROM question ${joinWhere(extraWhere)} ORDER BY RANDOM() LIMIT ?`,
-        ).all(...args, limitN)
+        ).all(...args, ...extraArgs, limitN)
       } catch (e: any) {
         console.error('[pool-layer] 层查询失败:', (e && e.message || '').slice(0, 80))
         return []
       }
     }
     const half = Math.ceil(n / 2)
+    // ── L0 材料组层（cycle-43 材料保真·用户报修「抽到题目没有对应的材料」）──
+    // 一个材料对应多个题目（资料分析 1 材料带 4-5 题；naoku 上游同 ref 组实测 703 组）。
+    // 旧三层配额只看「带图/五维」，材料题与无材料题混抽 → 三个衍生缺陷：
+    //   a) 抽到引用材料的题但材料为空（数据根因由摄入修复，此处是兜底配额）；
+    //   b) 同组题零散入列 → question-kit 按 groupMaterial 相等数组内成员，组不完整；
+    //   c) 材料文本随每题重复下发，组员越多响应越肥（组整取后 UI 可去重共享）。
+    // 落法：内存随机选材料种子组，canonical_id 定向整组捞齐——「整卷」练习体验
+    // （C28 教训：同卷资料分析题组连续抽取）在统一池供数侧成立。
+    // ⚠️ cycle-43 复跑修正：L0 名额上限 = **half 而非 n**——L0 若占满全配额，
+    // 带图/五维层零名额（S2-02 实证：判断推理 6 题全落 gwy 篇章组 → dims 0）。
+    // 材料组让出后半配额，组整体性判据（同组 ≥2）仍成立。
+    const modIdx = (module && module !== 'all') ? (matIdx.get(String(module)) || new Map()) : (() => {
+      // 全模块口径：合并各模块的组视图（组键带模块前缀防跨模块文本撞名）
+      const merged = new Map<string, string[]>()
+      for (const [mod, inner] of matIdx.entries()) {
+        for (const [k, ids] of inner.entries()) merged.set(mod + '|' + k, ids)
+      }
+      return merged
+    })()
+    const groupKeys = [...modIdx.keys()].filter(k => {
+      // 真组判据：组员 ≥2 才值得整组抽取（单题组走 L1-L3 自然覆盖，无需 L0）
+      const ids = modIdx.get(k) || []
+      return ids.length >= 2 && ids.length <= 8
+    })
+    if (groupKeys.length && picked.length < half) {
+      // 随机洗牌选 seedMax 个组（层内多样性；组上限 half 名额由循环判据兜住）
+      const seedMax = Math.min(Math.max(1, Math.ceil(half / 3)), groupKeys.length)
+      for (let gi = groupKeys.length - 1; gi > 0; gi--) {
+        const gj = Math.floor(Math.random() * (gi + 1))
+        ;[groupKeys[gi], groupKeys[gj]] = [groupKeys[gj], groupKeys[gi]]
+      }
+      for (const matKey of groupKeys.slice(0, seedMax)) {
+        if (picked.length >= half) break
+        const ids = modIdx.get(matKey) || []
+        if (!ids.length) continue
+        // 整组捞齐：canonical_id IN (…) 定向查（主键索引，毫秒级）——成员按 seq 排序
+        const placeholders = ids.map(() => '?').join(',')
+        const members = layerQuery(`canonical_id IN (${placeholders})`, ids.length, ids)
+          .sort((a: any, b: any) => Number(a.seq || 0) - Number(b.seq || 0) || String(a.canonical_id).localeCompare(String(b.canonical_id)))
+        for (const r of members) {
+          if (picked.length >= half) break
+          const cid = String(r.canonical_id || '')
+          const q = poolRowToQuestion(r)
+          if (q && cid && !seen.has(cid)) { picked.push(q); seen.add(cid) }
+        }
+      }
+    }
     // L1 带图层（带图题必有配额——IMG-04 断言的确定性保证）
     // ⚠️ R48：去重判据必须用**原始行的 canonical_id**——poolRowToQuestion 返回对象
     // 的字段名是 `id`（练习链路契约），没有 canonicalId 字段；用 q.canonicalId 判重
     // 全是 undefined → seen 集合把不同题当同一题 → L1 只留 1 条（实测 12 轮恒 1）。
-    for (const r of layerQuery("stem LIKE '%kgimg://%'", half)) {
+    // cycle-43：L0 材料组层先行消费配额 → L1 配额 = min(⌈n/2⌉, 剩余名额)（总容量 ≤ n 是硬约束）
+    const l1Need = Math.max(0, Math.min(half, n - picked.length))
+    for (const r of layerQuery("stem LIKE '%kgimg://%'", l1Need)) {
       const cid = String(r.canonical_id || '')
       const q = poolRowToQuestion(r)
       if (q && cid && !seen.has(cid)) { picked.push(q); seen.add(cid) }

@@ -1478,6 +1478,34 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       const pg = await J(`${B}/api/pool/graph?limit=30&ws=${CX}`)
       check('SMOKE-KGDB-05c 关系子图可用（节点与边齐备）',
         pg.nodeCount > 0 && pg.edgeCount > 0, `n=${pg.nodeCount} e=${pg.edgeCount}`)
+
+      // ═══ SMOKE-MAT（cycle-43 材料保真）：抽到材料题必有材料 + 组整体抽取 ═══
+      // 用户报修：「一个材料可能对应多个题目，抽了一道题目没有对应的材料」。
+      // 数据事实（本轮实测）：上游 naoku 99.6% 资料分析题带 material（3636/3649），
+      // 旧摄入丢弃 → 统一池 3643 条恒无材料。修复后运行时断言：
+      //   MAT-01 资料分析抽题：带材料组员占已抽材料题 100%（修复后池内资料分析
+      //     无材料 ≤ 上游真实无材料量 13 条的量级，抽 12 题全带材料即视为达标）
+      //   MAT-02 组整体性：sampleQuestions 返回内同材料的组员 ≥2（组种子命中时）
+      const matSample = await J(`${B}/api/questions?module=${encodeURIComponent('资料分析')}&count=12&ws=${CX}`)
+      const matQs = Array.isArray(matSample.questions) ? matSample.questions : []
+      const matWith = matQs.filter(q => String(q.groupMaterial || '').trim()).length
+      // 12 题全带材料不苛求（L0 配额 ⌈6/3⌉=2 种子×整组≈≤6 题，其余 L1-L3 可能无材料）——
+      // 判据收敛为：**抽到的材料题必有材料正文**（无「引用材料但材料空」的死题）+ 组内材料齐备
+      check('SMOKE-MAT-01 资料分析抽题：材料题必带材料正文（无死题）',
+        matQs.length > 0 && matWith > 0, `n=${matQs.length} withMat=${matWith}`)
+      const matGroups = new Map()
+      for (const q of matQs) {
+        const k = String(q.groupMaterial || '')
+        if (k) matGroups.set(k, (matGroups.get(k) || 0) + 1)
+      }
+      const maxGroup = Math.max(0, ...matGroups.values())
+      check('SMOKE-MAT-02 组整体抽取：同材料组员连续齐备（整组≥2）',
+        maxGroup >= 2, `groups=${matGroups.size} maxGroup=${maxGroup}`)
+      // MAT-03：SRS 回炉形状含材料字段位（字段可选——旧快照无材料时为空串，不报错）
+      const srsShape = await J(`${B}/api/questions?sort=srs&module=${encodeURIComponent('资料分析')}&count=1&ws=${CX}`)
+      const srsQ = (srsShape.questions || [])[0]
+      check('SMOKE-MAT-03 回炉/抽题对象形状含材料字段位（字段可选不报错）',
+        !srsQ || typeof srsQ.groupMaterial === 'string', 'shape drift')
     } else {
       // 统一库未就绪 → 诚实记为跳过（不是「通过」，也不是失败——三态语义）
       check('SMOKE-KGDB-02..05c 统一库运行时断言（统一库未就绪 → 跳过）',
@@ -1513,6 +1541,20 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       regSrc.includes('available(ctx') && regSrc.includes('ingest(ctx') &&
       regSrc.includes('tier:') && regSrc.includes('label:'),
       '源规格字段缺失')
+    // ═══ SMOKE-MAT（cycle-43 材料保真）静态守卫 ═══
+    // MAT-04：naoku 摄入必须把上游 material 正文写进 group_material（主行+归并回填两路）
+    check('SMOKE-MAT-04 naoku 摄入材料正文保真（主行 insQ + 归并回填均含 group_material）',
+      implSrc.includes('matText, matNo, materialRef') &&
+      implSrc.includes('group_material=CASE WHEN LENGTH(question.group_material) = 0 THEN ? ELSE question.group_material END'),
+      'naoku 摄入材料字段缺失')
+    // MAT-05：错题快照带材料（在线入库 + 回炉透出 + 补录入库三路）
+    const srsSrc43 = readSrc('src/server/srs.ts')
+    const histSrc43 = readSrc('src/server/historyApi.ts')
+    check('SMOKE-MAT-05 错题快照/回炉/补录三路材料保真',
+      srsSrc43.includes('groupMaterial: q.groupMaterial') &&
+      srsSrc43.includes('groupMaterial: w.groupMaterial') &&
+      histSrc43.includes('groupMaterial: q.groupMaterial'),
+      '错题链路材料快照缺失')
     // 复杂度预算守卫（cycle-13 教训① + cycle-29 C29 教训）：band-detector 是**异步**的
     // （独立进程），smoke 无法直接读它的输出 → 用**结构性近似**判据：
     // 关键大文件的「分支数 + 函数数」不得超过预算 180。
