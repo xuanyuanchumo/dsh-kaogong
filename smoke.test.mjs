@@ -2101,8 +2101,8 @@ check('外部占用时不裸抛 EADDRINUSE', safetyOK, safetyDetail)
   const { join } = await import('node:path')
   const rd = join(process.cwd(), 'docs', 'research')
   // R-DOC 守卫：10 篇研究文档 + 索引存在（声明 → 实体零断链，R28 族同纪律）
-  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md', '11-统一存储与模型自选架构.md', '12-统一题目池与多源抽题.md', '13-kaogong-db统一知识库.md', '14-内核边界契约.md', '15-全局整合分析.md', '16-题库覆盖审计.md', '17-性能研究白盒面板.md', '18-研究迭代闭环T032T033.md', '19-阶段2取题层升级.md', '20-端到端打通与主题适配.md', '21-跨源去重治理.md', '22-IMG04间歇假红根治.md']
-  check('RDOC-01 研究文档 22 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
+  const rdocExpected = ['README.md', '01-PageRank幂迭代与知识点优先级.md', '02-BM25与中文双粒度检索.md', '03-五箱SRS与遗忘曲线.md', '04-力导向布局与知识地图.md', '05-LRU环形缓冲与代际令牌.md', '06-中介中心性与社区发现.md', '07-内容寻址与原子写与Merkle.md', '08-遥测分位数与控制带.md', '09-参考插件技巧实证清单.md', '10-流动语义与桑基思维.md', '11-统一存储与模型自选架构.md', '12-统一题目池与多源抽题.md', '13-kaogong-db统一知识库.md', '14-内核边界契约.md', '15-全局整合分析.md', '16-题库覆盖审计.md', '17-性能研究白盒面板.md', '18-研究迭代闭环T032T033.md', '19-阶段2取题层升级.md', '20-端到端打通与主题适配.md', '21-跨源去重治理.md', '22-IMG04间歇假红根治.md', '23-GitHub开放issue分析与分支治理.md']
+  check('RDOC-01 研究文档 23 篇 + 索引全部存在', rdocExpected.every(f => fs.existsSync(join(rd, f))))
   // RDOC-01b（cycle-34）：**研究文档落地闭环**——研究 11/12/13/14/15 的关键断言
   // 必须能在**已实现的代码**里找到对应物（研究已定 → 代码已落 → 守卫固化）。
   // 这是「研究文档不是空谈」的机器化：文档说要做 X，代码里就得有 X 的实现痕迹。
