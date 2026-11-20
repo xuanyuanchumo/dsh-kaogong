@@ -84,7 +84,7 @@ updated: 2026-11-20
 1. **frontmatter 必填**：`title` / `status`(draft\|current\|legacy) / `updated`；被替代文档必须填 `superseded_by`。
 2. **默认不新建**：优先扩展现有文档；确需新建，先在本文件「agents/ 文档清单」登记。
 3. **历史靠 Git**：不建 `archive/` 目录；废弃文档标 `legacy` + `superseded_by`。
-4. **数字必须同源**：所有计数（端点/工具/视图/断言数/仓库数）以 [facts.json](./facts.json) 为准，禁止手写。
+4. **可派生数字必须同源**：能力计数（端点/工具/视图/仓库数）以 [facts.json](./facts.json) 为准（由 manifest 派生），禁止手写。测试断言数**不进事实源**——它是自我声明且不等于质量，测试质量只由 `npm run test:all` 退出码保证。
 5. **中文优先**：正文中文；术语首现给英文；代码注释中文。
 6. **不写空谈**：研究文档必须含「代码落地（file:line）」与「可运行验证」两节，否则该文档无价值。
 
@@ -92,6 +92,7 @@ updated: 2026-11-20
 
 ```bash
 node scripts/docs/check-docs.mjs     # 六检：frontmatter/链接/可达/superseded/archive/TODO
-node scripts/docs/check-facts.mjs    # 数字同源
+node scripts/docs/check-facts.mjs    # 能力计数同源（端点/工具；从 manifest 派生）
 node scripts/docs/gen-facts.mjs      # 重新生成事实源（需先 npm run build）
+npm run test:all                     # 唯一质量门：loader + smoke + render 退出码
 ```

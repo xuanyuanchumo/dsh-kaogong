@@ -1,15 +1,13 @@
 /**
- * 文档门禁的「受检文件清单」——单一事实源（BL-DOC-01 假门禁修复）
+ * 文档门禁的「受检文件清单」——单一事实源（BL-DOC-01）
  *
- * 为什么独立成文件：
- *   check-facts.mjs 定义「校验哪些文件」，pre-commit 决定「哪些文件变更要触发校验」。
- *   两者若各写一份清单，就会出现「check-facts 声明校验 CLAUDE.md、pre-commit 却跳过」的假门禁
- *   （reviewer-code 实测：CLAUDE.md 是唯一被 pre-commit 绕过的文件）。
- *   抽出来后两边 import 同一常量，配置漂移在物理上不可能。
+ * check-facts.mjs 定义「校验哪些文件的哪些事实」，pre-commit 决定「哪些文件变更要触发」。
+ * 两者 import 同一常量，杜绝「check-facts 声明校验、pre-commit 却跳过」的假门禁。
+ *
+ * ★ 2026-11-20 反模式清理：断言数（smoke/render 通过数）已从受检事实中移除。
+ *   它是自我声明、可被随手改数字绕过，且不等于测试质量。测试质量只由 test:all 退出码保证。
  */
 export const DOC_FILES = {
-  smoke: ['README.md', 'CLAUDE.md', 'docs/agents/ROADMAP.md', 'docs/agents/README.md', 'docs/agents/TESTING.md'],
-  render: ['README.md', 'CLAUDE.md', 'docs/agents/README.md', 'docs/agents/TESTING.md'],
   endpoints: ['README.md', 'docs/agents/README.md', 'docs/agents/ROADMAP.md', 'docs/agents/ARCHITECTURE.md'],
   tools: ['README.md', 'docs/agents/README.md'],
 }

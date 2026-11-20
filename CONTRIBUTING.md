@@ -84,7 +84,8 @@ develop: 完成功能 → npm run version:bump <x.y.z> → 更新 CHANGELOG → 
 | 改**版本** | `npm run version:bump`（三锚点原子同步）+ `CHANGELOG.md` | bump 脚本 + smoke |
 | 改**数据根 / 存储层** | `docs/agents/STORAGE-LAYER.md` + 所有「写路径引用点」（**含测试清理段**） | 评审 reviewer-code |
 | 改**架构/目录** | `docs/agents/ARCH-LAYOUT.md` + `ARCHITECTURE.md` | 评审 reviewer-git |
-| 改**测试基线数字** | `docs/facts.json`（`node scripts/docs/gen-facts.mjs`）+ README badge | `check-facts.mjs` |
+| 改**能力计数**（端点/工具/视图/仓库） | `docs/facts.json`（`node scripts/docs/gen-facts.mjs`，从 manifest 派生）+ README | `check-facts.mjs` |
+| 改**测试断言数** | 无需同步任何文档数字——测试质量由 `npm run test:all` 退出码保证，不再维护断言数基线（反模式已清理） | `test:all` |
 | 接入**新数据源** | `REPOS_META` + `docs/agents/DATA-SOURCES.md` + STORAGE-LAYER §5 | 评审 reviewer-issues |
 | 任何用户可见**文案/计数** | 从事实源渲染，禁止手写（R22/R25） | smoke 静态守卫 |
 | 发现**新事故** | `docs/agents/INCIDENTS.md`（R 编号递增）+ 可固化的加成 smoke 守卫 | 评审 reviewer-code |
@@ -97,7 +98,8 @@ develop: 完成功能 → npm run version:bump <x.y.z> → 更新 CHANGELOG → 
 |---|---|---|---|
 | 提交信息格式 `<type>(<scope>): <subject>` | `scripts/git-hooks/commit-msg` | `git commit` | ✅ |
 | 文档六检（frontmatter/链接/可达/superseded/archive/TODO） | `scripts/docs/check-docs.mjs` | `pre-commit` + CI | ✅ |
-| 文档数字同源 | `scripts/docs/check-facts.mjs` + `docs/facts.json` | `pre-commit` + CI | ✅ |
+| 能力计数同源（端点/工具，从 manifest 派生） | `scripts/docs/check-facts.mjs` + `docs/facts.json` | `pre-commit` + CI | ✅ |
+| 测试质量 | `npm run test:all` 退出码（loader+smoke+render） | `pre-push` 前 + CI | ✅（唯一质量门；不设断言数基线） |
 | 分支名 `<type>/<scope>-<desc>` | `scripts/git-hooks/pre-push` | `git push` | ✅ |
 | 变更关联 BL 编号 | `scripts/git-hooks/check-backlog-entry.mjs` | `git push` | ✅ |
 | 不推送本机 overlay / 运行时产物 | `scripts/git-hooks/pre-push` §4 | `git push` | ✅ |

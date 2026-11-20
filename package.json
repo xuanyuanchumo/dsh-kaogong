@@ -37,8 +37,6 @@
     "locale",
     "docs",
     "!docs/facts.json",
-    "!docs/facts.baseline.json",
-    "!docs/facts.run.json",
     "!docs/agents/reviews",
     "assets",
     "screenshots.json",

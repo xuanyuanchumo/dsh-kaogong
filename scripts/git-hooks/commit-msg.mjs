@@ -22,7 +22,7 @@ const TYPES = ['feat', 'fix', 'docs', 'refactor', 'perf', 'test', 'chore', 'cycl
 const SCOPES = [
   'host', 'server', 'client', 'ui', 'adapters', 'shared', 'manifest',
   'pool', 'graph', 'srs', 'plan', 'papers', 'naoku', 'tuxing', 'huasheng13', 'repos',
-  'smoke', 'render', 'docs', 'release', 'market', 'tools', 'sandbox', 'scripts', 'backlog', 'hooks',
+  'smoke', 'render', 'docs', 'release', 'market', 'tools', 'sandbox', 'scripts', 'backlog', 'hooks', 'test',
 ]
 const SUBJECT_MAX = 72
 const HEADER_MAX = 100

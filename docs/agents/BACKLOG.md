@@ -91,7 +91,7 @@ BL-<域>-<两位序号>
 | **BL-DOC-02** | 文档门禁（六检） | 无 frontmatter 校验、无链接可达校验、无 current 可达校验 | 依赖 BL-DOC-01 的事实源 | `scripts/docs/check-docs.mjs` 实现六检；挂 pre-commit + CI | ✅ |
 | **BL-DOC-03** | 架构目录结构向 dsh 官方规范对齐 | `src/` 已分 `adapters/client/host/server/shared/ui`，但缺「按 dsh 插件形态」的显式分层说明与目录约定文档；`docs/` 无根索引 | — | `docs/agents/ARCH-LAYOUT.md` 存在并说明每层职责与禁区；`docs/README.md` 索引存在 | ✅ |
 | **BL-DOC-04** | 双语文档 | 仅 `README.md` 中文；官方插件（kb/README）双语惯例 | 需翻译工作量 | README 增英文段落或 `README.en.md`；locale 已有 en/zh | ⬜ |
-| **BL-TEST-02** | 断言数基线与只增不减门禁 | 无基线文件，断言数改动靠人工核对 | 依赖 BL-DOC-01 | `docs/facts.json` 记基线；CI 校验 `assertions >= baseline` | ✅ |
+| **BL-TEST-02** | 反模式清理：移除断言数基线门禁 | 原实现用 `facts.run.json`/`facts.baseline.json` 做「断言数只增不减」门禁，但 CI 比对的是提交进仓库的 json 而非测试真实结果——自我声明式假门禁（用户指出） | — | 三份 facts 冗余文件减为一份（仅机器可派生的能力计数）；CI 只以测试退出码为质量门；端点/工具计数篡改负向验证 exit=1 | ✅ |
 | **BL-TEST-03** | 负向验证（证明门禁会红）纳入流程 | 已有实践（v1.13.1 变异测试），但未制度化 | — | `REVIEW.md` 规定每个新守卫必须配变异测试；至少 6 例已执行记录（见评审报告） | ✅ |
 | **BL-TEST-04** | KG_PORT 端口隔离守卫 | `ISOLATION.md` §5 提到 R-KGPORT 守卫但原 BACKLOG 无条目（reviewer-issues 指出指向空洞） | — | 生产代码 `src/host/index.ts` 已加 `Number.isInteger && 1..65531` 校验；非法值回退 8400；边界单测通过 | ✅ |
 | **BL-PROC-05** | issue 模板（环境矩阵） | `.github/` 仅 PR 模板 + ci.yml，无 issue 模板；issue #4/#5 内容详实但格式各异 | — | `.github/ISSUE_TEMPLATE/bug_report.yml` + `feature_request.yml` 含环境矩阵 | ✅ |
@@ -124,7 +124,7 @@ BL-<域>-<两位序号>
 | BL-DOC-01 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `docs/facts.json` 单一事实源；`check-facts.mjs` 全绿 |
 | BL-DOC-02 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `check-docs.mjs` 六检；负向验证通过 |
 | BL-DOC-03 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `ARCH-LAYOUT.md` + `docs/README.md` |
-| BL-TEST-02 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `facts.json` 记断言基线；CI 校验只增不减 |
+| BL-TEST-02 | 2026-11-20 | 待提交（反模式清理） | facts 三文件减一；CI 以测试退出码为唯一质量门；端点/工具篡改 exit=1 |
 | BL-TEST-03 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `REVIEW.md` §5 负向验证规程 + 3 例记录 |
 | BL-TEST-01 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `loader.test.mjs` 17/17；注入 export default → 5/17（负向验证） |
 | BL-SEC-01 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | `ISOLATION.md` 三层隔离；KG_PORT 可配置；pid/port 断言；临时目录清理 OK |

@@ -98,7 +98,7 @@ node smoke.test.mjs          # 期望：全绿
 | 产物形态（assert-combo） | 绕过 bundler 直接 `npx tsc` |
 | 提交信息门禁 | 试提交 `bad message` |
 | backlog 关联 | 在无 BL 编号的分支上试 push |
-| 文档数字同源 | 改 README 里任一断言数 |
+| 能力计数同源 | 改 README 端点数 78→99 / 工具数 6→9 |
 | 端点声明（manifest） | 删掉一个端点声明 |
 
 **已执行的负向验证记录**：
@@ -106,7 +106,8 @@ node smoke.test.mjs          # 期望：全绿
 | 日期 | 守卫 | 变异 | 结果 |
 |---|---|---|---|
 | 2026-11-10 (v1.13.1) | R28 打包卫生 | 移除 `files` 白名单条目 | ✅ 两条断言立刻变红 |
-| 2026-11-20 | 文档数字同源 | 篡改 README smoke 断言数 | ✅ `check-facts.mjs` exit 1 |
+| 2026-11-20 | 能力计数同源 | 篡改 README 端点 78→99 / 工具 6→9 | ✅ `check-facts.mjs` exit 1 |
+| 2026-11-20 | 反模式清理 | 移除断言数基线门禁后确认：测试质量仍由 test:all 退出码保证 | ✅ loader 17/17 · smoke 437/437 · render 66/66 |
 | 2026-11-20 | 提交信息门禁 | 提交 `bad commit message` | ✅ `commit-msg` 拒绝 |
 
 ---

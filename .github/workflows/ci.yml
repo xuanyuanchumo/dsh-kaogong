@@ -57,7 +57,7 @@ jobs:
         run: node scripts/docs/check-docs.mjs
 
       # ── 门禁 5：文档事实源新鲜度（BL-DOC-01）─────────────────────
-      # dist 已由上一步构建产出，gen-facts 可直接读运行时真值。
+      # 只校验可从 manifest 派生的能力计数；断言数不属于事实源。
       - name: Facts freshness gate
         run: |
           node scripts/docs/gen-facts.mjs --check || {
@@ -66,35 +66,11 @@ jobs:
           }
           node scripts/docs/check-facts.mjs
 
-      # ── 门禁 6：断言数只增不减（BL-TEST-02）────────────────────
-      - name: Assertion baseline gate
-        run: |
-          node - <<'PY'
-          const fs = require('node:fs');
-          const facts = JSON.parse(fs.readFileSync('docs/facts.json', 'utf-8'));
-          const baseline = JSON.parse(fs.readFileSync('docs/facts.baseline.json', 'utf-8'));
-          let fail = 0;
-          for (const k of ['smoke', 'render', 'loader']) {
-            const now = facts.assertions[k];
-            const was = baseline.assertions[k];
-            if (now < was) {
-              console.error(`::error::${k} 断言数倒退：${was} → ${now}（守卫只增不减，删断言必须在 PR 说明理由并同步更新 baseline）`);
-              fail = 1;
-            } else if (now > was) {
-              console.log(`${k} 断言数增加：${was} → ${now}（请提交新的 baseline）`);
-            } else {
-              console.log(`${k} 断言数持平：${now}`);
-            }
-          }
-          process.exit(fail);
-          PY
-
-      # ── 测试 ──────────────────────────────────────────────────
-      - name: Loader entry (真实 Loader + 三层隔离)
-        # loader.test.mjs 会检测 _dshcli/node_modules 的 Cordis Loader；
-        # 本地/带 dev 依赖环境必须跑，纯 keyless CI 缺依赖时脚本自跳过（打印说明）。
-        run: node loader.test.mjs
-
+      # ── 唯一质量门：测试退出码 ───────────────────────────────────
+      # 不再做「断言数只增不减」之类的自我声明式门禁——那比对的是提交进仓库的数字，
+      # 不是测试真实结果；测试全绿本身就是唯一可信的质量信号。
+      # Loader 真实入口测试依赖开发期 Cordis Loader（_dshcli/node_modules），CI keyless 环境没有，
+      # 故不在 CI 跑；它在本地 `npm run test:all` 中随 dev 依赖执行（见 loader.test.mjs 注释）。
       - name: Smoke
         run: node smoke.test.mjs
 

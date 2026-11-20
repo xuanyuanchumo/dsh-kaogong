@@ -148,7 +148,7 @@ $env:KG_REPOS_DIR = "$env:TEMP\kaogong-sandbox-repos"
 
 | 规则 | 强制点 | 触发时机 |
 |---|---|---|
-| Loader 测试三层隔离 | `loader.test.mjs` 内断言（pid/port/数据根） | `npm run test:all` + CI |
+| Loader 测试三层隔离 | `loader.test.mjs` 内断言（pid/port/数据根） | 本地 `npm run test:all`（CI keyless 无 Cordis Loader，不跑此项） |
 | 端口可配置 | smoke 静态守卫 `R-KGPORT`（建议，见 BACKLOG） | `npm run test:all` |
 | 沙箱独立 DSH_HOME | 本文档 + dsh-dev-sandbox 技能 | 人工（沙箱验证时） |
 | 真机验证后仓库卫生 | `git status` 检查（PR 自检项） | 提交前 |
