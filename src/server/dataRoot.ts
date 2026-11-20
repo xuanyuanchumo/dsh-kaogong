@@ -21,7 +21,7 @@
  * 零依赖；全部函数无副作用（写盘仅 persist 显式调用）。
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, readdirSync, statSync, cpSync, rmSync } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { join, resolve, relative, isAbsolute, sep, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -99,7 +99,18 @@ export function resolveReposRoot(repoKeys: string[]): { root: string, source: st
 /** 路径安全：candidate 必须落在 base 内（防穿越；resolve 归一后前缀比较） */
 export function isInside(base: string, candidate: string): boolean {
   const b = resolve(base), c = resolve(candidate)
-  return c === b || c.startsWith(b + '/') || c.startsWith(b + '\\\\')
+  if (c === b) return true
+  // GitHub issue #6（Windows 全功能失效根治）：原实现用 b + '/' 与 b + '\\'（两个
+  // 字面反斜杠）做前缀包含判断——Windows 上 resolve() 返回单 '\'，第二个分支恒 false，
+  // 任何子路径都被误判「越界」→ 题库管理安装/删除/浏览 100% 失败。
+  // 正解 = path.relative 语义判定（跨平台）：相对路径为空/.. 开头/绝对（跨盘）都是外部。
+  // 单一事实源：isInside 被 prepareInstall/remove/browse 三处共用，修这一处全恢复。
+  const rel = relative(b, c)
+  // F3/F4（cycle-43 评审修复）：`!!rel` 会把「同一路径但大小写不同」判为外部——
+  // Windows 路径大小写不敏感，path.win32.relative 对同一路径返回 ''，而 `!!''` 为 false
+  // （实测 isInside('C:\\Users\\Tester\\repos','c:\\users\\tester\\repos') → false，
+  // 应为 true）。正解 = `rel === ''` 视为内部（等价「同一路径」），与 c === b 快速路径同源。
+  return rel === '' || (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel))
 }
 
 /* ══ cycle-21 · 包内旧数据一次性迁移（issue #2 根治）══

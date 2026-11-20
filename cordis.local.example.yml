@@ -1,0 +1,6 @@
+# 本地测试 overlay 样例（复制为 cordis.local.yml 并改成本机路径；cordis.local.yml 已 gitignore）
+# 用法: pnpm dsh web --patch ./dsh-kaogong/cordis.local.yml
+# 说明: name 指向本机 dsh-kaogong 包的绝对路径（开发态 link 加载）
+- insert:
+    - id: kaogong
+      name: '/absolute/path/to/dsh-kaogong'

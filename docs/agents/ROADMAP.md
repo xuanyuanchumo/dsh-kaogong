@@ -2,28 +2,28 @@
 
 > 债务清单同步 `.cycles/tech-debt/backlog.md`。每轮迭代收口时更新状态。
 
-## 当前状态（v1.29.1 / cycle-32b）
+## 当前状态（v1.30.0 / cycle-34 统一题目池存储层）
 
 | 维度 | 数据 |
 |---|---|
-| 真题卷 | 1683 套（申论 944 / 行测 739，2008–2026） |
-| 深度题库 | 27506 题（知识点覆盖 100%，速解 41%，含图 10647；选项含图 1406 / 解析含图 8294） |
-| 本地图片 | 11 万+（试卷配图 + 354 张图推题图） |
-| 方法论语料 | 25 篇（20 references + 5 examples，336KB），位于数据根，**不随包** |
-| 端点/工具/视图 | 67 端点（含 /api/plan/schedule 智能排程）/ 6 工具（**v1.26 起全部接入 presentCall/presentResult UI 展示契约**）/ 16 视图 |
-| 测试 | smoke 371 + render 62；eval-runner 16 维；band-detector WARNING（零超预算文件） |
-| 图谱 | 168 节点全图 + v1.26 子图按需加载（1/2 跳邻域 + 影响面反向可达） |
-| 真题卷 | **v1.29 三模式**（📝答题=exam 域限时判分 / 🎓学习=单题即判即析+主观题跳题 / 📖全卷=自答对照）；解析显示按 mode 分流（v1.29.1 hideBeforeAnswer） |
+| **统一题目池** | **`.kaogong.db`：27506 题 / 222894 关系边 / 59093 出处 / 1578 材料 / 53 人工校验**（10 表 + FTS5 trigram；库 399MB；用户数据根，不入包） |
+| **统一身份** | `canonical_id` = qid 优先 → fp 次之 → sha256 兜底；跨源 qid 100% 一致（327/327 实证）；一题多出处（`multiSource` 可查） |
+| **跨源检索** | FTS5 trigram 中文全命中；实测 **19–38ms**；短词（<3 字）自动降级 LIKE |
+| **分层抽题** | 权重复用 SRS 同源模型 `1/(rate+0.15)` × 多出处加成；`/api/questions` 走存储层优先（请求路径零 fs 读） |
+| **内核边界** | 六不变量**已机器化**：`SMOKE-KERNEL-01..06b`（客户端/内核禁 fs 读 · 内核禁第三方字面量 · 媒体走 media_ref · 上游零写） |
+| **可扩展性** | **源注册表**（`poolSources.ts`）：新增源 = 写一个 ingest + 注册表加一条 → 主流程/面板/守卫零改动（`SMOKE-KGDB-08/08b`） |
+| **可观测性** | 白盒健康快照（`/api/pool/health`）：表行数 / 关系分布 / **8 项质量指标（每项附判据 SQL）** / 源覆盖 / Top 知识点 |
+| 端点/工具/视图 | **76 端点**（+9 `/api/pool/*`）/ 6 工具（**全部接入 presentCall/presentResult**）/ **16 视图**（+「🗄️ 统一题库」） |
+| 测试 | smoke **404**（+29）/ render **66**（+3 RENDER-POOL 旅程）；band-detector WARNING（零超预算文件） |
+| 真题卷 | 1683 套（申论 944 / 行测 739，2008–2026）；**v1.29 三模式**（📝答题 / 🎓学习 / 📖全卷） |
+| 深度题库 | 27506 题（知识点覆盖 100%，含图 3548；五维标注 11282 题） |
 | 方法论覆盖 | 六模块 overall **0.9756**（40/41；yanyu 0.889 为真实缺公式缺口） |
-| 方法论练习 | 74 题（32 题字母答案可自动判分 / 42 题文字作答走自评） |
 | 仓库 | 16（必选 3：huasheng13 / xingcezhenti / gk-tuxing；推荐 3：kaogong-skill / gwy-zhenti / GongkaoNaoku；可选 10） |
-| 视图 | 16 个原生 React 视图（含 huasheng13；方法论入口在专题枢纽内，不占一级导航） |
-| 端点 | **66 个**（`/api/kg-img` cycle-22 补 manifest 登记 + 扩展名探测回退） |
-| 工具 | 6 个（1 离线 + 5 可选 AI，含 `kaogong_ai_method`；输出全部实时取自能力矩阵） |
-| 断言 | smoke **321** + render **57** |
-| 数据根 | 四级可配置（env/config/开发态上级/托管默认）+ 一键克隆分级（**cycle-20**：批量队列 / 半成品死锁解除 / 健康巡检 / 旧根提示 / 配置校验） |
-| 研究文档 | `docs/research/` 10 篇（PageRank / BM25 / SRS / FR / LRU / Brandes / Merkle / SPC / 参考插件 / 桑基） |
+| 研究文档 | `docs/research/` **15 篇**（新增 11 统一存储 / 12 统一题目池 / 13 `.kaogong.db` / 14 内核边界 / 15 全局整合） |
 | 发布 | GitHub（SSH）+ npm + 市场合规齐备（条目草案见 [MARKETPLACE-ENTRY.md](./MARKETPLACE-ENTRY.md)） |
+
+> **存储层设计契约**：[STORAGE-LAYER.md](./STORAGE-LAYER.md) · **研究依据**：`docs/research/13` `14` `15`
+
 
 ## cycle-18 已交付（v1.13.0）
 
@@ -68,7 +68,7 @@
 
 ## 待办（按价值排序）
 
-### T-030 · awesome-dsh-plugin 收录 PR
+### T-030 · awesome-dsh-plugin 收录 PR（**用户指示暂缓**——2026-11-19「暂不T30，继续其他开发完善」）
 - 现状：合规项已全部就绪；条目 YAML 草案已写入 `docs/agents/MARKETPLACE-ENTRY.md`（category `tools`，无 `npm:` 键）。
 - 目标：向 awesome-dsh-plugin 提 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（一个 PR 一个文件；描述数字与 57 端点/6 工具/16 视图/16 仓库核对一致）。
 - 前置：仓库创建满 1 天（CI 自动查）、GitHub topic `dsh-plugin`、按 PR 当日复核。
@@ -84,6 +84,29 @@
 ### T-029 · 设置面板接入宿主 settings
 - 现状：主题/倒计时/每日目标等无用户可调面（README 能力矩阵登记为 ⏸）。
 - 目标：`ctx.settings` 配置表单（宿主能力矩阵「未用缝」的正当启用场景）。
+
+### T-033 · 统一池检索：合成 stem 降权 ✅（cycle-37 清偿）
+- 落地：检索 ORDER BY 对合成 stem（【 开头）排序置后（非过滤——纪律㉜推广）；实测首条回归真实带图题干（naoku 20/20，18.9ms）。守卫 SMOKE-PERF-05/05b。详见 docs/research/18。
+
+### T-032 · pool/rebuild 异步作业化 ✅（cycle-37 清偿）
+- 落地：POST /api/pool/rebuild 立即返回 jobId（单槽防并发），GET /api/pool/rebuild/status 轮询 + 归档环形 10；async:false 同步兼容；客户端 pool-view 轮询接线。守卫 SMOKE-PERF-06/06b/06c。详见 docs/research/18。
+
+## 统一存储主线 · 后续阶段（研究 15 §1.2 单条主线 · 阶段 2-4）
+
+> 阶段 0（基线固化）与阶段 1（存储层落地）已于 **cycle-34** 完成。以下按研究 15 的统一主线推进。
+> 详细设计：[../docs/design/unified-storage-architecture.md](../docs/design/unified-storage-architecture.md) §9b/§9c
+
+| 阶段 | 内容 | 状态 | 前置 |
+|---|---|---|---|
+| **阶段 2 · 取题层升级** | ① 多源分层抽题 · ② 五维标注贯通练习卡片 · ③ study_event 双写 | ✅ **cycle-38/39 完成**（dims 注入零客户端改动 + rich 优选 + 双写显式口径 S2 守卫 + 按源轮转；配额策略留后续微调） | 阶段 1 ✅ |
+| **阶段 3 · 检索层升级** | ① 统一检索 + **跨源内容级去重** · ② 图推桥接（服务 issue #4 P0/P1） | ✅ **cycle-39/40 完成**（源多样性轮转「和谐」4 源 + 内容指纹合并 140465→86454 行 + 来源全标记 231719 + 解析多版本 141121——研究 20/21；**图推桥接未做**：模型读图 → 规律类型+特征描述 → 匹配解析列，不需要图像 embedding——依赖阶段 4） | 阶段 2 ✅ |
+| **阶段 4 · 模型接入** | ① `ctx.llm` 直连 + ImageBlock · ② 模型自选 UI（provider/model 下拉） · ③ 图推桥接（阶段 3 ②） | ⏳ 未做 | ⚠️ **前置缺口 C5**：`src/host/index.ts` 的 `export const inject = ['tools']` **必须扩为 `['tools','llm']`**，否则 `ctx.llm` 在 `ctx.get` 中取不到（DSH `ctx.inject` 语义：未声明的服务不可取）。**不修则第一行代码就失败** |
+
+**阶段 2 的具体缺口（可立即开工）**：
+- `/api/questions` 虽已走存储层，但返回对象**未带五维标注**（`dims`）→ 练习卡片看不到「解题思路/最快解法/易错陷阱」。
+- 抽题的**多源策略**目前是「全部模块池内随机 + 弱点加权」，尚未做「按源分层配额」（如真题卷 40% / 深度库 40% / 专项 20%）。
+- `study_event` 表已建但**只写不读**（研究 15 C7：阶段 1 先只写表，阶段 2 再切读路径）——**避免双事实源**。
+
 
 ## 已清偿
 

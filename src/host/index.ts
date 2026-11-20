@@ -11,6 +11,8 @@
  */
 
 import { startServer, attachWebRoute } from '../server/http.js'
+import { resetPoolDb } from '../adapters/poolDb.js'
+import { resetNaoku } from '../adapters/naoku.js'
 import { CAPABILITIES } from '../shared/manifest.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
@@ -393,6 +395,13 @@ export function apply(ctx) {
   if (ctx.effect) {
     ctx.effect(() => () => {
       try { if (myServer && !myAdopted) myServer.close() } catch {}
+      // cycle-35（句柄泄漏修复）：插件卸载必须同时关统一库连接——
+      // 否则 Windows 上 `.kaogong.db` 句柄随宿主进程存活（handle.exe 实证 PID 26104
+      // 在 set_plugin disabled 后仍持有 db/-wal/-shm 三句柄），
+      // 任何其它进程的 rebuild（先删后建）都会 EPERM——重建语义被锁死。
+      // naoku.db 同理（resetNaoku 是幂等的，重复调用无害）。
+      try { resetPoolDb() } catch {}
+      try { resetNaoku() } catch {}
     }, 'kaogong server cleanup')
   }
 

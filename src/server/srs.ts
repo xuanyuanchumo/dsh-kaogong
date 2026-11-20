@@ -49,7 +49,7 @@ function resolveRetry(progress, q) {
 }
 
 /** 路由：/api/memory(专项刷题记忆,cycle-15) /api/questions(sort=srs) /api/wrong /api/wrong/remove /api/stats；未命中返回 undefined */
-export function makeSrsApi({ repoRoot, store }) {
+export function makeSrsApi({ repoRoot, store, pool }) {
   const { loadProgress, saveProgress } = store
 
   /* ── cycle-15 专项刷题记忆（progress.memory 域）──
@@ -107,7 +107,8 @@ export function makeSrsApi({ repoRoot, store }) {
       mod = mods[0]
       for (let i = 0; i < mods.length; i++) { r -= weights[i]; if (r <= 0) { mod = mods[i]; break } }
     }
-    const picked: any = getRandomQuestions(repoRoot, mod, count)
+    // cycle-34 阶段 1（I5/KERNEL-05）：存储层优先供数（统一池就绪时不直读第三方 md）
+    const picked: any = getRandomQuestions(repoRoot, mod, count, pool)
     if (picked.questions) { picked.srs = true; picked.mode = 'weighted'; picked.weightedModule = mod }
     return picked
   }

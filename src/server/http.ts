@@ -33,6 +33,9 @@ import { makeMethodologyApi } from './methodologyApi.js'
 import { resolveReposRoot, USER_DATA_ROOT, PROGRESS_DIR_USER, migratePkgData, dataLocationReport } from './dataRoot.js'
 import { makeRepoManager } from './repoManager.js'
 import { makeHistoryApi } from './historyApi.js'
+import { makePoolApi } from './poolApi.js'
+import { createTelemetry, isDeclaredEndpoint, recordRequest, telemetrySnapshot, UNMATCHED_BUCKET } from './telemetry.js'
+import { initPoolDb, resetPoolDb, putStudyEvent, poolDb } from '../adapters/poolDb.js'
 import { schedulePlan } from './planSchedule.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
@@ -61,10 +64,14 @@ const MIGRATION = migratePkgData()
 let domains: any = null
 function buildDomains(root: string) {
   const store = makeWsStore(PROGRESS_DIR)
+  // cycle-34 阶段 1：统一题目池域（`.kaogong.db` 存储层）
+  // ⚠️ 装配顺序：**必须先于 srsApi**——SRS 抽题走存储层优先（I5/KERNEL-05），
+  // 需要引用 poolApi.sampleQuestions（换根时随域一起重建，cycle-16 教训⑬）。
+  const poolApi = makePoolApi({ repoRoot: root, dataDir: DATA_DIR, store })
   const d = {
     root,
     store,
-    srsApi: makeSrsApi({ repoRoot: root, store }),
+    srsApi: makeSrsApi({ repoRoot: root, store, pool: poolApi }),
     dataApi: makeDataApi({ repoRoot: root, planFile: PLAN_FILE }),
     paperApi: makePaperApi({ repoRoot: root, store }),
     naokuApi: makeNaokuApi({ repoRoot: root, dataDir: DATA_DIR, store }),
@@ -75,9 +82,12 @@ function buildDomains(root: string) {
     methodologyApi: makeMethodologyApi({ pkgRoot: PKG_ROOT, repoRoot: root, dataDir: DATA_DIR, store }),
     // cycle-21 纸质补录域（issue #3）：搜索/补录/撤销，指纹与错题本同源
     historyApi: makeHistoryApi({ store, repoRoot: root }),
+    poolApi,
     studyPlan: makeStudyPlan(PLAN_FILE),
   }
   initNaoku(root, DATA_DIR).catch(() => {})
+  // cycle-34 阶段 1：统一库惰性打开（失败只降级——域内诚实报「未就绪」，绝不崩宿主）
+  initPoolDb(DATA_DIR).catch(() => {})
   return d
 }
 export function getRepoRoot(): string {
@@ -92,6 +102,7 @@ function rebuildDomains() {
   if (changed) {
     resetPaperIndex()
     resetNaoku()
+    resetPoolDb()
     graphCache.clear()
   }
   return { root: next, changed }
@@ -139,122 +150,20 @@ function serveKgImage(params, res) {
   st.pipe(res)
 }
 
-// ══ 遥测：滑窗 QPS + 每端点环形延迟样本（p50/p95 有序统计）══
-interface EpStat { count: number; errors: number; lat: number[]; lastTs?: number }
-const telemetry: { endpoints: Record<string, EpStat>; requests: number[]; window: number } = { endpoints: {}, requests: [], window: 60_000 }
-const LAT_RING = 100
-
-/** cycle-18：未声明端点（404/Unknown API）的遥测只记聚合桶，不污染端点对账表。
- *  为什么必须这样：`/api/capabilities` 的端点对账以 telemetry.endpoints 的键为
- *  「运行态声明」，一旦某个从未声明过的路径（拼错、探针、扫描器）被记进来，
- *  就会永久驻留成「影子端点」，让白盒面板与 smoke 口径守卫误判（v1.8 假阳性同族）。
- *  端点维度只认**已声明**路径；未命中的请求计数进 `telemetry.unmatched`（仍可观测，但不参与对账）。 */
-const UNMATCHED_BUCKET = '__unmatched__'
-
+/**
+ * 遥测（cycle-34 外提：见 server/telemetry.ts）
+ *
+ * 状态与快照逻辑已外提为独立模块（cycle-13 教训① 的固定拆法：只读纯函数外提 +
+ * 闭包值同名参数穿线）——本文件只保留调用点，**函数体逐语义等价**（无行为改动）。
+ *
+ * 口径纪律：
+ *  · 未声明端点只进 `__unmatched__` 聚合桶，不进端点对账表（cycle-18 ㉗）；
+ *  · UI 壳路径（'/' 与 '/index.html'）不进对账（cycle-19 ㉞）；
+ *  · 端点路径口径必须是**相对挂载点的逻辑路径**（`/api/graph`），否则能力对账 100% 失配（v1.8 白盒假阳性）。
+ */
+const telemetry = createTelemetry()
 /** 已声明端点集合（由 CAPABILITIES 单一事实源派生，供遥测判「是否影子端点」） */
 const DECLARED_ENDPOINT_SET = new Set(CAPABILITIES.endpoints.map((e: any) => e.path))
-/** 是否为已声明端点；非 /api/* 路径（UI/静态）不参与端点对账，一律视为 matched。
- *  cycle-19 旅程修正：UI 壳路径（'/' 与 '/index.html'）同样不进端点对账——
- *  它们是页面壳而非能力端点，混进对账表会成为「消费 ∧ ¬声明」假漂移（本轮沙箱旅程实证）。 */
-function isDeclaredEndpoint(path: any): boolean {
-  const p = String(path || '')
-  // UI 壳路径（SPA 页面本身）不是能力端点：不进对账、也不该进 unmatched 桶（纯壳流量）
-  if (p === '/' || p === '/index.html') return true
-  if (!p.startsWith('/api/')) return true
-  return DECLARED_ENDPOINT_SET.has(p)
-}
-
-function recordRequest(path: any, ms: any, isError: any, declared?: boolean): void {
-  const key = declared === false ? UNMATCHED_BUCKET : path
-  const t = (telemetry.endpoints[key] = telemetry.endpoints[key] || { count: 0, errors: 0, lat: [] })
-  t.count++
-  if (isError) t.errors++
-  t.lat.push(Math.round(ms))
-  if (t.lat.length > LAT_RING) t.lat.shift()
-  t.lastTs = Date.now()
-  telemetry.requests.push(t.lastTs)
-  if (telemetry.requests.length > 1000) telemetry.requests.shift()
-}
-
-function percentile(sorted: number[], p: number): number {
-  if (!sorted.length) return 0
-  return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]
-}
-
-function telemetrySnapshot() {
-  const now = Date.now()
-  const inWindow = telemetry.requests.filter(ts => now - ts < telemetry.window).length
-  const eps: any = {}
-  let unmatchedCount = 0, unmatchedErrors = 0
-  for (const [path, t] of entries(telemetry.endpoints)) {
-    // cycle-18：未声明端点的请求只进聚合桶，不混入端点对账表（否则会成为永久「影子端点」）
-    if (path === UNMATCHED_BUCKET) { unmatchedCount = t.count; unmatchedErrors = t.errors; continue }
-    const sorted = [...t.lat].sort((a, b) => a - b)
-    eps[path] = {
-      count: t.count, errors: t.errors,
-      errRate: t.count ? +(t.errors / t.count).toFixed(3) : 0,
-      p50: percentile(sorted, 50), p95: percentile(sorted, 95),
-      lastActive: t.lastTs ? Math.round((now - t.lastTs) / 1000) : null,
-      series: t.lat,
-    }
-  }
-  const totalReq: number = (Object.values(eps) as any[]).reduce((s: number, e: any) => s + e.count, 0)
-  const totalErr: number = (Object.values(eps) as any[]).reduce((s: number, e: any) => s + e.errors, 0)
-
-  // ── v1.8 追加：全局延迟直方图（各端点最新环形样本合并，有序统计）──
-  const allLat: number[] = []
-  for (const t of Object.values(telemetry.endpoints) as EpStat[]) allLat.push(...t.lat)
-  allLat.sort((a, b) => a - b)
-  const histogram = {
-    p50: percentile(allLat, 50), p90: percentile(allLat, 90),
-    p95: percentile(allLat, 95), p99: percentile(allLat, 99),
-    max: allLat.length ? allLat[allLat.length - 1] : 0,
-  }
-
-  // ── v1.8 追加：慢端点排行（p95 降序 → count 降序 → path 字典序，稳定可复现）──
-  const topSlow = entries(eps)
-    .filter(([path]) => !path.includes('-img')) // 二进制流不计入慢端点排名
-    .map(([path, e]: [string, any]) => ({ path, p95: e.p95, count: e.count }))
-    .sort((a, b) => b.p95 - a.p95 || b.count - a.count || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-    .slice(0, 10)
-
-  // ── v1.8 追加：告警（契约阈值 p95>200 warn / >500 error / errRate>1% warn）──
-  const alerts: any[] = []
-  for (const [path, e] of entries(eps) as Array<[string, any]>) {
-    if (e.p95 > 500) alerts.push({ level: 'error', msg: `${path} p95 ${e.p95}ms 超过 500ms` })
-    else if (e.p95 > 200) alerts.push({ level: 'warn', msg: `${path} p95 ${e.p95}ms 超过 200ms` })
-    if (e.count > 0 && e.errors / e.count > 0.01) {
-      alerts.push({ level: 'warn', msg: `${path} 错误率 ${(e.errors / e.count * 100).toFixed(1)}% 超过 1%` })
-    }
-  }
-  if (totalReq > 0 && totalErr / totalReq > 0.01) {
-    alerts.push({ level: 'warn', msg: `全局错误率 ${(totalErr / totalReq * 100).toFixed(1)}% 超过 1%` })
-  }
-  // cycle-18：命中未声明端点的请求（拼错/扫描器/旧客户端）——有量就提示，但不进端点表
-  if (unmatchedCount > 0) {
-    alerts.push({ level: 'info', msg: `有 ${unmatchedCount} 次请求命中未声明端点（已聚合，未计入端点对账）` })
-  }
-  // 稳定排序：error 在前，同级按消息字典序（避免 telemetry 插入序导致抖动）
-  alerts.sort((a, b) => (a.level === b.level
-    ? (a.msg < b.msg ? -1 : a.msg > b.msg ? 1 : 0)
-    : (a.level === 'error' ? -1 : 1)))
-
-  return {
-    uptimeSec: Math.round((now - BOOT_TS) / 1000),
-    qpsWindow: +(inWindow / (telemetry.window / 1000)).toFixed(3),
-    totalRequests: totalReq,
-    endpoints: eps,
-    activeEndpoints: Object.keys(eps).length,
-    declaredEndpoints: CAPABILITIES.endpoints.length,
-    coverage: +(Object.keys(eps).length / CAPABILITIES.endpoints.length).toFixed(3),
-    histogram,
-    topSlow,
-    alerts,
-    // cycle-18：未声明端点请求的可观测余量（不含具体路径，避免影子端点回流；
-    // 有计数就说明「有人在打不存在的 API」——这个信号本身必须保留）
-    unmatched: { count: unmatchedCount, errors: unmatchedErrors },
-  }
-}
 
 // ══ v1.8 生命周期状态机（data/lifecycle.jsonl 最近事件 + CAPABILITIES.lifecycle 合成）══
 /**
@@ -362,7 +271,7 @@ function graphSnapshot(wsRaw) {
   delete plan.raw
   const ge = buildGraph({ banks, modules, plan })
   const metrics = graphMetrics(ge.nodes, ge.edges)
-  const tel = telemetrySnapshot()
+  const tel = telemetrySnapshot(telemetry, CAPABILITIES.endpoints.length, BOOT_TS)
   const p = domains.store.loadProgress(wsRaw)
   // ── v1.8 追加：分析层（纯函数、确定性；每次缓存未命中重算，5s TTL）──
   const deg = degreeAnalysis(ge.nodes, ge.edges)
@@ -431,6 +340,10 @@ async function handleApi(path, params, post, method, wsRaw, port) {
   return domains.methodologyApi.handle(path, params, post, method, wsRaw)
     ?? domains.srsApi(path, params, post, method, wsRaw)
     ?? domains.historyApi.handle(path, params, post, method, wsRaw)
+    // cycle-34 阶段 1：统一题目池域——插在 historyApi 之后、tuxingApi 之前
+    // （研究 15 §2.3：`/api/pool/*` 前缀独立无冲突，但语义上「统一池」先于各专项域命中）
+    // ⚠️ 异步域：handle 返回 Promise → 必须 await（cycle-16 教训⑯：异步路由改造要同步改全部调用点）
+    ?? await domains.poolApi.handle(path, params, post, method, wsRaw)
     ?? domains.tuxingApi.handle(path, params)
     ?? domains.naokuApi.handle(path, params, post, method, wsRaw)
     ?? domains.paperApi.handle(path, params, post, method, wsRaw)
@@ -452,7 +365,15 @@ function coreApi(path, params, post, method, wsRaw, port) {
     }
   }
   if (path === '/api/questions' && method === 'GET') {
-    return getRandomQuestions(domains.root, params.get('module') || '判断推理', parseInt(params.get('count') || params.get('limit') || '1'))
+    // cycle-34 阶段 1（I5/KERNEL-05）：存储层优先供数——统一池就绪时不再直读第三方 md；
+    // 池未就绪时回落目录解析（受控降级，唯一可用数据源）。
+    // ⚠️ 兼容硬约束：响应形状零变化（options/correctAnswer/stem 的 kgimg:// 占位全保留）。
+    return getRandomQuestions(
+      domains.root,
+      params.get('module') || '判断推理',
+      parseInt(params.get('count') || params.get('limit') || '1'),
+      domains.poolApi,
+    )
   }
   if (path === '/api/check' && method === 'POST') {
     const q = post.question
@@ -478,6 +399,24 @@ function coreApi(path, params, post, method, wsRaw, port) {
       if (item) wrongEvent = { type: item.mastered ? 'mastered' : 'promoted', sig: item.sig, box: item.box, consecutive: item.consecutive }
     }
     domains.store.saveProgress(wsRaw, progress)
+    // cycle-38 阶段 2（研究 15 C7）：学习事件**双写**——progress json 仍是统计/错题本
+    // 的权威事实源（读路径零改动），study_event 只沉淀事件流水（阶段 3 按 kadian
+    // 诊断的原料）。写失败静默（流水丢失不影响判分主链路）。
+    try {
+      putStudyEvent(poolDb(), {
+        ws: domains.store.wsKey(wsRaw),
+        qid: String((q as any).qid || ''),
+        canonicalId: String((q as any).id || '').startsWith('q:') ? String((q as any).id) : '',
+        module: String(q.module || ''),
+        kadian: String((q as any).dims && (q as any).dims.kadian || ''),
+        action: isCorrect ? (wrongEvent && wrongEvent.type === 'mastered' ? 'mastered' : wrongEvent && wrongEvent.type === 'promoted' ? 'promoted' : 'answer') : (wrongEvent ? 'collected' : 'wrong'),
+        userAnswer: answer,
+        correctAnswer: String(q.correctAnswer || ''),
+        isCorrect,
+        box: wrongEvent && wrongEvent.box != null ? Number(wrongEvent.box) : null,
+        consecutive: wrongEvent && wrongEvent.consecutive != null ? Number(wrongEvent.consecutive) : null,
+      })
+    } catch { /* 流水写失败不影响判分返回 */ }
     return { isCorrect, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongEvent, progress: { answered: progress.answered, correct: progress.correct, wrong: progress.wrong, rate: Math.round(progress.correct / progress.answered * 100) } }
   }
   if (path === '/api/progress' && method === 'GET') {
@@ -505,9 +444,9 @@ function coreApi(path, params, post, method, wsRaw, port) {
     return graphQuery(path, params, wsRaw)
   }
   if (path === '/api/lifecycle') return lifecycleSnapshot()
-  if (path === '/api/telemetry') return telemetrySnapshot()
+  if (path === '/api/telemetry') return telemetrySnapshot(telemetry, CAPABILITIES.endpoints.length, BOOT_TS)
   if (path === '/api/capabilities') {
-    const tel = telemetrySnapshot()
+    const tel = telemetrySnapshot(telemetry, CAPABILITIES.endpoints.length, BOOT_TS)
     // cycle-19 旅程修正：对账消费集排除 UI 壳路径与聚合桶——「/」「/index.html」是页面壳
     // 而非能力端点，混进对账会成假漂移（missingProducers 误报「/」，沙箱实证）。
     const consumed = new Set(Object.keys(tel.endpoints).filter(p => p !== '/' && p !== '/index.html' && p !== UNMATCHED_BUCKET))
@@ -607,7 +546,7 @@ export function attachWebRoute(webServer, mountPath = '/kaogong') {
       // 遥测路径口径（v1.8.0 修复）：统一记「相对挂载点的逻辑路径」（/api/graph），
       // 与 CAPABILITIES.endpoints 声明口径一致。此前记 mountPath+rel（/kaogong/api/graph）
       // → 能力对账永远匹配不上 → 全部端点被判「未声明」，白盒面板失去意义（假阳性）。
-      recordRequest(rel, Date.now() - t0, status >= 400, isDeclaredEndpoint(rel))
+      recordRequest(telemetry, rel, Date.now() - t0, status >= 400, isDeclaredEndpoint(rel, DECLARED_ENDPOINT_SET))
     }
     res.setHeader('Cache-Control', 'no-store')
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
@@ -660,9 +599,9 @@ function buildHttpServer(port) {
       const finish = (status, type, body) => {
         res.writeHead(status, { 'Content-Type': type })
         res.end(body)
-        recordRequest(path, Date.now() - t0, status >= 400, isDeclaredEndpoint(path))
+        recordRequest(telemetry, path, Date.now() - t0, status >= 400, isDeclaredEndpoint(path, DECLARED_ENDPOINT_SET))
       }
-      if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); recordRequest(path, Date.now() - t0, false); return }
+      if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); recordRequest(telemetry, path, Date.now() - t0, false); return }
       if (path === '/' || path === '/index.html') {
         const ui = renderUI()
         return ui ? finish(200, 'text/html; charset=utf-8', ui) : finish(404, 'text/plain; charset=utf-8', 'UI not found')

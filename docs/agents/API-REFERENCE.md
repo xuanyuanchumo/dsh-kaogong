@@ -157,6 +157,31 @@
 
 **cycle-22 深度题库占位化（专题-判断推理无图修复）**：`adapters/naoku.ts` 的 `stripHtmlKeepImg`/`neutralizeImages` 与 repoData 同模板——选项（1406 题含图）、解析（8294 题含图）、五维标注（reasoning/fastest/pitfalls/mother）的内联 `<img>` 全部转 `kgimg://` 占位；客户端 `OptionRow`/深度题库选项行/模考选项行检测占位后走 RichText 渲染出图；manifest 已补登记 `/api/kg-img`（consumers=practice/deepbank/topics）。
 
+## 九c、统一题目池（v1.30 · cycle-34 阶段 1 · `.kaogong.db` 存储层）
+
+> 端点全在 `poolApi` 域（域链位置：`historyApi` **之后**、`tuxingApi` **之前**——研究 15 §2.3「统一池」语义先于各专项域命中）。
+> 详细设计见 [STORAGE-LAYER.md](./STORAGE-LAYER.md)。
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/pool/status` | GET | **库状态 + 白盒健康** → `{ready, built, builtAt, sourceFingerprint, schemaVersion, tables[], bytes, stats{questions,relations,materials,questionSources,distinctQid,withKadian,withImage,multiSource,relTypes[]}, health{...}, registry[{id,tier,label,upstream,available}], ingestStats}`。未就绪时 `ready:false` + `hint`（**诚实降级**，不返回空数组冒充） |
+| `/api/pool/health` | GET | **独立健康快照**（白盒面板消费）→ `{available, tables[], relTypes[{type,count,label,color,desc,known}], modules[], sources[], quality[8 项（每项附判据 SQL）], topKadian[], totals{}, bytes, path, builtAt, snapshotMs, relTypeMeta}` |
+| `/api/pool/questions?source=&module=&kadian=&count=` | GET | **多源分层抽题** → `{questions[聚合视图], count, candidates, strategy:'模块弱点（SRS 1/(rate+0.15)）× 多出处加成', source, module, kadian}`。权重公式**复用 SRS 同源模型**（不另立一套） |
+| `/api/pool/search?q=&limit=` | GET | **跨源统一检索**（FTS5 trigram + 跨源去重聚合）→ `{query, results[{canonicalId,qid,module,category,kadian,stem,analysis,sources[{source,paper,region,year}]}], count, tookMs, engine:'fts5-trigram'\|'like-fallback', phraseHit?}`。**短词（<3 字）自动降级** LIKE（trigram 无法命中） |
+| `/api/pool/question?id=<canonical_id>` | GET | **单题聚合视图** → `{canonicalId,qid,fp,module,category,kadian,qtype,stem,options,answer,analysis,dims{reasoning,fastest,pitfalls,mother,doubt,askModel},related,groupMaterial,materialRef,images[],hasImage,freq,paper,region,year,sources[],sourceCount,relations[]}`（cycle-40：sources 含全部归并来源；解析多版本查 `/api/pool/analysis-versions?id=<canonical_id>` → `{versions[{sourceId,localKey,analysis,answer,at}]}`） |
+| `/api/pool/relations?rel_type=&src=&dst=&limit=` | GET | **关系查询** → `{relations[{rel_type,src_kind,src_id,dst_kind,dst_id,weight,evidence}], count, relTypes[], total}` |
+| `/api/pool/graph?node=&depth=&rel_type=&limit=` | GET | **关系子图** → `{nodes[{id,kind,label}], edges[{type,source,target,weight}], nodeCount, edgeCount, focus, depth}`。无 `node` 时返回全局子图（按权重降序取前 N） |
+| `/api/pool/rebuild` | POST | **重建** `{mode:'full'\|'incremental', maxFiles?}` → `{ok, schemaVersion, elapsedMs, sources{源id:{questions,relations,files,materials,appearances,reviews}}, stats, diagnostics{perSource[], throughputPerQuestion}}` |
+| `/api/pool/review` | POST | **人工校验写入** `{canonicalId, verifiedAnswer, officialAnswer?, status?}` → `{ok, canonicalId, verifiedAnswer, at}` |
+
+**统一身份口径**：`canonical_id` = `q:<qid>` 优先 → `fp:<fp>` 次之 → `h:<sha256前16>` 兜底。
+**一题多出处**：同一 canonical_id 在多源/多卷出现时**合并为一条**并列出 **N 处出处**（`question_source` 表）。
+**端点形状纪律**：用**查询参数**而非路径参数（`?id=`）——能力对账以 manifest 的**精确路径**集合为准，
+路径参数端点会被判成「影子端点」制造假漂移。
+
+**`/api/questions` 兼容契约（不变）**：练习链路现在**存储层优先**（池就绪时不直读第三方 md，请求路径零 fs 读），
+但响应**形状零变化**（`options:{A:文本}` / `correctAnswer` / `stem` 含 `kgimg://` 占位 / `paperFile` / `source` 回填真实上游源名）。
+
 ## 十、工具（host 半 · 6 个 · 均声明 output:{schema,render}）
 
 | 工具 | 类 | 说明 |

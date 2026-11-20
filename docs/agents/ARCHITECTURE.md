@@ -63,6 +63,8 @@ async function handleApi(path, params, post, method, wsRaw, port) {
   if (path.startsWith('/api/repos')) { const r = await repoManager.handle(...); if (r) return r }
   return domains.methodologyApi.handle(...)  // 花生十三体系（cycle-18，同步域，前置）
     ?? domains.srsApi(...)            // 错题本 SRS + 专项记忆
+    ?? domains.historyApi.handle(...) // 纸质补录（issue #3）
+    ?? await domains.poolApi.handle(...)  // 统一题目池（cycle-34，异步域）
     ?? domains.tuxingApi.handle(...)  // 图形推理
     ?? domains.naokuApi.handle(...)   // 深度题库（27506 题）
     ?? domains.paperApi.handle(...)   // 真题卷/专题/申论评改/模考
@@ -70,6 +72,10 @@ async function handleApi(path, params, post, method, wsRaw, port) {
     ?? coreApi(...)                   // status/stats/graph/telemetry/capabilities
 }
 ```
+
+> **域链顺序即优先级**（先命中先返回）。cycle-34 把 `poolApi` 插在 `historyApi` 之后、`tuxingApi` 之前——
+> `/api/pool/*` 前缀独立无冲突，但排在前面让「统一池」在**语义上**先于各专项域被命中（研究 15 §2.3「改朝不加夕」）。
+> ⚠️ `poolApi.handle` 是 **async**（重建端点需 `await` 摄入）→ 链上必须 `await`（cycle-16 教训⑯）。
 
 - **数据根四级解析**（v1.11 一键式安装的基座）：`buildDomains(root)` 集中装配全部域，
   root 由 `dataRoot.resolveReposRoot()` 解析（env `KG_REPOS_DIR` > `data/repos-config.json`
@@ -93,6 +99,33 @@ export function migratePkgData(): MigrationReport     // 启动时执行一次�
 - **为什么必须外置**：市场/npm 升级 = pnpm 把包目录**整目录替换**（`ERR_PNPM_EPERM` 失败恢复也不保数据）——包内一切用户数据（进度/错题本/配置）必然丢失（issue #2 实证）。用户数据根 = `~/.dsh/kaogong/`（dsh-cookie-guard 实证模式：DSH 主目录下插件命名空间，与安装位置零耦合）。
 - **迁移器语义**：`progress/`、`repos-config.json`、`study-plan.md` 搬家（原子 rename → 跨卷 cp 回退**删源**）；`lifecycle.jsonl` 是环形审计日志（新根侧被运行时改写），保留新根删源；缓存快照（`.naoku.db`/`.paper-index.json` 等）不迁（可再生，rebuild 自动重建）。幂等标记 `.migrated`；失败只读降级**绝不删源**；`/api/data-location` 白盒透出位置/来源/迁移状态/包内残留。
 - **纪律：用户数据永不写进包目录**——新增写路径先问「升级替换包目录后它还在吗」。
+
+### 统一题目池存储层（v1.30 · cycle-34 · `.kaogong.db`）
+
+```
+L4 内核层   SRS / 图谱算法族 / 判分闭环            ← 不认识文件系统
+   ↓
+L3 存储层   .kaogong.db（10 表 + FTS5 trigram）    ← 唯一题/关系事实源
+   ↓
+L2 适配层   poolSources 注册表 + poolSourceImpls    ← 唯一认识上游格式的地方
+   ↓
+L1 数据源   16 个第三方仓库（只读，永不修改）
+```
+
+```js
+// src/server/http.ts —— buildDomains(root) 内装配（⚠️ 必须先于 srsApi）
+const poolApi = makePoolApi({ repoRoot: root, dataDir: DATA_DIR, store })
+domains = { srsApi: makeSrsApi({ repoRoot: root, store, pool: poolApi }), ..., poolApi, ... }
+initPoolDb(DATA_DIR).catch(() => {})   // 惰性打开；失败只降级不崩宿主
+```
+
+- **与 `.naoku.db` 的边界（硬约束）**：`.naoku.db` 是**上游投影**（整库重建，自有表会被静默冲掉）→
+  **禁写自有表**；`.kaogong.db` 是**项目自有派生物**（可全量重建，承载统一池 + 关系 + 资产 + 索引 + 用户态）。
+  两者以 `qid` 关联（`ATTACH` 实测可用）。
+- **库文件位置**：用户数据根 `~/.dsh/kaogong/.kaogong.db`（**不入包**——同 cycle-21 纪律）。
+- **装配顺序**：`poolApi` 必须**先于** `srsApi` 创建（SRS 抽题走存储层优先，需引用 `poolApi.sampleQuestions`）。
+- **换根时随域重建**：`rebuildDomains()` 里加 `resetPoolDb()`（cycle-16 教训⑬「谁持有、谁重建、谁失效」）。
+- **详细设计**：[STORAGE-LAYER.md](./STORAGE-LAYER.md)（四层依赖 / 六不变量 / schema / 源注册表 / 白盒健康 / 兼容硬约束 / 坑速查）。
 
 ### 方法论域（methodologyApi）的装配与边界（v1.13）
 

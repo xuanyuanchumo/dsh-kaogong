@@ -1,0 +1,62 @@
+{
+  "day": 1,
+  "answered": 5,
+  "correct": 3,
+  "wrong": 2,
+  "history": [
+    {
+      "date": "2026-11-02",
+      "module": "言语理解与表达",
+      "type": "片段阅读",
+      "userAnswer": "C",
+      "correctAnswer": "C",
+      "isCorrect": true
+    },
+    {
+      "date": "2026-11-02",
+      "module": "言语理解与表达",
+      "type": "片段阅读",
+      "userAnswer": "A",
+      "correctAnswer": "C",
+      "isCorrect": false
+    },
+    {
+      "date": "2026-11-02",
+      "module": "判断推理",
+      "type": "类比推理",
+      "userAnswer": "B",
+      "correctAnswer": "B",
+      "isCorrect": true
+    },
+    {
+      "date": "2026-11-02",
+      "module": "政治理论",
+      "type": "时事政治",
+      "userAnswer": "B",
+      "correctAnswer": "B",
+      "isCorrect": true
+    },
+    {
+      "date": "2026-11-02",
+      "module": "政治理论",
+      "type": "新思想",
+      "userAnswer": "C",
+      "correctAnswer": "A",
+      "isCorrect": false
+    }
+  ],
+  "byModule": {
+    "言语理解与表达": {
+      "answered": 2,
+      "correct": 1
+    },
+    "判断推理": {
+      "answered": 1,
+      "correct": 1
+    },
+    "政治理论": {
+      "answered": 2,
+      "correct": 1
+    }
+  }
+}

@@ -1,0 +1,5 @@
+# 本地测试 overlay — 绝对路径加载 dsh-kaogong（Host=src/host/index.js, Client=src/client/client.js）
+# 使用方法: pnpm dsh web --patch ./dsh-kaogong/cordis.local.yml
+- insert:
+    - id: kaogong
+      name: 'D:/Projects/TraeProjects/kaogong/dsh-kaogong'
