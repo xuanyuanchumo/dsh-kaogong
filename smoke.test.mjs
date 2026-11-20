@@ -1200,6 +1200,27 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
       fs.readFileSync(new URL('./src/shared/manifest.ts', import.meta.url), 'utf-8').includes("path: '/api/data-location'"))
   }
 
+  // ═══ SMOKE-ISSUE6（GitHub issue #6 · Windows 题库管理全功能失效根治）═══
+  // isInside 原实现用 b + '\\\\'（两个字面反斜杠）判前缀——Windows resolve() 返回单 '\'，
+  // 子路径恒判越界。修法 = path.relative 语义判定。6 组边界全部固化（含 issue 建议的
+  // 「子路径必须 true」与「兄弟同前缀必须 false」两条旧断言抓不到的用例）。
+  {
+    const { isInside } = await import('./dist/server/dataRoot.js')
+    const base = 'C:\\Users\\tester\\.dsh\\kaogong\\repos'
+    const cases = [
+      ['子路径', base + '\\huasheng13', true],
+      ['自身', base, true],
+      ['.. 穿越', base + '\\..\\evil', false],
+      ['兄弟同前缀', base + 'x\\foo', false],
+      ['跨盘', 'D:\\other', false],
+      ['混合分隔符', base + '/huasheng13', true],
+    ]
+    let pass = 0
+    for (const [name, cand, want] of cases) if (isInside(base, cand) === want) pass++
+    check('SMOKE-ISSUE6 isInside 跨平台 6 组边界（子路径/自身/穿越/兄弟/跨盘/混合分隔符）',
+      pass === cases.length, `${pass}/${cases.length}`)
+  }
+
   // ═══ SMOKE-SCHED（cycle-30b T-027）：智能排程运行时断言（教训⑧：§12 崩溃安全之前）═══
   {
     const sched = await J(`${B}/api/plan/schedule`)
