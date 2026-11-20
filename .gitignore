@@ -24,3 +24,13 @@ data/lifecycle.jsonl
 # 本轮临时验证脚本（不入户）
 _tmp/
 .npmrc
+
+# cycle-43（评审修复）：恢复 main(v1.17.0) 的 ANIC 工作区排除规则——develop 合并时误丢
+# （config.yml 除外：smoke R11-GUARD-01 守卫读它判「门禁走 npm scripts」）
+.cycles/*
+!.cycles/config.yml
+# 开发态个人作答数据（非发布内容；样例见 data/progress.example.json）
+data/progress.json
+
+# 本地测试 overlay（含开发机绝对路径，不入库；样例见 cordis.local.example.yml）
+cordis.local.yml
