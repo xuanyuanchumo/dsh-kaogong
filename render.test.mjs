@@ -660,7 +660,17 @@ try {
     ok('真实 client.js: 图谱工具条（重置/适配/标签/布局）齐备')
 
     // 节点类型过滤 chips（NODE_META 驱动）
-    const chips = tr.root.findAllByType('button').filter(b => /插件|入口|端点|视图|工具/.test(String(b.props.children)))
+    // cycle-44b：chips 走 ui-kit KgChips 基建后，icon 形态 children 是元素（span 包 icon+text）——
+    // 断言锚点同步升级：文本提取器递归取 children（教训④：改形态必须同波次改锚点）。
+    // chipText 提为图谱段共享（G-12 边类型断言同形态复用）。
+    const chipText = (c) => {
+      if (typeof c === 'string' || typeof c === 'number') return String(c)
+      if (Array.isArray(c)) return c.map(chipText).join('')
+      if (c && c.props && c.props.children !== undefined) return chipText(c.props.children)
+      return ''
+    }
+    window.__kgChipText = chipText
+    const chips = tr.root.findAllByType('button').filter(b => /插件|入口|端点|视图|工具/.test(chipText(b.props.children)))
     if (chips.length < 3) throw new Error('节点类型过滤 chips 缺失（NODE_META 未驱动 UI）')
     ok('真实 client.js: 节点类型过滤 chips 由 NODE_META 驱动')
 
@@ -1019,9 +1029,10 @@ try {
     }
 
     // G-12 图例卡 + 边类型 chips（边计数由 mock edges 的 rel 驱动）
+    // cycle-44b：icon 形态 children → 用共享 chipText 递归提取文本后再断言
     if (!gText.includes('🎨 图例与过滤')) throw new Error('RENDER-G-12 图例卡未渲染')
     if (!gText.includes('边类型（点击显隐）')) throw new Error('RENDER-G-12 边类型过滤行未渲染')
-    if (!gBtns.some(b => /(生产|注册) \d+/.test(String(b.props.children)))) throw new Error('RENDER-G-12 边类型 chips 缺失')
+    if (!gBtns.some(b => /(生产|注册) \d+/.test(window.__kgChipText(b.props.children)))) throw new Error('RENDER-G-12 边类型 chips 缺失')
     ok('RENDER-G-12: 图例卡（节点/边类型过滤 chips）渲染')
 
     // G-13 小地图接线：canvas stub 下引擎降级（容器条件渲染不出现），证据链在产物中

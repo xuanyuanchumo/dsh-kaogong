@@ -6,7 +6,7 @@
  * 空态/加载骨架 + 视觉现代化（精灵渐变/脉冲环/弧线/玻璃拟态）。
  */
 
-import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, G_CHIP, MOUNT_PATH } from '../ui-kit.js'
+import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, MOUNT_PATH, KgChips, KgLoad, KgErr } from '../ui-kit.js'
 import { createGraphEngine } from '../graph/graph-engine.js'
 import { graphKeyCommand } from '../graph/graph-transition.js'
 import { graphFetchSubgraph, graphNormalizeNeighborhood, graphDeriveImpact } from '../graph/graph-subgraph.js'
@@ -778,50 +778,56 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
             }, legendOpen ? '▾ 收起' : '▸ 展开')),
           legendOpen ? h('div', { style: { marginTop: 7 } },
             // 节点类型行（保留 button 形态：点击显隐 = 过滤；计数与色点增强）
+            // cycle-44b：chips 走 ui-kit 基建 KgChips（icon=色点 ReactNode；显隐态由调用方 style 声明）
             h('div', { style: { fontSize: 10, color: '#94a3b8', marginBottom: 4 } }, '节点类型（点击显隐）'),
-            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 4 } },
-              typeChips.map((c: any) => {
+            h(KgChips, {
+              gap: 4,
+              items: typeChips.map((c: any) => {
                 const hid = hiddenTypes.has(c.type)
-                return h('button', {
+                return {
                   key: c.type,
-                  onClick: () => toggleType(c.type),
+                  text: (c.meta.icon || '•') + ' ' + (c.meta.label || c.type) + ' ' + (typeCounts[c.type] || 0),
+                  icon: h('i', { style: { width: 8, height: 8, borderRadius: '50%', background: c.meta.color, display: 'inline-block', flexShrink: 0 } }),
                   title: '点击显示/隐藏「' + (c.meta.label || c.type) + '」节点（' + (typeCounts[c.type] || 0) + ' 个）',
-                  style: Object.assign({}, G_CHIP, {
+                  style: {
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     borderColor: c.meta.color + '66',
                     background: hid ? 'transparent' : c.meta.color + '1f',
                     color: hid ? '#94a3b8' : c.meta.color,
                     opacity: hid ? 0.55 : 1,
                     textDecoration: hid ? 'line-through' : 'none',
-                  }),
-                },
-                  h('i', { style: { width: 8, height: 8, borderRadius: '50%', background: c.meta.color, display: 'inline-block', flexShrink: 0 } }),
-                  (c.meta.icon || '•') + ' ' + (c.meta.label || c.type) + ' ' + (typeCounts[c.type] || 0))
+                  },
+                }
               }),
-              h('button', {
-                onClick: () => setShowOrphans((v: any) => !v),
-                title: '孤儿 = 度数为 0 的节点',
-                style: Object.assign({}, G_CHIP, { opacity: showOrphans ? 1 : 0.55 }),
-              }, '孤儿：' + (showOrphans ? '显示' : '隐藏'))),
+              onPick: k => toggleType(k),
+            }),
+            h(KgChips, {
+              gap: 4,
+              items: [{ key: '__orphans__', text: '孤儿：' + (showOrphans ? '显示' : '隐藏'),
+                title: '孤儿 = 度数为 0 的节点', style: { opacity: showOrphans ? 1 : 0.55 } }],
+              onPick: () => setShowOrphans((v: any) => !v),
+            }),
             // 边类型过滤行（engine setView 的 hiddenEdges 消费端）
             h('div', { style: { fontSize: 10, color: '#94a3b8', margin: '8px 0 4px' } }, '边类型（点击显隐）'),
-            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 4 } },
-              edgeChips.map((ec: any) => {
+            h(KgChips, {
+              gap: 4,
+              items: edgeChips.map((ec: any) => {
                 const hid = hiddenEdges.has(ec.rel)
-                return h('button', {
+                return {
                   key: ec.rel,
-                  onClick: () => toggleEdge(ec.rel),
+                  text: (ec.meta.label || ec.rel) + ' ' + (edgeCounts[ec.rel] || 0),
+                  icon: h('i', { style: { width: 12, height: 2, background: ec.meta.color, display: 'inline-block', borderRadius: 2, flexShrink: 0 } }),
                   title: '点击显示/隐藏「' + (ec.meta.label || ec.rel) + '」边（' + (edgeCounts[ec.rel] || 0) + ' 条）',
-                  style: Object.assign({}, G_CHIP, {
+                  style: {
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     borderColor: (ec.meta.color || '#94a3b8') + '55',
                     opacity: hid ? 0.45 : 1,
                     textDecoration: hid ? 'line-through' : 'none',
-                  }),
-                },
-                  h('i', { style: { width: 12, height: 2, background: ec.meta.color, display: 'inline-block', borderRadius: 2, flexShrink: 0 } }),
-                  (ec.meta.label || ec.rel) + ' ' + (edgeCounts[ec.rel] || 0))
-              })),
+                  },
+                }
+              }),
+              onPick: k => toggleEdge(k),
+            }),
             // 着色模式图例（连续模式=渐变条+min/max；社区模式=色块+计数）
             renderColorLegend())
             : null),

@@ -263,17 +263,21 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
      * cycle-44（chips 组件化）：KgChips —— 五套手写 chip 行（graph/obs/papers/study/
      * question-kit 各自 Object.assign(G_CHIP, …)）收敛为单一事实源。
      * 全 props 可选缺失降级（R4 纪律）；active 态由调用方声明，组件不做场景推断。
+     * cycle-44b：icon 支持任意 ReactNode（graph-view 节点色点/边色条形态）——
+     * 字符串走文本 chip，ReactNode 直接渲染（调用方负责形状）。
      */
-    interface KgChipItem { key: string; text: string; active?: boolean; style?: any; title?: string }
-    interface KgChipsProps { items: KgChipItem[]; onPick?: (key: string) => void }
-    export function KgChips({ items, onPick }: KgChipsProps) {
+    interface KgChipItem { key: string; text: string; icon?: any; active?: boolean; style?: any; title?: string }
+    interface KgChipsProps { items: KgChipItem[]; onPick?: (key: string) => void; gap?: number }
+    export function KgChips({ items, onPick, gap }: KgChipsProps) {
       const list = Array.isArray(items) ? items.filter(Boolean) : []
       if (!list.length) return null
-      return <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+      return <div style={{ display: 'flex', gap: gap != null ? gap : 6, flexWrap: 'wrap', marginBottom: 10 }}>
         {list.map(it => {
           const base = Object.assign({}, G_CHIP, it.active ? G_BTN_ON : {}, it.style || {})
           return <button key={it.key} title={it.title || undefined} style={base}
-            onClick={onPick ? () => onPick(it.key) : undefined}>{it.text}</button>
+            onClick={onPick ? () => onPick(it.key) : undefined}>
+            {it.icon != null ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{it.icon}{it.text}</span> : it.text}
+          </button>
         })}
       </div>
     }
