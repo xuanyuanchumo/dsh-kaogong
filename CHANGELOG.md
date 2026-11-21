@@ -2,6 +2,27 @@
 
 本文件记录 dsh-kaogong 的版本级变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.32.0] - 2026-11-21
+
+### TS 严格化（测试体系与代码质量）
+- **noUnusedLocals: true 开启**（档①）——69 死声明清零（未使用 import 36/interface 补注 9/局部变量 22 逐条核对）
+- **strictNullChecks: true 开启**（档②）——218 错 13 批清零（null 初始化标注/never 数组 any[]/Map.get 非空断言/safeAll·safeGet·loadPaper 返回类型根因修）
+- 两条 TS 控制流根因发现固化：return [] 字面量推断 never[]；params 默认 [] 推断 never[]
+- React Props 类型化 29/29 全覆盖；ObsFlowChart key 警告根治；radiusBoost 冗余闭包态治理
+
+### 测试体系（大单文件退役 → 分域体系）
+- 4173 行双单文件退役 → tests/ 35 文件分域体系（276 vitest 断言）
+- 目录：_harness（server/render 共享设施）/ unit / smoke 27 域 / render 7 旅程 / e2e loader
+- strictNullChecks 渐进路线与 barrel 形态纪律固化进 UI-GUIDE.md 第七~九节
+
+### UI 规范
+- docs/agents/UI-GUIDE.md 固化（颜色 token/交互反馈/降级语义/组件复用/取数 hooks 六节）
+- 文字色 token 化 253 处（暗色主题适配）；全局可点反馈 CSS 规则；取数 hooks（useApiData/useApiMany）
+
+### 修复
+- poolSourceKnowledge TS2783 展开顺序语义修正（skipped 覆盖真实 bug）
+- ObsView 渲染 key 警告根治；radiusBoost 冗余闭包态治理
+
 ## [1.31.0] - 2026-11-20
 
 ### 修复
