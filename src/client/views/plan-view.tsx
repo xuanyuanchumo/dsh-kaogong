@@ -12,7 +12,7 @@
  * Props 类型化 · 全中文注释 · R9 零直调。
  */
 import { h, React, Stat, Card, KV_TAG, KV_BTN, KgLoad, KgErr, KgEmpty, Bar } from '../ui-kit.js'
-import { useApiMany } from '../hooks.js'
+import { useApiMany } from '../hooks/index.js'
 
 /* ══════════════ NativePlanView · 学习计划 ══════════════ */
 
