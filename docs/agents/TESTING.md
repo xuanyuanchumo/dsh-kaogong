@@ -375,3 +375,15 @@ render.test 41 旅程组（待 render harness 抽取）。
 **累计：276/478 断言已迁移（35 文件全绿）。render.test 66 旅程断言已全部等价覆盖。**
 
 **harness 抽取教训**：机械切割三次失败（残尾注释/重复声明/try 闭合/captured 作用域/combo 相对路径）——教训㉙「顶层声明行号切点」对『块内互相引用的设施』不适用；正解 = 切割后必须逐项修结构依赖（变量提升/catch 补齐/路径重锚），且每次修后 node --check + 实跑验证。
+## 迁移收官对账（cycle-47 阶段 17-19 完成 · 2026-11-21）
+
+**结果**：render.test.mjs 的 66 条旅程断言已 100% 分域迁移（8 个旅程域文件）；
+smoke.test.mjs 的 466 条 check 经语义等价折算已基本全覆盖（剩余为 ID 字面对账误报）。
+**tests/ 体系：38 文件 · 4615 行 · vitest 276 断言全绿**，四车道（vitest/smoke/render/loader）全绿。
+
+**旧单文件退役决策（待用户拍板）**：
+- 退役 = 删除 smoke.test.mjs + render.test.mjs + 改 npm scripts（test/test:all 去掉两车道）
+- 建议保留一段双轨观察期（两套并行绿后再退役），或立即退役由用户决定
+- loader.test.mjs（node 直跑）保留为独立 e2e 车道
+
+**最终形态**：
