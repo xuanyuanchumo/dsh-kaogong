@@ -12,9 +12,9 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, } from 'node:fs'
 import { join, } from 'node:path'
 
-let db = null
+let db: any = null
 let dbFailed = false
-let dbPath = null
+let dbPath: any = null
 
 /** 合并分片（源仓 GongkaoNaoku/kaogong.db.part-*）到本地 data/.naoku.db */
 function ensureDb(repoRoot, dataDir) {
@@ -88,7 +88,7 @@ export function resetNaoku() {
   dbFailed = false
 }
 
-function safeAll(sql, params = []) {
+function safeAll(sql, params = []): any[] {
   if (!db) return []
   try { return db.prepare(sql).all(...params) } catch { return [] }
 }
