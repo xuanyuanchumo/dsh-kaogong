@@ -9,7 +9,7 @@
  */
 
 const React = require('react')
-export const h = React.createElement
+export const h: typeof React.createElement = React.createElement
 export { React }
 
 /**
@@ -135,7 +135,7 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
     export const G_CHIP = { border: '1px solid rgba(148,163,184,.35)', background: 'transparent', color: '#64748b', borderRadius: 20, padding: '2px 9px', fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1.6 }
 
     /** 迷你折线（纯 SVG，无 canvas/无 hook；样本不足 2 个返回占位） */
-    export function Sparkline({ series, color, width = 84, height: hh = 20 }) {
+    export function Sparkline({ series, color, width = 84, height: hh = 20 }: any) {
       const arr = Array.isArray(series) ? series.filter(v => typeof v === 'number' && isFinite(v)) : []
       if (arr.length < 2) return h('span', { style: { color: '#cbd5e1', fontSize: 10 } }, '—')
       const max = Math.max.apply(null, arr) || 1
@@ -148,13 +148,13 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
     }
 
     /** 生命周期阶段配色（done / current / pending 三态） */
-    export function stageColor(state) {
+    export function stageColor(state: any) {
       if (state === 'done') return { bg: 'rgba(16,185,129,.12)', fg: '#059669', dot: '#10b981' }
       if (state === 'current') return { bg: 'rgba(99,102,241,.14)', fg: '#4f46e5', dot: '#6366f1' }
       return { bg: 'rgba(148,163,184,.14)', fg: '#94a3b8', dot: '#cbd5e1' }
     }
     /** 告警分级配色 */
-    export function alertColor(level) {
+    export function alertColor(level: any) {
       if (level === 'error') return { bg: 'rgba(239,68,68,.1)', fg: '#dc2626', border: 'rgba(239,68,68,.35)', icon: '⛔' }
       if (level === 'warn') return { bg: 'rgba(245,158,11,.1)', fg: '#b45309', border: 'rgba(245,158,11,.35)', icon: '⚠️' }
       return { bg: 'rgba(148,163,184,.1)', fg: '#64748b', border: 'rgba(148,163,184,.3)', icon: 'ℹ️' }
@@ -168,14 +168,14 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
      * R14：复杂度治理辅助——把「选项渲染 / 标注块 / 标签行」三处高频重复
      * 从各视图内联三元中提出来，既降分支密度也让样式口径统一。
      */
-    export function optionStyle(state) {
+    export function optionStyle(state: any) {
       // state: 'idle' | 'chosen' | 'right' | 'wrong'
       if (state === 'right') return { border: '#10b981', bg: 'rgba(16,185,129,.09)', badge: '#10b981', color: '#fff' }
       if (state === 'wrong') return { border: '#ef4444', bg: 'rgba(239,68,68,.08)', badge: '#ef4444', color: '#fff' }
       if (state === 'chosen') return { border: '#6366f1', bg: 'rgba(99,102,241,.08)', badge: '#6366f1', color: '#fff' }
       return { border: 'rgba(148,163,184,.3)', bg: 'transparent', badge: 'rgba(148,163,184,.15)', color: 'inherit' }
     }
-    export function OptionRow({ label, text, state, onClick, disabled }) {
+    export function OptionRow({ label, text, state, onClick, disabled }: any) {
       const st = optionStyle(state)
       // cycle-22：选项可携带配图占位（资料分析公式图/数学运算图/判断推理选项图）——
       // 含 kgimg:// 占位的选项文本走 RichText 渲染出图，纯文本走原链路（零变化）。
@@ -197,19 +197,19 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
       pitfalls: { icon: '⚠️', title: '易错点', color: '#ef4444', border: '#ef4444' },
       mother: { icon: '🧩', title: '母题思维', color: '#8b5cf6', border: '#8b5cf6' },
     }
-    export function DimBlock({ kind, text }) {
-      const m = DIM_META[kind]
+    export function DimBlock({ kind, text }: any) {
+      const m = (DIM_META as Record<string, any>)[kind]
       if (!m || !text) return null
       return h('div', { style: { marginBottom: 10, padding: 12, background: 'rgba(148,163,184,.07)', borderRadius: 10, borderLeft: '3px solid ' + m.border } },
         h('div', { style: { fontWeight: 700, fontSize: 12.5, marginBottom: 5, color: m.color } }, m.icon + ' ' + m.title),
         h(RichText, { text }))
     }
     /** 标签行 */
-    export function TagRow({ items }) {
+    export function TagRow({ items }: any) {
       const list = (items || []).filter(Boolean)
       if (!list.length) return null
       return h('div', { style: { display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' } },
-        list.map((it, i) => h('span', { key: i, style: { ...KV_TAG, ...(it.style || {}) } }, it.text)))
+        list.map((it: any, i: any) => h('span', { key: i, style: { ...KV_TAG, ...(it.style || {}) } }, it.text)))
     }
 
     /**
@@ -228,8 +228,8 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
       'civil-exam-agent': { label: '督导题库', color: '#ef4444' },
       pool: { label: '统一题库', color: '#3b82f6' },
     }
-    export function SourceBadge({ source, exam, year, region, paperFile, extra }) {
-      const meta = KG_SOURCE_META[source]
+    export function SourceBadge({ source, exam, year, region, paperFile, extra }: any) {
+      const meta = (KG_SOURCE_META as Record<string, any>)[source]
       const vol = [exam || paperFile, year, region].filter(Boolean)
       if (!meta && !vol.length && !extra) return null
       return h('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, fontSize: 10.5 } },
@@ -284,9 +284,9 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
     /** 渲染错误边界（R9 纵深）：子树抛错降级提示条，绝不白屏宿主 GUI */
     export class KaogongErrorBoundary extends React.Component {
-      constructor(props) { super(props); this.state = { err: null } }
-      static getDerivedStateFromError(e) { return { err: String((e && e.message) || e) } }
-      componentDidCatch(e) { try { console.error('[kaogong] 渲染降级:', e) } catch {} }
+      constructor(props: any) { super(props); this.state = { err: null } }
+      static getDerivedStateFromError(e: any) { return { err: String((e && e.message) || e) } }
+      componentDidCatch(e: any) { try { console.error('[kaogong] 渲染降级:', e) } catch {} }
       render() {
         if (this.state.err) {
           return h('div', { className: 'kg-load', role: 'alert' },

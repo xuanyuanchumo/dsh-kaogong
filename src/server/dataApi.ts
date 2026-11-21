@@ -6,8 +6,8 @@ import { join } from 'node:path'
 import { REPOS, XINGCE_MODULES, METHOD_MAP, exists, safeReadDir, safeReadFile, searchKnowledge, getMethodRef, parsePlanStructure } from '../adapters/repoData.js'
 
 /** 学习计划（结构化 + 单日聚焦），graph 域亦复用 */
-export function makeStudyPlan(planFile) {
-  return function studyPlan(day) {
+export function makeStudyPlan(planFile: any) {
+  return function studyPlan(day: any) {
     const content = safeReadFile(planFile, 100000)
     if (!content) return { plan: '学习计划文件未找到', raw: '', phases: [], days: [] }
     const structured = parsePlanStructure(content)
@@ -17,10 +17,10 @@ export function makeStudyPlan(planFile) {
   }
 }
 
-export function makeDataApi({ repoRoot, planFile }) {
+export function makeDataApi({ repoRoot, planFile }: any) {
   const studyPlan = makeStudyPlan(planFile)
 
-  return function handleDataApi(path, params, post, method) {
+  return function handleDataApi(path: any, params: any, post: any, method: any) {
     if (path === '/api/banks') {
       const banks: any = {}
       for (const [key, desc] of Object.entries(REPOS as Record<string, string>)) banks[key] = { desc, exists: exists(join(repoRoot, key)) }
@@ -39,7 +39,7 @@ export function makeDataApi({ repoRoot, planFile }) {
     if (path === '/api/search') return { results: searchKnowledge(repoRoot, params.get('q') || '', params.get('repo') || '') }
     if (path === '/api/method') return getMethodRef(repoRoot, params.get('topic') || post.topic || '')
     if (path === '/api/methods') {
-      return { topics: Object.keys(METHOD_MAP).map(t => ({ id: t, label: t, file: METHOD_MAP[t], exists: exists(join(repoRoot, 'kaogong-skill', 'skills', 'kaogong', 'references', METHOD_MAP[t])) })) }
+      return { topics: Object.keys(METHOD_MAP).map(t => ({ id: t, label: t, file: (METHOD_MAP as Record<string, any>)[t], exists: exists(join(repoRoot, 'kaogong-skill', 'skills', 'kaogong', 'references', (METHOD_MAP as Record<string, any>)[t])) })) }
     }
     return undefined
   }

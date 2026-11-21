@@ -10,7 +10,7 @@
  */
 import { neighborhood, shortestPath, reverseReach } from '../shared/manifest.js'
 
-export function graphQuery(path, params, wsRaw, graphSnapshot) {
+export function graphQuery(path: any, params: any, wsRaw: any, graphSnapshot: any) {
   try {
     const g = graphSnapshot(wsRaw)
     const nodes = g.nodes || []

@@ -111,7 +111,7 @@ const repoManager = makeRepoManager({ getRoot: getRepoRoot, onRootChanged: rebui
 getRepoRoot()   // 模块加载即解析一次（后续只读复用）
 
 // ══ 生命周期事件日志（环形 300 行）══
-function logLifecycle(event, data = {}) {
+function logLifecycle(event: any, data = {}) {
   try {
     mkdirSync(DATA_DIR, { recursive: true })
     appendFileSync(LIFECYCLE_FILE, JSON.stringify({ ts: new Date().toISOString(), event, ...data }) + '\n')
@@ -125,8 +125,8 @@ function logLifecycle(event, data = {}) {
 // 前端 RichText 把占位改写为 `${MOUNT_PATH}/api/kg-img?p=` 请求本端点。
 // 安全模型与 naokuImage.safeImagePath 同族：resolve 归一后必须仍在 xingcezhenti 内 + 扩展名白名单。
 const KG_IMG_MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }
-function serveKgImage(params, res) {
-  const dec = (v) => { try { return decodeURIComponent(v || '') } catch { return v || '' } }
+function serveKgImage(params: any, res: any) {
+  const dec = (v: any) => { try { return decodeURIComponent(v || '') } catch { return v || '' } }
   const rel = dec(params.get('p'))
   if (!rel) { try { res.writeHead(400); res.end('bad request') } catch {} ; return }
   // 占位协议：kgimg://<相对 xingcezhenti 的路径>；防御 http(s)/越级引用/绝对路径
@@ -254,7 +254,7 @@ function lifecycleSnapshot() {
 // cycle-17 隔离修复：快照内嵌 progress（ws 相关字段），缓存必须按 wsKey 分槽——
 // 否则工作区 A 先访问后，B 在 TTL 内命中同一份缓存，读到 A 的进度（跨项目污染）。
 const graphCache = new Map<string, any>()
-function graphSnapshot(wsRaw) {
+function graphSnapshot(wsRaw: any) {
   const ck = domains.store.wsKey(wsRaw)
   const hit = graphCache.get(ck)
   const now = Date.now()
@@ -313,7 +313,7 @@ function graphSnapshot(wsRaw) {
  * cycle-29：函数体已外提到 server/graphQuery.ts（复杂度预算治理，graphSnapshot 参数注入）。
  */
 import { graphQuery as graphQueryImpl } from './graphQuery.js'
-function graphQuery(path, params, wsRaw) {
+function graphQuery(path: any, params: any, wsRaw: any) {
   return graphQueryImpl(path, params, wsRaw, graphSnapshot)
 }
 
@@ -331,7 +331,7 @@ function renderUI() {
 }
 
 // ══ 核心路由（域链分发：repoManager(异步) ?? srs ?? paper ?? data ?? core）══
-async function handleApi(path, params, post, method, wsRaw, port) {
+async function handleApi(path: any, params: any, post: any, method: any, wsRaw: any, port: any) {
   // cycle-16 题库管理域（异步：git 作业控制面）——前置于同步域链，仅接管 /api/repos*
   if (path.startsWith('/api/repos')) {
     const r = await repoManager.handle(path, params, post, method)
@@ -351,7 +351,7 @@ async function handleApi(path, params, post, method, wsRaw, port) {
     ?? coreApi(path, params, post, method, wsRaw, port)
 }
 
-function coreApi(path, params, post, method, wsRaw, port) {
+function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, port: any) {
   if (path === '/api/status') {
     const rs = repoStats(domains.root)
     const p = domains.store.loadProgress(wsRaw || undefined)
@@ -476,22 +476,22 @@ function coreApi(path, params, post, method, wsRaw, port) {
 }
 
 // ══ 崩溃安全启动（信标发现 + adopt + 降级）══
-function probePort(port) {
+function probePort(port: any) {
   return fetch(`http://127.0.0.1:${port}/api/status`, { signal: AbortSignal.timeout(700) })
     .then(r => r.json())
     .then(j => (j && j.app === APP_NAME ? j : null))
     .catch(() => null)
 }
-function tryListen(server, port) {
+function tryListen(server: any, port: any) {
   return new Promise((res, rej) => {
-    const onError = (e) => { server.removeListener('listening', onOk); rej(e) }
+    const onError = (e: any) => { server.removeListener('listening', onOk); rej(e) }
     const onOk = () => { server.removeListener('error', onError); res(port) }
     server.once('error', onError)
     server.once('listening', onOk)
     server.listen(port, '127.0.0.1') // 仅回环，绝不暴露局域网
   })
 }
-function writeRuntime(info) {
+function writeRuntime(info: any) {
   try {
     mkdirSync(DATA_DIR, { recursive: true })
     writeFileSync(RUNTIME_FILE, JSON.stringify({ app: APP_NAME, ...info, startedAt: new Date(BOOT_TS).toISOString(), version: CAPABILITIES.plugin.version }, null, 2))
@@ -533,14 +533,14 @@ export async function startServer(preferredPort = 8400, options: any = {}) {
  * @param webServer - ctx.webServer（register 返回 disposer）
  * @param mountPath - 挂载前缀，绝对 pathname 无尾斜杠
  */
-export function attachWebRoute(webServer, mountPath = '/kaogong') {
-  const handler = (req, res) => {
+export function attachWebRoute(webServer: any, mountPath = '/kaogong') {
+  const handler = (req: any, res: any) => {
     const t0 = Date.now()
     const url = new URL(req.url, 'http://host-root')
     const rel = url.pathname.slice(mountPath.length) || '/'
     const params = url.searchParams
     const wsRaw = params.get('ws') || undefined
-    const finish = (status, type, body) => {
+    const finish = (status: any, type: any, body: any) => {
       res.writeHead(status, { 'Content-Type': type })
       res.end(body)
       // 遥测路径口径（v1.8.0 修复）：统一记「相对挂载点的逻辑路径」（/api/graph），
@@ -562,7 +562,7 @@ export function attachWebRoute(webServer, mountPath = '/kaogong') {
       // cycle-21（issue #1）：xingcezhenti 题库图（题目图/公式图）——中立占位 kgimg:// 的服务端
       if (rel === '/api/kg-img') { serveKgImage(params, res); return }
       let body = ''
-      req.on('data', c => body += c)
+      req.on('data', (c: any) => body += c)
       req.on('end', async () => {
         try {
           const post = body ? JSON.parse(body) : {}
@@ -578,7 +578,7 @@ export function attachWebRoute(webServer, mountPath = '/kaogong') {
   return webServer.register({ kind: 'prefix', path: mountPath, handler })
 }
 
-function buildHttpServer(port) {
+function buildHttpServer(port: any) {
   const server = createServer((req, res) => {
     // 兼容性防线（R8）：畸形请求（非法 % 转义撞 URL/decodeURIComponent 等）必须
     // 在本回调内消化为 400 —— 独立端口没有宿主 webServer 的兜底，
@@ -596,7 +596,7 @@ function buildHttpServer(port) {
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
       res.setHeader('Cache-Control', 'no-store')
-      const finish = (status, type, body) => {
+      const finish = (status: any, type: any, body: any) => {
         res.writeHead(status, { 'Content-Type': type })
         res.end(body)
         recordRequest(telemetry, path, Date.now() - t0, status >= 400, isDeclaredEndpoint(path, DECLARED_ENDPOINT_SET))

@@ -17,7 +17,7 @@ const TRY_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']
 // 目录扫描缓存（同一目录只列一次；39051 文件全扫太慢）
 const dirCache = new Map()
 
-function listDir(dir) {
+function listDir(dir: any) {
   if (dirCache.has(dir)) return dirCache.get(dir)
   let names: any[] = []
   try { names = readdirSync(dir) } catch { names = [] }
@@ -29,7 +29,7 @@ function listDir(dir) {
  * 把 img_refs（形如 `/90-图片/题目图/xxx.webp`）解析成真实可服务的相对路径。
  * @returns 相对 xingcezhenti 的路径（如 `90-图片/题目图/xxx.png`）或 null
  */
-export function resolveNaokuImage(repoRoot, imgRef) {
+export function resolveNaokuImage(repoRoot: any, imgRef: any) {
   const raw = String(imgRef || '').trim()
   if (!raw) return null
   // 去掉开头斜杠，统一分隔符
@@ -47,13 +47,13 @@ export function resolveNaokuImage(repoRoot, imgRef) {
     if (names.includes(candidate)) return (dir === '.' ? candidate : dir + '/' + candidate)
   }
   // 3) 兜底：目录内前缀匹配（防 hash 截断）
-  const hit = names.find(n => n.startsWith(stem))
+  const hit = names.find((n: any) => n.startsWith(stem))
   if (hit) return (dir === '.' ? hit : dir + '/' + hit)
   return null
 }
 
 /** 供 API 层安全读取：解析后必须仍在 xingcezhenti 内 */
-export function safeImagePath(repoRoot, relPath) {
+export function safeImagePath(repoRoot: any, relPath: any) {
   const root = resolve(repoRoot, IMG_ROOT_NAME)
   const target = resolve(root, relPath)
   const prefix = root + sep
@@ -67,7 +67,7 @@ export function safeImagePath(repoRoot, relPath) {
 }
 
 /** 把题目 img_refs 转成 markdown 图片（供 RichText 渲染 → 走 /api/naoku-img） */
-export function imageMarkdown(repoRoot, imgRefs, mountPath = '/kaogong') {
+export function imageMarkdown(repoRoot: any, imgRefs: any, mountPath = '/kaogong') {
   const list = String(imgRefs || '').split(/[,;\s]+/).filter(Boolean)
   const out: any[] = []
   for (const ref of list) {

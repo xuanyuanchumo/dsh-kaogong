@@ -36,7 +36,7 @@ const runtime: any = { port: null, server: null, adopted: false, boot: 'pending'
 // 「数据来自哪代服务、是否降级、哪个命名空间」——陈旧显示治理（㉑纪律）的呈现层加固。
 const textOutput = {
   schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
-  render(_args, value) { return [{ type: 'text', text: value.text }] },
+  render(_args: any, value: any) { return [{ type: 'text', text: value.text }] },
 }
 // ── cycle-29 P0：工具调用 UI 展示契约（presentCall/presentResult）──
 // 【根因】此前 6 个工具均未声明这两个可选方法，宿主 GUI 回退 generic 兜底卡片
@@ -91,13 +91,13 @@ async function callApi(path: any, ws?: any): Promise<any> {
 export const name = CAPABILITIES.plugin.name
 export const inject = ['tools']
 
-export function apply(ctx) {
+export function apply(ctx: any) {
   // ── 主通道：宿主同源路由 ──
   // R10 修复（沙箱首启取证）：webServer 晚于本 fiber 激活 —— ctx.get 首启拿不到、
   // ctx.on('webServer') 不是事件永不触发 → 路由静默 404。
   // 正解 = ctx.inject(['webServer'], cb)：服务可用后才运行回调；服务变化时框架
   // 先卸载（运行本回调返回的 disposer）再重跑 → 天然消灭热重载双代竞态窗口。
-  ctx.inject(['webServer'], (injected) => {
+  ctx.inject(['webServer'], (injected: any) => {
     const ws = injected.get('webServer')
     if (!ws?.register) return
     try {
@@ -137,7 +137,7 @@ export function apply(ctx) {
     parameters: { type: 'object', properties: { workspace: { type: 'string', description: '可选：当前项目工作区绝对路径（用于隔离进度查询）' } } },
     output: textOutput,
     ...kgToolCard('📚 考公学习平台 · 状态引导'),
-    async execute(args) {
+    async execute(args: any) {
       // cycle-17：消灭「工具输出陈旧显示」——视图/工具/端点/仓库/数据根全部来自
       // /api/capabilities + /api/status + /api/repos 实时数据，杜绝手写模板漂移
       let status: any = { app: 'down' }, caps: any = null, repos: any = null
@@ -188,14 +188,14 @@ export function apply(ctx) {
     },
     output: textOutput,
     ...kgToolCard((a: any) => '🧑‍🏫 AI辅导 · ' + String((a && a.module) || '') + ((a && a.question_type) ? ' · ' + a.question_type : '')),
-    async execute(args) {
+    async execute(args: any) {
       let method: any = {}, search: any = { results: [] }
       try { method = await callApi(`/api/method?topic=${encodeURIComponent('行测')}`, args.workspace) } catch {}
       try { search = await callApi(`/api/search?q=${encodeURIComponent(args.question_type || args.module)}`, args.workspace) } catch {}
       const lines = [
         `## AI辅导素材 — ${args.module}${args.question_type ? ' · ' + args.question_type : ''}\n`,
         '### 方法论参考', method.content ? method.content.slice(0, 3000) : '（服务未就绪）',
-        '\n### 相关知识', search.results?.length ? search.results.slice(0, 3).map(r => `**${r.file}**\n${r.snippet}`).join('\n\n') : '（无命中）',
+        '\n### 相关知识', search.results?.length ? search.results.slice(0, 3).map((r: any) => `**${r.file}**\n${r.snippet}`).join('\n\n') : '（无命中）',
       ]
       if (args.error_pattern) lines.push(`\n### 错误模式\n${args.error_pattern}\n请针对该模式给出可执行的改进建议。`)
       lines.push(kgMarkTail(CAPABILITIES.plugin.version, !!method.content, args.workspace))
@@ -209,7 +209,7 @@ export function apply(ctx) {
     parameters: { type: 'object', properties: { workspace: { type: 'string', description: '工作区路径（隔离命名空间）' } } },
     output: textOutput,
     ...kgToolCard('📈 学习进度 · 个性化建议素材'),
-    async execute(args) {
+    async execute(args: any) {
       let p: any = {}
       try { p = await callApi('/api/progress', args.workspace) } catch {}
       const lines = ['## 学习进度素材', `第${p.day || 1}天 | 已答${p.answered || 0}题 | 正确率${p.rate || 0}%\n`]
@@ -242,7 +242,7 @@ export function apply(ctx) {
     },
     output: textOutput,
     ...kgToolCard('✍️ 申论批改素材'),
-    async execute(args) {
+    async execute(args: any) {
       let method: any = {}
       try { method = await callApi('/api/method?topic=申论', args.workspace) } catch {}
       const lines = [
@@ -273,7 +273,7 @@ export function apply(ctx) {
     },
     output: textOutput,
     ...kgToolCard((a: any) => '📝 申论深度点评' + ((a && a.mode === 'article') ? ' · 大作文' : ((a && a.paperId) ? ' · ' + a.paperId : ''))),
-    async execute(args) {
+    async execute(args: any) {
       const isArticle = args.mode === 'article'
       // 取离线基线分（POST 到本地规则引擎）
       let baseline: any = null
@@ -336,7 +336,7 @@ export function apply(ctx) {
     },
     output: textOutput,
     ...kgToolCard((a: any) => (a && a.file) ? '📖 方法论全文 · ' + a.file : '📖 方法论检索 · ' + String((a && a.query) || '')),
-    async execute(args) {
+    async execute(args: any) {
       const limit = Math.min(20, Math.max(1, Math.floor(Number(args.limit) || 5)))
       const lines: string[] = ['## 📖 花生十三体系方法论', '']
 

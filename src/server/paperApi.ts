@@ -27,7 +27,7 @@ const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
  * 图片与 md 同级，故基准目录是 dirname(paperId)，不是 paperId 自身。
  * 安全：resolve 后必须仍在 gwy-zhenti 内（防路径穿越）；只服务白名单扩展名。
  */
-function servePaperImage(repoRoot, paperId, relPath, res) {
+function servePaperImage(repoRoot: any, paperId: any, relPath: any, res: any) {
   const root = resolve(repoRoot, PAPER_REPO)
   const paperDir = resolve(root, dirname(paperId))
   const target = resolve(paperDir, relPath)
@@ -36,7 +36,7 @@ function servePaperImage(repoRoot, paperId, relPath, res) {
     res.writeHead(403); res.end('forbidden'); return
   }
   const ext = extname(target).toLowerCase()
-  if (!MIME[ext]) { res.writeHead(415); res.end('unsupported'); return }
+  if (!(MIME as Record<string, any>)[ext]) { res.writeHead(415); res.end('unsupported'); return }
   let stat
   try {
     stat = existsSync(target) ? statSync(target) : null
@@ -44,7 +44,7 @@ function servePaperImage(repoRoot, paperId, relPath, res) {
   if (!stat || !stat.isFile()) { res.writeHead(404); res.end('not found'); return }
   // 头一旦发出，后续任何异常都不能再 writeHead（会二次写头破坏响应）
   try {
-    res.writeHead(200, { 'Content-Type': MIME[ext], 'Content-Length': stat.size, 'Cache-Control': 'public, max-age=86400' })
+    res.writeHead(200, { 'Content-Type': (MIME as Record<string, any>)[ext], 'Content-Length': stat.size, 'Cache-Control': 'public, max-age=86400' })
   } catch {
     try { res.destroy() } catch {}
     return
@@ -58,29 +58,29 @@ function servePaperImage(repoRoot, paperId, relPath, res) {
  * 把题目/材料里的 markdown 图片引用改写成可访问 URL。
  * `![](assets-229/x.png)` → `![](<mount>/api/paper-img?id=<paperId>&p=assets-229/x.png)`
  */
-function rewriteImages(text, paperId, mountPath) {
+function rewriteImages(text: any, paperId: any, mountPath: any) {
   if (!text) return text
-  return text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (full, alt, src) => {
+  return text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (full: any, alt: any, src: any) => {
     if (/^https?:\/\//i.test(src)) return full
     const encoded = encodeURIComponent(src)
     return `![${alt}](${mountPath}/api/paper-img?id=${encodeURIComponent(paperId)}&p=${encoded})`
   })
 }
 
-export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
+export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }: any) {
   const { loadProgress, saveProgress } = store
 
   /** 图片端点（二进制，由 HTTP 层在 JSON 链路之前分流调用） */
-  function serveImage(params, res) {
+  function serveImage(params: any, res: any) {
     // URLSearchParams 对已编码的 %2F 不二次解码，这里显式解码一次（try 保护幂等）
-    const dec = (v) => { try { return decodeURIComponent(v || '') } catch { return v || '' } }
+    const dec = (v: any) => { try { return decodeURIComponent(v || '') } catch { return v || '' } }
     const id = dec(params.get('id'))
     const p = dec(params.get('p'))
     if (!id || !p) { try { res.writeHead(400); res.end('bad request') } catch {} ; return }
     servePaperImage(repoRoot, id, p, res)
   }
 
-  function handlePaperApi(path, params, post, method, wsRaw) {
+  function handlePaperApi(path: any, params: any, post: any, method: any, wsRaw: any) {
     // 试卷列表（cycle-13：新增 province 省份过滤；响应透出 provinces facet 与 subjects 并列）
     if (path === '/api/papers' && method === 'GET') {
       const list = listPapers(repoRoot, {
@@ -124,7 +124,7 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
       const wantType = params.get('type') || ''
       const limit = Math.min(60, parseInt(params.get('limit') || '20'))
       const idx = buildPaperIndex(repoRoot)
-      const essays = idx.papers.filter(p => p.subject === '申论').sort((a, b) => (b.year || 0) - (a.year || 0))
+      const essays = idx.papers.filter((p: any) => p.subject === '申论').sort((a: any, b: any) => (b.year || 0) - (a.year || 0))
       const typeKw = {
         '概括': /概括|概述|归纳|梳理/,
         '分析': /分析|评析|谈谈|理解|解释/,
@@ -139,7 +139,7 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
         if (detail.error) continue
         for (const q of detail.questions || []) {
           if (out.length >= limit) break
-          if (wantType && typeKw[wantType] && !typeKw[wantType].test(q.stem + q.requirement)) continue
+          if (wantType && (typeKw as Record<string, any>)[wantType] && !(typeKw as Record<string, any>)[wantType].test(q.stem + q.requirement)) continue
           out.push({
             paperId: paper.id, exam: paper.exam, year: paper.year, paperType: paper.paperType,
             no: q.no, stem: q.stem, score: q.score, requirement: q.requirement,
@@ -157,7 +157,7 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
       if (!question && post.paperId) {
         const paper = loadPaper(repoRoot, post.paperId)
         if (paper.error) return paper
-        question = (paper.questions || []).find(q => q.no === +post.no)
+        question = (paper.questions || []).find((q: any) => q.no === +post.no)
       }
       if (!question) return { error: '缺少题目（question 或 paperId+no）' }
       const answer = String(post.answer || '')
@@ -185,7 +185,7 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
     if (path === '/api/essay/history' && method === 'GET') {
       const p = loadProgress(wsRaw)
       const recs = (p.essayRecords || []).slice(-50).reverse()
-      const avg = recs.length ? +(recs.reduce((s, r) => s + (r.ratio || 0), 0) / recs.length * 100).toFixed(1) : 0
+      const avg = recs.length ? +(recs.reduce((s: any, r: any) => s + (r.ratio || 0), 0) / recs.length * 100).toFixed(1) : 0
       return { total: (p.essayRecords || []).length, recent: recs, avgRatio: avg }
     }
 
@@ -195,7 +195,7 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
       if (!question && post.paperId) {
         const paper = loadPaper(repoRoot, post.paperId)
         if (paper.error) return paper
-        question = (paper.questions || []).find(q => q.no === +post.no)
+        question = (paper.questions || []).find((q: any) => q.no === +post.no)
       }
       const answer = String(post.answer || '')
       if (!answer.trim()) return { error: '作答内容为空' }
@@ -218,7 +218,7 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
       const id = params.get('id') || ''
       const paper = loadPaper(repoRoot, id)
       if (paper.error) return paper
-      const qs = (paper.questions || []).map(q => ({
+      const qs = (paper.questions || []).map((q: any) => ({
         no: q.no, stem: rewriteImages(q.stem, id, mountPath), score: q.score,
         options: q.options || {},
         // cycle-27：题型 + 题组材料随题下发——组材料不是答案（资料分析多题共享），
@@ -228,7 +228,7 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
         groupMaterialNo: q.groupMaterialNo || 0,
         // 答案与解析绝不下发（防作弊）：交卷时服务端自行比对后回传
       }))
-      const totalScore = qs.reduce((s, q) => s + (q.score || 0), 0) || qs.length
+      const totalScore = qs.reduce((s: any, q: any) => s + (q.score || 0), 0) || qs.length
       return {
         id, exam: paper.exam, year: paper.year, subject: paper.subject, paperType: paper.paperType,
         questionCount: qs.length, totalScore,
@@ -291,7 +291,7 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }) {
     if (path === '/api/paper/exam/history' && method === 'GET') {
       const p = loadProgress(wsRaw)
       const recs = (p.examRecords || []).slice(-20).reverse()
-      const avg = recs.length ? Math.round(recs.reduce((s, r) => s + (r.rate || 0), 0) / recs.length) : 0
+      const avg = recs.length ? Math.round(recs.reduce((s: any, r: any) => s + (r.rate || 0), 0) / recs.length) : 0
       return { total: (p.examRecords || []).length, recent: recs, avgRate: avg }
     }
 

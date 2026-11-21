@@ -6,16 +6,16 @@ import { readFileSync, writeFileSync, mkdirSync, statSync, readdirSync, existsSy
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 
-function safeReaddir(d) { try { return readdirSync(d) } catch { return [] } }
+function safeReaddir(d: any) { try { return readdirSync(d) } catch { return [] } }
 
-export function makeWsStore(progressDir) {
-  function wsKey(raw) {
+export function makeWsStore(progressDir: any) {
+  function wsKey(raw: any) {
     const key = (raw && String(raw).trim()) || 'default'
     const slug = key.replace(/[^0-9A-Za-z\u4e00-\u9fa5_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(-40)
     const hash = createHash('sha1').update(key).digest('hex').slice(0, 8)
     return `${slug || 'ws'}-${hash}`
   }
-  function progressFile(raw) { return join(progressDir, `${wsKey(raw)}.json`) }
+  function progressFile(raw: any) { return join(progressDir, `${wsKey(raw)}.json`) }
   function loadProgress(raw: any): any {
     try {
       const j = JSON.parse(readFileSync(progressFile(raw), 'utf-8'))

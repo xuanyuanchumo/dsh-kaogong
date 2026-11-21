@@ -28,24 +28,24 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       const [flags, setFlags] = React.useState(() => new Set())
 
       React.useEffect(() => {
-        api('/papers?subject=行测').then(d => setPapers(d)).catch(() => setPapers({ papers: [] }))
+        api('/papers?subject=行测').then((d: any) => setPapers(d)).catch(() => setPapers({ papers: [] }))
       }, [api])
 
       // 倒计时（仅考试中且未交卷）
       React.useEffect(() => {
         if (!exam || report) return
-        const t = setInterval(() => setLeft(v => (v <= 1 ? 0 : v - 1)), 1000)
+        const t = setInterval(() => setLeft((v: any) => (v <= 1 ? 0 : v - 1)), 1000)
         return () => clearInterval(t)
       }, [exam, report])
 
-      const fmt = (sec) => {
+      const fmt = (sec: any) => {
         const hh = Math.floor(sec / 3600)
         const mm = Math.floor((sec % 3600) / 60)
         const ss = sec % 60
         return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0')
       }
 
-      const start = async (id) => {
+      const start = async (id: any) => {
         setBusy(true)
         try {
           const d = await api('/paper/exam/start?id=' + encodeURIComponent(id))
@@ -76,8 +76,8 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       if (report) {
         const pct = report.totalScore ? Math.round(report.scored / report.totalScore * 100) : report.rate
         const color = pct >= 75 ? '#10b981' : pct >= 50 ? '#6366f1' : '#f59e0b'
-        const wrongList = (report.detail || []).filter(d => !d.isCorrect)
-        const wrongRows = wrongList.slice(0, 30).map(d =>
+        const wrongList = (report.detail || []).filter((d: any) => !d.isCorrect)
+        const wrongRows = wrongList.slice(0, 30).map((d: any) =>
           <div
             key={d.no}
             style={{ display: 'flex', gap: 8, fontSize: 12, padding: '4px 0', borderBottom: '1px solid rgba(148,163,184,.12)' }}
@@ -99,7 +99,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                 <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{'用时 ' + fmt(report.elapsedSec || 0)}</span>
               </div>
               <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 8 }}>{'🎯 模块得分分布（弱→强）'}</div>
-              {(report.modules || []).map(m =>
+              {(report.modules || []).map((m: any) =>
                 <div key={m.type} style={{ marginBottom: 9 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
                     <span>{m.type + (m.total ? '（' + m.total + ' 题）' : '')}</span>
@@ -143,8 +143,8 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                 paperMeta={{ exam: exam.subject, year: exam.year, subject: exam.subject }}
                 answers={answers}
                 flags={flags}
-                onSelect={(L) => setAnswers(a => ({ ...a, [q.no]: L }))}
-                onToggleFlag={(no) => setFlags(f => { const n = new Set(f); n.has(no) ? n.delete(no) : n.add(no); return n })}
+                onSelect={(L) => setAnswers((a: any) => ({ ...a, [q.no]: L }))}
+                onToggleFlag={(no) => setFlags((f: any) => { const n = new Set(f); n.has(no) ? n.delete(no) : n.add(no); return n })}
               />
             </div>
             } />
@@ -153,7 +153,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
 
       // ── 分支 3：选题 ──
       const listRows = papers
-        ? papers.papers.slice(0, 60).map(pp =>
+        ? papers.papers.slice(0, 60).map((pp: any) =>
             <div
               key={pp.id}
               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, marginBottom: 4, background: 'rgba(148,163,184,.06)', fontSize: 12.5 }}
@@ -240,7 +240,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       // 答题模式倒计时（考试中且未交卷）
       React.useEffect(() => {
         if (paperMode !== 'answer' || !answerExam || answerReport) return
-        const t = setInterval(() => setAnswerLeft(v => (v <= 1 ? 0 : v - 1)), 1000)
+        const t = setInterval(() => setAnswerLeft((v: any) => (v <= 1 ? 0 : v - 1)), 1000)
         return () => clearInterval(t)
       }, [paperMode, answerExam, answerReport])
       const startAnswerMode = async () => {
@@ -266,14 +266,14 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
           if (r && !r.error) setAnswerReport(r)
         } finally { setAnswerBusy(false) }
       }
-      const fmtAnswerClock = (sec) => {
+      const fmtAnswerClock = (sec: any) => {
         const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60
         return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0')
       }
       // 答题模式：服务端判分结果 → 每题解析揭示（卷面 correctAnswer 由 start 不下发，
       // 交卷后从 report.detail（mine/right/isCorrect）重建每题判色 + 用 detail.questions 的 analysis 展示解析）
       const answerQ = answerExam && Array.isArray(answerExam.questions) ? answerExam.questions[answerIdx] : null
-      const answerDetailRow = answerReport && Array.isArray(answerReport.detail) ? answerReport.detail.find(d => d.no === (answerQ && answerQ.no)) : null
+      const answerDetailRow = answerReport && Array.isArray(answerReport.detail) ? answerReport.detail.find((d: any) => d.no === (answerQ && answerQ.no)) : null
           const answerRevealed = !!answerReport   // 交卷后全部揭示（判色 + 解析）
       // 换卷重置双模式全部状态（browseSel/browseReveal/答题态/学习态）
       React.useEffect(() => {
@@ -285,14 +285,14 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       // cycle-14：材料逐份折叠（用户诉求：给定材料除全局折叠外，支持材料 1/2/3/4 单独折叠展开）。
       // 键=材料段号，值=true 表示该份折叠；换卷时重置为全展开。
       const [collapsedMats, setCollapsedMats] = React.useState({})
-      const toggleMat = (no) => setCollapsedMats(m => ({ ...m, [no]: !m[no] }))
+      const toggleMat = (no: any) => setCollapsedMats((m: any) => ({ ...m, [no]: !m[no] }))
       const mats = (detail && detail.materials) || []
-      const allCollapsed = mats.length > 0 && mats.every(m => collapsedMats[m.no])
+      const allCollapsed = mats.length > 0 && mats.every((m: any) => collapsedMats[m.no])
 
       React.useEffect(() => {
         let cancelled = false
         const qs = entries(filters).filter(([, v]) => v).map(([k, v]) => '&' + k + '=' + encodeURIComponent(v)).join('')
-        api('/papers?_=1' + qs).then(d => { if (!cancelled) setList(d) }).catch(() => { if (!cancelled) setList({ papers: [], total: 0 }) })
+        api('/papers?_=1' + qs).then((d: any) => { if (!cancelled) setList(d) }).catch(() => { if (!cancelled) setList({ papers: [], total: 0 }) })
         return () => { cancelled = true }
       }, [filters, api])
 
@@ -304,7 +304,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
         setBrowseIdx(0)   // cycle-27：换卷重置整卷浏览当前题
         setBrowseSel({})   // cycle-30：换卷重置自答对照态（自选 + 揭示）
         setBrowseReveal({})
-        api('/paper?id=' + encodeURIComponent(openId)).then(d => { if (!cancelled) setDetail(d) }).catch(() => { if (!cancelled) setDetail({ error: '加载失败' }) })
+        api('/paper?id=' + encodeURIComponent(openId)).then((d: any) => { if (!cancelled) setDetail(d) }).catch(() => { if (!cancelled) setDetail({ error: '加载失败' }) })
         return () => { cancelled = true }
         // cycle-26 D-2 修复：detail 曾在依赖数组里——setDetail(d) 触发本 effect 重跑 →
         // setDetail(null) + 重新 fetch 无限循环（用户感知「一直加载试卷」）。
@@ -329,14 +329,14 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                 <button
                   style={KV_BTN}
                   onClick={() => setCollapsedMats(() => {
-                    const next = {}
+                    const next: Record<string, any> = {}
                     for (const m of mats) next[m.no] = !allCollapsed
                     return next
                   })}
                 >{allCollapsed ? '▼ 展开全部材料（' + mats.length + ' 份）' : '▲ 收起全部材料'}</button>
                 <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{'点击「材料 N」标题可单独折叠/展开该份材料'}</span>
               </div>
-              {detail.materials.map(m => {
+              {detail.materials.map((m: any) => {
                 const wordCount = String(m.text || '').replace(/\s/g, '').length
                 const isCollapsed = !!collapsedMats[m.no]
                 return (
@@ -418,8 +418,8 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                           if (learnReveal) return   // 已揭示不可改选（practice 同构语义）
                           setLearnSel(L)
                           setLearnReveal(true)
-                          setLearnAnsweredCount(n => n + 1)
-                          if (lCorrect != null && L === lCorrect) setLearnCorrectCount(n => n + 1)
+                          setLearnAnsweredCount((n: any) => n + 1)
+                          if (lCorrect != null && L === lCorrect) setLearnCorrectCount((n: any) => n + 1)
                         }}
                       />}
                     />
@@ -431,7 +431,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                         <button
                           style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, fontWeight: 700 }}
                           disabled={learnIdx >= (detail.questions || []).length - 1}
-                          onClick={() => { setLearnIdx(i => i + 1); setLearnSel(null); setLearnReveal(false) }}
+                          onClick={() => { setLearnIdx((i: any) => i + 1); setLearnSel(null); setLearnReveal(false) }}
                           data-kg-learn-next="1"
                         >{learnIdx >= (detail.questions || []).length - 1 ? '已是最后一题' : '下一题 →'}</button>
                         <button style={KV_BTN} onClick={() => { setLearnSel(null); setLearnReveal(false) }}>{'↺ 重做此题'}</button>
@@ -443,7 +443,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                         <button
                           style={KV_BTN}
                           disabled={learnIdx >= (detail.questions || []).length - 1}
-                          onClick={() => { setLearnIdx(i => i + 1); setLearnSel(null); setLearnReveal(false) }}
+                          onClick={() => { setLearnIdx((i: any) => i + 1); setLearnSel(null); setLearnReveal(false) }}
                           data-kg-learn-skip="1"
                         >{learnIdx >= (detail.questions || []).length - 1 ? '已是最后一题' : '跳过此题 →'}</button>
                       </div>
@@ -470,7 +470,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                       <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{'答 ' + answerReport.answered + ' 题 · 对 ' + answerReport.correct + ' 题 · 用时 ' + fmtAnswerClock(answerReport.elapsedSec || 0)}</span>
                       <button style={{ ...KV_BTN, marginLeft: 'auto' }} onClick={() => { setAnswerReport(null); setAnswerExam(null); setAnswerSel({}); setAnswerFlags(new Set()); setAnswerIdx(0) }}>{'↺ 再来一次'}</button>
                     </div>
-                    {(answerReport.modules || []).map(m =>
+                    {(answerReport.modules || []).map((m: any) =>
                       <div key={m.type} style={{ marginBottom: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
                           <span>{m.type + (m.total ? '（' + m.total + ' 题）' : '')}</span>
@@ -485,14 +485,14 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                         <QwPaperMode
                           mode="browse"
                           questions={detail.questions || []}
-                          current={detail.questions.findIndex(q => q.no === answerQ.no) >= 0 ? detail.questions.findIndex(q => q.no === answerQ.no) : 0}
-                          onJump={(i) => setAnswerIdx(answerExam.questions.findIndex(q => q.no === (detail.questions[i] && detail.questions[i].no)) >= 0 ? answerExam.questions.findIndex(q => q.no === (detail.questions[i] && detail.questions[i].no)) : i)}
+                          current={detail.questions.findIndex((q: any) => q.no === answerQ.no) >= 0 ? detail.questions.findIndex((q: any) => q.no === answerQ.no) : 0}
+                          onJump={(i) => setAnswerIdx(answerExam.questions.findIndex((q: any) => q.no === (detail.questions[i] && detail.questions[i].no)) >= 0 ? answerExam.questions.findIndex((q: any) => q.no === (detail.questions[i] && detail.questions[i].no)) : i)}
                           paperMeta={{ exam: detail.exam, year: detail.year, subject: detail.subject, paperType: detail.paperType }}
                           selected={(answerSel[answerQ.no] || null)}
                           right={answerDetailRow ? answerDetailRow.right : null}
                           revealed={answerRevealed}
                           browseAnswers={answerSel}
-                          onSelect={(letter) => setAnswerSel(m => ({ ...m, [answerQ.no]: letter }))}
+                          onSelect={(letter) => setAnswerSel((m: any) => ({ ...m, [answerQ.no]: letter }))}
                         />}
                       />
                     ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'题目索引异常'}</div>}
@@ -519,8 +519,8 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                         paperMeta={{ exam: detail.subject, year: answerExam.year || detail.year, subject: detail.subject }}
                         answers={answerSel}
                         flags={answerFlags}
-                        onSelect={(L) => setAnswerSel(a => ({ ...a, [answerQ.no]: L }))}
-                        onToggleFlag={(no) => setAnswerFlags(f => { const n = new Set(f); n.has(no) ? n.delete(no) : n.add(no); return n })}
+                        onSelect={(L) => setAnswerSel((a: any) => ({ ...a, [answerQ.no]: L }))}
+                        onToggleFlag={(no) => setAnswerFlags((f: any) => { const n = new Set(f); n.has(no) ? n.delete(no) : n.add(no); return n })}
                       />}
                     />
                   ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'题目加载异常'}</div>}
@@ -546,7 +546,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                   right={browseCorrect}
                   revealed={browseRevealed}
                   browseAnswers={browseSel}
-                  onSelect={(letter) => setBrowseSel(m => ({ ...m, [curQ.no]: letter }))}
+                  onSelect={(letter) => setBrowseSel((m: any) => ({ ...m, [curQ.no]: letter }))}
                 />}
               />
               {/* cycle-30：对照操作条——自选未揭示时提示点选项；揭示后给重做入口 */}
@@ -555,11 +555,11 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                   {!browseRevealed ? (
                     <button
                       style={{ ...KV_BTN, background: 'rgba(99,102,241,.12)', borderColor: 'rgba(99,102,241,.5)', color: '#4f46e5', fontWeight: 700 }}
-                      onClick={() => setBrowseReveal(m => ({ ...m, [curQ.no]: true }))}
+                      onClick={() => setBrowseReveal((m: any) => ({ ...m, [curQ.no]: true }))}
                       data-kg-browse-reveal="1"
                     >{browseSelected ? '对照答案（卷面：' + browseCorrect + '）' : '直接看答案（卷面：' + browseCorrect + '）'}</button>
                   ) : (
-                    <button style={KV_BTN} onClick={() => setBrowseReveal(m => ({ ...m, [curQ.no]: false }))}>{'↺ 重做此题'}</button>
+                    <button style={KV_BTN} onClick={() => setBrowseReveal((m: any) => ({ ...m, [curQ.no]: false }))}>{'↺ 重做此题'}</button>
                   )}
                   <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{'点选项=记录自选 · 对照后绿=自选正确 / 红=错答 · 答案与解析自动展开'}</span>
                 </div>
@@ -608,7 +608,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
             </div> : null}
             {list && list.subjects ? <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
               <button style={{ ...KV_BTN, ...(filters.subject === '' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }} onClick={() => setFilters({ subject: '', year: '', province: '' })}>{'全部'}</button>
-              {list.subjects.map(sc =>
+              {list.subjects.map((sc: any) =>
                 <button
                   key={sc.subject}
                   style={{ ...KV_BTN, ...(filters.subject === sc.subject ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }}
@@ -639,7 +639,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
             </div>
             {!list ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载中…'}</div> : null}
             {list ? <div style={{ maxHeight: '52vh', overflowY: 'auto' }}>
-              {list.papers.map(p =>
+              {list.papers.map((p: any) =>
                 <div
                   key={p.id}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, marginBottom: 4, cursor: 'pointer', background: 'rgba(148,163,184,.06)', fontSize: 12.5 }}
@@ -687,7 +687,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
 
       const visit = (id: string) => {
         setSec(id)
-        setVisited(v => (v[id] ? v : { ...v, [id]: true }))
+        setVisited((v: any) => (v[id] ? v : { ...v, [id]: true }))
       }
 
       // 胶囊分区 tab 条（选中渐变；data-kg-hub-tab 供测试/脚本锚定）
@@ -705,15 +705,15 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
 
       // ── 总览分区：既有专题树（行测/申论频道 + 练习入口），内部行为零变化 ──
       const chs = tree ? (tree.channels || []) : []
-      const cur = chs.find(c => c.id === channel) || chs[0]
-      const go = (entry) => { if (entry && onGo) onGo(entry.view, entry.params || {}) }
+      const cur = chs.find((c: any) => c.id === channel) || chs[0]
+      const go = (entry: any) => { if (entry && onGo) onGo(entry.view, entry.params || {}) }
       const st = tree ? (tree.stats || {}) : {}
 
       // 频道切换 + 统计
       const head = (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            {chs.map(c =>
+            {chs.map((c: any) =>
               <button
                 key={c.id}
                 data-kg-channel={c.id}
@@ -734,7 +734,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       const entriesCard = cur ? <Card title={'🚀 ' + cur.name + '练习入口'}>
         <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>{cur.desc}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10 }}>
-          {(cur.entries || []).map((e, i) =>
+          {(cur.entries || []).map((e: any, i: any) =>
             <div
               key={i}
               style={{ border: '1.5px solid rgba(148,163,184,.25)', borderRadius: 12, padding: 14, cursor: 'pointer', textAlign: 'center', background: 'rgba(148,163,184,.04)' }}
@@ -754,9 +754,9 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       const KIND_LABEL = { module: '六大模块', category: '细分题型', 'essay-type': '申论题型' }
 
       const topicCards = entries(groups).map(([kind, list]) =>
-        <Card {...{ key: kind }} title={(KIND_LABEL[kind] || kind) + '（' + list.length + '）'}>
+        <Card {...{ key: kind }} title={((KIND_LABEL as Record<string, any>)[kind] || kind) + '（' + list.length + '）'}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 10 }}>
-            {list.map(t2 =>
+            {list.map((t2: any) =>
               <div
                 key={t2.id}
                 style={{ border: '1.5px solid rgba(148,163,184,.25)', borderRadius: 12, padding: 13, cursor: 'pointer' }}
@@ -778,7 +778,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
         : <div>{head}{entriesCard}{...topicCards}</div>
 
       // 分区包裹：非当前分区 display:none 隐藏（保持挂载 → 状态不丢）
-      const wrap = (id: string, node) => <div key={id} style={sec === id ? undefined : { display: 'none' }}>{node}</div>
+      const wrap = (id: string, node: any) => <div key={id} style={sec === id ? undefined : { display: 'none' }}>{node}</div>
 
       return (
         <div>
@@ -835,9 +835,9 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
         setBusy(true)
         try {
           const d = await api('/method?topic=' + encodeURIComponent(label))
-          setContents(c => ({ ...c, [label]: (d && d.content) || '内容暂缺' }))
+          setContents((c: any) => ({ ...c, [label]: (d && d.content) || '内容暂缺' }))
         } catch {
-          setContents(c => ({ ...c, [label]: '内容加载失败，请稍后重试' }))
+          setContents((c: any) => ({ ...c, [label]: '内容加载失败，请稍后重试' }))
         } finally { setBusy(false) }
       }
 
@@ -943,7 +943,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
               key="legacy-toggle"
               className="kg-navbtn"
               data-kg-hub-legacy="1"
-              onClick={() => setShowLegacy(v => !v)}
+              onClick={() => setShowLegacy((v: any) => !v)}
             >{(showLegacy ? '▾ ' : '▸ ') + '另见：kaogong-skill 十主题方法论 + 深度题库母题精选'}</button>
             <div style={{ fontSize: 11, color: 'var(--text-faint)', margin: '4px 0 0' }}>
               {'（这一部分是外部仓库内容：kaogong-skill 十主题 + GongkaoNaoku 母题精选；'}
@@ -972,13 +972,13 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       const writeDraft = (q: any, v: any) => { try { v ? localStorage.setItem(essayDraftKey(q), v) : localStorage.removeItem(essayDraftKey(q)) } catch { /* 隐私模式等场景静默 */ } }
       // cycle-14：材料逐份折叠（用户诉求：全局折叠保留之外，材料 1/2/3/4 可单独折叠展开）
       const [collapsedMats, setCollapsedMats] = React.useState({})
-      const toggleMat = (no) => setCollapsedMats(m => ({ ...m, [no]: !m[no] }))
+      const toggleMat = (no: any) => setCollapsedMats((m: any) => ({ ...m, [no]: !m[no] }))
       // T-021：材料-题目联动（点关联段号 → 滚动并高亮；若目标材料处于折叠态先自动展开）
       const [hlNo, setHlNo] = React.useState(0)
       const matRefs = React.useRef({})
       const jumpToMaterial = (no: number) => {
         setShowMaterials(true)
-        setCollapsedMats(m => (m[no] ? { ...m, [no]: false } : m))   // 折叠中的关联材料自动展开，否则滚过去看不到正文
+        setCollapsedMats((m: any) => (m[no] ? { ...m, [no]: false } : m))   // 折叠中的关联材料自动展开，否则滚过去看不到正文
         setHlNo(no)
         setTimeout(() => {
           const el = matRefs.current[no]
@@ -992,7 +992,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
         return out
       }
 
-      const load = React.useCallback((t) => {
+      const load = React.useCallback((t: any) => {
         setType(t); setList(null); setCur(null); setResult(null)
         api('/essay/list?limit=40' + (t ? '&type=' + encodeURIComponent(t) : '')).then(setList).catch(() => setList({ questions: [] }))
       }, [api])
@@ -1039,15 +1039,15 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
               </div>
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>{'💬 批改建议'}</div>
-                {(result.feedback || []).map((f, i) => <div key={i} style={{ fontSize: 12.5, lineHeight: 1.7 }}>{'• ' + f}</div>)}
+                {(result.feedback || []).map((f: any, i: any) => <div key={i} style={{ fontSize: 12.5, lineHeight: 1.7 }}>{'• ' + f}</div>)}
               </div>
               {(result.hitTerms || []).length > 0 ? <div style={{ marginBottom: 10 }}>
                 <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5 }}>{'✅ 已覆盖采分点'}</div>
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{result.hitTerms.map((t, i) => <span key={i} style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{t}</span>)}</div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{result.hitTerms.map((t: any, i: any) => <span key={i} style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{t}</span>)}</div>
               </div> : null}
               {(result.missingTerms || []).length > 0 ? <div>
                 <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5 }}>{'⚠️ 可能遗漏的要点'}</div>
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{result.missingTerms.map((t, i) => <span key={i} style={{ ...KV_TAG, background: 'rgba(245,158,11,.12)', color: '#f59e0b' }}>{t}</span>)}</div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{result.missingTerms.map((t: any, i: any) => <span key={i} style={{ ...KV_TAG, background: 'rgba(245,158,11,.12)', color: '#f59e0b' }}>{t}</span>)}</div>
               </div> : null}
             </Card>
           </div>
@@ -1083,14 +1083,14 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
             {/* v1.7 给定材料阅读区（可折叠；考场必须先读材料）；cycle-14：逐份折叠——材料 N 标题可点击单独折叠/展开 */}
             <Card title={'📄 给定材料' + (paperDetail && paperDetail.materials ? '（' + paperDetail.materials.length + ' 段）' : '')}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button style={KV_BTN} onClick={() => setShowMaterials(v => !v)}>{showMaterials ? '▲ 收起材料' : '▼ 展开材料（' + ((paperDetail && paperDetail.materials) || []).length + ' 段）'}</button>
+                <button style={KV_BTN} onClick={() => setShowMaterials((v: any) => !v)}>{showMaterials ? '▲ 收起材料' : '▼ 展开材料（' + ((paperDetail && paperDetail.materials) || []).length + ' 段）'}</button>
                 {showMaterials && paperDetail && paperDetail.materials && paperDetail.materials.length > 0 ? (() => {
                   const mats = paperDetail.materials
-                  const allCollapsed = mats.every(mm => collapsedMats[mm.no])
+                  const allCollapsed = mats.every((mm: any) => collapsedMats[mm.no])
                   return <button
                     style={KV_BTN}
                     onClick={() => setCollapsedMats(() => {
-                      const next = {}
+                      const next: Record<string, any> = {}
                       for (const mm of mats) next[mm.no] = !allCollapsed
                       return next
                     })}
@@ -1100,7 +1100,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
               </div>
               {!paperDetail ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载材料…'}</div> : null}
               {paperDetail && (!paperDetail.materials || paperDetail.materials.length === 0) ? <div style={{ fontSize: 12, color: '#f59e0b' }}>{'该卷未附带材料（部分年份采集稿缺材料）'}</div> : null}
-              {showMaterials && paperDetail && (paperDetail.materials || []).map(mm => {
+              {showMaterials && paperDetail && (paperDetail.materials || []).map((mm: any) => {
                 const isCollapsed = !!collapsedMats[mm.no]
                 const wordCount = String(mm.text || '').replace(/\s/g, '').length
                 return (
@@ -1159,13 +1159,13 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                 >{t || '全部'}</button>)}
             </div>
             {!list ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载中…'}</div> : null}
-            {list ? (list.questions || []).map((q, i) =>
+            {list ? (list.questions || []).map((q: any, i: any) =>
               <div
                 key={i}
                 style={{ padding: '9px 11px', borderRadius: 9, marginBottom: 5, background: 'rgba(148,163,184,.06)', cursor: 'pointer', fontSize: 12.5, lineHeight: 1.65 }}
                 onClick={() => {
                 setCur(q); setAnswer(readDraft(q)); setResult(null); setPaperDetail(null); setShowMaterials(true); setCollapsedMats({})
-                api('/paper?id=' + encodeURIComponent(q.paperId)).then(d => setPaperDetail(d)).catch(() => setPaperDetail({ materials: [] }))
+                api('/paper?id=' + encodeURIComponent(q.paperId)).then((d: any) => setPaperDetail(d)).catch(() => setPaperDetail({ materials: [] }))
               }}
               >
                 <div style={{ display: 'flex', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>

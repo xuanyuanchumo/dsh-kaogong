@@ -47,7 +47,7 @@ function weightedPick<T>(items: T[], weights: number[], n: number): T[] {
   return out
 }
 
-export function makePoolApi({ repoRoot, dataDir, store }) {
+export function makePoolApi({ repoRoot, dataDir, store }: any) {
   const { loadProgress } = store
 
   // ── T-032 重建作业状态（repoManager 同构：进行中单槽 + 归档环形 10）──

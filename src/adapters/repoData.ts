@@ -40,15 +40,15 @@ export const XINGCE_MODULES = {
 
 export const METHOD_MAP = { '行测': 'xingce.md', '申论': 'shenlun.md', '职测': 'zhice.md', '综应': 'zongying.md', '公基': 'gongji.md', '公文': 'gongwen.md', '面试': 'mianshi.md', '时政': 'shizheng.md', '报考': 'baokao.md', '复盘': 'review.md' }
 
-export function safeReadFile(f, max = 8000) {
+export function safeReadFile(f: any, max = 8000) {
   try { const c = readFileSync(f, 'utf-8'); return c.length > max ? c.slice(0, max) + '\n... (已截断)' : c }
   catch { return null }
 }
-export function exists(p) { try { return existsSync(p) } catch { return false } }
-export function safeReadDir(d) { try { return readdirSync(d) } catch { return [] } }
+export function exists(p: any) { try { return existsSync(p) } catch { return false } }
+export function safeReadDir(d: any) { try { return readdirSync(d) } catch { return [] } }
 
 /** 题块解析（CRLF 归一 + 中文 frontmatter + h2/h3 双级题号，历史踩坑固化） */
-export function parseQuestions(filePath, maxQ = 20) {
+export function parseQuestions(filePath: any, maxQ = 20) {
   const raw = safeReadFile(filePath, 200000)
   if (!raw) return []
   const content = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
@@ -79,7 +79,7 @@ export function parseQuestions(filePath, maxQ = 20) {
   // （落盘/存储与端口、挂载点无关；前端 RichText 渲染时才改写为 /api/kg-img?p= 绝对 URL），
   // 再剥其余 HTML 标签。占位文本形态 `【题图】` 由前端渲染层处理，落盘数据保持可读。
   const IMG_PLACEHOLDER_RE = /<img[^>]*\ssrc=["']([^"']+)["'][^>]*\/?>/gi
-  const neutralizeImages = (s) => String(s || '')
+  const neutralizeImages = (s: any) => String(s || '')
     .replace(IMG_PLACEHOLDER_RE, (_full, src) => {
       const rel = String(src || '').replace(/\\/g, '/')
       if (!rel || /^https?:/i.test(rel)) return _full                       // 外链原样保留
@@ -87,7 +87,7 @@ export function parseQuestions(filePath, maxQ = 20) {
       const norm = rel.replace(/^(\.\.\/)+/, '')
       return `【图:kgimg://${norm}】`
     })
-  const stripHtmlKeepImg = (s) => neutralizeImages(s).replace(/<[^>]+>/g, '').trim()
+  const stripHtmlKeepImg = (s: any) => neutralizeImages(s).replace(/<[^>]+>/g, '').trim()
   // cycle-26 D-1b：材料段正文表（offset → { no, text }）——专题刷题链路的资料分析题组
   // 与真题卷同源（xingcezhenti 卷内 `## 材料 N` 夹在题目流中），材料正文此前从不进题目对象
   const matTextTable: Array<{ at: number, no: number, text: string }> = []
@@ -186,7 +186,7 @@ export function parseQuestions(filePath, maxQ = 20) {
  * 回落到目录解析是**受控降级**而非违规：它是唯一可用的数据源，
  * 且守卫 SMOKE-KERNEL-05 断言「池就绪时请求路径不 readFileSync」。
  */
-export function getRandomQuestions(repoRoot, moduleName, count = 1, pool?: any) {
+export function getRandomQuestions(repoRoot: any, moduleName: any, count = 1, pool?: any) {
   // ① 存储层优先（统一池供数；跨源可聚合，请求路径零文件读）
   if (pool && typeof pool.sampleQuestions === 'function') {
     const r = pool.sampleQuestions({ module: moduleName, count })
@@ -196,7 +196,7 @@ export function getRandomQuestions(repoRoot, moduleName, count = 1, pool?: any) 
     if (r && r.error) return { error: r.error }
   }
   // ② 回落：目录解析（池未就绪时的唯一数据源）
-  const dirName = XINGCE_MODULES[moduleName]
+  const dirName = (XINGCE_MODULES as Record<string, any>)[moduleName]
   if (!dirName) return { error: `未知模块。可用: ${Object.keys(XINGCE_MODULES).join(', ')}` }
   const modulePath = join(repoRoot, 'xingcezhenti', dirName)
   // cycle-29（flaky 根治）：排除非题库文件——六个模块目录各有一个 README.md（6/2962=0.2%），
@@ -219,14 +219,14 @@ export function getRandomQuestions(repoRoot, moduleName, count = 1, pool?: any) 
 }
 
 /** 全文检索：DFS 限深(3) + 命中上限(15) 早停 */
-export function searchKnowledge(repoRoot, query, repoKey) {
+export function searchKnowledge(repoRoot: any, query: any, repoKey: any) {
   const searchRepos = repoKey ? [repoKey] : ['sakib', 'kaogong-skill', 'developer2gwy']
   const results: any[] = []
   const qLower = (query || '').toLowerCase()
   if (!qLower) return results
   for (const key of searchRepos) {
     if (!exists(join(repoRoot, key))) continue
-    function walk(dir, depth) {
+    function walk(dir: any, depth: any) {
       if (depth > 3 || results.length >= 15) return
       for (const item of safeReadDir(dir)) {
         if (item.startsWith('.git') || item === 'node_modules') continue
@@ -253,15 +253,15 @@ export function searchKnowledge(repoRoot, query, repoKey) {
   return results
 }
 
-export function getMethodRef(repoRoot, topic) {
-  const fileName = METHOD_MAP[topic] || METHOD_MAP[(topic || '').slice(0, 2)]
+export function getMethodRef(repoRoot: any, topic: any) {
+  const fileName = (METHOD_MAP as Record<string, any>)[topic] || (METHOD_MAP as Record<string, any>)[(topic || '').slice(0, 2)]
   if (!fileName) return { error: `未知主题。可用: ${Object.keys(METHOD_MAP).join(', ')}` }
   const content = safeReadFile(join(repoRoot, 'kaogong-skill', 'skills', 'kaogong', 'references', fileName), 20000)
   return { topic, file: fileName, content: content || '参考文件未找到' }
 }
 
 /** 学习计划结构化：4阶段/30天/每日任务（正则状态机单遍 O(n)） */
-export function parsePlanStructure(content) {
+export function parsePlanStructure(content: any) {
   const lines = content.split('\n')
   const phases: any[] = []
   const days: any[] = []
@@ -288,7 +288,7 @@ export function parsePlanStructure(content) {
   return { phases, days }
 }
 
-export function repoStats(repoRoot) {
+export function repoStats(repoRoot: any) {
   let ready = 0
   for (const key of Object.keys(REPOS)) if (exists(join(repoRoot, key))) ready++
   return { ready, total: Object.keys(REPOS).length }

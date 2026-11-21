@@ -25,7 +25,7 @@ export function hs13Num(v: any) {
     return isFinite(n) ? n : 0;
 }
 /** 表格行拆分：去掉首尾竖线后按 | 切（单元格 trim） */
-function hs13SplitRow(line) {
+function hs13SplitRow(line: any) {
     let s = String(line == null ? '' : line).trim();
     if (s.charAt(0) === '|')
         s = s.slice(1);
@@ -34,14 +34,14 @@ function hs13SplitRow(line) {
     return s.split('|').map((x) => x.trim());
 }
 /** 表格分隔行判定（| --- | :---: | 等；必须含 '-' 且只由 | - : 空白组成） */
-function hs13IsTableSep(line) {
+function hs13IsTableSep(line: any) {
     const s = String(line == null ? '' : line).trim();
     if (!s || s.indexOf('-') < 0)
         return false;
     return /^\|?[\s:|-]+\|?$/.test(s);
 }
 /** 行是否属于「块起始」（段落累积在遇到块起始时截断，避免列表被并进段落） */
-function hs13BlockStart(line) {
+function hs13BlockStart(line: any) {
     const t = String(line == null ? '' : line).trim();
     if (!t)
         return true;
@@ -64,7 +64,7 @@ function hs13BlockStart(line) {
  * 支持的块：标题(#1-6) / 段落 / 无序列表 / 有序列表 / 表格 / 代码围栏 / 引用 / 分隔线。
  * CRLF 先归一（语料历史是 CRLF，不归一会让表头判定全部失败）。
  */
-function hs13MarkdownBlocks(src): any[] {
+function hs13MarkdownBlocks(src: any): any[] {
     const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
     const blocks: any[] = [];
     let i = 0;
@@ -188,7 +188,7 @@ function hs13MarkdownBlocks(src): any[] {
     return blocks;
 }
 /** 正则字面量转义（检索词来自用户输入，必须转义后才能拼 RegExp） */
-function hs13EscapeRe(s) {
+function hs13EscapeRe(s: any) {
     return String(s == null ? '' : s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 /**
@@ -239,7 +239,7 @@ function hs13Inline(text: any, keyBase: any) {
             out.push(h('img', {
                 key: keyBase + '-i' + (n++), src: m[2], alt: m[1] || '配图', loading: 'lazy',
                 style: { maxWidth: '100%', maxHeight: 300, display: 'block', margin: '8px 0', borderRadius: 8, border: '1px solid rgba(148,163,184,.25)' },
-                onError: (e) => { if (e && e.target)
+                onError: (e: any) => { if (e && e.target)
                     e.target.style.display = 'none'; },
             }));
         }
@@ -259,7 +259,7 @@ function hs13Inline(text: any, keyBase: any) {
     return out;
 }
 /** 单块渲染（纯函数，无 hook；供 hs13RenderBlocks 调用） */
-function hs13RenderBlock(b: any, key) {
+function hs13RenderBlock(b: any, key: any) {
     if (!b || typeof b !== 'object')
         return null;
     if (b.t === 'h') {
@@ -282,7 +282,7 @@ function hs13RenderBlock(b: any, key) {
     }
     if (b.t === 'ul' || b.t === 'ol') {
         const items = Array.isArray(b.items) ? b.items : [];
-        return h(b.t === 'ol' ? 'ol' : 'ul', { key, style: { margin: '8px 0', paddingLeft: 22, fontSize: 13, lineHeight: 1.85 } }, items.map((it, i) => h('li', { key: key + '-li' + i, style: { marginBottom: 3, whiteSpace: 'pre-wrap' } }, ...hs13Inline(it, key + '-li' + i))));
+        return h(b.t === 'ol' ? 'ol' : 'ul', { key, style: { margin: '8px 0', paddingLeft: 22, fontSize: 13, lineHeight: 1.85 } }, items.map((it: any, i: any) => h('li', { key: key + '-li' + i, style: { marginBottom: 3, whiteSpace: 'pre-wrap' } }, ...hs13Inline(it, key + '-li' + i))));
     }
     if (b.t === 'quote') {
         return h('div', { key, style: { margin: '10px 0', padding: '8px 12px', borderLeft: '3px solid rgba(148,163,184,.6)', background: 'rgba(148,163,184,.09)', borderRadius: '0 8px 8px 0', fontSize: 12.5, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' } }, ...hs13Inline(b.text, key));
@@ -294,7 +294,7 @@ function hs13RenderBlock(b: any, key) {
         const head = Array.isArray(b.head) ? b.head : [];
         const rows = Array.isArray(b.rows) ? b.rows : [];
         const cellStyle = { border: '1px solid rgba(148,163,184,.3)', padding: '5px 9px', fontSize: 12, lineHeight: 1.6, textAlign: 'left', verticalAlign: 'top' };
-        return h('div', { key, style: { margin: '10px 0', overflowX: 'auto' } }, h('table', { style: { borderCollapse: 'collapse', width: '100%', minWidth: 260 } }, head.length ? h('thead', null, h('tr', null, head.map((c, i) => h('th', { key: key + '-th' + i, style: { ...cellStyle, background: 'rgba(99,102,241,.08)', fontWeight: 800, color: '#4338ca', whiteSpace: 'nowrap' } }, ...hs13Inline(c, key + '-th' + i))))) : null, h('tbody', null, rows.map((r, ri) => h('tr', { key: key + '-tr' + ri }, r.map((c, ci) => h('td', { key: key + '-td' + ri + '-' + ci, style: cellStyle }, ...hs13Inline(c, key + '-td' + ri + '-' + ci))))))));
+        return h('div', { key, style: { margin: '10px 0', overflowX: 'auto' } }, h('table', { style: { borderCollapse: 'collapse', width: '100%', minWidth: 260 } }, head.length ? h('thead', null, h('tr', null, head.map((c: any, i: any) => h('th', { key: key + '-th' + i, style: { ...cellStyle, background: 'rgba(99,102,241,.08)', fontWeight: 800, color: '#4338ca', whiteSpace: 'nowrap' } }, ...hs13Inline(c, key + '-th' + i))))) : null, h('tbody', null, rows.map((r: any, ri: any) => h('tr', { key: key + '-tr' + ri }, r.map((c: any, ci: any) => h('td', { key: key + '-td' + ri + '-' + ci, style: cellStyle }, ...hs13Inline(c, key + '-td' + ri + '-' + ci))))))));
     }
     if (b.t === 'hr') {
         return h('div', { key, style: { height: 1, background: 'rgba(148,163,184,.3)', margin: '14px 0' } });
@@ -312,14 +312,14 @@ function hs13RenderBlocks(src: any, keyBase: any) {
  * 策略层（strategy）与真题示例（examples）——它们不属于任何单一模块，但必须可见。
  */
 /** markdown 渲染组件（零依赖；供文档正文与题干复用） */
-export function Hs13Markdown(props) {
+export function Hs13Markdown(props: any) {
     const src = props && props.src != null ? props.src : '';
     if (!String(src).trim())
         return h('div', { style: { fontSize: 12, color: 'var(--text-faint)' } }, '（正文为空）');
     return h('div', { style: { fontSize: props && props.fontSize ? props.fontSize : 13 } }, ...hs13RenderBlocks(src, 'hs13md'));
 }
 /** 命中高亮片段（检索结果 / 摘要共用） */
-export function Hs13Snippet(props) {
+export function Hs13Snippet(props: any) {
     const text = String((props && props.text) || '');
     if (!text)
         return null;

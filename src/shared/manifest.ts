@@ -327,9 +327,9 @@ export const REPOS_META: any = {
 export function buildGraph({ banks, modules, telemetry, plan }: any = {}) {
   const nodes: any[] = []
   const edges: any[] = []
-  const nid = (t, id) => `${t}:${id}`
-  const addNode = (t, id, label, meta = {}) => { nodes.push({ id: nid(t, id), type: t, label, ...meta }); return nid(t, id) }
-  const addEdge = (s, d, rel, w = 1) => { if (s && d && s !== d) edges.push({ source: s, target: d, rel, w }) }
+  const nid = (t: any, id: any) => `${t}:${id}`
+  const addNode = (t: any, id: any, label: any, meta = {}) => { nodes.push({ id: nid(t, id), type: t, label, ...meta }); return nid(t, id) }
+  const addEdge = (s: any, d: any, rel: any, w = 1) => { if (s && d && s !== d) edges.push({ source: s, target: d, rel, w }) }
 
   const pluginId = addNode('plugin', 'kaogong', 'dsh-kaogong', { version: CAPABILITIES.plugin.version })
 
@@ -409,7 +409,7 @@ export function buildGraph({ banks, modules, telemetry, plan }: any = {}) {
     for (const ph of plan.phases) {
       const phid = addNode('phase', ph.name, ph.name, { days: `${ph.startDay}-${ph.endDay}` })
       addEdge(pd, phid, 'contains')
-      for (const d of plan.days.filter(x => x.phase === ph.name)) {
+      for (const d of plan.days.filter((x: any) => x.phase === ph.name)) {
         addEdge(phid, addNode('day', 'D' + d.day, 'D' + d.day, { title: d.title }), 'contains')
       }
     }
@@ -419,7 +419,7 @@ export function buildGraph({ banks, modules, telemetry, plan }: any = {}) {
 }
 
 // ── PageRank 幂迭代 ──
-export function pageRank(nodes, edges, { d = 0.85, iter = 40 } = {}) {
+export function pageRank(nodes: any, edges: any, { d = 0.85, iter = 40 } = {}) {
   const n = nodes.length
   if (!n) return {}
   const out: any = {}
@@ -443,10 +443,10 @@ export function pageRank(nodes, edges, { d = 0.85, iter = 40 } = {}) {
 }
 
 // ── Union-Find 弱连通分量 ──
-export function components(nodes, edges) {
+export function components(nodes: any, edges: any) {
   const parent: any = {}
-  const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x] } return x }
-  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb }
+  const find = (x: any) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x] } return x }
+  const union = (a: any, b: any) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb }
   for (const x of nodes) parent[x.id] = x.id
   for (const e of edges) { if (parent[e.source] !== undefined && parent[e.target] !== undefined) union(e.source, e.target) }
   const groups: any = {}
@@ -455,7 +455,7 @@ export function components(nodes, edges) {
 }
 
 // ── 图指标 + 健康度评分 ──
-export function graphMetrics(nodes, edges) {
+export function graphMetrics(nodes: any, edges: any) {
   const V = nodes.length, E = edges.length
   const density = V > 1 ? (E / (V * (V - 1))) : 0
   const degree: any = {}
@@ -466,9 +466,9 @@ export function graphMetrics(nodes, edges) {
   }
   // 孤儿：无任何消费/入边的可消费节点（端点/视图/工具）
   const orphans = nodes
-    .filter(x => ['endpoint', 'tool', 'view'].includes(x.type))
-    .filter(x => (degree[x.id]?.in || 0) === 0)
-    .map(x => x.id)
+    .filter((x: any) => ['endpoint', 'tool', 'view'].includes(x.type))
+    .filter((x: any) => (degree[x.id]?.in || 0) === 0)
+    .map((x: any) => x.id)
   const comps = components(nodes, edges)
   const rank = pageRank(nodes, edges)
   return { V, E, density: +density.toFixed(4), orphans, components: comps.length, rank }

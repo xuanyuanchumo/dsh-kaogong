@@ -340,25 +340,25 @@ function ObsFlowChart(props: any) {
   leftRows.forEach((x: any, i: number) => {
     if (isGrouped) {
       const G: any = groups[x.key]
-      items.push(capsule('L' + x.key, colX[0], topPad + i * rowH, G.state, obsFlowLabel(x.key) + ' ·' + G.members.length, (G.amber ? '琥珀' + G.amber + ' ' : '') + (G.red ? '漂移' + G.red : ''), () => setSelKey(k => (k === x.key ? null : x.key)), G.state === 'red' && !G.ok && !G.amber))
+      items.push(capsule('L' + x.key, colX[0], topPad + i * rowH, G.state, obsFlowLabel(x.key) + ' ·' + G.members.length, (G.amber ? '琥珀' + G.amber + ' ' : '') + (G.red ? '漂移' + G.red : ''), () => setSelKey((k: any) => (k === x.key ? null : x.key)), G.state === 'red' && !G.ok && !G.amber))
     } else {
-      items.push(capsule('L' + x.path, colX[0], topPad + i * rowH, x.state, obsFlowLabel(x.path), x.label && x.label !== '未在 manifest 声明' ? x.label : '', () => setSelKey(k => (k === x.path ? null : x.path)), x.state === 'red'))
+      items.push(capsule('L' + x.path, colX[0], topPad + i * rowH, x.state, obsFlowLabel(x.path), x.label && x.label !== '未在 manifest 声明' ? x.label : '', () => setSelKey((k: any) => (k === x.path ? null : x.path)), x.state === 'red'))
     }
   })
   midRows.forEach((x: any, i: number) => {
     if (isGrouped) {
       const G: any = groups[x.key]
-      items.push(capsule('M' + x.key, colX[1], topPad + i * rowH, G.state, obsFlowLabel(x.key), G.count + '次', () => setSelKey(k => (k === x.key ? null : x.key)), false))
+      items.push(capsule('M' + x.key, colX[1], topPad + i * rowH, G.state, obsFlowLabel(x.key), G.count + '次', () => setSelKey((k: any) => (k === x.key ? null : x.key)), false))
     } else {
-      items.push(capsule('M' + x.path, colX[1], topPad + i * rowH, x.state, obsFlowLabel(x.path), (x.r.count || 0) + '次', () => setSelKey(k => (k === x.path ? null : x.path)), false))
+      items.push(capsule('M' + x.path, colX[1], topPad + i * rowH, x.state, obsFlowLabel(x.path), (x.r.count || 0) + '次', () => setSelKey((k: any) => (k === x.path ? null : x.path)), false))
     }
   })
   rightRows.forEach((x: any, i: number) => {
     if (isGrouped) {
       const G: any = groups[x.key]
-      items.push(capsule('R' + x.key, colX[2], topPad + i * rowH, G.state, obsFlowLabel(x.key), 'p95 ' + G.p95 + 'ms', () => setSelKey(k => (k === x.key ? null : x.key)), false))
+      items.push(capsule('R' + x.key, colX[2], topPad + i * rowH, G.state, obsFlowLabel(x.key), 'p95 ' + G.p95 + 'ms', () => setSelKey((k: any) => (k === x.key ? null : x.key)), false))
     } else {
-      items.push(capsule('R' + x.path, colX[2], topPad + i * rowH, x.state, obsFlowLabel(x.path), 'p95 ' + (x.r.p95 || 0) + 'ms', () => setSelKey(k => (k === x.path ? null : x.path)), false))
+      items.push(capsule('R' + x.path, colX[2], topPad + i * rowH, x.state, obsFlowLabel(x.path), 'p95 ' + (x.r.p95 || 0) + 'ms', () => setSelKey((k: any) => (k === x.path ? null : x.path)), false))
     }
   })
 
@@ -396,7 +396,7 @@ function ObsFlowChart(props: any) {
   return h('div', null,
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 } },
       h('button', {
-        onClick: () => setGrouped(v => (v === null ? !(nodes.length > 40) : !v)),
+        onClick: () => setGrouped((v: any) => (v === null ? !(nodes.length > 40) : !v)),
         style: Object.assign({}, G_BTN, (grouped === null ? nodes.length > 40 : grouped) ? G_BTN_ON : {}),
         title: '按 /api/<域> 前缀聚合端点（>40 节点自动启用；点胶囊展开成员）',
       }, '聚合', (grouped === null ? nodes.length > 40 : grouped) ? ' ✓' : ''),
@@ -879,7 +879,7 @@ export function NativeObsView({ api, onReload }: ObsViewProps) {
   const thSort: any = { ...th, cursor: 'pointer', userSelect: 'none' }
   const td: any = { padding: '6px 8px', fontSize: 11.5, borderBottom: '1px solid rgba(148,163,184,.12)', verticalAlign: 'middle' }
   const doSort = (key: any) => {
-    if (sortKey === key) setSortAsc(a => !a)
+    if (sortKey === key) setSortAsc((a: any) => !a)
     else { setSortKey(key); setSortAsc(false) }
   }
   const sortHead = (key: any, label: any) => h('th', {
@@ -1071,11 +1071,11 @@ export function NativeObsView({ api, onReload }: ObsViewProps) {
         ? h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 9, alignItems: 'center' } },
             h('input', {
               value: filter, placeholder: '过滤端点路径 / 名称…',
-              onChange: (e) => setFilter(e && e.target ? e.target.value : ''),
+              onChange: (e: any) => setFilter(e && e.target ? e.target.value : ''),
               'aria-label': '过滤端点',
               style: { flex: '1 1 180px', minWidth: 130, padding: '5px 10px', borderRadius: 8, border: '1px solid rgba(148,163,184,.35)', fontSize: 11.5, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'inherit' },
             }),
-            h('button', { onClick: () => setOnlyProblems(v => !v), style: Object.assign({}, G_BTN, onlyProblems ? G_BTN_ON : {}) }, onlyProblems ? '✓ 仅问题端点' : '仅问题端点'),
+            h('button', { onClick: () => setOnlyProblems((v: any) => !v), style: Object.assign({}, G_BTN, onlyProblems ? G_BTN_ON : {}) }, onlyProblems ? '✓ 仅问题端点' : '仅问题端点'),
             /* W2c 三态筛选 chips（与三态灯列联动） */
             ['all', 'abnormal', 'unconsumed'].map(k => h('button', {
               key: 'tf' + k, onClick: () => setTriFilter(k),

@@ -47,14 +47,14 @@ export function QwLightbox({ src, alt, onClose }: QwLightboxProps) {
   const wheelZoom = (e: any) => {
     e.preventDefault()
     const factor = e.deltaY < 0 ? QW_ZOOM_STEP : 1 / QW_ZOOM_STEP
-    setScale(prev => {
+    setScale((prev: any) => {
       const next = Math.min(QW_ZOOM_MAX, Math.max(QW_ZOOM_MIN, prev * factor))
       if (next === prev) return prev
       // 指针相对遮罩中心的偏移 → 缩放前后该内容点保持在指针下
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
       const px = e.clientX - rect.left - rect.width / 2
       const py = e.clientY - rect.top - rect.height / 2
-      setOffset(o => ({
+      setOffset((o: any) => ({
         x: px - (px - o.x) * (next / prev),
         y: py - (py - o.y) * (next / prev),
       }))
@@ -93,9 +93,9 @@ export function QwLightbox({ src, alt, onClose }: QwLightboxProps) {
       >
         <span style={{ color: '#cbd5e1', fontSize: 12, fontFamily: 'monospace' }}>{Math.round(scale * 100) + '%'}</span>
         <button style={{ background: 'rgba(255,255,255,.12)', color: '#e2e8f0', border: 0, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}
-          onClick={() => setScale(s => Math.max(QW_ZOOM_MIN, s / QW_ZOOM_STEP))}>{'－'}</button>
+          onClick={() => setScale((s: any) => Math.max(QW_ZOOM_MIN, s / QW_ZOOM_STEP))}>{'－'}</button>
         <button style={{ background: 'rgba(255,255,255,.12)', color: '#e2e8f0', border: 0, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}
-          onClick={() => setScale(s => Math.min(QW_ZOOM_MAX, s * QW_ZOOM_STEP))}>{'＋'}</button>
+          onClick={() => setScale((s: any) => Math.min(QW_ZOOM_MAX, s * QW_ZOOM_STEP))}>{'＋'}</button>
         <button style={{ background: 'rgba(255,255,255,.12)', color: '#e2e8f0', border: 0, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}
           onClick={dblReset}>{'复位'}</button>
         <button style={{ background: 'rgba(239,68,68,.75)', color: '#fff', border: 0, borderRadius: 8, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}

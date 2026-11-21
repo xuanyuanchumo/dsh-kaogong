@@ -45,7 +45,7 @@ export function makeHistoryApi({ store, repoRoot = '' }: { store: any, repoRoot?
   function search(q: string, module: string, limit: number) {
     const kw = String(q || '').trim()
     if (!kw) return { keyword: kw, list: [], hint: '输入题干关键词（≥2 字）' }
-    const wantModule = module && XINGCE_MODULES[module] ? module : ''
+    const wantModule = module && (XINGCE_MODULES as Record<string, any>)[module] ? module : ''
     const list: any[] = []
     const seen = new Set<string>()
     // 1) 深度题库（27506 题，五维标注；DB LIKE 全量搜索，非截取；不可用时自动跳过）
