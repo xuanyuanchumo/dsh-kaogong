@@ -218,7 +218,7 @@ export function prewarmPaperIndex(repoRoot) {
 }
 
 /** 取单套卷详情：材料 + 题目（含参考答案） */
-export function loadPaper(repoRoot, paperId) {
+export function loadPaper(repoRoot, paperId): any {
   const root = join(repoRoot, PAPER_REPO)
   const filePath = join(root, paperId + '.md')
   // 防路径穿越：解析后必须仍在 root 内
