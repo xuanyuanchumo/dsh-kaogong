@@ -19,7 +19,7 @@ const dirCache = new Map()
 
 function listDir(dir) {
   if (dirCache.has(dir)) return dirCache.get(dir)
-  let names = []
+  let names: any[] = []
   try { names = readdirSync(dir) } catch { names = [] }
   dirCache.set(dir, names)
   return names
@@ -69,7 +69,7 @@ export function safeImagePath(repoRoot, relPath) {
 /** 把题目 img_refs 转成 markdown 图片（供 RichText 渲染 → 走 /api/naoku-img） */
 export function imageMarkdown(repoRoot, imgRefs, mountPath = '/kaogong') {
   const list = String(imgRefs || '').split(/[,;\s]+/).filter(Boolean)
-  const out = []
+  const out: any[] = []
   for (const ref of list) {
     const rel = resolveNaokuImage(repoRoot, ref)
     if (!rel) continue

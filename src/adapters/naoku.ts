@@ -92,7 +92,7 @@ function safeAll(sql, params = []): any[] {
   if (!db) return []
   try { return db.prepare(sql).all(...params) } catch { return [] }
 }
-function safeGet(sql, params = []) {
+function safeGet(sql, params = []): any {
   if (!db) return null
   try { return db.prepare(sql).get(...params) } catch { return null }
 }
@@ -184,7 +184,7 @@ export function naokuQuestions({ module, category, kadian, count = 1, random = t
 /** 知识点检索：从 kadian 字段找「考什么 + 怎么想」 */
 export function searchKadian(keyword, limit = 20) {
   if (!db) return []
-  const rows = safeAll(
+  const rows: any[] = safeAll(
     `SELECT kadian, category, module, COUNT(*) c FROM questions
      WHERE kadian LIKE ? GROUP BY kadian ORDER BY c DESC LIMIT ?`,
     ['%' + keyword + '%', Math.min(50, limit)]
@@ -199,7 +199,7 @@ export function searchQuestionsByStem(keyword, limit = 12, repoRoot = null, moun
   if (!db) return []
   const kw = String(keyword || '').trim()
   if (!kw) return []
-  const rows = safeAll(
+  const rows: any[] = safeAll(
     `SELECT id,qid,module,category,kadian,region,year,paper,stem,options,answer,analysis,material,material_ref,has_image,img_refs,qtype
      FROM questions WHERE stem LIKE ? ORDER BY year DESC, id ASC LIMIT ?`,
     ['%' + kw.replace(/[%_]/g, m => '\\' + m) + '%', Math.min(50, limit)])
@@ -285,7 +285,7 @@ function parseOptions(raw) {
  */
 export function papersByCategory(category: string, limit = 40) {
   if (!db) return []
-  const rows = safeAll(
+  const rows: any[] = safeAll(
     "SELECT paper, region, year, COUNT(*) c FROM questions WHERE category = ? AND LENGTH(paper) > 0 GROUP BY paper ORDER BY c DESC LIMIT ?",
     [category, Math.min(100, limit)],
   )
@@ -300,7 +300,7 @@ export function papersByCategory(category: string, limit = 40) {
 /** 全部考点（category）清单及题量 */
 export function categoryList(limit = 40) {
   if (!db) return []
-  const rows = safeAll(
+  const rows: any[] = safeAll(
     "SELECT category k, COUNT(*) c FROM questions WHERE LENGTH(category) > 0 GROUP BY category ORDER BY c DESC LIMIT ?",
     [Math.min(100, limit)],
   )
