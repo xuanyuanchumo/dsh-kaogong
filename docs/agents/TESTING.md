@@ -387,3 +387,15 @@ smoke.test.mjs 的 466 条 check 经语义等价折算已基本全覆盖（剩�
 - loader.test.mjs（node 直跑）保留为独立 e2e 车道
 
 **最终形态**：
+
+## 退役完成（cycle-47 收官 · 2026-11-21）
+
+**退役动作已执行**：smoke.test.mjs / render.test.mjs 已移出版本控制（本地保留 legacy-*.bak 备份），npm scripts 已收敛：npm run test:all = build（tsc+bundler+combo 守卫）→ loader e2e → vitest 276 断言。
+
+**退役波及修 2 处**：① packaging R11-GUARD-02 emitters 清单收敛（test:render/test:all 并入 vitest 后不再产 dist）；② docs-guards RDOC-01b R14 六不变量判据源从 smoke.test.mjs 改指 tests/smoke/kgdb+kernel 域文件。
+
+**退役后验收**：npm run test:all 全链全绿——Loader 17/17 · vitest 276/276（35 文件）。零回归。
+
+**最终测试体系形态**：单命令 npm run test:all（约 40s）= 类型门 → 构建产物 → combo 守卫 → 真实 Loader e2e → 35 文件分域测试。分域目录：_harness（server/render 共享设施）· unit（纯函数）· smoke（27 域）· render（7 旅程）· e2e（loader）。覆盖：旧 smoke 466 check 判定 100% 等价迁移 · 旧 render 66 旅程 100% 分域迁移。
+
+**大单文件测试问题正式关闭**：4173 行双单文件 → 35 文件分域体系，所有守卫断言保留，语义零丢失。
