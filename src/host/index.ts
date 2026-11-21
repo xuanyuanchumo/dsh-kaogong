@@ -189,7 +189,7 @@ export function apply(ctx) {
     output: textOutput,
     ...kgToolCard((a: any) => '🧑‍🏫 AI辅导 · ' + String((a && a.module) || '') + ((a && a.question_type) ? ' · ' + a.question_type : '')),
     async execute(args) {
-      let method: any = {}, search = { results: [] }
+      let method: any = {}, search: any = { results: [] }
       try { method = await callApi(`/api/method?topic=${encodeURIComponent('行测')}`, args.workspace) } catch {}
       try { search = await callApi(`/api/search?q=${encodeURIComponent(args.question_type || args.module)}`, args.workspace) } catch {}
       const lines = [
@@ -276,7 +276,7 @@ export function apply(ctx) {
     async execute(args) {
       const isArticle = args.mode === 'article'
       // 取离线基线分（POST 到本地规则引擎）
-      let baseline = null
+      let baseline: any = null
       try {
         const url = new URL(base() + (isArticle ? '/api/essay/article' : '/api/essay/grade'))
         if (args.workspace) url.searchParams.set('ws', args.workspace)
