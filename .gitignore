@@ -34,3 +34,4 @@ data/progress.json
 
 # 本地测试 overlay（含开发机绝对路径，不入库；样例见 cordis.local.example.yml）
 cordis.local.yml
+pnpm-lock.yaml
