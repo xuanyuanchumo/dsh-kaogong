@@ -110,7 +110,7 @@ export function apply(ctx: any) {
       }
     } catch (e) {
       // 受控降级：独立端口兜底仍在；绝不击杀宿主
-      console.error(`[dsh-kaogong] 路由挂载失败(${e.message})，降级独立端口模式`)
+      console.error(`[dsh-kaogong] 路由挂载失败(${(e as Error).message})，降级独立端口模式`)
     }
   })
 
@@ -287,7 +287,7 @@ export function apply(ctx: any) {
           signal: AbortSignal.timeout(15000),
         })
         baseline = await res.json()
-      } catch (e) { baseline = { error: e.message } }
+      } catch (e) { baseline = { error: (e as Error).message } }
 
       let method: any = {}
       try { method = await callApi('/api/method?topic=申论', args.workspace) } catch {}

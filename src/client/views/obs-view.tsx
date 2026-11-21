@@ -792,7 +792,7 @@ export function NativeObsView({ api, onReload }: ObsViewProps) {
         setIns({ essay: eh, exam: xh })
         setHs({ trace: hs13Trace, coverage: hs13Coverage, catalog: hs13Catalog })
         setFetchErr(null)
-      } catch (e) { if (!cancelled) setFetchErr(String((e && e.message) || e)) }
+      } catch (e) { if (!cancelled) setFetchErr(String((e && (e as Error).message) || e)) }
       finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true }

@@ -114,7 +114,7 @@ function KgMemBanner(props: KgMemBannerProps) {
               examCount: (xh && xh.total) || 0, avgExam: (xh && xh.avgRate) || 0,
             }
             if (!cancelled) { setPayload({ st, stats, extra }); setErr(null) }
-          } catch (e) { if (!cancelled) setErr(String((e && e.message) || e)) }
+          } catch (e) { if (!cancelled) setErr(String((e && (e as Error).message) || e)) }
           finally { if (!cancelled) setLoading(false) }
         })()
         return () => { cancelled = true }
@@ -426,7 +426,7 @@ function KgMemBanner(props: KgMemBannerProps) {
       const { wrong, summary } = wb
       const tagStyle = { background: '#eef2ff', color: '#4338ca', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }
       // cycle-33 筛选：模块 chips（来源=条目里出现过的模块，确定性）+ 状态三态
-      const modulesAll = Array.from(new Set((wrong || []).map((w: any) => String(w.module || '未知')))).sort()
+      const modulesAll = Array.from(new Set<string>((wrong || []).map((w: any) => String(w.module || '未知')))).sort()
       const filtered = (wrong || []).filter((w: any) => {
         if (modFilter && String(w.module || '未知') !== modFilter) return false
         if (stateFilter === 'open' && w.mastered) return false

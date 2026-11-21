@@ -111,3 +111,18 @@ host/index myServer/myAdopted null 初始化 → any 标注；client.tsx mq null
 与渐进纪律冲突）。
 **严格化现状**：noUnusedLocals ✅ 开启（档①）· strictNullChecks ✅ 开启（档②）·
 noImplicitAny ⏳ 长期档 · strict 全档 ⏳ 随②③收敛后自然达成。
+## 十、TS 严格化收官（cycle-48 · strict 全档达成）
+
+**里程碑**： 全档开启——noUnusedLocals + strictNullChecks + noImplicitAny
+（+ strict 附带的 noImplicitThis/useUnknownInCatchVariables 等全子项）全部零错误达成。
+
+**档③关键根因**：TS7026 1723 处 = require('react') 无类型（react 18 无内置 types +
+@types/react 未装 + tsconfig types:['node'] 排除）→ 装 @types/react@18（devDep，
+不进运行时零依赖面）+ types 加 'react' → 一键清零。
+
+**codemod 三批纪律**（2230→0）：① 逐参数显式 any 标注（箭头单参数必须括号 (n: any) =>）；
+② 解构 Binding element 闭合后标类型；③ 字面量词典 Record<string, any> 断言。
+**形态守卫跟锚点**：改形态必须同波次改 smoke 形态锚点断言（教训④推广实证）。
+
+**新代码纪律**：新代码零隐式 any（Props interface 强制）+ 显式 any 仅限 catch 断言与
+宿主注入面（api: any）——显式优于隐式，any 是降级出口不是常态。

@@ -242,7 +242,7 @@ function Hs13Overview(props: Hs13OverviewProps) {
             }
             catch (e) {
                 if (!dead)
-                    setErr(String((e && e.message) || e));
+                    setErr(String((e && (e as Error).message) || e));
             }
         })();
         return () => { dead = true; };
@@ -346,7 +346,7 @@ function Hs13DocReader(props: Hs13DocReaderProps) {
             }
             catch (e) {
                 if (!dead)
-                    setErr(String((e && e.message) || e));
+                    setErr(String((e && (e as Error).message) || e));
             }
         })();
         return () => { dead = true; };
@@ -402,7 +402,7 @@ function Hs13Catalog(props: Hs13CatalogProps) {
             }
             catch (e) {
                 if (!dead)
-                    setErr(String((e && e.message) || e));
+                    setErr(String((e && (e as Error).message) || e));
             }
         })();
         return () => { dead = true; };
@@ -488,7 +488,7 @@ function Hs13Search(props: Hs13SearchProps) {
             setRes(d && typeof d === 'object' ? d : null);
         }
         catch (e) {
-            setErr(String((e && e.message) || e));
+            setErr(String((e && (e as Error).message) || e));
         }
         finally {
             setBusy(false);
@@ -643,7 +643,7 @@ function Hs13Practice(props: Hs13PracticeProps) {
             }
             catch (e) {
                 if (!dead)
-                    setErr(String((e && e.message) || e));
+                    setErr(String((e && (e as Error).message) || e));
             }
         })();
         return () => { dead = true; };
@@ -822,7 +822,7 @@ function Hs13Trace(props: Hs13TraceProps) {
             }
             catch (e) {
                 if (!dead)
-                    setErr(String((e && e.message) || e));
+                    setErr(String((e && (e as Error).message) || e));
             }
         })();
         return () => { dead = true; };

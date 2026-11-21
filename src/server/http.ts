@@ -519,7 +519,7 @@ export async function startServer(preferredPort = 8400, options: any = {}) {
       if (prewarm) prewarmPaperIndex(getRepoRoot())
       return { server, port, adopted: false }
     } catch (e) {
-      if (e.code === 'EADDRINUSE') continue
+      if ((e as NodeJS.ErrnoException).code === 'EADDRINUSE') continue
       throw e
     }
   }
@@ -568,7 +568,7 @@ export function attachWebRoute(webServer: any, mountPath = '/kaogong') {
           const post = body ? JSON.parse(body) : {}
           finish(200, 'application/json; charset=utf-8', JSON.stringify(await handleApi(rel, params, post, req.method, wsRaw, 0)))
         } catch (e) {
-          finish(500, 'application/json; charset=utf-8', JSON.stringify({ error: e.message }))
+          finish(500, 'application/json; charset=utf-8', JSON.stringify({ error: (e as Error).message }))
         }
       })
       return
@@ -619,7 +619,7 @@ function buildHttpServer(port: any) {
             const post = body ? JSON.parse(body) : {}
             finish(200, 'application/json; charset=utf-8', JSON.stringify(await handleApi(path, params, post, req.method, wsRaw, port)))
           } catch (e) {
-            finish(500, 'application/json; charset=utf-8', JSON.stringify({ error: e.message }))
+            finish(500, 'application/json; charset=utf-8', JSON.stringify({ error: (e as Error).message }))
           }
         })
         return

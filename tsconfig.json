@@ -26,7 +26,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "noEmitOnError": true,
-    "strict": false,
+    "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noUnusedLocals": true,
