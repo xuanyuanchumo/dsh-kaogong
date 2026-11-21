@@ -167,6 +167,8 @@ export function makeHistoryApi({ store, repoRoot = '' }: { store: any, repoRoot?
             sig, module: q.module || '未知', type: q.type || '',
             stem: q.stem, options: q.options || {}, correctAnswer: q.correctAnswer || null,
             analysis: q.analysis || '', wrongCount: 1, box: 1, consecutive: 0, mastered: false,
+            // cycle-43 材料保真：补录候选带材料时随快照入错题本（回炉可复现作答语境）
+            groupMaterial: q.groupMaterial || '', groupMaterialNo: q.groupMaterialNo || 0,
             lastAt: Date.now(), historical: true, fromImport: batchId,
           })
         } else { exist.wrongCount++; exist.lastAt = Date.now(); exist.fromImport = exist.fromImport || batchId }

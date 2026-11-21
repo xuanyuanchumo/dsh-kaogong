@@ -142,6 +142,17 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
       void canon0
       const imgs = extractImages(r.stem)
       const materialRef = String(r.material_ref ?? '').trim()
+      // cycle-43（材料保真·用户报修「抽到题目没有对应的材料」）：
+      // 上游 naoku 的 `material` 列是**材料正文**（99.6% 资料分析题带：3636/3649 实测），
+      // `material_ref` 是**材料标题/身份键**（非正文）。旧实现 insQ 传 `''` → 主行材料全空；
+      // 归并回填也不含材料列 → 3643 条资料分析题在统一池里恒无材料（不可作答的死题）。
+      // 正解：正文占位化后进 group_material（与 xingce-app 摄入同语义）；ref 保持身份键。
+      const matText = stripHtmlKeepImg(r.material ?? '')
+      // 材料号：上游 naoku 无材料序号（material_ref 头部数字是上游内部 ID，非序号——
+      // 臆造会渲染出「材料 3680726」这类误导徽章）→ 恒 0，UI 徽章降级与 xingce-app 同形态
+      const matNo = 0
+      // 材料段内的统计图表也要可作答（cycle-22 教训同族：剥 HTML 必须保留 img 占位）
+      const matImgs = extractImages(r.material ?? '')
       try {
         if (mergeTarget) {
           stats.dbgMerge++
@@ -154,6 +165,9 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
           putQuestionSource(db, mergeTarget, 'naoku', qid, String(r.paper ?? ''), String(r.region ?? ''), String(r.year ?? ''), 0, String(r.path ?? ''))
           putAnalysis(db, mergeTarget, 'naoku', qid, stripHtmlKeepImg(r.analysis), String(r.answer ?? ''))
           // 富字段回填（只填空位——与 UPSERT 合并语义一致）
+          // cycle-43（本分支）：回填列**补 group_material/has_image**——上游 naoku 99.6%
+          // 资料分析题带 material 正文（3636/3649 实测），归并行若此前由无材料源先入库，
+          // 不回填 = 用户抽到「有题无材料」的死题（本缺陷的用户报修点①）。
           db.prepare(
             `UPDATE question SET
                fp=CASE WHEN LENGTH(question.fp) = 0 THEN ? ELSE question.fp END,
@@ -163,11 +177,17 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
                mother=CASE WHEN LENGTH(question.mother) = 0 THEN ? ELSE question.mother END,
                doubt=CASE WHEN LENGTH(question.doubt) = 0 THEN ? ELSE question.doubt END,
                kadian=CASE WHEN LENGTH(question.kadian) = 0 THEN ? ELSE question.kadian END,
-               n_paper=CASE WHEN question.n_paper = 0 THEN ? ELSE question.n_paper END
+               n_paper=CASE WHEN question.n_paper = 0 THEN ? ELSE question.n_paper END,
+               group_material=CASE WHEN LENGTH(question.group_material) = 0 THEN ? ELSE question.group_material END,
+               group_material_no=CASE WHEN question.group_material_no = 0 THEN ? ELSE question.group_material_no END,
+               has_image=CASE WHEN question.has_image = 1 THEN 1 ELSE ? END
              WHERE canonical_id = ?`,
           ).run(fp, stripHtmlKeepImg(r.reasoning), stripHtmlKeepImg(r.fastest), stripHtmlKeepImg(r.pitfalls),
             stripHtmlKeepImg(r.mother), stripHtmlKeepImg(r.doubt), String(r.kadian ?? ''),
-            Number(r.n_paper || 0), mergeTarget)
+            Number(r.n_paper || 0), matText, matNo, matImgs.length ? 1 : 0, mergeTarget)
+          // 归并行也登记 HAS_MATERIAL 边（材料真实存在即登记；putRelation 唯一键幂等，重复登记无害）
+          const evMerge = JSON.stringify({ src: 'naoku.db', rule: 'field' })
+          if (matText) { putRelation(db, 'HAS_MATERIAL', 'question', mergeTarget, 'material', materialRef || mergeTarget, 1.0, evMerge); stats.relations++ }
           stats.questions++
           continue
         }
@@ -178,7 +198,7 @@ export async function ingestNaokuSource(ctx: any): Promise<any> {
           stem, normalizeOptions(r.options), String(r.answer ?? ''), stripHtmlKeepImg(r.analysis),
           stripHtmlKeepImg(r.reasoning), stripHtmlKeepImg(r.fastest), stripHtmlKeepImg(r.pitfalls), stripHtmlKeepImg(r.mother),
           stripHtmlKeepImg(r.doubt), String(r.related ?? ''),
-          '', 0, materialRef,
+          matText, matNo, materialRef,
           JSON.stringify(imgs), imgs.length ? 1 : 0,
           Number(r.freq || 0), String(r.paper ?? ''), String(r.region ?? ''), String(r.year ?? ''),
           0, Number(r.n_paper || 0), new Date().toISOString(), cfOwn,
