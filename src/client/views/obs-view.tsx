@@ -747,7 +747,10 @@ function supDigits(s: string): string {
  * 触发索引构建，分开 await 让各卡片独立到达——cycle-18 教训保留，语义零变化）。
  * hook 链恒定：原 7 个 useState + 新增 data/err/loading 3 个 useState，全部顶部声明。
  */
-export function NativeObsView({ api, onReload }) {
+/** 视图标准 props（cycle-48 Props 类型化补齐——api 宿主注入 + onReload 刷新令牌） */
+interface ObsViewProps { api: (p: string, opts?: any) => Promise<any>, onReload: () => void }
+
+export function NativeObsView({ api, onReload }: ObsViewProps) {
   /* ── hooks：全部在顶部声明，跨渲染数量恒定（R9） ── */
   const [data, setData] = React.useState(null)
   const [ins, setIns] = React.useState(null)
