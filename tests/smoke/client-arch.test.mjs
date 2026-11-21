@@ -77,7 +77,7 @@ test('C24-01..06 组件规范：注册表路由/目录分层/tsx 全覆盖/jsx c
   // cycle-48：hooks barrel 形态守卫——禁 export-from 带源形态（bundler 剥皮不认，
   // 残留孤立 from 行且函数体不进依赖图 → 组件 undefined）
   const barrel = readSrc('src/client/hooks/index.ts')
-  expect(/export \{ useApiData, useApiMany \}/.test(barrel) && !/export \{[^}]+\} from/.test(barrel), 'barrel 必须用 import+独立 export（禁 export-from）').toBe(true)
+  expect(/^export \{ useApiData, useApiMany \}$/m.test(barrel) && !/^export [\w{}, $]+ from/m.test(barrel), 'barrel 必须用 import+独立 export（禁 export-from）').toBe(true)
   expect(fs.readdirSync(path.join(REPO, 'src', 'client', 'views')).every(f => f.endsWith('.tsx'))).toBe(true)
   expect(/"jsx": "react"/.test(readSrc('tsconfig.json')) && !/"jsx": "react-jsx"/.test(readSrc('tsconfig.json'))).toBe(true)
   // .tsx 禁 import React（唯一 require('react') 在 ui-kit）
