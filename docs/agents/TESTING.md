@@ -269,3 +269,47 @@ DSH 社区 dsh-testkit（npm v0.4.4，MIT）提供「真实宿主发布门禁」
 3. junit.xml 产物接 CI。
 
 **教训**：测试金字塔第⑥层「真机」从「人工+Playwright」升级为「dsh-testkit 自动化 + 人工 Playwright 抽查」——发布门禁从手工流程变为可复核证据。
+
+## 三、生态工具对齐矩阵（依据《DSH插件开发官方与生态》v0.2.2-rc.5 基准 · cycle-47）
+
+> 权威依据：用户提供的《DSH插件开发官方与生态》结构性文档（2026-11-21，rc.5 基准）。
+> 本节把本项目的测试车道与该文档的 L1–L5 验证等级、生态工具矩阵逐项对齐，
+> 标出「已对齐 / 有等价物 / 缺口」三种状态，作为后续补齐路线图。
+
+### 3.1 本项目车道 ↔ 验证等级对照
+
+| 生态等级 | 本项目对应车道 | 状态 | 说明 |
+|---|---|---|---|
+| L1 已找到 / L2 结构化 | manifest 单一事实源 + R28 族声明→实体守卫 | ✅ 已对齐 | smoke guards/packaging 域（vitest） |
+| L3 安装规范 | peerDependencies + engines.dsh 声明守卫（兼容声明测试） | ✅ 已对齐 | packaging.test.mjs |
+| L4 安装实测 | **loader.test.mjs**（真实 Cordis Loader 进程内安装，三层隔离） | ✅ 有等价物（进程内级） | 生态标准是 dsh-dev-sandbox / testkit 容器级 |
+| L5 安装已验证 | 沙箱 sb-kaogong 人工冒烟 | ⚠️ 人工 | **缺口：dsh-testkit 容器级自动化**（见 3.3） |
+| 代码级 | vitest 分域（tests/，本重构主体） | ✅ 进行中 30/478 | 契约/逻辑/执行路径——文档 §4.1 口径 |
+
+### 3.2 生态工具 ↔ 本项目现状
+
+| 生态工具 | 本项目现状 | 状态 |
+|---|---|---|
+| dsh-plugin-dev-kb | 已在用（dsh_kb_search/read；CLAUDE.md 事实基线即其纪律的落地） | ✅ |
+| vitest | tests/ 分域迁移中（阶段 1-3 已迁 52 断言） | ✅ 进行中 |
+| dsh-testkit | **未引入**。文档 §4.2：公开适配器证据止于 rc.1/rc.2，rc.5 未适配——**不强行代跑**（exit code 4 是保护机制） | ⚠️ 待适配器跟进 rc.5 后引入 |
+| dsh-seam | **未引入**。文档 §3.4：编译期兼容性检查（源码 vs 目标版本接口面），升级适配的秒级快速失败门禁 | ⚠️ 缺口：本项目 peer 范围宽（>=0.2.0-rc.2），升基线时应引入 |
+| dsh-plugin-check | 未引入（只读静态合规扫描，不替代 L4/L5） | ⚠️ 可选增强 |
+| Joker2377/dsh-plugin-devkit | 未引入（doctor=安装闸门重现 / audit=供应链） | ⚠️ 可选增强 |
+| @effaf/dsh-plugin-devkit | 未引入（运行时调试 / fake host / preview） | ⚠️ 可选增强 |
+| dsh-dev-sandbox | 已在用（sb-kaogong profile，三层隔离纪律） | ✅ |
+| dsh-test-plugin | 未引入（业务流程端到端，跟当前会话） | ⚠️ render.test 部分等价（真实 React 渲染旅程） |
+
+### 3.3 补齐路线图（按文档场景 B/C 的门禁顺序）
+
+场景 B（发布前门禁）的生态标准序列：**plugin-check → plugin_audit → dsh-seam → vitest → dsh-testkit →（UI）dsh-test-plugin**。
+
+本项目当前序列：**npm run build（tsc+combo 守卫）→ vitest 分域 → smoke → render → loader**。
+
+缺口按优先级：
+1. **dsh-seam**（升级适配前置——本项目 peer 范围跨 rc 版本，抬基线时必引；秒级快速失败应插在 vitest 之前）
+2. **dsh-testkit**（L5 自动化——等适配器公开声明覆盖 rc.5；exit code 4 不绕过）
+3. vitest 迁移完成（448 断言余量，按域继续）
+4. dsh-plugin-check / plugin_audit（发布 PR 前人工跑，非硬门禁）
+
+**纪律（文档 §10.3/10.9 采纳）**：CI/门禁锁定 DSH 版本不跟随 next/latest 漂移；任何「隔离测试」未独立 DSH_HOME 的，证据强度打折——loader.test 的三层隔离（数据根/DSH_HOME/端口）已满足。
