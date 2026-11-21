@@ -238,7 +238,7 @@ export function makeMethodologyApi(options: any = {}) {
   interface IndexSlot { idx: any; at: number; degraded: boolean; error: string }
   const IDX_TTL_MS = 30_000
   const IDX_DEGRADED_RETRY_MS = 3_000
-  let idxSlot: IndexSlot = null
+  let idxSlot: IndexSlot | any = null
 
   function loadIndex(force = false): IndexSlot {
     const at = Date.now()
@@ -324,7 +324,7 @@ export function makeMethodologyApi(options: any = {}) {
   }
 
   // ══ catalog：目录树（META 驱动 + 每篇实测统计）══
-  let catalogCache: { key: string; value: any } = null
+  let catalogCache: any = null
 
   function buildCatalog(force: boolean, c: WsCounter): any {
     const slot = ensureIndex(force)
@@ -485,7 +485,7 @@ export function makeMethodologyApi(options: any = {}) {
   const SEARCH_REL_CUT = 0.15      // 相对下限：低于 top 的 15% 视为长尾
 
   /** 去空白归一表（每代索引只算一次）：判定「查询整串是否真的出现在某篇语料里」 */
-  let normTextCache: { key: string; map: Map<string, string> } = null
+  let normTextCache: any = null
   function normTexts(slot: IndexSlot): Map<string, string> {
     const docs = docsOf(slot.idx)
     const key = `${slot.idx ? slot.idx.builtAt : 0}|${docs.length}`
