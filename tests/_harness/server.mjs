@@ -69,3 +69,26 @@ export async function ensurePoolReady(base) {
     return !!rb.ok
   } catch (e) { console.log('[harness] 池自检跳过:', String(e).slice(0, 60)); return false }
 }
+
+/**
+ * 清理测试命名空间的 progress 文件（cycle-47 阶段 2：分域文件测前自清理）。
+ *
+ * 背景（HIST-02 假红实证）：progress json 持久化在用户数据根，分域测试重跑时
+ * 上一轮的 importedSigs 台账残留 → 补录幂等闸误判「此前已补录」→ accepted=0。
+ * 旧 smoke 有全量清理段（PROJ_ 前缀），分域文件各自负责自己的 ws。
+ *
+ * @param {string} ws 测试命名空间（如 PROJ_VTEST_HIST）
+ */
+export async function clearProgressNamespace(ws) {
+  try {
+    const { PROGRESS_DIR_USER } = await import('../../dist/server/dataRoot.js')
+    const fs = await import('node:fs')
+    const dir = PROGRESS_DIR_USER
+    if (!fs.existsSync(dir)) return 0
+    let removed = 0
+    for (const f of fs.readdirSync(dir)) {
+      if (f.startsWith(ws)) { fs.rmSync(dir + '/' + f); removed++ }
+    }
+    return removed
+  } catch (e) { console.log('[harness] 清理跳过:', String(e).slice(0, 60)); return 0 }
+}
