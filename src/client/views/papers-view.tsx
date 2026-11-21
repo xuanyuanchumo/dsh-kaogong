@@ -3,7 +3,7 @@
  * 模考 / 真题卷库 / 专题 / 申论评改。
  */
 
-import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN } from '../ui-kit.js'
+import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, KgLoad, KgChips } from '../ui-kit.js'
 // cycle-13 专题枢纽：行测刷题 / 图形推理 / 深度题库 三个既有视图嵌入本页分区（R9：h() 挂载）
 import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
 // cycle-18：专题枢纽「📖 方法论」分区直接挂花生十三体系（语料由「📦 题库管理」安装到数据根）。
@@ -119,7 +119,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       // ── 分支 2：考试中 ──
       if (exam) {
         const q = exam.questions[idx]
-        if (!q) return <div className="kg-load">{'题目加载异常'}</div>
+        if (!q) return <KgLoad label="题目加载异常" />
         {/* cycle-27：四区划分收敛进 QwPaperMode（区1 材料区·无则隐藏 / 区2 题目区 / 区3 切换区 / 区4 答题卡区）。
             QwZoomHost 整卡图片可放大；倒计时/交卷属宿主职责保留在容器外。 */}
         return (
@@ -313,7 +313,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       }, [openId, api])
 
       if (openId) {
-        if (!detail) return <div className="kg-load"><div className="kg-spin" />{'加载试卷…'}</div>
+        if (!detail) return <KgLoad label="加载试卷…" />
         return (
           <div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
@@ -616,20 +616,19 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   onClick={() => setFilters({ subject: sc.subject, year: '', province: '' })}
                 >{sc.subject + ' ' + sc.count}</button>)}
             </div> : null}
-            {/* cycle-13 省份维度 chips：provinces facet 驱动（索引 v2 起可用；旧数据无 facet 时整行隐藏） */}
-            {list && Array.isArray(list.provinces) && list.provinces.length ? <div style={{ display: 'flex', gap: 5, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* cycle-13 省份维度 chips：provinces facet 驱动（索引 v2 起可用；旧数据无 facet 时整行隐藏）
+                cycle-44：chips 走 ui-kit 基建 KgChips（active 态调用方声明；render 锚点「省份」标签保留） */}
+            {list && Array.isArray(list.provinces) && list.provinces.length ? <div>
               <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{'省份'}</span>
-              <button
-                style={{ ...KV_BTN, ...(filters.province === '' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }}
-                onClick={() => setFilters({ ...filters, province: '' })}
-              >{'全部'}</button>
-              {list.provinces.map((p: any) =>
-                <button
-                  key={p.name}
-                  title={p.subjects ? entries(p.subjects).map(([s, n]) => s + ' ' + n).join(' · ') + `（${p.minYear || '?'}-${p.maxYear || '?'}）` : p.name}
-                  style={{ ...KV_BTN, ...(filters.province === p.name ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }}
-                  onClick={() => setFilters({ ...filters, province: filters.province === p.name ? '' : p.name })}
-                >{p.name + ' ' + p.total}</button>)}
+              <KgChips gap={5} items={[
+                { key: '', text: '全部', active: filters.province === '' },
+                ...list.provinces.map((p: any) => ({
+                  key: p.name,
+                  text: p.name + ' ' + p.total,
+                  active: filters.province === p.name,
+                  title: p.subjects ? entries(p.subjects).map(([s, n]) => s + ' ' + n).join(' · ') + `（${p.minYear || '?'}-${p.maxYear || '?'}）` : p.name,
+                })),
+              ]} onPick={k => setFilters({ ...filters, province: filters.province === k ? '' : k })} />
             </div> : null}
             <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
               {['2026', '2025', '2024', '2023', '2022', '2021', '2020'].map(y =>
@@ -776,7 +775,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
         </Card>)
 
       const overview = !tree
-        ? <div className="kg-load"><div className="kg-spin" />{'加载专题…'}</div>
+        ? <KgLoad label="加载专题…" />
         : <div>{head}{entriesCard}{...topicCards}</div>
 
       // 分区包裹：非当前分区 display:none 隐藏（保持挂载 → 状态不丢）

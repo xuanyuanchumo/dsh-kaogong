@@ -10,7 +10,7 @@
  *  ③ 顶层名全部 Rp* 前缀（combo 单作用域防重名，教训⑨）；
  *  ④ 作业轮询：有 running 作业时 2s 一次，无作业自动停表（省电停帧同构理念）。
  */
-import { h, React, entries, Stat, Card, KV_TAG, KV_BTN } from '../ui-kit.js'
+import { h, React, entries, Stat, Card, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
 
 /** tier 元数据（颜色/文案/排序；与 server REPOS_META.tier 词表同源） */
 const RP_TIERS: any = {
@@ -203,7 +203,7 @@ export function NativeReposView({ api }: NativeReposViewProps) {
       <div>
         {err
           ? <Card title="📦 原始题库管理"><div style={{ fontSize: 12, color: '#b45309' }}>{'状态端点未就绪：' + err + '（服务可用时自动恢复）'}</div></Card>
-          : <div className="kg-load" style={{ padding: 40 }}><div className="kg-spin" />读取题库状态…</div>}
+          : <KgLoad label="读取题库状态…" pad={40} />}
       </div>
     )
   }

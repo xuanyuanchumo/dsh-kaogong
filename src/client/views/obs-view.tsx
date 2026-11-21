@@ -12,7 +12,7 @@
  *  ⑤ 本模块顶层声明一律 Obs/OBS 前缀——combo 合并后所有模块共享 factory 单作用域，
  *     顶层名与其他模块（graph 系 / study-view / papers-view）撞名会直接重复声明 SyntaxError。
  */
-import { h, React, Stat, Bar, Sparkline, stageColor, alertColor, G_BTN, G_BTN_ON, G_TAG } from '../ui-kit.js'
+import { h, React, Stat, Bar, Sparkline, stageColor, alertColor, G_BTN, G_BTN_ON, G_TAG, KgLoad, KgErr } from '../ui-kit.js'
 
 /* ═══════════════ W2c 共享样式：玻璃拟态（与图谱升级风格统一） ═══════════════
    沿用既有 CSS 变量（--surface-card 等）保持深浅色自适应；color-mix 把不透明
@@ -945,8 +945,9 @@ export function NativeObsView({ api, onReload }) {
   }, label)
 
   /* ── R9 早退守卫：必须放在全部 hooks（含两个 useMemo）之后 —— 渲染期 hook 数量跨渲染恒定 ── */
-  if (loading) return h('div', { className: 'kg-load' }, h('div', { className: 'kg-spin' }))
-  if (fetchErr || !data) return h('div', { style: { color: '#ef4444', fontSize: 13 } }, '白盒面板加载失败: ' + (fetchErr || '无数据'))
+  /* cycle-44：三态走 ui-kit 基建组件（样式口径单一事实源；早退位置不变，hook 数不变） */
+  if (loading) return h(KgLoad, { flex: true })
+  if (fetchErr || !data) return h(KgErr, { msg: fetchErr || '无数据', label: '白盒面板加载失败' })
 
   return h('div', {},
     /* ── 行 hover 高亮样式（React 内联样式写不了 :hover，注入一次作用域样式） ── */

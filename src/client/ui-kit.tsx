@@ -238,6 +238,50 @@ export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
         extra || null)
     }
 
+    /**
+     * cycle-44（前端组件化·三态基建）：KgState 状态块族——loading/err/empty 三态
+     * 统一渲染。此前视图层三态各自手写（kg-load 块 ~10 处、红色错误行 ~6 处、
+     * 灰色空态 ~10 处，样式口径漂移）。零 hook 纯组件（R9 安全：不改变调用方
+     * hook 数），条件分支语义按「场景」留给调用方（C31 教训：组件不做场景推断）。
+     */
+    interface KgLoadProps { label?: string; pad?: number | string; flex?: boolean }
+    export function KgLoad({ label, pad, flex }: KgLoadProps) {
+      return <div className="kg-load" style={pad ? { padding: pad } : flex ? { flex: 1 } : undefined}><div className="kg-spin" role="status" />{label || null}</div>
+    }
+    interface KgErrProps { msg: any; label?: string; onRetry?: () => void }
+    export function KgErr({ msg, label, onRetry }: KgErrProps) {
+      return <div style={{ color: '#ef4444', fontSize: 13 }}>
+        {(label || '加载失败') + ': ' + String(msg || '无数据')}
+        {onRetry ? <button className="kg-navbtn" style={{ marginLeft: 8 }} onClick={onRetry}>↻ 重试</button> : null}
+      </div>
+    }
+    interface KgEmptyProps { text: any; fontSize?: number; color?: string; pad?: number }
+    export function KgEmpty({ text, fontSize, color, pad }: KgEmptyProps) {
+      return <div style={{ fontSize: fontSize || 12, color: color || '#64748b', padding: pad ? pad + 'px 0' : undefined }}>{text}</div>
+    }
+    /**
+     * cycle-44（chips 组件化）：KgChips —— 五套手写 chip 行（graph/obs/papers/study/
+     * question-kit 各自 Object.assign(G_CHIP, …)）收敛为单一事实源。
+     * 全 props 可选缺失降级（R4 纪律）；active 态由调用方声明，组件不做场景推断。
+     * cycle-44b：icon 支持任意 ReactNode（graph-view 节点色点/边色条形态）——
+     * 字符串走文本 chip，ReactNode 直接渲染（调用方负责形状）。
+     */
+    interface KgChipItem { key: string; text: string; icon?: any; active?: boolean; style?: any; title?: string }
+    interface KgChipsProps { items: KgChipItem[]; onPick?: (key: string) => void; gap?: number }
+    export function KgChips({ items, onPick, gap }: KgChipsProps) {
+      const list = Array.isArray(items) ? items.filter(Boolean) : []
+      if (!list.length) return null
+      return <div style={{ display: 'flex', gap: gap != null ? gap : 6, flexWrap: 'wrap', marginBottom: 10 }}>
+        {list.map(it => {
+          const base = Object.assign({}, G_CHIP, it.active ? G_BTN_ON : {}, it.style || {})
+          return <button key={it.key} title={it.title || undefined} style={base}
+            onClick={onPick ? () => onPick(it.key) : undefined}>
+            {it.icon != null ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{it.icon}{it.text}</span> : it.text}
+          </button>
+        })}
+      </div>
+    }
+
     /** 渲染错误边界（R9 纵深）：子树抛错降级提示条，绝不白屏宿主 GUI */
     export class KaogongErrorBoundary extends React.Component {
       constructor(props) { super(props); this.state = { err: null } }

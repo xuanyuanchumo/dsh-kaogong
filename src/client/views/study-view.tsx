@@ -5,7 +5,7 @@
  * 练题流程收敛到左栏「考公学习」面板（对话窗口回归纯对话）。
  */
 
-import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow, SourceBadge } from '../ui-kit.js'
+import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow, SourceBadge, KgLoad, KgErr, KgChips, KgEmpty } from '../ui-kit.js'
 // cycle-25：题目七段渲染接入统一组件域 question-kit（QwQuestionCard 组装器 + QwZoomHost 图片放大宿主）
 import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-kit.js'
 
@@ -119,8 +119,8 @@ function KgMemBanner(props: KgMemBannerProps) {
         })()
         return () => { cancelled = true }
       }, [api])
-      if (loading) return <div className="kg-load"><div className="kg-spin" /></div>
-      if (err || !payload) return <div style={{ color: '#ef4444', fontSize: 13 }}>{'仪表盘加载失败: ' + (err || '无数据')}</div>
+      if (loading) return <KgLoad flex />
+      if (err || !payload) return <KgErr msg={err || '无数据'} label="仪表盘加载失败" />
       const { st, stats, extra } = payload
       const rate = stats.rate
       const rc = rate >= 80 ? '#10b981' : rate >= 60 ? '#6366f1' : rate >= 40 ? '#f59e0b' : '#ef4444'
@@ -281,7 +281,7 @@ function KgMemBanner(props: KgMemBannerProps) {
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button style={KV_BTN} onClick={() => setModule('')}>{'← 换模块'}</button>
             </div>
-            <div className="kg-load" style={{ padding: 40 }}>{'该模块暂无题目，试试其他模块'}</div>
+            <KgEmpty text="该模块暂无题目，试试其他模块" pad={40} />
           </div>
         )
       }
@@ -414,8 +414,8 @@ function KgMemBanner(props: KgMemBannerProps) {
           .finally(() => { if (!cancelled) setLoading(false) })
         return () => { cancelled = true }
       }, [api])
-      if (loading) return <div className="kg-load"><div className="kg-spin" /></div>
-      if (err || !wb) return <div style={{ color: '#ef4444', fontSize: 13 }}>{'错题本加载失败: ' + (err || '无数据')}</div>
+      if (loading) return <KgLoad flex />
+      if (err || !wb) return <KgErr msg={err || '无数据'} label="错题本加载失败" />
       const { wrong, summary } = wb
       const tagStyle = { background: '#eef2ff', color: '#4338ca', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }
       // cycle-33 筛选：模块 chips（来源=条目里出现过的模块，确定性）+ 状态三态
@@ -448,19 +448,16 @@ function KgMemBanner(props: KgMemBannerProps) {
             <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{(filtered || []).length + ' / ' + (wrong || []).length + ' 条'}</span>
           </div>
           {importOpen ? <div style={{ marginBottom: 14 }}><KgHistoryImport api={api} /></div> : null}
-          {/* cycle-33 筛选条：模块 chips + 状态三态 */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{'筛选'}</span>
-            <button style={{ ...KV_BTN, ...(modFilter === '' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }} onClick={() => setModFilter('')}>{'全部模块'}</button>
-            {modulesAll.map(m => <button key={m}
-              style={{ ...KV_BTN, ...(modFilter === m ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }}
-              onClick={() => setModFilter(m)}>{m}</button>)}
-            <span style={{ width: 10 }} />
-            {[['all', '全部'], ['open', '🔥 待消灭'], ['mastered', '✅ 已掌握']].map(([k, label]) =>
-              <button key={k}
-                style={{ ...KV_BTN, ...(stateFilter === k ? { background: 'linear-gradient(135deg,#f59e0b,#f97316)', color: '#fff', border: 0 } : {}) }}
-                onClick={() => setStateFilter(k)}>{label}</button>)}
-          </div>
+          {/* cycle-33 筛选条：模块 chips + 状态三态（cycle-44：chips 走 ui-kit 基建组件，
+              active 态与配色由调用方声明——组件不做场景推断） */}
+          <KgChips items={[
+            { key: '', text: '全部模块', active: modFilter === '' },
+            ...modulesAll.map((m: string) => ({ key: m, text: m, active: modFilter === m })),
+          ]} onPick={k => setModFilter(k)} />
+          <KgChips items={[['all', '全部'], ['open', '🔥 待消灭'], ['mastered', '✅ 已掌握']]
+            .map(([k, label]: any) => ({ key: String(k), text: String(label), active: stateFilter === String(k),
+              style: stateFilter === String(k) ? { background: 'linear-gradient(135deg,#f59e0b,#f97316)', color: '#fff', border: 0 } : {} }))}
+            onPick={k => setStateFilter(k)} />
           {!(filtered || []).length && <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
             {!(wrong || []).length ? '🎉 错题本空空如也 — 保持！' : '当前筛选无条目 — 试试放宽模块/状态筛选'}
           </div>}
@@ -525,7 +522,7 @@ function KgMemBanner(props: KgMemBannerProps) {
 
       const q = list && list.questions ? list.questions[idx] : null
 
-      if (!cats) return <div className="kg-load"><div className="kg-spin" />{'加载图形推理题库…'}</div>
+      if (!cats) return <KgLoad label="加载图形推理题库…" />
 
       if (!cats.ready) {
         return (
