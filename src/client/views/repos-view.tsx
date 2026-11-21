@@ -26,7 +26,7 @@ const RP2_HEALTH: any = {
   empty:      { text: '空仓库', color: '#b45309', bg: 'rgba(245,158,11,.14)' },
   'half-clone': { text: '半成品', color: '#b45309', bg: 'rgba(245,158,11,.14)' },
   'no-git':   { text: '缺 .git', color: '#dc2626', bg: 'rgba(239,68,68,.12)' },
-  absent:     { text: '未安装', color: '#64748b', bg: 'rgba(148,163,184,.12)' },
+  absent:     { text: '未安装', color: 'var(--text-muted)', bg: 'rgba(148,163,184,.12)' },
 }
 /** 最近更新时间人读化（lastCommitAt 毫秒；缺失/无效 → 空串由调用方降级） */
 function rp2Ago(ms: any): string {
@@ -50,10 +50,10 @@ function rp2Size(mb: any): string {
 function rpBadge(r: any) {
   if (r.job && r.job.state === 'running') return { text: r.job.action === 'clone' ? '⬇ 下载中…' : '🔄 更新中…', bg: 'rgba(99,102,241,.14)', fg: '#4f46e5' }
   if (r.job && r.job.state === 'failed') return { text: '❌ 失败', bg: 'rgba(239,68,68,.12)', fg: '#dc2626' }
-  if (r.job && r.job.state === 'canceled') return { text: '⏹ 已取消', bg: 'rgba(148,163,184,.15)', fg: '#64748b' }
+  if (r.job && r.job.state === 'canceled') return { text: '⏹ 已取消', bg: 'rgba(148,163,184,.15)', fg: 'var(--text-muted)' }
   if (r.present && r.isGit) return { text: '✅ 已安装', bg: 'rgba(16,185,129,.12)', fg: '#059669' }
   if (r.present && !r.isGit) return { text: '⚠ 非 git 目录', bg: 'rgba(245,158,11,.14)', fg: '#b45309' }
-  return { text: '○ 未安装', bg: 'rgba(148,163,184,.12)', fg: '#64748b' }
+  return { text: '○ 未安装', bg: 'rgba(148,163,184,.12)', fg: 'var(--text-muted)' }
 }
 
 /** 作业日志尾部折叠块 props */
@@ -65,7 +65,7 @@ function RpJobLog({ job }: RpJobLogProps) {
   return (
     <div style={{ marginTop: 6 }}>
       <button style={KV_BTN} onClick={() => setOpen((v: any) => !v)}>{open ? '▾ 收起日志' : '▸ 查看日志'}</button>
-      {open ? <div style={{ marginTop: 4, maxHeight: 140, overflowY: 'auto', background: 'rgba(15,23,42,.05)', borderRadius: 8, padding: '6px 9px', fontFamily: 'monospace', fontSize: 10, lineHeight: 1.6, color: '#475569', whiteSpace: 'pre-wrap' }}>
+      {open ? <div style={{ marginTop: 4, maxHeight: 140, overflowY: 'auto', background: 'rgba(15,23,42,.05)', borderRadius: 8, padding: '6px 9px', fontFamily: 'monospace', fontSize: 10, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
         {job.error ? '错误: ' + job.error + '\n' : ''}{(job.log || []).join('\n')}</div> : null}
     </div>
   )
@@ -95,9 +95,9 @@ function RpAboutProject({ self }: RpAboutProjectProps) {
         background: 'linear-gradient(135deg,rgba(99,102,241,.08),rgba(20,184,166,.06))',
         border: '1px solid rgba(99,102,241,.22)',
       }}>
-      <span style={{ fontWeight: 800, fontSize: 12.5, color: '#334155' }}>{'🧭 关于本项目 · ' + (self.name || 'dsh-kaogong')}</span>
+      <span style={{ fontWeight: 800, fontSize: 12.5, color: 'var(--text-primary)' }}>{'🧭 关于本项目 · ' + (self.name || 'dsh-kaogong')}</span>
       {self.version ? <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#059669' }}>{'v' + self.version}</span> : null}
-      {self.desc ? <span style={{ fontSize: 11, color: '#64748b', flex: '1 1 200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={self.desc}>{self.desc}</span> : null}
+      {self.desc ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flex: '1 1 200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={self.desc}>{self.desc}</span> : null}
       <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {rpLinkBtn(self.repo, 'GitHub 仓库', '项目主页与源码')}
         {rpLinkBtn(self.releases, 'Release', '版本发布记录（含更新说明）')}
@@ -277,25 +277,25 @@ export function NativeReposView({ api }: NativeReposViewProps) {
           <input value={cfgDraft.mirror} placeholder="镜像前缀（如 https://gh-proxy.com/），留空=直连" onChange={(e: any) => setCfgDraft((c: any) => Object.assign({}, c, { mirror: e.target.value }))} style={{ flex: '1 1 240px', padding: '6px 10px', borderRadius: 8, border: '1.5px solid rgba(148,163,184,.35)', fontSize: 12, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' }} />
           {btn('保存镜像', false, () => post('/repos/config', { mirror: cfgDraft.mirror }))}
         </div>
-        <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 6 }}>镜像前缀对 clone/pull 同时生效；国内网络建议 https://gh-proxy.com/</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 6 }}>镜像前缀对 clone/pull 同时生效；国内网络建议 https://gh-proxy.com/</div>
       </Card>
 
       {/* ③ 一键必选（cycle-20 G2：真·一键——单次请求交给服务端队列，UI 显示批次进度） */}
       {!requiredReady
         ? <Card title="🚀 一键安装必选包">
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
               {'缺失必选：' + (sum.requiredMissing || []).join('、') + ' —— 装完即可用刷题 / 方法论 / 图推三大核心视图'}
             </div>
             {/* cycle-18：不再写死「合计约 363MB」——必选集随版本会变（本轮新增 huasheng13，
                 且 kaogong-skill 已降为推荐），硬编码体积必然漂移成谎报（R22 陈旧文案教训）。
                 各仓库体积已在下方分级卡片逐条显示，总览这里只给可执行指引。 */}
-            <div style={{ fontSize: 10.5, color: '#94a3b8', marginBottom: 8 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginBottom: 8 }}>
               国内网络建议先在上方「镜像代理」填 https://gh-proxy.com/ 再安装；各仓库体积见下方分级列表。
             </div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
               {btn('🚀 一键安装全部必选', false, doInstallBatch,
                 { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '7px 16px', fontWeight: 700 })}
-              <span style={{ fontSize: 10.5, color: '#94a3b8' }}>服务端队列化（并发 2），无需逐个点击</span>
+              <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>服务端队列化（并发 2），无需逐个点击</span>
             </div>
             {/* 批次进度条（仅批次存在时显示；字段缺失即降级） */}
             {batch ? <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 9, background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.18)' }}>
@@ -306,7 +306,7 @@ export function NativeReposView({ api }: NativeReposViewProps) {
                 <i style={{ display: 'block', height: '100%', width: (batch.total ? Math.round((batch.done || 0) / batch.total * 100) : 0) + '%', background: 'linear-gradient(90deg,#6366f1,#8b5cf6)', borderRadius: 3 }} />
               </div>
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
-                {(batch.items || []).map((it: any) => <span key={it.key} style={{ ...KV_TAG, fontSize: 9.5, background: it.state === 'done' ? 'rgba(16,185,129,.12)' : it.state === 'failed' || it.state === 'skipped' ? 'rgba(239,68,68,.12)' : 'rgba(148,163,184,.14)', color: it.state === 'done' ? '#059669' : it.state === 'failed' || it.state === 'skipped' ? '#dc2626' : '#475569' }} title={it.error || ''}>{it.key + ' ' + it.state}</span>)}
+                {(batch.items || []).map((it: any) => <span key={it.key} style={{ ...KV_TAG, fontSize: 9.5, background: it.state === 'done' ? 'rgba(16,185,129,.12)' : it.state === 'failed' || it.state === 'skipped' ? 'rgba(239,68,68,.12)' : 'rgba(148,163,184,.14)', color: it.state === 'done' ? '#059669' : it.state === 'failed' || it.state === 'skipped' ? '#dc2626' : 'var(--text-secondary)' }} title={it.error || ''}>{it.key + ' ' + it.state}</span>)}
               </div>
             </div> : null}
           </Card>
@@ -317,9 +317,9 @@ export function NativeReposView({ api }: NativeReposViewProps) {
         ? <Card title={'🕘 最近作业 · ' + data.recentJobs.length + ' 条'}>
             <button style={KV_BTN} onClick={() => setJobsOpen(v => !v)}>{jobsOpen ? '▾ 收起' : '▸ 展开历史'}</button>
             {jobsOpen ? <div style={{ marginTop: 6 }}>
-              {data.recentJobs.map((j: any, i: number) => <div key={'rj' + i} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '4px 0', borderBottom: '1px dashed rgba(148,163,184,.15)', fontSize: 10.5, color: '#64748b' }}>
+              {data.recentJobs.map((j: any, i: number) => <div key={'rj' + i} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '4px 0', borderBottom: '1px dashed rgba(148,163,184,.15)', fontSize: 10.5, color: 'var(--text-muted)' }}>
                 <span style={{ fontFamily: 'monospace', minWidth: 130 }}>{String(j.key || '?')}</span>
-                <span style={{ color: j.state === 'done' ? '#059669' : j.state === 'failed' ? '#dc2626' : '#475569', fontWeight: 700 }}>{j.state + ' · ' + String(j.action || '')}</span>
+                <span style={{ color: j.state === 'done' ? '#059669' : j.state === 'failed' ? '#dc2626' : 'var(--text-secondary)', fontWeight: 700 }}>{j.state + ' · ' + String(j.action || '')}</span>
                 <span>{(j.elapsedSec || 0) + 's'}</span>
                 {j.error ? <span style={{ color: '#b45309' }} title={j.error}>{'⚠ ' + String(j.error).slice(0, 60)}</span> : null}
               </div>)}
@@ -331,7 +331,7 @@ export function NativeReposView({ api }: NativeReposViewProps) {
       {RP_TIER_ORDER.map(tier => {
         const CardEl = Card
         return <CardEl {...{ key: 'tier-' + tier }} title={(RP_TIERS[tier].label) + ' · ' + grouped[tier].length + ' 个（' + tier + '）'}>
-        <div style={{ fontSize: 10.5, color: '#94a3b8', marginBottom: 8 }}>{RP_TIERS[tier].tip}</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginBottom: 8 }}>{RP_TIERS[tier].tip}</div>
         {grouped[tier].map((r: any) => {
           const b = rpBadge(r)
           const running = r.job && r.job.state === 'running'
@@ -340,13 +340,13 @@ export function NativeReposView({ api }: NativeReposViewProps) {
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: RP_TIERS[tier].color, flexShrink: 0 }} />
               <span title={r.desc} style={{ fontWeight: 700, fontSize: 12, minWidth: 150 }}>{r.key}</span>
               <span style={{ ...KV_TAG, background: b.bg, color: b.fg }}>{b.text}</span>
-              {r.size ? <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{r.size}</span> : null}
-              {r.present ? <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{r.files + ' 项'}</span> : null}
+              {r.size ? <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{r.size}</span> : null}
+              {r.present ? <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{r.files + ' 项'}</span> : null}
               {/* cycle-20 G6：健康徽章（非 ok 态才显示，避免视觉噪音）+ 最近更新时间 */}
               {r.health && r.health !== 'ok' && r.present
                 ? <span style={{ ...KV_TAG, fontSize: 9.5, background: (RP2_HEALTH[r.health] || RP2_HEALTH.absent).bg, color: (RP2_HEALTH[r.health] || RP2_HEALTH.absent).color }}>{(RP2_HEALTH[r.health] || RP2_HEALTH.absent).text}</span>
                 : null}
-              {rp2Ago(r.lastCommitAt) ? <span style={{ fontSize: 9.5, color: '#94a3b8' }}>{rp2Ago(r.lastCommitAt)}</span> : null}
+              {rp2Ago(r.lastCommitAt) ? <span style={{ fontSize: 9.5, color: 'var(--text-faint)' }}>{rp2Ago(r.lastCommitAt)}</span> : null}
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                 {running ? btn('⏹ 取消', false, () => doCancel(r.key)) : null}
                 {!running ? btn(busyKey === r.key ? '…' : (r.present && r.isGit ? '🔄 更新' : '⬇ 安装'), false, () => doInstall(r.key),
@@ -376,15 +376,15 @@ export function NativeReposView({ api }: NativeReposViewProps) {
             >
               <span style={{ width: 18, textAlign: 'center' }}>{it.dir ? '📁' : '·'}</span>
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.name}</span>
-              {!it.dir && it.size != null ? <span style={{ color: '#94a3b8', fontSize: 10 }}>{it.size > 1048576 ? (it.size / 1048576).toFixed(1) + 'MB' : it.size > 1024 ? (it.size / 1024).toFixed(1) + 'KB' : it.size + 'B'}</span> : null}
+              {!it.dir && it.size != null ? <span style={{ color: 'var(--text-faint)', fontSize: 10 }}>{it.size > 1048576 ? (it.size / 1048576).toFixed(1) + 'MB' : it.size > 1024 ? (it.size / 1024).toFixed(1) + 'KB' : it.size + 'B'}</span> : null}
             </div>)}
-            {browse.truncated ? <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 4 }}>{'仅显示 ' + (browse.items || []).length + ' / ' + (browse.total || 0) + ' 项（服务端上限 ' + (browse.limit || (browse.items || []).length) + '）'}</div> : null}
+            {browse.truncated ? <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 4 }}>{'仅显示 ' + (browse.items || []).length + ' / ' + (browse.total || 0) + ' 项（服务端上限 ' + (browse.limit || (browse.items || []).length) + '）'}</div> : null}
             <div style={{ marginTop: 6 }}>{btn('✕ 关闭', false, () => setBrowse(null))}</div>
           </Card>
         : null}
 
       {/* ⑥ 口径说明 */}
-      <div style={{ fontSize: 10.5, color: '#94a3b8', lineHeight: 1.8 }}>
+      <div style={{ fontSize: 10.5, color: 'var(--text-faint)', lineHeight: 1.8 }}>
         {'口径：安装=git clone --depth 1（浅克隆省流量）· 已装仓库再点=git pull --ff-only 更新 · 一键必选走服务端队列（并发 2）· '}
         {'删除仅清本地数据目录（学习进度/错题本在用户数据根 progress/，升级卸载均不受影响）· clone 失败的半成品自动清理可重装 · '}
         {'健康巡检：空仓库/缺 .git/半成品显式标记 · 非 git 的用户数据目录受保护拒绝覆盖 · '}

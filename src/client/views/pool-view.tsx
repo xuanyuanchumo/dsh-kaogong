@@ -59,7 +59,7 @@ function PoolMetric({ label, value, total, ok, desc }: any) {
   return (
     <div style={{ minWidth: 132 }}>
       <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)' }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: ok === false ? '#dc2626' : '#0f172a' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: ok === false ? '#dc2626' : 'var(--text-primary)' }}>
         {String(value ?? '—')}{Number(total) > 0 ? <span style={{ fontSize: 10, color: 'var(--text-faint,#94a3b8)', fontWeight: 400 }}> / {String(total)}</span> : null}
       </div>
       {pct !== null ? (
@@ -106,7 +106,7 @@ function PoolStatusCard({ st, onRebuild, busy }: any) {
               <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 4 }}>已注册源（新增源自动出现在此，无需改前端）</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {registry.map((r: any) => (
-                  <span key={r.id} style={{ ...KV_TAG, background: r.available ? 'rgba(16,185,129,.12)' : 'rgba(148,163,184,.14)', color: r.available ? '#059669' : '#64748b' }}>
+                  <span key={r.id} style={{ ...KV_TAG, background: r.available ? 'rgba(16,185,129,.12)' : 'rgba(148,163,184,.14)', color: r.available ? '#059669' : 'var(--text-muted)' }}>
                     {r.available ? '●' : '○'} {r.label || r.id}
                   </span>
                 ))}
@@ -130,7 +130,7 @@ function PoolStatusCard({ st, onRebuild, busy }: any) {
               <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 4 }}>关系类型分布</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {health.relTypes.map((r: any) => (
-                  <span key={r.type} style={{ ...KV_TAG, background: (r.color || '#94a3b8') + '18', color: r.color || '#64748b' }}
+                  <span key={r.type} style={{ ...KV_TAG, background: (r.color || 'var(--text-faint)') + '18', color: r.color || 'var(--text-muted)' }}
                     title={r.desc + (r.known ? '' : '（未在词表登记——新增关系类型请先在服务端 REL_TYPE_META 登记）')}>
                     {r.label || r.type} {r.count}{r.known ? '' : ' ⚠'}
                   </span>

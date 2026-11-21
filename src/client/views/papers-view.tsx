@@ -83,7 +83,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
             style={{ display: 'flex', gap: 8, fontSize: 12, padding: '4px 0', borderBottom: '1px solid rgba(148,163,184,.12)' }}
           >
             <span style={{ ...KV_TAG, minWidth: 52 }}>{'第' + d.no + '题'}</span>
-            <span style={{ flex: 1, color: '#64748b' }}>{d.type || ''}</span>
+            <span style={{ flex: 1, color: 'var(--text-muted)' }}>{d.type || ''}</span>
             <span style={{ color: '#ef4444' }}>{'你 ' + (d.mine || '—')}</span>
             <span style={{ color: '#10b981' }}>{'对 ' + (d.right || '?')}</span>
           </div>)
@@ -95,15 +95,15 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
             <Card title={'📊 模考报告 · ' + report.subject + ' ' + report.year}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 38, fontWeight: 800, color }}>{pct + '%'}</span>
-                <span style={{ fontSize: 14, color: '#64748b' }}>{'答 ' + report.answered + ' 题 · 对 ' + report.correct + ' 题 · 正确率 ' + report.rate + '%'}</span>
-                <span style={{ fontSize: 12, color: '#94a3b8' }}>{'用时 ' + fmt(report.elapsedSec || 0)}</span>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{'答 ' + report.answered + ' 题 · 对 ' + report.correct + ' 题 · 正确率 ' + report.rate + '%'}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{'用时 ' + fmt(report.elapsedSec || 0)}</span>
               </div>
               <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 8 }}>{'🎯 模块得分分布（弱→强）'}</div>
               {(report.modules || []).map(m =>
                 <div key={m.type} style={{ marginBottom: 9 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
                     <span>{m.type + (m.total ? '（' + m.total + ' 题）' : '')}</span>
-                    <span style={{ color: '#64748b' }}>{m.correct + '/' + m.answered + ' · ' + m.rate + '%'}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{m.correct + '/' + m.answered + ' · ' + m.rate + '%'}</span>
                   </div>
                   <Bar pct={m.rate} color={m.rate >= 75 ? 'linear-gradient(135deg,#10b981,#34d399)' : m.rate >= 50 ? undefined : 'linear-gradient(135deg,#f59e0b,#fbbf24)'} />
                 </div>)}
@@ -160,7 +160,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
             >
               <span style={{ width: 46, fontWeight: 700, color: '#6366f1' }}>{pp.year}</span>
               <span style={{ flex: 1 }}>{pp.exam + ' · ' + pp.paperType}</span>
-              <span style={{ color: '#64748b', fontSize: 11.5, marginRight: 8 }}>{pp.questionCount + ' 题'}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 11.5, marginRight: 8 }}>{pp.questionCount + ' 题'}</span>
               <button style={{ ...KV_BTN, padding: '3px 12px' }} disabled={busy} onClick={() => start(pp.id)}>{'开始模考'}</button>
             </div>)
         : null
@@ -168,8 +168,8 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       return (
         <div>
           <Card title="⏱ 行测整卷模考（真实考场计时）">
-            <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 10 }}>{'选一套卷 → 限时作答（行测 120 分钟）→ 交卷得模块得分分布与错题清单'}</div>
-            {!papers ? <div style={{ fontSize: 12, color: '#64748b' }}>{'加载卷库…'}</div> : null}
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>{'选一套卷 → 限时作答（行测 120 分钟）→ 交卷得模块得分分布与错题清单'}</div>
+            {!papers ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载卷库…'}</div> : null}
             {listRows ? <div style={{ maxHeight: '56vh', overflowY: 'auto' }}>{listRows}</div> : null}
           </Card>
         </div>
@@ -321,7 +321,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
               {detail.exam ? <span style={KV_TAG}>{detail.exam + ' ' + detail.year}</span> : null}
               {detail.subject ? <span style={KV_TAG}>{detail.subject}</span> : null}
               {detail.paperType ? <span style={KV_TAG}>{detail.paperType}</span> : null}
-              <span style={{ fontSize: 11.5, color: '#64748b' }}>{((detail.materials || []).length) + ' 材料 · ' + ((detail.questions || []).length) + ' 题'}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{((detail.materials || []).length) + ' 材料 · ' + ((detail.questions || []).length) + ' 题'}</span>
             </div>
             {detail.error ? <div style={{ color: '#ef4444' }}>{detail.error}</div> : null}
             {/* cycle-14：给定材料逐份折叠——每份材料头部可点击折叠/展开（含字数提示），另有「全部展开/收起」总开关 */}
@@ -335,7 +335,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                     return next
                   })}
                 >{allCollapsed ? '▼ 展开全部材料（' + mats.length + ' 份）' : '▲ 收起全部材料'}</button>
-                <span style={{ fontSize: 11, color: '#94a3b8' }}>{'点击「材料 N」标题可单独折叠/展开该份材料'}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{'点击「材料 N」标题可单独折叠/展开该份材料'}</span>
               </div>
               {detail.materials.map(m => {
                 const wordCount = String(m.text || '').replace(/\s/g, '').length
@@ -349,7 +349,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                     >
                       <span style={{ display: 'inline-block', transition: 'transform .2s', transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>{'▸'}</span>
                       <span>{'材料 ' + m.no}</span>
-                      <span style={{ fontWeight: 400, fontSize: 10.5, color: '#94a3b8' }}>{'约 ' + wordCount + ' 字' + (isCollapsed ? ' · 已折叠' : '')}</span>
+                      <span style={{ fontWeight: 400, fontSize: 10.5, color: 'var(--text-faint)' }}>{'约 ' + wordCount + ' 字' + (isCollapsed ? ' · 已折叠' : '')}</span>
                     </div>
                     {!isCollapsed ? <RichText text={m.text} maxHeight={240} /> : null}
                   </div>
@@ -383,7 +383,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   data-kg-answer-start="1"
                 >{answerBusy ? '加载试卷…' : '▶ 开始作答（限时 ' + ((detail.subject === '申论' ? 150 : 120)) + ' 分钟）'}</button>
               ) : null}
-              <span style={{ fontSize: 10.5, color: '#94a3b8' }}>
+              <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>
                 {paperMode === 'browse' ? '全卷模式：逐题浏览卷面答案与解析（自答对照）'
                   : paperMode === 'learn' ? '学习模式：单题作答 → 立即判分出答案与解析 → 下一题（节奏自控）'
                   : '答题模式：限时作答 → 服务端判分 → 错题解析（answer 剥离防作弊）'}
@@ -394,7 +394,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
               // 与 practice 同构（选中即揭示）；解析/答案来自 /api/paper 已下发数据（纯客户端判分）。
               (() => {
                 const lq = detail && Array.isArray(detail.questions) ? detail.questions[learnIdx] : null
-                if (!lq) return <Card title="🎓 学习模式"><div style={{ fontSize: 12, color: '#64748b' }}>{'本题卷无题目'}</div></Card>
+                if (!lq) return <Card title="🎓 学习模式"><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'本题卷无题目'}</div></Card>
                 const lCorrect = typeof lq.correctAnswer === 'string' ? lq.correctAnswer.toUpperCase() : (typeof lq.answer === 'string' && /^[A-D]$/.test(lq.answer.toUpperCase()) ? lq.answer.toUpperCase() : null)
                 const lIsCorrect = learnSel != null && lCorrect != null && learnSel === lCorrect
                 const hasOpts = lq.options && Object.keys(lq.options).length > 0
@@ -403,7 +403,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                     <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                       <span style={KV_TAG}>{'学习进度 ' + (learnIdx + 1) + '/' + (detail.questions || []).length}</span>
                       <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{'已答 ' + learnAnsweredCount + ' · 对 ' + learnCorrectCount}</span>
-                      <span style={{ fontSize: 10.5, color: '#94a3b8', marginLeft: 'auto' }}>{'选中即判分揭示（不可改选）· 节奏自控'}</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--text-faint)', marginLeft: 'auto' }}>{'选中即判分揭示（不可改选）· 节奏自控'}</span>
                     </div>
                     <QwZoomHost children={
                       <QwPaperMode
@@ -439,7 +439,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                       </div>
                     ) : !hasOpts ? (
                       // 申论形态题（无选项）：学习模式不支持在线判分，引导全卷模式 + 跳下一题（防死路）
-                      <div style={{ marginTop: 8, fontSize: 11.5, color: '#94a3b8', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--text-faint)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span>{'本题为主观题（无选项），学习模式不支持在线判分 —— 请切「📖 全卷模式」查看材料与参考答案'}</span>
                         <button
                           style={KV_BTN}
@@ -456,7 +456,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
               // ── 📝 答题模式（复用 exam 域；未开始给引导，交卷后给报告+解析）──
               !answerExam && !answerReport ? (
                 <Card title="📝 答题模式（未开始）">
-                  <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.8 }}>
                     {'点击上方「▶ 开始作答」进入限时答题：' + ((detail.questions || []).length) + ' 题 · 行测 ' + 120 + ' 分钟 / 申论 ' + 150 + ' 分钟'}
                     <br />{'作答中答案不下发（防作弊）；交卷后服务端判分，错题逐题显示卷面答案与解析。'}
                     <br />{'中途切回「📖 全卷模式」不会清空作答记录；换卷才会重置。'}
@@ -468,14 +468,14 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   <Card title={'📊 答题报告 · ' + (answerReport.subject || detail.subject) + ' ' + (answerReport.year || detail.year)}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 36, fontWeight: 800, color: (answerReport.rate || 0) >= 75 ? '#10b981' : (answerReport.rate || 0) >= 50 ? '#6366f1' : '#f59e0b' }}>{(answerReport.rate || 0) + '%'}</span>
-                      <span style={{ fontSize: 13, color: '#64748b' }}>{'答 ' + answerReport.answered + ' 题 · 对 ' + answerReport.correct + ' 题 · 用时 ' + fmtAnswerClock(answerReport.elapsedSec || 0)}</span>
+                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{'答 ' + answerReport.answered + ' 题 · 对 ' + answerReport.correct + ' 题 · 用时 ' + fmtAnswerClock(answerReport.elapsedSec || 0)}</span>
                       <button style={{ ...KV_BTN, marginLeft: 'auto' }} onClick={() => { setAnswerReport(null); setAnswerExam(null); setAnswerSel({}); setAnswerFlags(new Set()); setAnswerIdx(0) }}>{'↺ 再来一次'}</button>
                     </div>
                     {(answerReport.modules || []).map(m =>
                       <div key={m.type} style={{ marginBottom: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
                           <span>{m.type + (m.total ? '（' + m.total + ' 题）' : '')}</span>
-                          <span style={{ color: '#64748b' }}>{m.correct + '/' + m.answered + ' · ' + m.rate + '%'}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>{m.correct + '/' + m.answered + ' · ' + m.rate + '%'}</span>
                         </div>
                         <Bar pct={m.rate} color={m.rate >= 75 ? 'linear-gradient(135deg,#10b981,#34d399)' : m.rate >= 50 ? undefined : 'linear-gradient(135deg,#ef4444,#f87171)'} />
                       </div>)}
@@ -496,7 +496,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                           onSelect={(letter) => setAnswerSel(m => ({ ...m, [answerQ.no]: letter }))}
                         />}
                       />
-                    ) : <div style={{ fontSize: 12, color: '#64748b' }}>{'题目索引异常'}</div>}
+                    ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'题目索引异常'}</div>}
                   </Card>
                 </div>
               ) : answerExam ? (
@@ -524,7 +524,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                         onToggleFlag={(no) => setAnswerFlags(f => { const n = new Set(f); n.has(no) ? n.delete(no) : n.add(no); return n })}
                       />}
                     />
-                  ) : <div style={{ fontSize: 12, color: '#64748b' }}>{'题目加载异常'}</div>}
+                  ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'题目加载异常'}</div>}
                 </div>
               ) : null
             ) : (
@@ -562,7 +562,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   ) : (
                     <button style={KV_BTN} onClick={() => setBrowseReveal(m => ({ ...m, [curQ.no]: false }))}>{'↺ 重做此题'}</button>
                   )}
-                  <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{'点选项=记录自选 · 对照后绿=自选正确 / 红=错答 · 答案与解析自动展开'}</span>
+                  <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{'点选项=记录自选 · 对照后绿=自选正确 / 红=错答 · 答案与解析自动展开'}</span>
                 </div>
               ) : null}
             </Card>
@@ -577,7 +577,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
           <Card title={'📚 真题卷库' + (list ? '（' + list.total + ' 套）' : '')}>
             {/* T-019 浏览模式：按科目/年份 或 按考点反查 */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{'浏览'}</span>
+              <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{'浏览'}</span>
               <button style={{ ...KV_BTN, ...(mode === 'year' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }} onClick={() => setMode('year')}>{'按科目/年份'}</button>
               <button style={{ ...KV_BTN, ...(mode === 'topic' ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }} onClick={() => setMode('topic')}>{'按考点'}</button>
               {cat ? <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{'考点：' + cat}</span> : null}
@@ -591,17 +591,17 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                     onClick={() => setCat(cat === c.k ? '' : c.k)}
                   >{c.k + ' ' + c.c}</button>)}
               </div>
-              {!cats.length ? <div style={{ fontSize: 12, color: '#64748b' }}>{'加载考点…'}</div> : null}
-              {cat && catPapers === null ? <div style={{ fontSize: 12, color: '#64748b' }}>{'查询含「' + cat + '」的卷…'}</div> : null}
+              {!cats.length ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载考点…'}</div> : null}
+              {cat && catPapers === null ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'查询含「' + cat + '」的卷…'}</div> : null}
               {cat && catPapers ? <div style={{ maxHeight: '46vh', overflowY: 'auto' }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{'共 ' + catPapers.length + ' 套卷含该考点（按题量排序）'}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{'共 ' + catPapers.length + ' 套卷含该考点（按题量排序）'}</div>
                 {catPapers.map((cp: any, i: number) =>
                   <div
                     key={i}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, marginBottom: 4, background: 'rgba(148,163,184,.06)', fontSize: 12 }}
                   >
                     <span style={{ width: 44, fontWeight: 700, color: '#6366f1' }}>{String(cp.year || '—')}</span>
-                    <span style={{ width: 50, color: '#64748b' }}>{cp.region || ''}</span>
+                    <span style={{ width: 50, color: 'var(--text-muted)' }}>{cp.region || ''}</span>
                     <span style={{ flex: 1 }}>{String(cp.paper || '').replace(/（网友回忆版）|《行测》题|《申论》题/g, '')}</span>
                     <span style={{ ...KV_TAG, fontSize: 10, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{cp.count + ' 题'}</span>
                   </div>)}
@@ -619,7 +619,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
             {/* cycle-13 省份维度 chips：provinces facet 驱动（索引 v2 起可用；旧数据无 facet 时整行隐藏）
                 cycle-44：chips 走 ui-kit 基建 KgChips（active 态调用方声明；render 锚点「省份」标签保留） */}
             {list && Array.isArray(list.provinces) && list.provinces.length ? <div>
-              <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{'省份'}</span>
+              <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{'省份'}</span>
               <KgChips gap={5} items={[
                 { key: '', text: '全部', active: filters.province === '' },
                 ...list.provinces.map((p: any) => ({
@@ -638,7 +638,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   onClick={() => setFilters({ ...filters, year: filters.year === y ? '' : y })}
                 >{y}</button>)}
             </div>
-            {!list ? <div style={{ fontSize: 12, color: '#64748b' }}>{'加载中…'}</div> : null}
+            {!list ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载中…'}</div> : null}
             {list ? <div style={{ maxHeight: '52vh', overflowY: 'auto' }}>
               {list.papers.map(p =>
                 <div
@@ -647,9 +647,9 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   onClick={() => { setOpenId(p.id); setDetail(null) }}
                 >
                   <span style={{ width: 46, fontWeight: 700, color: '#6366f1' }}>{p.year || '—'}</span>
-                  <span style={{ width: 58, color: '#64748b' }}>{p.province || p.exam}</span>
+                  <span style={{ width: 58, color: 'var(--text-muted)' }}>{p.province || p.exam}</span>
                   <span style={{ flex: 1 }}>{p.subject + ' · ' + p.paperType}</span>
-                  <span style={{ color: '#64748b', fontSize: 11.5 }}>{p.questionCount + ' 题'}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{p.questionCount + ' 题'}</span>
                   {p.verified ? <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{'已核验'}</span> : null}
                 </div>)}
             </div> : null}
@@ -733,7 +733,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
 
       // 频道内的练习入口（cur 缺席时降级为提示，绝不抛错）
       const entriesCard = cur ? <Card title={'🚀 ' + cur.name + '练习入口'}>
-        <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 10 }}>{cur.desc}</div>
+        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>{cur.desc}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10 }}>
           {(cur.entries || []).map((e, i) =>
             <div
@@ -742,11 +742,11 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
               onClick={() => go({ view: e.view, params: e.params })}
             >
               <div style={{ fontWeight: 800, fontSize: 13.5 }}>{e.label}</div>
-              <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 4 }}>{'点击进入'}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 4 }}>{'点击进入'}</div>
             </div>)}
         </div>
       </Card>
-        : <Card title="🚀 练习入口"><div style={{ fontSize: 12, color: '#64748b' }}>{'专题数据暂不可用 — 可直接使用上方分区练习'}</div></Card>
+        : <Card title="🚀 练习入口"><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'专题数据暂不可用 — 可直接使用上方分区练习'}</div></Card>
 
       // 专题列表（按 kind 分组）
       const topics = cur ? (cur.topics || []) : []
@@ -768,7 +768,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   {t2.questionCount ? <span style={{ ...KV_TAG, fontSize: 10, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{t2.questionCount + ' 题'}</span> : null}
                   {t2.papers ? <span style={{ ...KV_TAG, fontSize: 10 }}>{t2.papers + ' 套'}</span> : null}
                 </div>
-                <div style={{ fontSize: 11.5, color: '#64748b', lineHeight: 1.6 }}>{t2.desc || ''}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.6 }}>{t2.desc || ''}</div>
                 <div style={{ fontSize: 10.5, color: '#6366f1', marginTop: 6, fontWeight: 600 }}>{'开始练习 →'}</div>
               </div>)}
           </div>
@@ -844,7 +844,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
 
       // ① 方法论目录卡（网格）
       const methodGrid = topics === null
-        ? <div style={{ fontSize: 12, color: '#64748b' }}>{'加载方法论目录…'}</div>
+        ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载方法论目录…'}</div>
         : topics.length === 0
           ? <div style={{ fontSize: 12, color: '#f59e0b' }}>{'⚠️ 方法论目录暂不可用（kaogong-skill 参考文件缺失）'}</div>
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
@@ -855,7 +855,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   onClick={() => openTopic(String(tp.label))}
                 >
                   <div style={{ fontWeight: 800, fontSize: 13 }}>{'📖 ' + tp.label}</div>
-                  <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 4 }}>{open === tp.label ? '点击收起' : '点击展开全文'}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 4 }}>{open === tp.label ? '点击收起' : '点击展开全文'}</div>
                 </div>)}
             </div>
 
@@ -864,14 +864,14 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
         ? <Card title={'📖 ' + open + ' · 方法论全文'}>
             <RichText text={String(contents[open])} fontSize={12.5} maxHeight={'48vh' as any} />
           </Card>
-        : open ? <Card title={'📖 ' + open}><div style={{ fontSize: 12, color: '#64748b' }}>{busy ? '加载正文…' : '正文暂缺'}</div></Card> : null
+        : open ? <Card title={'📖 ' + open}><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{busy ? '加载正文…' : '正文暂缺'}</div></Card> : null
 
       // ② 母题思维 / 易错点精选卡
       const pickCards = picks === null
-        ? <div style={{ fontSize: 12, color: '#64748b' }}>{'加载母题精选…'}</div>
+        ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载母题精选…'}</div>
         : picks.length === 0
           ? <Card title="🧩 母题思维 / 易错点精选">
-              <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.8 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.8 }}>
                 {'深度题库未就绪（需 Node ≥ 22.19 内置 node:sqlite 且 GongkaoNaoku 分片存在），母题精选暂缺。'}
                 <div style={{ marginTop: 6, color: '#4f46e5' }}>{'可先阅读上方方法论；或在左栏面板「深度题库」分区练习（那里有未掌握时的回落方案）。'}</div>
               </div>
@@ -893,7 +893,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                     <div style={{ fontSize: 10.5, color: '#6366f1', marginTop: 6, fontWeight: 600 }}>{pickOpen === i ? '收起 ▲' : '展开详情 ▼'}</div>
                   </div>
                   {pickOpen === i ? <div style={{ border: '1.5px solid rgba(139,92,246,.35)', borderTop: 0, borderRadius: '0 0 12px 12px', padding: 12, background: 'rgba(139,92,246,.04)' }}>
-                    {q.stem ? <div style={{ marginBottom: 8 }}><div style={{ fontWeight: 700, fontSize: 11.5, color: '#64748b', marginBottom: 3 }}>{'题干'}</div><RichText text={String(q.stem).slice(0, 400)} fontSize={11.5} maxHeight={160} /></div> : null}
+                    {q.stem ? <div style={{ marginBottom: 8 }}><div style={{ fontWeight: 700, fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 3 }}>{'题干'}</div><RichText text={String(q.stem).slice(0, 400)} fontSize={11.5} maxHeight={160} /></div> : null}
                     {q.mother ? <div style={{ marginBottom: 8 }}><div style={{ fontWeight: 700, fontSize: 11.5, color: '#8b5cf6', marginBottom: 3 }}>{'🧩 母题思维'}</div><RichText text={q.mother} fontSize={11.5} maxHeight={200} /></div> : null}
                     {q.pitfalls ? <div><div style={{ fontWeight: 700, fontSize: 11.5, color: '#ef4444', marginBottom: 3 }}>{'⚠️ 易错点'}</div><RichText text={q.pitfalls} fontSize={11.5} maxHeight={200} /></div> : null}
                   </div> : null}
@@ -903,14 +903,14 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       return (
         <div>
           <Card title="📖 方法论技巧（kaogong-skill 十主题）">
-            <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 10 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>
               {'行测 / 申论 / 职测 / 综应 / 公基 / 公文 / 面试 / 时政 / 报考 / 复盘 十大主题备考方法论，点击主题展开全文。'}
             </div>
             {methodGrid}
           </Card>
           {methodDetail}
           <Card title="🧩 母题思维 / 易错点精选（深度题库标注）">
-            <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 10 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>
               {'从 GongkaoNaoku 27506 题的五维标注中精选带「母题思维 / 易错点」的真题，点击卡片展开题干与标注全文。'}
             </div>
             {pickCards}
@@ -946,7 +946,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
               data-kg-hub-legacy="1"
               onClick={() => setShowLegacy(v => !v)}
             >{(showLegacy ? '▾ ' : '▸ ') + '另见：kaogong-skill 十主题方法论 + 深度题库母题精选'}</button>
-            <div style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', margin: '4px 0 0' }}>
               {'（这一部分是外部仓库内容：kaogong-skill 十主题 + GongkaoNaoku 母题精选；'}
               {'上方花生十三体系同样需要先在「📦 题库管理」安装必选包 huasheng13，未装时上方会显示安装引导）'}
             </div>
@@ -1027,13 +1027,13 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
             <Card title="📊 评分结果">
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
                 <span style={{ fontSize: 40, fontWeight: 800, color }}>{result.score}</span>
-                <span style={{ fontSize: 16, color: '#64748b' }}>{'/ ' + result.max}</span>
-                <span style={{ fontSize: 13, color: '#64748b' }}>{'(' + pct + '% · ' + result.chars + ' 字' + (result.limit ? ' / 限 ' + result.limit : '') + ')'}</span>
+                <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>{'/ ' + result.max}</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{'(' + pct + '% · ' + result.chars + ' 字' + (result.limit ? ' / 限 ' + result.limit : '') + ')'}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: 8, marginBottom: 14 }}>
                 {[['要点覆盖', result.dims.coverage, '权重50%'], ['结构条理', result.dims.structure, '权重20%'], ['字数合规', result.dims.length, '权重15%'], ['语言规范', result.dims.language, '权重15%']].map(([k, v, w]) =>
                   <div key={k} style={{ background: 'rgba(148,163,184,.08)', borderRadius: 10, padding: 10 }}>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>{k + ' ' + w}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k + ' ' + w}</div>
                     <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>{v}</div>
                     <Bar pct={v} color={v >= 70 ? 'linear-gradient(135deg,#10b981,#34d399)' : v >= 40 ? undefined : 'linear-gradient(135deg,#f59e0b,#fbbf24)'} />
                   </div>)}
@@ -1069,7 +1069,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                 mode="browse"
                 q={{ no: cur.no, score: cur.score, stem: cur.stem, requirement: cur.requirement }}
               />
-              {cur.relatedMaterials ? <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: '#64748b', marginTop: 4 }}>
+              {cur.relatedMaterials ? <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                 <span>{'关联材料：'}</span>
                 {parseMatNos(cur.relatedMaterials).length
                   ? parseMatNos(cur.relatedMaterials).map(n =>
@@ -1097,9 +1097,9 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                     })}
                   >{allCollapsed ? '▼ 全部展开' : '▲ 全部收起'}</button>
                 })() : null}
-                {paperDetail && paperDetail.materials && paperDetail.materials.length > 0 ? <span style={{ fontSize: 11, color: '#94a3b8' }}>{'点击「材料 N」标题可单独折叠 · 阅读材料后在下方作答区作答'}</span> : null}
+                {paperDetail && paperDetail.materials && paperDetail.materials.length > 0 ? <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{'点击「材料 N」标题可单独折叠 · 阅读材料后在下方作答区作答'}</span> : null}
               </div>
-              {!paperDetail ? <div style={{ fontSize: 12, color: '#64748b' }}>{'加载材料…'}</div> : null}
+              {!paperDetail ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载材料…'}</div> : null}
               {paperDetail && (!paperDetail.materials || paperDetail.materials.length === 0) ? <div style={{ fontSize: 12, color: '#f59e0b' }}>{'该卷未附带材料（部分年份采集稿缺材料）'}</div> : null}
               {showMaterials && paperDetail && (paperDetail.materials || []).map(mm => {
                 const isCollapsed = !!collapsedMats[mm.no]
@@ -1125,7 +1125,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                     >
                       <span style={{ display: 'inline-block', transition: 'transform .2s', transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>{'▸'}</span>
                       <span>{'材料 ' + mm.no}</span>
-                      <span style={{ fontWeight: 400, fontSize: 10.5, color: '#94a3b8' }}>{'约 ' + wordCount + ' 字' + (isCollapsed ? ' · 已折叠' : '')}</span>
+                      <span style={{ fontWeight: 400, fontSize: 10.5, color: 'var(--text-faint)' }}>{'约 ' + wordCount + ' 字' + (isCollapsed ? ' · 已折叠' : '')}</span>
                     </div>
                     {!isCollapsed ? <RichText text={mm.text} maxHeight={300} fontSize={12.5} /> : null}
                   </div>
@@ -1140,8 +1140,8 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
               />
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
                 <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '8px 20px', fontSize: 13, fontWeight: 700 }} disabled={busy || !answer.trim()} onClick={submit}>{busy ? '评分中…' : '提交评分'}</button>
-                <span style={{ fontSize: 11.5, color: '#64748b' }}>{answer.replace(/\s/g, '').length + ' 字'}</span>
-                <span style={{ fontSize: 10.5, color: '#94a3b8' }} title="作答内容已自动暂存在本机浏览器，误关页面或切换题目不会丢失">{'💾 草稿已本地暂存，误关不丢'}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{answer.replace(/\s/g, '').length + ' 字'}</span>
+                <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }} title="作答内容已自动暂存在本机浏览器，误关页面或切换题目不会丢失">{'💾 草稿已本地暂存，误关不丢'}</span>
               </div>
             </Card>
           </div>
@@ -1159,7 +1159,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                   onClick={() => load(t)}
                 >{t || '全部'}</button>)}
             </div>
-            {!list ? <div style={{ fontSize: 12, color: '#64748b' }}>{'加载中…'}</div> : null}
+            {!list ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载中…'}</div> : null}
             {list ? (list.questions || []).map((q, i) =>
               <div
                 key={i}
@@ -1172,7 +1172,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
                 <div style={{ display: 'flex', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
                   <span style={KV_TAG}>{String(q.year)}</span>
                   <span style={{ ...KV_TAG, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' }}>{q.paperType}</span>
-                  {q.score ? <span style={{ fontSize: 10.5, color: '#64748b' }}>{q.score + '分'}</span> : null}
+                  {q.score ? <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{q.score + '分'}</span> : null}
                 </div>
                 <div>{(q.stem || '').slice(0, 110) + ((q.stem || '').length > 110 ? '…' : '')}</div>
               </div>) : null}
