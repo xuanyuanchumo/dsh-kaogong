@@ -98,3 +98,44 @@ test('SMOKE-IMG-06 越级路径 403/404 防线（绝不出包）', async () => {
   const bad = await fetch(`${h.base}/api/kg-img?p=${encodeURIComponent('../../etc/passwd')}&ws=${CX}`)
   expect([403, 404]).toContain(bad.status)
 })
+
+test('SMOKE-IMG-01/02/03 题图占位链路静态守卫（repoData 占位化 + RichText 渲染 + 双通道分流）', () => {
+  const rdSrc = readSrc('src/adapters/repoData.ts')
+  expect(rdSrc.includes('kgimg://') && rdSrc.includes('neutralizeImages')).toBe(true)
+  // client bundle（combo）必须含 kgimg 渲染链路（RichText → /api/kg-img?p= 绝对 URL）
+  const bundlePath = new URL('../../dist/client/client.js', import.meta.url)
+  const ukSrc = fs.readFileSync(bundlePath, 'utf-8')
+  expect(ukSrc.includes('/api/kg-img?p=') && ukSrc.includes('kgimg://')).toBe(true)
+  // 双通道分流：同源 attachWebRoute + 独立端口 buildHttpServer 两处
+  const httpSrc = readSrc('src/server/http.ts')
+  expect(httpSrc.split("'/api/kg-img'").length >= 3).toBe(true)
+})
+
+test('SMOKE-IMG-04 存储层供数带图能力：池抽题带图 ≥ 配额下限（确定性 L1 配额 ⌈10/2⌉=5）', async () => {
+  const poolImgQ = await h.J(`/api/pool/questions?module=判断推理&count=10&ws=${CX}`)
+  const poolImgHit = (poolImgQ.questions || []).filter(r => String(r.stem || '').includes('kgimg://')).length
+  expect(poolImgHit >= 5, `池抽 10 题含图 ${poolImgHit} 题（配额下限 5）`).toBe(true)
+})
+
+test('SMOKE-IMG-04b 目录解析路径带图能力（回落路径保留，随机抽题不假红）+ IMG-05 占位服务可达', async () => {
+  // 跨 5 模块各抽 6 题（图形推理/资料分析含图率高，单模块随机会漏）——qTotal>0 即回落路径存活
+  let withImgTotal = 0, qTotal = 0
+  for (const mod of ['判断推理', '资料分析', '数量关系', '言语理解与表达', '常识判断']) {
+    const qs = await h.J(`/api/questions?module=${encodeURIComponent(mod)}&count=6&ws=${CX}`)
+    qTotal += (qs.questions || []).length
+    withImgTotal += (qs.questions || []).filter(q => String(q.stem || '').includes('kgimg://')).length
+  }
+  expect(qTotal > 0, `抽 ${qTotal} 题（含图 ${withImgTotal} 题随源分布）`).toBe(true)
+  // IMG-05：占位路径经 /api/kg-img 服务真实可达（旧文件 withImgTotal 条件分支语义）
+  if (withImgTotal) {
+    const qs2 = await h.J(`/api/questions?module=资料分析&count=6&ws=${CX}`)
+    const first = (qs2.questions || []).concat((await h.J(`/api/questions?module=判断推理&count=6&ws=${CX}`)).questions || [])
+      .find(q => String(q.stem || '').includes('kgimg://'))
+    const rel = first && String(first.stem).match(/kgimg:\/\/([^\]】]+)】/)?.[1]
+    if (rel) {
+      const img = await fetch(`${h.base}/api/kg-img?p=${encodeURIComponent(rel)}&ws=${CX}`)
+      expect(img.status === 200 && /^image\//.test(img.headers.get('content-type') || ''),
+        `status=${img.status} type=${img.headers.get('content-type')}`).toBe(true)
+    }
+  }
+})

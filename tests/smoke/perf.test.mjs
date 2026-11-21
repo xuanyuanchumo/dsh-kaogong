@@ -10,7 +10,7 @@
  *
  * 运行：npx vitest run tests/smoke/perf.test.mjs
  */
-import { test, expect } from 'vitest'
+import { test, expect, beforeAll, afterAll } from 'vitest'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -55,4 +55,45 @@ test('SMOKE-PERF-06 重建作业化（jobId 立即返回 + status 轮询 + 归�
 test('SMOKE-PERF-06c 重建端点已声明（manifest + 新 status 端点登记）', () => {
   const mfSrc = readSrc('src/shared/manifest.ts')
   expect(mfSrc.includes("path: '/api/pool/rebuild/status'") && poolApiSrcP.includes('/api/pool/rebuild/status')).toBe(true)
+})
+
+// ── 运行时判据（阶段 15 补迁：PERF-04/05b/06b，走 setupDomain）──
+
+let hRt = null
+
+beforeAll(async () => {
+  const { setupDomain } = await import('../_harness/server.mjs')
+  hRt = await setupDomain({ ws: 'PROJ_VTEST_PERF' })
+}, 120_000)
+
+afterAll(async () => {
+  if (hRt) await hRt.close()
+})
+
+test('SMOKE-PERF-04 运行时延迟（status 二查 <150ms · questions 二查 <300ms）', async () => {
+  const t0 = Date.now()
+  await hRt.J('/api/pool/status?ws=PROJ_VTEST_PERF')   // 首查（可能构建缓存）
+  const t1 = Date.now()
+  await hRt.J('/api/pool/status?ws=PROJ_VTEST_PERF')   // 二查（必须命中）
+  const t2 = Date.now()
+  await hRt.J('/api/pool/questions?count=3&ws=PROJ_VTEST_PERF')
+  const t3 = Date.now()
+  await hRt.J('/api/pool/questions?count=3&ws=PROJ_VTEST_PERF')   // 二查
+  const t4 = Date.now()
+  const statusSecond = t2 - t1
+  const questionsSecond = t4 - t3
+  expect(statusSecond < 150 && questionsSecond < 300,
+    `status 二查 ${statusSecond}ms · questions 二查 ${questionsSecond}ms`).toBe(true)
+})
+
+test('SMOKE-PERF-05b 检索首条为真实题干（合成标签行不占榜首）', async () => {
+  const sr37 = await hRt.J(`/api/pool/search?q=${encodeURIComponent('图形推理')}&limit=10&ws=PROJ_VTEST_PERF`)
+  const first37 = (sr37.results || [])[0]
+  expect(!!first37 && !String(first37.stem || '').startsWith('【图形推理 ·'),
+    String((first37 && first37.stem) || '').slice(0, 40)).toBe(true)
+})
+
+test('SMOKE-PERF-06b 作业轮询结构（running + history 字段齐备，不臆造）', async () => {
+  const st37 = await hRt.J('/api/pool/rebuild/status?ws=PROJ_VTEST_PERF')
+  expect(typeof st37.running !== 'undefined' && Array.isArray(st37.history)).toBe(true)
 })
