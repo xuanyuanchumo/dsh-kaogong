@@ -5,7 +5,7 @@
 [![awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-listed-6366f1)](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
 [![offline-first](https://img.shields.io/badge/offline-100%25-10b981)](#-快速开始3-步)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
-[![tests](https://img.shields.io/badge/tests-smoke%20437%20%C2%B7%20render%2066-10b981)](#-开发与验证)
+[![tests](https://img.shields.io/badge/tests-vitest%20276%20%C3%97%2035%20files-10b981)](#-开发与验证)
 
 > **一句话**：把 **16 个**优秀开源考公仓库整合为 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）宿主内的**原生**学习平台 ——
 > 刷题 / SRS 错题本 / 真题卷 / 整卷模考 / 申论评改 / **花生十三体系方法论** / 可交互知识图谱 / 白盒可观测，**完全离线可用**。
@@ -352,16 +352,11 @@ src/
 ## 🧪 开发与验证
 
 ```bash
-npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 17 模块为宿主单 combo
-node smoke.test.mjs  # 437 断言 E2E（信标/adopt/隔离/SRS 闭环/图谱算法确定性/专项记忆/
-                     # 三布局/流动粒子/白盒三件套/题库管理 R-P-01..06/
-                     # 方法论 HS13-01..10 六端点+降级语义+跨 ws 隔离/
-                     # 工具展示契约 C29-01..03（presentCall/presentResult 6 工具全接线）/
-                     # 图谱子图 C29-04..07（neighborhood+impact 消费闭环）/
-                     # 打包卫生 R28: bundle patch 与随包模板必须入包、语料与调试 overlay 不得入包）
-node render.test.mjs # 66 断言真实 React 18 + 真实 client.js 集成渲染（零 role=alert 降级；
-                     # 含 C18-01..08 方法论五分区 + 专题枢纽锚点 + 白盒链路卡 + C29 子图链）
-npm run test:all     # 上面两步一起跑
+npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 17 模块为宿主单 combo → assert-combo 终检
+npm run test:all     # 单命令全链：build → 真实 Cordis Loader e2e（17 断言，三层隔离）→ vitest 分域 276 断言
+                     # tests/ 分域体系：unit（纯函数直测）/ smoke（27 域端点契约+静态守卫）/ render（7 旅程真实 React）/ e2e（loader）
+                     # 覆盖：SRS 闭环/图谱算法确定性/题库管理/方法论 HS13/工具展示契约/打包卫生 R28/
+                     # 真题卷三模式/白盒面板/记忆横幅/数据外置/补录旅程/幽灵视图——旧 4173 行双单文件已分域退役
 ```
 
 **沙箱验证（禁主力直测）**：`node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`
@@ -389,7 +384,7 @@ ANIC 质量流程：`.cycles/`（intent → spec → plan → G0–G3 门禁 →
 
 **能力事实（维护者可对代码核对）**：**78** 个 HTTP 端点 · **6** 个宿主工具 · **16** 个视图 ·
 **16** 个上游仓库（按需安装）· 统一题库池 **86,454** 题 / **229,732** 出处行 / **141,121** 解析版本 ·
-测试 **smoke 437 / render 66**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
+测试 **vitest 276 断言 × 35 分域文件**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
 与 `docs/facts.json`（文档事实源，`node scripts/docs/gen-facts.mjs` 自动生成）实测得出，不随文案改动。
 
 ## ⚖️ 许可与免责
