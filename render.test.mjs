@@ -220,6 +220,34 @@ globalThis.fetch = async (url) => {
   if (u.includes('/api/memory')) {
     return { json: async () => ({ memory: globalThis.__kgMemStore || {} }) }
   }
+  // cycle-46 幽灵视图补齐：plan/search/method 三页面的端点 mock（真实形状——mock 即契约）
+  if (u.includes('/api/plan/schedule')) return { json: async () => ({
+    schedule: Array.from({ length: 30 }, (_, i) => ({ day: i + 1, focus: [{ module: '判断推理', weight: 0.4, suggested: 12 }, { module: '资料分析', weight: 0.3, suggested: 9 }, { module: '言语理解与表达', weight: 0.3, suggested: 9 }] })),
+    profile: { hasProfile: true, focus: [{ module: '判断推理', primaryRate: 0.55, backlog: 3 }, { module: '资料分析', primaryRate: 0.85, backlog: 0 }] },
+  }) }
+  if (u.includes('/api/plan')) return { json: async () => ({
+    day: 1, phases: [
+      { name: '第一阶段', startDay: 1, endDay: 7 }, { name: '第二阶段', startDay: 8, endDay: 15 },
+      { name: '第三阶段', startDay: 16, endDay: 22 }, { name: '第四阶段', startDay: 23, endDay: 30 },
+    ],
+    days: Array.from({ length: 30 }, (_, i) => ({ day: i + 1, title: '第 ' + (i + 1) + ' 天 · 训练', phase: '', tasks: ['刷题 30 题', '错题复盘'] })),
+  }) }
+  if (u.includes('/api/search')) return { json: async () => ({
+    results: [
+      { file: 'sakib/判断推理/index.md', snippet: '1. 图形推理\n   - 定义：每道题给出一套图形' },
+      { file: 'kaogong-skill/references/xingce.md', snippet: '图形推理常见规律：位置/样式/数量/空间' },
+    ],
+  }) }
+  if (u.includes('/api/methods')) return { json: async () => ({
+    topics: [
+      { id: '行测', label: '行测', file: 'xingce.md', exists: true },
+      { id: '申论', label: '申论', file: 'shenlun.md', exists: true },
+      { id: '公基', label: '公基', file: 'gongji.md', exists: true },
+    ],
+  }) }
+  if (u.includes('/api/method')) return { json: async () => ({
+    topic: '行测', file: 'xingce.md', content: '# 行测方法参考\n\n截位直除、ABRX 等速算技巧说明（mock 全文）。',
+  }) }
   // cycle-15 图形推理/深度题库数据源 mock（让横幅与恢复路径可测；N-02 分区切换零降级）
   if (u.includes('/api/tuxing/cats')) return { json: async () => ({ ready: true, total: 354, cats: [{ cat: 'shuliang', name: '数量规律', count: 40 }] }) }
   if (u.includes('/api/tuxing/list')) return { json: async () => ({ total: 2, questions: [{ no: 1, catName: '数量规律', ans: 'A', imgUrl: '' }, { no: 2, catName: '数量规律', ans: 'B', imgUrl: '' }] }) }
@@ -522,11 +550,13 @@ try {
     ok('RENDER-POOL-34a: 统一题库视图渲染（库状态 + 源注册表 + 数据质量 + 关系词表）')
 
     // 检索旅程：输入关键词 → 检索 → 结果含「N 处出处」聚合标注
-    const input = tr.root.findAllByType('input').find((i) => String(i.props.placeholder || '').includes('关键词'))
+    // cycle-46：NativeSearchView 的 placeholder 也含「关键词」——定位收紧为 pool-view 独有文案
+    const input = tr.root.findAllByType('input').find((i) => String(i.props.placeholder || '').includes('FTS5 trigram'))
     if (!input) throw new Error('RENDER-POOL-34 检索输入框缺失')
     await act(async () => { input.props.onChange({ target: { value: '图形推理' } }) })
     await act(async () => { await new Promise(r => setTimeout(r, 20)) })
-    const searchBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('检索'))
+    // cycle-46：导航新增「🔎 检索」按钮也含「检索」——定位收紧为 pool-view 内的检索按钮（children 恒为「检索」/「⏳ 检索中…」且 disabled 受 searching 控制）
+    const searchBtn = tr.root.findAllByType('button').find(b => String(b.props.children) === '检索')
     if (!searchBtn) throw new Error('RENDER-POOL-34 检索按钮缺失')
     await act(async () => { searchBtn.props.onClick() })
     await act(async () => { await new Promise(r => setTimeout(r, 90)) })
@@ -1507,6 +1537,53 @@ try {
       if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('C18-08 方法论链路卡渲染降级')
       ok('C18-08: 白盒「📖 方法论链路」卡（三源齐请求 + 六模块热力条 + 覆盖率/命中率/p95 + 缺口如实展示 + 零降级）')
     }
+  }
+
+
+  // ═══ RENDER-GHOST-46（cycle-46 幽灵视图补齐）：plan/search/method 三页旅程 ═══
+  {
+    // ① 学习计划：静态 30 天日历 + 智能排程侧重标注
+    const planBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('🗓 计划'))
+    if (!planBtn) throw new Error('RENDER-GHOST-46 未找到「🗓 计划」导航按钮')
+    await act(async () => { planBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+    const tp = JSON.stringify(tr.toJSON())
+    if (tr.root.findAll(n => n.props && n.props.role === 'alert').length) throw new Error('RENDER-GHOST-46 学习计划渲染降级')
+    if (!tp.includes('学习计划')) throw new Error('RENDER-GHOST-46 学习计划页未渲染')
+    if (!tp.includes('画像侧重')) throw new Error('RENDER-GHOST-46 智能排程画像卡未渲染（schedule 域未贯通）')
+    if (!tp.includes('12 题')) throw new Error('RENDER-GHOST-46 排程建议题量未渲染（suggested 题）')
+    ok('RENDER-GHOST-46a: 学习计划（30 天日历 + 排程侧重 + 建议题量）')
+    // ② 知识检索：输入 → 检索 → 结果
+    const sBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('🔎 检索'))
+    if (!sBtn) throw new Error('RENDER-GHOST-46 未找到「🔎 检索」导航按钮')
+    await act(async () => { sBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    const sInput = tr.root.findAllByType('input').find(i2 => String(i2.props.placeholder || '').includes('输入关键词'))
+    if (!sInput) throw new Error('RENDER-GHOST-46 知识检索输入框缺失')
+    await act(async () => { sInput.props.onChange({ target: { value: '图形推理' } }) })
+    await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+    const sRun = tr.root.findAllByType('button').find(b => String(b.props.children) === '检索')
+    if (!sRun) throw new Error('RENDER-GHOST-46 知识检索执行按钮缺失')
+    await act(async () => { sRun.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    const ts46 = JSON.stringify(tr.toJSON())
+    if (!ts46.includes('sakib/判断推理/index.md')) throw new Error('RENDER-GHOST-46 检索结果未渲染')
+    ok('RENDER-GHOST-46b: 知识检索旅程（输入 → 检索 → 结果渲染）')
+    // ③ 方法参考：主题标签 → 读取全文
+    const mBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('📖 方法参考'))
+    if (!mBtn) throw new Error('RENDER-GHOST-46 未找到「📖 方法参考」导航按钮')
+    await act(async () => { mBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    const mTag = tr.root.findAllByType('button').find(b => String(b.props.children) === '行测')
+    if (!mTag) throw new Error('RENDER-GHOST-46 方法参考主题标签缺失')
+    await act(async () => { mTag.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 60)) })
+    const tm46 = JSON.stringify(tr.toJSON())
+    if (!tm46.includes('行测方法参考')) throw new Error('RENDER-GHOST-46 方法参考全文未渲染')
+    ok('RENDER-GHOST-46c: 方法参考旅程（主题标签 → 全文渲染）')
+    // 回 dashboard（不污染后续断言）
+    const dBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('📊 仪表盘'))
+    if (dBtn) { await act(async () => { dBtn.props.onClick() }); await act(async () => { await new Promise(r => setTimeout(r, 40)) }) }
   }
 
   tr.unmount()

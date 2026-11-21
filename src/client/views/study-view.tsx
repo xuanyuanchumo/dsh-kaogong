@@ -198,7 +198,14 @@ function KgMemBanner(props: KgMemBannerProps) {
       const draw = React.useCallback(async (mod, useSrs) => {
         // 队列还有题 → 直接取下一题（不重复请求）
         if (queueRef.current.length > 1) { takeNext(); return }
-        const data = await api('/questions?module=' + encodeURIComponent(mod || '判断推理') + '&count=6' + (useSrs ? '&sort=srs' : ''))
+        // cycle-46（用户确认项②·抽题器收敛）：practice 切到**纯池端点** /api/pool/questions
+        //（分层配额 L0 材料组/L1 带图/L2 五维/L3 普通——确定性保障），替代旧 /api/questions
+        //（池优先+目录回落双轨）。形状实测：池对象是旧对象超集且同形字段全兼容，
+        // SRS 回炉语义由前端 useSrs 走 /api/questions?sort=srs 保留（池端点无错题本语义）。
+        const url = useSrs
+          ? '/questions?module=' + encodeURIComponent(mod || '判断推理') + '&count=6&sort=srs'
+          : '/pool/questions?module=' + encodeURIComponent(mod || '判断推理') + '&count=6'
+        const data = await api(url)
         const list = data.questions || []
         if (!list.length) { queueRef.current = []; setQueueLen(0); setQ(null); return }
         queueRef.current = list

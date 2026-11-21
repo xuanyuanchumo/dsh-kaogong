@@ -1123,13 +1123,21 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
   const nav = (cl.match(/const NAV_GROUPS[\s\S]*?\n {6}\]/) || [''])[0]
   check('SMOKE-N-01 导航精简：一级入口保留仪表盘/模考/真题卷/专题/错题本/图谱/可观测',
     nav.includes("'dashboard'") && nav.includes("'exam'") && nav.includes("'papers'") && nav.includes("'topics'") &&
-    nav.includes("'wrongbook'") && nav.includes("'graph'") && nav.includes("'obs'"), nav ? 'ok' : 'NAV_GROUPS 未锚定')
+    nav.includes("'wrongbook'") && nav.includes("'graph'") && nav.includes("'observability'"), nav ? 'ok' : 'NAV_GROUPS 未锚定')
   check('SMOKE-N-01 导航精简：刷题/深度题库/图形推理/申论退出一级导航',
     !!nav && !/['"](?:practice|deepbank|tuxing|essay)['"]/.test(nav) &&
     !nav.includes('刷题') && !nav.includes('深度题库') && !nav.includes('图形推理') && !nav.includes('申论'))
   check('SMOKE-N-01 导航精简：四视图路由仍可达（cycle-24 注册表路由：VIEW_ROUTES 键位登记）',
     /practice: \{ comp: NativePracticeView/.test(cl) && /deepbank: \{ comp: NativeDeepBankView/.test(cl) &&
     /tuxing: \{ comp: NativeTuxingView/.test(cl) && /essay: \{ comp: NativeEssayView/.test(cl))
+  // cycle-46 幽灵视图补齐：plan/search/method 路由 + 导航可达 + obs→observability 统一
+  check('SMOKE-N-46 幽灵视图补齐：plan/search/method 三视图路由分发 + 导航可达',
+    /plan: \{ comp: NativePlanView/.test(cl) && /search: \{ comp: NativeSearchView/.test(cl) &&
+    /method: \{ comp: NativeMethodView/.test(cl) &&
+    nav.includes("'plan'") && nav.includes("'search'") && nav.includes("'method'"))
+  check('SMOKE-N-46b obs→observability 统一：路由键为 manifest 口径 + 旧键别名兜底',
+    /observability: \{ comp: NativeObsView/.test(cl) && !/  obs: \{ comp:/.test(cl) &&
+    /view === 'obs' \? 'observability'/.test(cl))
   // SMOKE-N-02 对话窗口瘦身
   const sv = readSrc('./src/client/views/study-view.tsx')
   check('SMOKE-N-02 对话窗口瘦身：KaogongQuickPractice 已完全移除',

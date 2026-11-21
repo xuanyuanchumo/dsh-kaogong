@@ -33,6 +33,7 @@ import { NativeReposView } from './views/repos-view.js'
 import { NativePoolView } from './views/pool-view.js'
 // cycle-18 花生十三体系方法论（消费 /api/huasheng13/*，自管数据视图）
 import { NativeHuasheng13View } from './views/huasheng13-view.js'
+import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan-view.js'
 
 ;(window as any).__ModuleLoader__.load({
   id: 'dsh-kaogong',
@@ -129,7 +130,10 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
         dashboard: { comp: NativeDashboardView, key: t => 'd' + t, props: () => ({ api }) },
         wrongbook: { comp: NativeWrongbookView, key: t => 'w' + t, props: () => ({ api, onGoPractice: () => setView('practice', { srs: 1 }) }) },
         graph: { comp: NativeGraphView, key: t => 'g' + t, props: () => ({ api, wsKey, statsApi: api, onGo: (v: any, params?: any) => setView(v, params || {}) }) },
-        obs: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onReload: () => setTick(t => t + 1) }) },
+        // cycle-46（用户确认项①·路由对齐）：manifest 声明 id 是 observability，路由键曾用 obs
+        //（三方对账假漂移第三形态：同名异键）——统一为 manifest 口径；旧 'obs' 键保留一行
+        // 别名分发（localStorage kg-native-view 可能存着旧键，读到了也能渲染）。
+        observability: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onReload: () => setTick(t => t + 1) }) },
         papers: { comp: NativePapersView, key: t => 'pp' + t, props: () => ({ api, initialSubject: viewParams.subject || '' }) },
         exam: { comp: NativeExamView, key: t => 'ex' + t, props: () => ({ api }) },
         practice: { comp: NativePracticeView, key: t => 'pr' + t + JSON.stringify(viewParams), props: () => ({ api, initialModule: viewParams.module || '', onGoWrongbook: () => setView('wrongbook') }) },
@@ -141,8 +145,14 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
         huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t, props: () => ({ api, initialSection: viewParams.section || '', onGo: (v: any, params?: any) => setView(v, params || {}) }) },
         topics: { comp: NativeTopicsView, key: t => 'tp' + t, props: () => ({ api, onGo: (v: any, params?: any) => setView(v, params || {}), initialModule: viewParams.module || '' }) },
         essay: { comp: NativeEssayView, key: t => 'es' + t + JSON.stringify(viewParams), props: () => ({ api, initialType: viewParams.type || '' }) },
+        // cycle-46（用户确认项①·幽灵视图补齐）：plan/search/method 在 manifest 声明、
+        // 服务端端点全部存活，但无路由无页面（声明漂移第四形态）。补齐为真页面，
+        // 视图组件在 views/plan-view.tsx（懒 import 经 bundler 静态编译）。
+        plan: { comp: NativePlanView, key: t => 'pn' + t, props: () => ({ api }) },
+        search: { comp: NativeSearchView, key: t => 'se' + t, props: () => ({ api }) },
+        method: { comp: NativeMethodView, key: t => 'me' + t, props: () => ({ api }) },
       }
-      const route = VIEW_ROUTES[view]
+      const route = VIEW_ROUTES[view] || VIEW_ROUTES[(view === 'obs' ? 'observability' : view)]
       const routeEl = route ? h(route.comp, { key: route.key(tick), ...route.props() }) : null
 
       // 通道未就绪守卫（cycle-24 取数下沉时曾误删 → channel.kind 崩溃进 ErrorBoundary，render 实测抓住）
@@ -159,11 +169,12 @@ import { NativeHuasheng13View } from './views/huasheng13-view.js'
       // 放在专题下的方法论下即可」）——它的入口在专题枢纽「📖 方法论」分区内；
       // view==='huasheng13' 的分发保留，用于深链与枢纽内跳转。
       const NAV_GROUPS: Array<{ id: string; label: string; items: Array<[string, string]> }> = [
-        { id: 'learn', label: '学习', items: [['dashboard', '📊 仪表盘'], ['exam', '⏱ 模考']] },
+        { id: 'learn', label: '学习', items: [['dashboard', '📊 仪表盘'], ['plan', '🗓 计划'], ['exam', '⏱ 模考']] },
         // cycle-34 阶段 1：统一题库收敛进「题库」组（纪律㉛：新增业务视图不新增一级导航）
         { id: 'bank', label: '题库', items: [['papers', '📚 真题卷'], ['topics', '🎯 专题'], ['pool', '🗄️ 统一题库']] },
-        { id: 'review', label: '复盘', items: [['wrongbook', '📕 错题本'], ['graph', '🕸️ 图谱'], ['obs', '📡 可观测']] },
-        { id: 'admin', label: '管理', items: [['repos', '📦 题库管理']] },
+        { id: 'review', label: '复盘', items: [['wrongbook', '📕 错题本'], ['graph', '🕸️ 图谱'], ['observability', '📡 可观测']] },
+        // cycle-46：搜索/方法参考补齐为真页面（幽灵视图根治）——工具属性 → 归「查阅」组
+        { id: 'ref', label: '查阅', items: [['search', '🔎 检索'], ['method', '📖 方法参考'], ['repos', '📦 题库管理']] },
       ]
       return h('div', { className: 'kg-page', role: 'main', 'aria-label': t('title') },
         h('div', { className: 'kg-page-head' },

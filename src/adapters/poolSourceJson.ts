@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { deriveCanonicalId, putRelation, putQuestionSource, putAnalysis, contentFingerprint, withTx } from './poolDb.js'
 import { prepareQuestionUpsert, upsertQuestionBundle } from './poolUpsert.js'
+import { CAT_NAMES as TUXING_CATS } from './tuxing.js'
 
 /** JSON 文件安全读取（损坏/缺失 → null，绝不抛） */
 function readJson(path: string): any {
@@ -145,13 +146,12 @@ export function ingestXingceAppSource(ctx: any): any {
 
 /* ══ P3 · gk-tuxing（354 题 · QDATA · 纯图 + cat 规律）══ */
 
-/** gk-tuxing 13 类规律词表（cat → 中文标签；rule_type 维度——tuxingApi 同源） */
-const TUXING_CATS: Record<string, string> = {
-  symmetry: '对称性', quantity: '数量规律', position: '位置规律', style: '样式规律',
-  spatial: '空间重构', cross: '立体图形', fold: '折纸盒', view: '三视图',
-  section: '截面图', group: '分类分组', series: '规律序列', analogy: '类比推理',
-  attr: '属性规律',
-}
+/** gk-tuxing 13 类规律词表（cat → 中文标签；rule_type 维度）——
+ *  cycle-46（用户确认项③·词表漂移根治）：原 TUXING_CATS 是编造的另一套键（quantity/
+ *  spatial/cross/fold/view/section/group/series/analogy/attr），与上游 gk-tuxing 真实
+ *  cat 词表仅 3/13 命中 → 池内 259/354 行 rule_type 落英文码。正解 = **从上游适配器
+ *  tuxing.ts 的 CAT_NAMES 导入**（单一事实源纪律：同一业务语义全仓只有一个词表）。
+ *  TUXING_CATS = CAT_NAMES（导入别名，消费点不变）。 */
 
 export function ingestTuxingSource(ctx: any): any {
   const { repoRoot, db } = ctx
