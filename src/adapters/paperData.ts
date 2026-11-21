@@ -20,9 +20,9 @@
  *  - 快照根写入 schemaVersion: 2；读取时 schemaVersion !== 2 一律视为旧版失效 → 现场重建
  *    （旧快照无此字段自动重建，首次约 16s，属预期）。
  */
-import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, basename, relative, dirname } from 'node:path'
-import { parseFrontmatter, parseOverview, parsePaperText, guessXingceType } from './paperParse.js'
+import { parseFrontmatter, parseOverview, parsePaperText, } from './paperParse.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})

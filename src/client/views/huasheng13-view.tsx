@@ -23,14 +23,14 @@
  *
  * ## 硬性纪律（本项目历史事故沉淀）
  *  ① 单 combo 作用域：本模块**全部**顶层标识符带 hs13 / Hs13 前缀（教训⑨：撞名即重复声明 SyntaxError）。
- *  ② 子视图一律 `h(Comp, props)` 真组件挂载，禁止把含 hook 的函数当普通函数直调（R9 = 宿主 GUI 白屏）。
+ *  ② 子视图一律 `(Comp, props)` 真组件挂载，禁止把含 hook 的函数当普通函数直调（R9 = 宿主 GUI 白屏）。
  *  ③ 事件一律 onClick 驼峰（R6：小写 onclick 被 React 静默吞掉）。
  *  ④ 所有接口字段视为可选，缺失即卡片级降级；**绝不输出 role="alert"**（render 测试全量断言）。
  *  ⑤ 零依赖：markdown 手写渲染，不引任何 markdown 库。
  *  ⑥ 配色只用既有 CSS 变量 + 接口返回的模块 color，不硬编码新色板。
  *  ⑦ 响应式：卡片网格 repeat(auto-fit,minmax(...)) 自适应（<720px 自然单列，>=720px 两栏）。
  */
-import { h, React, Stat, Bar, Card, KV_TAG, KV_BTN, OptionRow, KgLoad } from '../ui-kit.js';
+import { React, Stat, Bar, Card, KV_TAG, KV_BTN, OptionRow, KgLoad } from '../ui-kit.js';
 import { hs13Num, Hs13Markdown, Hs13Snippet } from './huasheng13-md.js';
 /* ═══════════════════ 常量（全部 hs13 前缀） ═══════════════════ */
 /** 五分区定义（顺序即展示顺序；label 带 emoji 与既有导航口径一致） */
@@ -152,7 +152,7 @@ function hs13CanAutoGrade(it) {
 /** 覆盖率环形进度 props（纯 SVG，无 hook）。pct 0-1，中心显示百分比。 */
 interface Hs13DonutProps { pct?: any; size?: any; stroke?: any; color?: any; children?: any }
 /** 覆盖率环形进度（纯 SVG，无 hook）。pct 0-1，中心显示百分比。 */
-function Hs13Donut(props) {
+function Hs13Donut(props: Hs13DonutProps) {
     const pct = hs13Clamp01(props.pct);
     const size = hs13Num(props.size) || 96;
     const stroke = hs13Num(props.stroke) || 9;
@@ -181,7 +181,7 @@ function Hs13Donut(props) {
 /** 体系总览的模块卡 props：图标 + 名称 + 权重/目标用时/题量 + 覆盖率条 + 语料统计 */
 interface Hs13ModuleCardProps { m?: any; cov?: any; onPick?: any }
 /** 体系总览的模块卡：图标 + 名称 + 权重/目标用时/题量 + 覆盖率条 + 语料统计 */
-function Hs13ModuleCard(props) {
+function Hs13ModuleCard(props: Hs13ModuleCardProps) {
     const m = props && props.m ? props.m : {};
     const cov = props && props.cov ? props.cov : null;
     const color = hs13ColorOf(m);
@@ -217,7 +217,7 @@ function Hs13ModuleCard(props) {
 /* ═══════════════════ ① 体系总览 ═══════════════════ */
 /** 体系总览分区 props（api：学习服务通道；onPick：点模块卡跳目录浏览） */
 interface Hs13OverviewProps { api?: any; onPick?: any }
-function Hs13Overview(props) {
+function Hs13Overview(props: Hs13OverviewProps) {
     const api = props && props.api;
     const [cat, setCat] = React.useState(null);
     const [cov, setCov] = React.useState(null);
@@ -318,7 +318,7 @@ function Hs13Overview(props) {
 /** 单篇全文阅读器 props（自管 fetch；key=file 由父组件控制重挂载，切换即干净重取） */
 interface Hs13DocReaderProps { api?: any; file?: any }
 /** 单篇全文阅读器（自管 fetch；key=file 由父组件控制重挂载，切换即干净重取） */
-function Hs13DocReader(props) {
+function Hs13DocReader(props: Hs13DocReaderProps) {
     const api = props && props.api;
     const file = String((props && props.file) || '');
     const [doc, setDoc] = React.useState(null);
@@ -381,7 +381,7 @@ function Hs13DocReader(props) {
 }
 /** 目录浏览分区 props（initial* 供跨分区跳转注入） */
 interface Hs13CatalogProps { api?: any; initialModule?: any; initialFile?: any }
-function Hs13Catalog(props) {
+function Hs13Catalog(props: Hs13CatalogProps) {
     const api = props && props.api;
     const [cat, setCat] = React.useState(null);
     const [err, setErr] = React.useState('');
@@ -463,7 +463,7 @@ function Hs13Catalog(props) {
 /* ═══════════════════ ③ 检索 ═══════════════════ */
 /** 检索分区 props */
 interface Hs13SearchProps { api?: any }
-function Hs13Search(props) {
+function Hs13Search(props: Hs13SearchProps) {
     const api = props && props.api;
     const [q, setQ] = React.useState('');
     const [res, setRes] = React.useState(null);
@@ -578,7 +578,7 @@ function Hs13Search(props) {
 /* ═══════════════════ ④ 配套练习 ═══════════════════ */
 /** 配套练习分区 props（initialFile 供检索跳题注入） */
 interface Hs13PracticeProps { api?: any; initialFile?: any }
-function Hs13Practice(props) {
+function Hs13Practice(props: Hs13PracticeProps) {
     const api = props && props.api;
     const [files, setFiles] = React.useState([]);
     const [file, setFile] = React.useState(String((props && props.initialFile) || 'ziliao-lianxi'));
@@ -799,8 +799,8 @@ function Hs13Practice(props) {
 }
 /* ═══════════════════ ⑤ 白盒链路 ═══════════════════ */
 /** 白盒链路分区 props */
-interface Hs13TraceProps { api?: any }
-function Hs13Trace(props) {
+interface Hs13TraceProps { api?: any, onGo?: (v: string, params?: any) => void }
+function Hs13Trace(props: Hs13TraceProps) {
     const api = props && props.api;
     const [tr, setTr] = React.useState(null);
     const [err, setErr] = React.useState('');
@@ -969,8 +969,8 @@ function hs13Kv(k, v) {
  * 带 data-kg-hs13-tab 锚点供测试定位（分区是组件内 tab，非路由）。
  */
 /** NativeHuasheng13View props（initialSection 供宿主路由注入口） */
-interface NativeHuasheng13ViewProps { api?: any; initialSection?: string }
-export function NativeHuasheng13View(props) {
+interface NativeHuasheng13ViewProps { api?: any; initialSection?: string, key?: string }
+export function NativeHuasheng13View(props: NativeHuasheng13ViewProps) {
     const api = props && props.api;
     const [sec, setSec] = React.useState(String((props && props.initialSection) || 'overview'));
     const [visited, setVisited] = React.useState({ overview: true });

@@ -14,7 +14,7 @@
  * 前缀纪律：Qw* 顶层名全局唯一（combo 单作用域，教训⑨）。
  */
 
-import { h, React } from '../ui-kit.js'
+import { React } from '../ui-kit.js'
 
 
 /** QwLightbox props：src 必传；alt 可选；onClose 由宿主传入 */

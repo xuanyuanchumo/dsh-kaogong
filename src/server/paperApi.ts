@@ -13,7 +13,7 @@
 import { buildPaperIndex, loadPaper, buildTopics, listPapers, gradeEssay, gradeEssayArticle } from '../adapters/paperData.js'
 import { buildTopicTree } from './topicTree.js'
 import { createReadStream, existsSync, statSync } from 'node:fs'
-import { join, resolve, extname, dirname, sep } from 'node:path'
+import { resolve, extname, dirname, sep } from 'node:path'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})

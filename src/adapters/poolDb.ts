@@ -19,7 +19,7 @@
  *   库文件位于**用户数据根**（`~/.dsh/kaogong/`），不入包——
  *   cycle-21 issue#2 教训：市场升级 = 包目录整目录替换，包内数据必然丢失。
  */
-import { existsSync, mkdirSync, renameSync, statSync } from 'node:fs'
+import { mkdirSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 

@@ -46,8 +46,6 @@ const OBS_STATE_META: any = {
   red: { dot: '#ef4444', fg: '#dc2626', bg: 'rgba(239,68,68,.14)', border: '#ef4444', label: '未声明/漂移（消费 ∧ ¬声明，= reconciliation.missingProducers）' },
   gray: { dot: 'var(--text-faint)', fg: 'var(--text-muted)', bg: 'rgba(148,163,184,.14)', border: 'var(--text-faint)', label: '未生产（遥测请求数 = 0）' },
 }
-/** 三态优先级（聚合胶囊取组内最差态着色：红 > 琥珀 > 绿） */
-const OBS_STATE_RANK: any = { red: 0, amber: 1, ok: 2, gray: 3 }
 
 /** 生命周期阶段兜底顺序（life.stages 缺席时仍可画泳道；与 CAPABILITIES.lifecycle 一致） */
 const OBS_STAGE_ORDER: string[] = ['load', 'apply', 'server-start', 'tools-register', 'runtime-publish', 'serve', 'cleanup']

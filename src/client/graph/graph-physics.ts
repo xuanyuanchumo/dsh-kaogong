@@ -28,10 +28,6 @@ import { graphHash, graphClamp, graphShade, GRAPH_NODE_META, GRAPH_EDGE_META } f
       // 弹簧与向心压过斥力 → 全图塌缩成中心一团（标签 100% 重叠、不可读）。
       // 现按「节点数自适应」标定：斥力随 V 放大、弹簧随 V 拉长、向心减半。
       const BASE_R = 300, BASE_W = 520, BASE_H = 380
-      const VN = Math.max(1, nodesIn.length)
-      const LINK = Math.round(110 + Math.min(70, VN * 0.5))          // 140 节点 → 180
-      const REP = Math.round(9000 * Math.max(1, VN / 60))            // 140 节点 → 21000
-      const GRAVITY = 0.0016                                          // 向心：0.004 → 0.0016
       for (let i = 0; i < nodesIn.length; i++) {
         const n = nodesIn[i] || {}
         const id = String(n.id == null ? 'n' + i : n.id)

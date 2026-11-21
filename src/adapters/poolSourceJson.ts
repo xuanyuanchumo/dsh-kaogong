@@ -16,7 +16,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { deriveCanonicalId, putRelation, putQuestionSource, putAnalysis, contentFingerprint, withTx } from './poolDb.js'
+import { deriveCanonicalId, putAnalysis, contentFingerprint, withTx } from './poolDb.js'
 import { prepareQuestionUpsert, upsertQuestionBundle } from './poolUpsert.js'
 import { CAT_NAMES as TUXING_CATS } from './tuxing.js'
 
@@ -87,7 +87,7 @@ function stripKeepImg(s: any): string {
 /* ══ P1 · xingce-app（22298 题 · 6 模块 JSON）══ */
 
 export function ingestXingceAppSource(ctx: any): any {
-  const { repoRoot, db, opts = {} } = ctx
+  const { repoRoot, db } = ctx
   const dataDir = join(repoRoot, 'xingce-app', 'web', 'public', 'data')
   const manifest = readJson(join(dataDir, 'manifest.json'))
   if (!manifest || !manifest.modules) return { source: 'xingce-app', skipped: true, reason: 'manifest.json 缺失或损坏' }

@@ -22,7 +22,7 @@
  * 宿主加载器契约（单文件 combo、无行首 export、factory 返回 {inject, apply}）不变。
  */
 
-import { h, React, MOUNT_PATH, PORTS, APP_NAME, Stat, KaogongErrorBoundary } from './ui-kit.js'
+import { h, React, MOUNT_PATH, PORTS, APP_NAME, KaogongErrorBoundary } from './ui-kit.js'
 // cycle-13 对话窗口瘦身：会话练题控件已删除（会话输入区 slot 随之下线）
 import { NativeDashboardView, NativePracticeView, NativeWrongbookView, NativeTuxingView, NativeDeepBankView } from './views/study-view.js'
 import { NativeExamView, NativePapersView, NativeTopicsView, NativeEssayView } from './views/papers-view.js'
@@ -118,8 +118,8 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
 
       // cycle-24 P0-1：取数下沉段整体移除 —— dashboard/wrongbook/graph/obs 四视图改为自治 fetch
       //（原 90 行 data.kind 分发 + Promise.all 整包下传删除；各视图错误各自就地降级）
-      /** 自管视图名单（组件内自行 fetch，不经父层）：cycle-24 起为全部视图 */
-      const SELF_MANAGED_VIEWS = new Set(['papers', 'topics', 'essay', 'exam', 'practice', 'deepbank', 'tuxing', 'repos', 'huasheng13'])
+      /** 自管视图名单（组件内自行 fetch，不经父层）：cycle-24 起为全部视图（cycle-48 全部收敛进 VIEW_ROUTES，本名单留作契约存档） */
+      void new Set(['papers', 'topics', 'essay', 'exam', 'practice', 'deepbank', 'tuxing', 'repos', 'huasheng13'])
 
       /**
        * cycle-24 P0-2：视图路由注册表（唯一分发事实源）。
@@ -395,6 +395,8 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
           } catch { /* matchMedia/MutationObserver 缺席 → 首次 apply 已兜底 */ }
           return { apply }
         })() : { apply: () => {} }
+        void theme  // cycle-48：副作用层（监听器挂载在 apply 内）——返回值 {apply} 仅供热重载扩展
+
 
         // 样式注入双保险（R11 取证：combo 环境 `styles` 内置全局可能不存在，
         // 直接 styles.insert 抛 ReferenceError → 条目激活失败）

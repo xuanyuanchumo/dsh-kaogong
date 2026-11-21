@@ -4,7 +4,7 @@
  * 单一职责：把 markdown 试卷文本解析成 {meta, materials, questions}。
  * 行测/申论两套形态在此收敛，paperData 只负责索引与 API 编排。
  */
-import { basename } from 'node:path'
+import { } from 'node:path'
 
 /** YAML frontmatter（本仓库是简单 key: "value" 形态） */
 export function parseFrontmatter(content: string): Record<string, string> {

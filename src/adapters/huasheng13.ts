@@ -25,7 +25,7 @@ import {
   readFileSync, readdirSync, statSync, existsSync,
   writeFileSync, mkdirSync, renameSync, unlinkSync,
 } from 'node:fs'
-import { join, resolve, basename, dirname } from 'node:path'
+import { join, resolve, basename, } from 'node:path'
 import { createHash } from 'node:crypto'
 import { countBlocks, tokenize, termKind, countOccurrences, pickExcerpt, clampInt, numOr } from './huasheng13-text.js'
 // 对外导出面保持不变：这两个工具原定义在本文件，现由文本模块提供

@@ -101,7 +101,12 @@ test('C25-01..05 渲染域：七段组件 + 答题卡四态 + 图片放大三交
   expect(/function QwLightbox/.test(lbSrc) && lbSrc.includes('wheelZoom') && lbSrc.includes('dragStart') && lbSrc.includes('Escape')).toBe(true)
   const sv = readSrc('src/client/views/study-view.tsx')
   const pv = readSrc('src/client/views/papers-view.tsx')
-  expect(/QwQuestionCard/.test(sv) && /QwExamNavigator/.test(pv) && (pv.match(/QwQuestionCard/g) || []).length >= 3).toBe(true)
+  // C25-04 接入面：practice/exam/papers/essay 消费 QwQuestionCard——
+  // cycle-48 修正：QwExamNavigator 在 papers-view 仅 import 未 JSX 消费（QwPaperMode
+  // 内部消费答题卡），接入面断言改为「study-view QwPaperMode 间接接入」
+  const svQw = readSrc('src/client/views/study-view.tsx')
+  expect(/QwQuestionCard/.test(sv) && /QwPaperMode/.test(pv) && (pv.match(/QwQuestionCard/g) || []).length >= 3).toBe(true)
+  expect(/QwPaperMode/.test(svQw), 'study-view 间接接入面（QwPaperMode 内部消费 QwQuestionCard）').toBe(true)
   expect((pv.match(/collapsedMats/g) || []).length >= 6 && (pv.match(/toggleMat/g) || []).length >= 4 && /jumpToMaterial/.test(pv)).toBe(true)
 })
 

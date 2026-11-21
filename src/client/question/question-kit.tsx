@@ -18,7 +18,7 @@
  *  - 零模块级可变状态（R7 热重载竞态）
  */
 
-import { h, React, entries, RichText, OptionRow, DimBlock, SourceBadge, KV_TAG, KV_BTN } from '../ui-kit.js'
+import { React, entries, RichText, OptionRow, DimBlock, SourceBadge, KV_TAG, KV_BTN } from '../ui-kit.js'
 import { QwLightbox } from './question-lightbox.js'
 
 /* ══════════════ Lightbox 宿主（context 驱动，全组件域共享单实例） ══════════════ */
@@ -41,24 +41,7 @@ export function QwZoomHost({ children }: QwZoomHostProps) {
   )
 }
 
-/** 内部辅助：在 QwZoomHost 内时渲染可点击 img，否则退化静态 img（无条件守卫，零破坏） */
-function QwImg(props: { src: string; alt?: string; style?: any }) {
-  const openLightbox: any = React.useContext(QwZoomCtx)
-  const { src, alt, style } = props
-  if (typeof openLightbox !== 'function') {
-    return <img src={src} alt={alt || '题目配图'} loading="lazy" style={style} />
-  }
-  return (
-    <img
-      src={src}
-      alt={(alt || '题目配图') + '（点击放大）'}
-      loading="lazy"
-      style={{ ...style, cursor: 'zoom-in' }}
-      title="点击放大查看"
-      onClick={(e: any) => { e.stopPropagation(); openLightbox(src, alt) }}
-    />
-  )
-}
+
 
 /* ══════════════ 数据契约：QwQuestion（七段规范化输入） ══════════════ */
 

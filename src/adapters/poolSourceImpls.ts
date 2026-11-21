@@ -11,7 +11,7 @@
  * ── 归一铁律（设计 §9c.3）──
  *   ① 图片只引用不复制    ② HTML 剥除必须枚举字段（img 占位保留）   ③ 可空字段不臆造
  */
-import { existsSync, statSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { deriveCanonicalId, putRelation, putQuestionSource, putSource, putAnalysis, contentFingerprint, setMeta, withTx } from './poolDb.js'
 import { prepareQuestionUpsert, upsertQuestionBundle } from './poolUpsert.js'

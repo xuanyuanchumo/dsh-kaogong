@@ -6,7 +6,7 @@
  * 空态/加载骨架 + 视觉现代化（精灵渐变/脉冲环/弧线/玻璃拟态）。
  */
 
-import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, MOUNT_PATH, KgChips, KgLoad, KgErr } from '../ui-kit.js'
+import { h, React, entries, Stat, Bar, Card, G_BTN, G_BTN_ON, G_TAG, MOUNT_PATH, KgChips, } from '../ui-kit.js'
 import { createGraphEngine } from '../graph/graph-engine.js'
 import { graphKeyCommand } from '../graph/graph-transition.js'
 import { graphFetchSubgraph, graphNormalizeNeighborhood, graphDeriveImpact } from '../graph/graph-subgraph.js'
@@ -31,7 +31,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       /* ── 自治取数（R9：hooks 全部在组件顶部，跨渲染数量恒定） ── */
       const [graphData, setGraphData] = React.useState(null)
       const [statsData, setStatsData] = React.useState(null)
-      const [fetchErr, setFetchErr] = React.useState(null)
+      const [, setFetchErr] = React.useState(null)
       const [graphLoading, setGraphLoading] = React.useState(true)
       React.useEffect(() => {
         let cancelled = false

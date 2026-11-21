@@ -16,7 +16,7 @@
  */
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { putKnowledge, putAsset, putSource, putRelation, withTx, poolStats } from './poolDb.js'
+import { putKnowledge, putAsset, putSource, putRelation, withTx, } from './poolDb.js'
 
 /** 源内文件清单（relPath + size + mtime），限深 2；失败返回空 */
 function listFiles(root: string, exts: string[], depth = 2, prefix = ''): Array<{ rel: string, size: number, mtime: number }> {

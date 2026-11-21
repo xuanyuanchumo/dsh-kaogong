@@ -16,7 +16,7 @@
  *  - 只有对错没有选项：允许 result=unknown / 无所选答案（纸上只有叉号也能录）。
  */
 import { createHash } from 'node:crypto'
-import { naokuQuestions, naokuReady, searchQuestionsByStem } from '../adapters/naoku.js'
+import { naokuReady, searchQuestionsByStem } from '../adapters/naoku.js'
 import { getRandomQuestions, XINGCE_MODULES } from '../adapters/repoData.js'
 import { buildPaperIndex, loadPaper } from '../adapters/paperData.js'
 
