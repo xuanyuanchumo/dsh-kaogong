@@ -25,7 +25,7 @@ import { pathToFileURL } from 'node:url'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const REPO_ROOT = path.resolve(HERE)                              // .../kaogong/dsh-kaogong（本插件根）
+const REPO_ROOT = path.resolve(HERE, '..', '..')                  // .../kaogong/dsh-kaogong（本插件根；cycle-47 迁入 tests/e2e/ 上跳两级）
 const WORKSPACE_ROOT = path.resolve(REPO_ROOT, '..')              // .../kaogong（当前会话工作区）
 // _dshcli 与 dsh-kaogong 同在工作区根下：kaogong/_dshcli
 const DSH_CLI_ROOT = path.join(WORKSPACE_ROOT, '_dshcli')
@@ -165,4 +165,12 @@ try {
   console.log(`[loader-test] 已清理临时目录与 Loader entry：${!fs.existsSync(TEMP) ? 'OK' : '部分残留（下次启动会由 OS 回收）'}`)
 }
 
-process.exit(failed ? 1 : 0)
+// cycle-47：迁入 tests/e2e/ 后保持 node 直跑形态（npm run test:loader）。
+// vitest 聚合时（npm run test:all 走 npx vitest run tests/）跳过本文件——
+// 真实 Loader 测试自带子进程/临时目录/exit 语义，与 vitest 进程模型冲突（process.exit 拦截），
+// 其独立性由 test:loader 专项承担（DSH 测试策略：集成/e2e 车道分离于单元车道）。
+if (process.env.VITEST_POOL_ID || process.env.VITEST) {
+  console.log('[loader-test] vitest 聚合车道跳过（专项：npm run test:loader）')
+} else {
+  process.exit(failed ? 1 : 0)
+}
