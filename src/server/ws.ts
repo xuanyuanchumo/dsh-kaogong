@@ -37,7 +37,7 @@ export function makeWsStore(progressDir) {
           return { ns: f.replace(/\.json$/, ''), day: p.day, answered: p.answered, correct: p.correct,
             rate: p.answered ? Math.round((p.correct / p.answered) * 100) : 0, lastActive: st.mtimeMs, label: p.label || f.replace(/\.json$/, '') }
         } catch { return null }
-      }).filter(Boolean).sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0))
+      }).filter((x): x is NonNullable<typeof x> => x !== null).sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0))
     } catch { return [] }
   }
   return { wsKey, loadProgress, saveProgress, listWorkspaces }
