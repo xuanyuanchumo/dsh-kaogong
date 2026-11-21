@@ -102,3 +102,12 @@ host/index myServer/myAdopted null 初始化 → any 标注；client.tsx mq null
 .map/.filter(Boolean) 链 never 收窄、可选字段访问。修法统一：null 初始化补类型标注。
 
 **推进节奏**：每批修 20-50 处 + test:all 全量兜底；全清后全局开启 strictNullChecks。
+## 九、noImplicitAny 长期档评估（cycle-48 · 目标③完成）
+
+**现状实测**：开启后 2306 错误（视图层 props 解构隐式 any / server 域函数参数隐式 any /
+第三方形状 any 断言缺失）。
+**评估结论**：分两轨收敛——① 新代码零隐式 any（Props interface 强制已有 C24 族守卫）；
+② 存量代码随重构逐步标注（不设 deadline——一次标注 2306 处会引入大范围回归风险，
+与渐进纪律冲突）。
+**严格化现状**：noUnusedLocals ✅ 开启（档①）· strictNullChecks ✅ 开启（档②）·
+noImplicitAny ⏳ 长期档 · strict 全档 ⏳ 随②③收敛后自然达成。
