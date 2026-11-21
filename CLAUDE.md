@@ -4,7 +4,7 @@
 
 ## Commands
 - Build/类型门: `npm run build`（**tsc + scripts/bundle-client.mjs**：类型错误阻断 + 多文件产物拓扑序合并为宿主要求的单 combo）。**改完 .ts 必须 build（宿主编织的是 dist），改完任何 src/client/*.ts 也必须 build（client 产物是 bundler 合并的，裸 tsc 会把 dist/client/client.js 重写回裸 ESM → 宿主拒绝加载）**
-- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**262 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + cycle-13 省份维度 R-P/R-N + cycle-15 记忆 R-MEM/三布局/流动粒子/白盒三件套 + **cycle-16/17 题库管理 R-P-01..06（/api/repos* 控制面+数据根四级解析+崩溃安全静态守卫+跨工作区缓存分槽隔离）**）+ `node render.test.mjs`（**50 断言**，真实 React 18 + 真实 client.js 集成渲染，含专题枢纽/省份 chips/白盒流动图/图谱升级包/记忆跳回/**C16 题库面板「关于本项目」卡与安装请求**/**C18 方法论五分区+检索交互+obs 方法论链路卡**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
+- Test 全量: `npm run test:all` = `node smoke.test.mjs`（**437 断言**，独立端口段 8495，publishRuntime=false，含 combo 格式/R9/R11/R8/兼容声明静态守卫 + v1.6/v1.7 真题卷·申论评改·配图·模考·大作文·深度题库端到端 + cycle-13 省份维度 R-P/R-N + cycle-15 记忆 R-MEM/三布局/流动粒子/白盒三件套 + **cycle-16/17 题库管理 R-P-01..06（/api/repos* 控制面+数据根四级解析+崩溃安全静态守卫+跨工作区缓存分槽隔离）**）+ `node render.test.mjs`（**66 断言**，真实 React 18 + 真实 client.js 集成渲染，含专题枢纽/省份 chips/白盒流动图/图谱升级包/记忆跳回/**C16 题库面板「关于本项目」卡与安装请求**/**C18 方法论五分区+检索交互+obs 方法论链路卡**）。**两者都已接线 bundler**（scripts 先 tsc 再合并）
 - **沙箱验证（禁主力直测）**: `node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`（token 行取 URL；插件崩只崩沙箱）
 - 热更新重载: `plugin_manager set_plugin include:kaogong enabled=false → true`（fiber 重挂载）
 - 安装/重装: `plugin_manager remove_bundle dsh-kaogong → install_bundle <绝对路径>`

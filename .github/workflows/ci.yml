@@ -11,16 +11,68 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # 提交信息校验需要完整历史
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
       - name: Install (no runtime deps — registry-free)
         run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      # ── 门禁 1：提交信息格式（BL-PROC-02）────────────────────────
+      # 只在 PR 上校验新增提交，避免历史提交一次性阻断。
+      - name: Commit message gate
+        if: github.event_name == 'pull_request'
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          fail=0
+          for sha in $(git rev-list "$base..$head"); do
+            msg=$(git log -1 --pretty=%s "$sha")
+            printf '%s\n' "$msg" > /tmp/cm.txt
+            if ! node scripts/git-hooks/commit-msg.mjs /tmp/cm.txt >/dev/null 2>&1; then
+              echo "::error::提交 $sha 信息不合规：$msg"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "规范见 CONTRIBUTING.md §二"
+            exit 1
+          fi
+          echo "提交信息全部合规"
+        continue-on-error: false
+
+      # ── 门禁 2：类型门 ─────────────────────────────────────────
       - name: Type gate
         run: npx tsc --noEmit
+
+      # ── 门禁 3：构建门（含 combo 产物形态硬守卫）──────────────────
       - name: Build
         run: npm run build
+
+      # ── 门禁 4：文档门禁（BL-DOC-02）────────────────────────────
+      - name: Docs gate
+        run: node scripts/docs/check-docs.mjs
+
+      # ── 门禁 5：文档事实源新鲜度（BL-DOC-01）─────────────────────
+      # 只校验可从 manifest 派生的能力计数；断言数不属于事实源。
+      - name: Facts freshness gate
+        run: |
+          node scripts/docs/gen-facts.mjs --check || {
+            echo "::error::docs/facts.json 已过期。本地运行：node scripts/docs/gen-facts.mjs 并提交"
+            exit 1
+          }
+          node scripts/docs/check-facts.mjs
+
+      # ── 唯一质量门：测试退出码 ───────────────────────────────────
+      # 不再做「断言数只增不减」之类的自我声明式门禁——那比对的是提交进仓库的数字，
+      # 不是测试真实结果；测试全绿本身就是唯一可信的质量信号。
+      # Loader 真实入口测试依赖开发期 Cordis Loader（_dshcli/node_modules），CI keyless 环境没有，
+      # 故不在 CI 跑；它在本地 `npm run test:all` 中随 dev 依赖执行（见 loader.test.mjs 注释）。
       - name: Smoke
         run: node smoke.test.mjs
+
       - name: Render
         run: node render.test.mjs

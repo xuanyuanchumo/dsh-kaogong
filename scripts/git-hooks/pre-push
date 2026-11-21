@@ -1,0 +1,3 @@
+#!/bin/sh
+# git pre-push 钩子包装器 —— 分支名/backlog/卫生检查（BL-PROC-02/04）
+exec node "$(dirname "$0")/pre-push.mjs" "$@"

@@ -4,11 +4,13 @@
 
 ```
         ┌─────────────────────────────┐
-   ⑤    │ 真机（沙箱 GUI 浏览器）      │  人工+Playwright，5–10 min
+   ⑥    │ 真机（沙箱 GUI 浏览器）      │  人工+Playwright，5–10 min
         ├─────────────────────────────┤
-   ④    │ render.test.mjs  50 断言     │  真实 React 18 + 真实 client.js，~8s
+   ⑤    │ loader.test.mjs  17 断言     │  真实 Cordis Loader + 三层隔离，~5s
+         ├─────────────────────────────┤
+   ④    │ render.test.mjs  66 断言     │  真实 React 18 + 真实 client.js，~8s
         ├─────────────────────────────┤
-   ③    │ smoke.test.mjs   262 断言    │  真实 server + 真实数据，~25s
+   ③    │ smoke.test.mjs   437 断言    │  真实 server + 真实数据，~25s
         ├─────────────────────────────┤
    ②    │ npm run build（tsc 类型检查+编译+bundler 合并 13 模块）│  ~4s
         └─────────────────────────────┘
@@ -28,8 +30,8 @@
 ```bash
 cd dsh-kaogong
 npm run build              # tsc：类型检查 + 产出 dist + bundler 合并
-node smoke.test.mjs        # 必须 262/262
-node render.test.mjs       # 必须 50/50
+node smoke.test.mjs        # 必须 437/437
+node render.test.mjs       # 必须 66/66
 ```
 
 输出必须贴进交付说明。任一失败不得提交。
@@ -39,7 +41,8 @@ node render.test.mjs       # 必须 50/50
 ### 2b.1 smoke HS13-01..10（`smoke.test.mjs:394-791`，55 条 `check`）
 
 > 位置纪律（教训⑧+⑤）：本块在 §11 之后、**§12 崩溃安全（`server.close()`）之前**；块内无长阻塞（索引快照命中即返回）。
-> 计数口径：静态 `check('` 调用点 273 处（含依赖数据就绪的条件分支），运行态基线 **262**；其中 HS13 段 55 条。
+> 计数口径：静态 `check('` 调用点 454 处（含依赖数据就绪的条件分支），运行态基线 **437**；其中 HS13 段 55 条。
+> 注：这些数字仅供读者了解规模，**不是门禁**——断言数可被随手改且不等于质量，质量只看 `npm run test:all` 是否全绿。
 
 | 组 | 断言要点（真实断言，非 length>0） |
 |---|---|
@@ -188,5 +191,9 @@ anic_flows_archive   # 归档到 .cycles/archive/cycle-N
 ## 七、测试隔离
 
 - smoke 用独立端口段 `8495+`，`publishRuntime: false`，自清理 `PROJ_*` 命名空间。
-- 绝不 adopt 到正在运行的实例（会误判「改了没生效」）。
-- 跑完确认真实端口（8400/8401）没有被测试进程占用。
+- **loader.test.mjs 三层隔离**（BL-SEC-01，详见 [ISOLATION.md](./ISOLATION.md)）：
+  `KG_DATA_DIR`/`KG_REPOS_DIR` 临时目录 + `DSH_HOME` 临时目录 + `KG_PORT=18400`，
+  并断言 `status.pid === process.pid`（绝不 adopt 既有实例——因为 `startServer` 默认会 adopt 8400 的主力实例，实测假阳性）。
+- **沙箱 profile 必须配合独立 `DSH_HOME` 或 `KG_DATA_DIR`**：数据根按用户而非按 profile 隔离，
+  仅开独立 profile 仍会写主力 `~/.dsh/kaogong`（实测证据见 ISOLATION.md §1）。
+- 跑完确认真实端口（8400/8401）没有被测试进程占用；`git status` 无新增噪音。

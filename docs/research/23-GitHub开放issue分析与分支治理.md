@@ -51,7 +51,7 @@ PR 从 `develop` 直连 `main`（非 release bridge 权宜）。
 |---|---|
 | [CONTRIBUTING.md](../../CONTRIBUTING.md) | gitflow 双线模型、Conventional Commits、PR 清单、遵守承诺 |
 | [.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md) | 变更类型/目标分支/验收清单（8 项不得删节）/破坏性变更/关联 issue |
-| [BRANCHING-STRATEGY.md](./BRANCHING-STRATEGY.md) | 本仓库真实拓扑、血缘修复过程、冲突策略、清理策略 |
+| [BRANCHING-STRATEGY.md](../agents/BRANCHING-STRATEGY.md) | 本仓库真实拓扑、血缘修复过程、冲突策略、清理策略 |
 
 ## 5. 验证
 

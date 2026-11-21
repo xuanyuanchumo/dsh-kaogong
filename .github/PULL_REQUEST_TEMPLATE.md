@@ -22,7 +22,9 @@
 
 - [ ] `npx tsc --noEmit` 通过
 - [ ] `npm run build` 通过
-- [ ] `npm run test:all` 全绿（smoke ____ / render ____）
+- [ ] `npm run test:all` 全绿（loader ____ / smoke ____ / render ____）
+- [ ] 验证环境已隔离（`KG_DATA_DIR`/`KG_PORT` 或独立 `DSH_HOME`），未污染主力数据根（见 [ISOLATION.md](../docs/agents/ISOLATION.md)）
+- [ ] 真机验证后 `git status` 无新增噪音
 - [ ] ANIC 评估 16 维 PASS + G0-G3 + HITL（若适用）
 - [ ] 新端点已登记 `src/shared/manifest.ts`（method/path/label/consumers/desc 齐全）
 - [ ] 新增测试使用独立 `PROJ_*` 命名空间（防跨段污染）
