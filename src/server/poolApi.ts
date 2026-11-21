@@ -656,7 +656,14 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
     const matIdx = getCachedStats('materialGroups', () => {
       const byModule = new Map<string, Map<string, string[]>>()
       try {
-        for (const r of db.prepare("SELECT canonical_id, module, group_material, seq FROM question WHERE LENGTH(group_material) > 0 ORDER BY seq, canonical_id").all() as any[]) {
+        // cycle-45：过滤条件与部分索引 ix_q_mat 的 WHERE 对齐（group_material != ''）——
+        // SQLite 部分索引只在查询条件蕴含索引条件时生效；LENGTH() 写法不等价于 != '' →
+        // 旧写法全表行拆包 735ms，对齐后走部分索引 281ms（2.6 倍，且随索引不随全表成长）。
+        // 排序不放 SQL（索引键序是 group_material 前缀，ORDER BY seq 用不上）→ 内存排序；
+        // 组内排序语义由下方建组时的成员 push 序 + L0 捞组后的 seq 排序保证。
+        // ⚠️ group_material 列**必须取**（MAT-02 教训：索引阶段建组需要组键——
+        // 曾改窄列漏取该列 → 组键恒空 → L0 整层失效）。
+        for (const r of db.prepare("SELECT group_material, canonical_id, module, seq FROM question WHERE group_material != ''").all() as any[]) {
           const k = String(r.group_material || '')
           if (!k) continue
           const mod = String(r.module || '')

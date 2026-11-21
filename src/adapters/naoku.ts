@@ -119,19 +119,37 @@ export function naokuStats() {
 /** 抽题：按模块/题型/知识点筛选，返回带深度标注的题 */
 export function naokuQuestions({ module, category, kadian, count = 1, random = true, repoRoot = null, mountPath = '/kaogong' }: any = {}) {
   if (!db) return []
-  const where: any[] = []
-  const args: any[] = []
-  if (module) { where.push('module = ?'); args.push(module) }
-  if (category) { where.push('category = ?'); args.push(category) }
-  if (kadian) { where.push('kadian LIKE ?'); args.push('%' + kadian + '%') }
-  const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
-  const order = random ? 'ORDER BY RANDOM()' : 'ORDER BY id'
+  const COLS = 'id,qid,module,category,kadian,region,year,paper,stem,options,answer,analysis,reasoning,fastest,pitfalls,mother,material,material_ref,has_image,img_refs,qtype'
+  // cycle-45（性能·研究 23 实测）：无过滤路径 ORDER BY RANDOM() 在 27506 行宽表上
+  // = **91.7ms/次全表物化排序**（WHERE id>=? rowid 点查 0.1ms，900 倍差距；
+  // 带 WHERE 的子集 RANDOM 仅 1.7ms——过滤命中先缩小扫描面，排序才便宜）。
+  // 修法与 PERF-02b 同族：无过滤 → 随机 rowid 起点补捞；有过滤 → 保留 RANDOM。
+  let rows: any[] = []
+  const hasFilter = !!(module || category || kadian)
+  if (random && !hasFilter) {
+    const maxId = (safeGet('SELECT MAX(id) m FROM questions') || {}).m || 0
+    const need = Math.min(20, count)
+    const got = new Set<number>()
+    for (let i = 0; i < need * 8 && got.size < need; i++) {
+      const start = Math.floor(Math.random() * Math.max(1, maxId))
+      const r = safeGet(`SELECT ${COLS} FROM questions WHERE id >= ? LIMIT 1`, [start])
+      if (r && r.id != null && !got.has(r.id)) { got.add(r.id); rows.push(r) }
+    }
+  } else {
+    const where: any[] = []
+    const args: any[] = []
+    if (module) { where.push('module = ?'); args.push(module) }
+    if (category) { where.push('category = ?'); args.push(category) }
+    if (kadian) { where.push('kadian LIKE ?'); args.push('%' + kadian + '%') }
+    const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
+    const order = random ? 'ORDER BY RANDOM()' : 'ORDER BY id'
+    rows = safeAll(`SELECT ${COLS} FROM questions ${w} ${order} LIMIT ?`, [...args, Math.min(20, count)])
+  }
   // cycle-23 P0（用户二报「资料分析/言语理解渲染异常」）：SELECT 补 material/material_ref——
   // 数据实证：资料分析 3636/3649（99.6%）、言语理解 2505/6957（36%）题带 material
   // （统计图表 <img src=/90-图片/题目图/…> 与文字材料段），旧 SELECT 漏取 → 无材料不可作答。
   // 同时移除 img_refs 追加（cycle-21 引入）：300 题抽检 img_refs 的 basename 100% 已内联于
   // stem/options/analysis/material——追加=重复渲染（图形推理题干图双份）+解析公式图污染题干。
-  const rows = safeAll(`SELECT id,qid,module,category,kadian,region,year,paper,stem,options,answer,analysis,reasoning,fastest,pitfalls,mother,material,material_ref,has_image,img_refs,qtype FROM questions ${w} ${order} LIMIT ?`, [...args, Math.min(20, count)])
   return rows.map(r => {
     const materialText = stripHtmlKeepImg(r.material || '')
     const stemText = stripHtmlKeepImg(r.stem || '')

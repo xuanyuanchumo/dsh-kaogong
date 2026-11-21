@@ -214,7 +214,7 @@
 - **（存储分层·L3 不做）**：工作区 7820MB / 27441 md / **216266 图**。L1 资产账本（源/文件/版本/content_hash）+ L2 统一文本索引**做**；**L3 媒体 BLOB 不做**——图片已是内容寻址（sha256 文件名），复制进库丧失跨源去重且备份体积翻倍，正确做法是登记 `rel_path+hash` 做引用。
 - **（PDF 源分层）**：AdministrativeAptitudeTest 1403 个 PDF / 1929.7MB，年份 2000–2024，与真题卷文件名规范化后**零重叠**；**独有 2000–2007 早期真题**（真题卷从 2008 起）+ 独立「答案及解析」版。2008–2022 段与 md 源同题 → **不做正文入库**；全部 PDF 先做 L1 登记；2000–2007 OCR 入库列为**可选项非阻塞**。图推选项图的正解是 gk-tuxing 现有 354 张整图，**不值得为 PDF 另建渲染管线**。
 - **（模型自选走宿主路由·不自建凭据）**：宿主契约——`ctx.llm`（`inject:['llm']`，provider+model 身份）、`ContentBlock` 含 `ImageBlock`（图片一等模态）、`ImageAttachmentAccess.readonlyPath`（模型工具读图规范路径）、`ctx.attachments` → `<DSH_HOME>/attachments/v1`（**内容寻址引用**，不含 base64）、`event:model/selection`、`agent-default-model` 的 `provider/model/reasoningEffort` Config 形状、`@Remote`/`ctx.remote` + `remoteAccess` 做 Host↔Client 通信。插件侧模型选择**仅作用于本插件 AI 增强，不影响 DSH 主对话**；现有 `kaogong_ai_*` 是「素材供模型加工」（长文本点评），图片识别需 **schema 约束的结构化输出** ⇒ 走 `ctx.llm` 直连**并存**而非替代。
-- **（既有失败登记）**：`node smoke.test.mjs` 当前 **375/376**，`SMOKE-SCHED-04`（当日 suggested 求和=30，实测 sum=31）失败——经 stash 验证为 **v1.30.0 提交自带**（与研究评估改动无关），疑似排程守恒依赖当前日期的漂移，**未擅自修改**，需单独立项。
+- **（既有失败登记·已清偿）**：~~`SMOKE-SCHED-04`（当日 suggested 求和=30，实测 sum=31）失败~~ —— cycle-34 T-34-01 已根治（最大余数法，见下条），smoke 445/445 实证通过（2026-11-21 复验）。
 
 - **（练习链路锁单源·issue #5）**：`getRandomQuestions` 硬编码 `join(repoRoot, 'xingcezhenti', dirName)`，`/api/questions` 参数仅 `module`/`count`/`sort`（**无来源参数**）；且算法是「**随机文件 → 只解析前 30 题 → 再随机取 count**」⇒ 可达集被压缩、考点轮换极慢，且**不装 xingcezhenti 则专题刷题直接不可用**（#3「功能存在≠功能可用」同族）。其它入口各锁一源：`/api/naoku/*`→GongkaoNaoku、`/api/tuxing/*`→gk-tuxing、`/api/papers/*`→gwy-zhenti。**教训：抽题器必须先答「可达集有多大、分布是否偏斜」，不能只看「能不能抽到题」。**
 - **（跨仓 qid 已是事实标准·关键实测）**：`xingcezhenti` 题干内嵌 `<sub>qid N · 类型</sub>`，与 `naoku.qid` 匹配 **327/327 = 100%** ⇒ **两个独立第三方仓库共享同一套题目 ID 体系**。**规矩：跨源身份优先消费上游 qid，不要自造 canonical_id**；`fp`（同 fp 多 qid 仅 **3 例** / 28669 fp）可作合并键；sha256 归一哈希仅最后兜底。
@@ -275,3 +275,10 @@
 - **（三态/chips 单一事实源）**：视图层三态（kg-load ~10 处/红色错误 ~6 处/灰空态 ~10 处）与 chips（5 套手写）收敛为 ui-kit 基建族 **KgLoad/KgErr/KgEmpty/KgChips**（零 hook 纯组件——R9 安全：不改变调用方 hook 数）。守卫 C44-01..03（基建在 ui-kit/视图零手写 kg-load/消费面 ≥4 视图）。**规矩：三态样式口径全仓只有 ui-kit 一处；新增视图禁止再手写 className="kg-load"。**
 - **（组件不做场景推断）**：KgChips 的 active 态与配色由调用方声明（style 覆盖），KgEmpty 只渲染文案——C31 教训在组件契约的推广：**共享组件的每条分支要逐消费场景推演，场景语义留在调用方**。
 - **（宿主浏览器验证的现实边界）**：Desktop 载体的 GUI 凭据经父进程 IPC 交付（connection.authenticatedUrl 签名），独立浏览器实例天然拿不到 token（"dsh web authentication required" 属预期安全行为）——**浏览器级验证走 render.test（真实 React 18 + 真实 client.js 集成）+「宿主 link: 指向开发仓 → dist 含新符号」两段证据链**，不强行自动化登录。
+
+## cycle-45 事故与教训（v1.31.0 性能研究：直读面池化评估 + 索引治理）
+- **（SCHED-04 遗留清偿）**：cycle-34 登记的「sum=31」实为 T-34-01 最大余数法**已根治**的旧文案残留（R25 陈旧文案）——复验 445/445 通过，登记段改写为已清偿。**教训：失败登记是时效性数据，清偿后必须同波次改写登记段，否则每轮会话都重读一遍假问题。**
+- **（ORDER BY RANDOM() 的表规模阈值）**：`.naoku.db` 27,506 行宽表裸 `ORDER BY RANDOM()` = **91.7ms/次**（SQLite 为排序物化全部候选行），rowid 点查 0.1ms（900 倍）；但**带 WHERE 的子集**（3,649 行）RANDOM 仅 1.7ms——**过滤先缩小扫描面，排序才便宜**。修法（PERF-02b 同族推广）：无过滤 → 随机 rowid 起点补捞；有过滤 → 保留 RANDOM。naokuQuestions 110ms→12ms（9 倍）。
+- **（部分索引的三条纪律）**：① 查询 WHERE 必须蕴含索引 WHERE（`LENGTH(x)>0` 不等价 `x!=''` → SQLite 不认，索引静默失效）；② **索引列必须包含查询所需全部列**（为省页宽漏取组键列 → L0 整层静默失效，MAT-02 假红实证）；③ ORDER BY 若与索引键序不一致，去 SQL 排序改内存（20ms 内），否则排序抵消索引收益（417→281ms）。
+- **（过度工程收口判定）**：L1 带图层 31.5ms（stem LIKE 前缀通配固有成本）曾试探四种方案（has_image 预筛/COUNT+OFFSET/候选快照/rich 部分索引），收益均 ≤30ms/请求且引入首建/一致性复杂度 → **保留现状**。**规矩：稳态 <100ms 的端点不再加缓存层；「研究实测 → 方案对比 → 收益/复杂度比 → 显式收口」四步走完才允许停手。**
+- **（性能研究基线·2026-11-21 实测）**：练习抽题稳态 88ms（L0 0.09 + L1 31.5 + L3 5 + 映射）/ 统一检索 18ms / 深度题库 12ms / 真题卷单卷 15ms / 方法论检索 4ms / 知识搜索 138ms（DFS 直读，低频可接受）/ 错题本·统计 1ms / 排程 2.5ms / 能力对账 6ms。全端点在 <150ms 预算内。
