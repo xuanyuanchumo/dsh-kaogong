@@ -256,3 +256,16 @@ anic_flows_archive   # 归档到 .cycles/archive/cycle-N
    **教训：旧大文件的「全量清理段」是隐式全局前置，拆域后必须显式化为每域前置**。
 
 **累计进度：30/478 断言已迁移（阶段 3 起按域继续：KGDB 静态段 → HIST 后续 → RP/RM → render 分域）。**
+
+### 第⑥层规划：dsh-testkit 发布门禁（用户补充的规范项 · 评估结论）
+
+DSH 社区 dsh-testkit（npm v0.4.4，MIT）提供「真实宿主发布门禁」：Docker 隔离环境按精确 DSH 版本安装 tarball → bundle assemble → tool/service schema 校验 → runtime probe → 卸载残留检查，产出 report.json/junit.xml 证据。
+
+**与现有车道的关系**：本项目的 loader.test（真实 Cordis Loader 入口 17 断言）覆盖了「安装→激活→服务注入→工具注册」的进程内路径；R28 族 npm pack dry-run 守卫覆盖「声明→实体」打包卫生；沙箱（sb-kaogong）覆盖人工真机冒烟。dsh-testkit 的增量价值 = **Docker 隔离的精确版本矩阵 + 卸载残留自动化取证**（本机 Docker 29.8.0 可用）。
+
+**落地建议**（下轮可选增强，非阻塞）：
+1. npm i -D dsh-testkit && npx dsh-test init → 生成 dsh-testkit.yaml（row 预期按 manifest 的 service/tool 声明填）；
+2. 接入 pre-release 脚本（发布前人工跑，不进 test:all——Docker 依赖不宜硬门禁）；
+3. junit.xml 产物接 CI。
+
+**教训**：测试金字塔第⑥层「真机」从「人工+Playwright」升级为「dsh-testkit 自动化 + 人工 Playwright 抽查」——发布门禁从手工流程变为可复核证据。
