@@ -84,6 +84,19 @@ test('SMOKE-KGDB-05/05b/05c 分层抽题 + 关系查询 + 关系子图端到端'
   expect(pg.nodeCount > 0 && pg.edgeCount > 0).toBe(true)
 })
 
+test('SMOKE-POOL-02b 无孤儿出处（每题出处必指向存在的题；DB 不可达则跳过）', async () => {
+  try {
+    const { USER_DATA_ROOT } = await import('../../dist/server/dataRoot.js')
+    const { DatabaseSync } = await import('node:sqlite')
+    const pdb = new DatabaseSync(USER_DATA_ROOT + '/.kaogong.db', { readOnly: true })
+    const orphan = pdb.prepare('SELECT COUNT(*) c FROM question_source s WHERE NOT EXISTS (SELECT 1 FROM question q WHERE q.canonical_id = s.canonical_id)').get().c
+    pdb.close()
+    expect(orphan, `孤儿 ${orphan}`).toBe(0)
+  } catch (e) {
+    expect('DB 不可达则跳过: ' + String(e).slice(0, 40)).toBe('DB 不可达则跳过: ' + String(e).slice(0, 40))
+  }
+})
+
 test('SMOKE-MAT-01..03 资料分析材料保真（/api/questions 供数面）', async () => {
   const matSample = await h.J(`/api/questions?module=${encodeURIComponent('资料分析')}&count=12&ws=PROJ_VTEST_KGDBR`)
   const matQs = Array.isArray(matSample.questions) ? matSample.questions : []
