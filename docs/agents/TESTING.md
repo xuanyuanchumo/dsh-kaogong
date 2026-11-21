@@ -313,3 +313,15 @@ DSH 社区 dsh-testkit（npm v0.4.4，MIT）提供「真实宿主发布门禁」
 4. dsh-plugin-check / plugin_audit（发布 PR 前人工跑，非硬门禁）
 
 **纪律（文档 §10.3/10.9 采纳）**：CI/门禁锁定 DSH 版本不跟随 next/latest 漂移；任何「隔离测试」未独立 DSH_HOME 的，证据强度打折——loader.test 的三层隔离（数据根/DSH_HOME/端口）已满足。
+### 阶段 3+4 迁移记录（cycle-47 · 续）
+
+| 域 | 文件 | 断言 | 特征 |
+|---|---|---|---|
+| packaging | tests/smoke/packaging.test.mjs | 13 | R9/R11/R28 打包发布卫生（npm pack dry-run 实测） |
+| kgdb | tests/smoke/kgdb.test.mjs | 9 | 存储层静态守卫（UPSERT/动态 import/载体隔离/复杂度预算） |
+| perf | tests/smoke/perf.test.mjs | 8 | 性能守卫静态判据（缓存/索引/采样/作业化；运行时延迟留旧文件） |
+| huasheng13 | tests/smoke/huasheng13.test.mjs | 7 | 方法论语料位 + META↔磁盘双向零漂移（import dist 事实源） |
+
+**累计：67/478 断言已迁移。** 剩余大头为需 server 的运行时域（RP/RM 题库管理、HS13 运行时、IMG 链路、SRS/判分旅程）与 render.test 的 41 旅程组——待 server harness 域迁移时统一处理。
+
+**阶段 4 新增教训**：迁移静态判据前先定位判据的**事实源**——HS13-10 的 META↔磁盘对账在旧文件里 import dist 的 HUASHENG13_META，初版迁移误用源码 grep 形态查错了文件（META 定义在 manifest.ts）导致假红。**规矩：迁移 = 判据逐字等价 + 事实源同一，两者缺一不可。**
