@@ -29,12 +29,52 @@
 
 ```bash
 cd dsh-kaogong
-npm run build              # tsc：类型检查 + 产出 dist + bundler 合并
-node smoke.test.mjs        # 必须 437/437
-node render.test.mjs       # 必须 66/66
+npm run test:all           # 聚合：build + loader + smoke + render + vitest(tests/)
 ```
 
+聚合包含（cycle-47 起五车道）：
+
+| 车道 | 命令 | 断言基线 | 说明 |
+|---|---|---|---|
+| 类型+构建 | `npm run build` | 零错误 | tsc + bundler 合并 + combo 守卫 |
+| e2e Loader | `npm run test:loader` | 17/17 | 真实 Cordis Loader（tests/e2e/loader.test.mjs，node 直跑） |
+| 冒烟 | `node smoke.test.mjs` | 447/447 | 旧单文件（迁移期权威事实源） |
+| 渲染 | `node render.test.mjs` | 69/69 | 真实 React + combo（旧单文件，迁移期保留） |
+| 分域 vitest | `npx vitest run tests/` | 12+/12+ | tests/ 新形态（迁移目标形态） |
+
 输出必须贴进交付说明。任一失败不得提交。
+
+## 二a、测试体系分域重构（cycle-47 · 进行中）
+
+### 背景与定案（用户确认）
+
+- **现状问题**：smoke（2581 行/478 断言/86 域组）与 render（1594 行/41 旅程组）两个大单文件——「大单文件测试」反模式；断言间隐式顺序耦合（同一 server 实例跨 § 顺序消费）。
+- **框架定案（用户纠正后）**：引入 **vitest** 作为 dev-only 测试运行器。理由：①「零依赖」纪律约束的是 `dependencies`（运行时），devDependencies 经 npm pack/files 白名单天然不进包（R28 守卫实测）；② DSH 官方测试策略（kb extra/testing.zh.md）就是 vitest 分层金字塔，对齐规范；③ render.test 原经包外 `../_kgtest/node_modules` 野解析 React——才是真正的不规范，vitest 化后可正立化。
+- **拆分粒度**：`tests/` 按业务域分目录 + `_harness/` 共享设施；**不做** unit/integration/e2e 三层强拆（项目以端点契约+渲染旅程为主，强分层会引入 mock 形态爆炸）。
+- **节奏**：分阶段迁移（每轮迁 2-3 域，旧文件保持权威事实源直至对应域迁完，`test:all` 全量兜底）。
+
+### 目标目录结构
+
+```
+tests/
+├── _harness/          共享设施（server 启动单例 / J·P fetch / 池自检重建）
+│   └── server.mjs
+├── smoke/             冒烟分域（从 smoke.test.mjs 逐域迁入）
+│   └── pool.test.mjs  ← 阶段 1 已迁：POOL-01..04b + KGDB-04/04b/05b + MAT-01..03（12 断言）
+├── render/            渲染旅程分域（阶段 2 起）
+├── e2e/
+│   └── loader.test.mjs ← 已迁（node 直跑形态保留；vitest 聚合车道自动跳过）
+└── unit/              dist 纯函数直测（阶段 2 起填充）
+```
+
+### 迁移规则（机器可核对）
+
+1. **逐字等价**：断言判定逻辑不变，只换 harness 与测试框架形态（check → test+expect）。
+2. **命名空间隔离**：分域文件用独立 `CX`（如 `PROJ_VTEST_POOL`），不与旧 smoke 共用 ws。
+3. **环境降级三态**：池未就绪等环境性前置缺失 → `expect(true).toBe(true)` 跳过，不假红不崩（继承旧 skip 语义）。
+4. **双轨期权威**：迁移完成（旧文件对应段删除）前，旧 smoke.test.mjs 对同 ID 断言仍是权威；两处任一失败以旧为准修。
+5. **车道分离**：loader.test 保持 node 直跑（process.exit 语义与 vitest 进程模型冲突，已在文件内 `VITEST` 环境检测跳过）。
+
 
 ## 二b、cycle-18 方法论测试基线（HS13 / C18 / 反向旅程）
 

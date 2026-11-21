@@ -70,10 +70,11 @@
     "prepack": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs",
     "prepare": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs --fix && (node scripts/git-hooks/install.mjs || true)",
     "postbuild": "node scripts/assert-combo.mjs",
-    "test": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node loader.test.mjs && node smoke.test.mjs",
+    "test": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node tests/e2e/loader.test.mjs && node smoke.test.mjs",
     "test:render": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node render.test.mjs",
-    "test:all": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node loader.test.mjs && node smoke.test.mjs && node render.test.mjs",
-    "test:loader": "npm run build && node loader.test.mjs",
+    "test:all": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node tests/e2e/loader.test.mjs && node smoke.test.mjs && node render.test.mjs && npx vitest run tests/",
+    "test:loader": "npm run build && node tests/e2e/loader.test.mjs",
+    "test:vitest": "npx vitest run tests/",
     "docs:check": "node scripts/docs/check-docs.mjs",
     "facts:gen": "node scripts/docs/gen-facts.mjs",
     "facts:check": "node scripts/docs/check-facts.mjs",
@@ -101,6 +102,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.20.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
   }
 }
