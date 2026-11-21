@@ -105,13 +105,13 @@ function hs13ColorOf(m) {
     const c = m && typeof m.color === 'string' ? m.color : '';
     return c || 'var(--brand,#6366f1)';
 }
-function hs13CatalogGroups(cat) {
+function hs13CatalogGroups(cat): any[] {
     const out = [];
     const mods = cat && Array.isArray(cat.modules) ? cat.modules : [];
     for (const m of mods) {
         if (!m || typeof m !== 'object')
             continue;
-        const docs = [];
+        const docs: any[] = [];
         for (const d of (Array.isArray(m.docs) ? m.docs : [])) {
             if (d && d.file)
                 docs.push({ file: String(d.file), title: d.title || d.file, desc: d.desc || '', chars: d.chars, tables: d.tables, formulas: d.formulas, kind: 'doc' });
@@ -122,12 +122,12 @@ function hs13CatalogGroups(cat) {
         }
         out.push({ id: String(m.id || ''), label: m.label || m.id || '模块', icon: m.icon || '📄', color: hs13ColorOf(m), docs });
     }
-    const strat = (cat && Array.isArray(cat.strategy) ? cat.strategy : [])
+    const strat: any[] = (cat && Array.isArray(cat.strategy) ? cat.strategy : [])
         .filter((d) => d && d.file)
         .map((d) => ({ file: String(d.file), title: d.title || d.file, desc: d.desc || '', chars: d.chars, tables: d.tables, formulas: d.formulas, kind: 'strategy' }));
     if (strat.length)
         out.push({ id: '__strategy', label: '跨模块策略', icon: '🧭', color: '#6366f1', docs: strat });
-    const exs = (cat && Array.isArray(cat.examples) ? cat.examples : [])
+    const exs: any[] = (cat && Array.isArray(cat.examples) ? cat.examples : [])
         .filter((d) => d && d.file)
         .map((d) => ({ file: String(d.file), title: d.title || d.file, desc: d.desc || '', chars: d.chars, tables: d.tables, formulas: d.formulas, kind: 'example' }));
     if (exs.length)
@@ -597,7 +597,7 @@ function Hs13Practice(props: Hs13PracticeProps) {
                 const c = await api('/huasheng13/catalog').catch(() => null);
                 if (dead)
                     return;
-                const list = [];
+                const list: any[] = [];
                 const mods = c && Array.isArray(c.modules) ? c.modules : [];
                 for (const m of mods) {
                     for (const e of (Array.isArray(m.examples) ? m.examples : [])) {
