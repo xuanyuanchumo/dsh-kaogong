@@ -122,7 +122,7 @@ export function QwMaterial({ text, matRef: materialRef, collapsed, onToggle }: Q
   const isCollapsed = typeof onToggle === 'function'
     ? !!collapsed
     : (selfCollapsed != null ? selfCollapsed : wordCount > 500)
-  const toggle = typeof onToggle === 'function' ? onToggle : () => setSelfCollapsed(v => !(v != null ? v : wordCount > 500))
+  const toggle = typeof onToggle === 'function' ? onToggle : () => setSelfCollapsed((v: any) => !(v != null ? v : wordCount > 500))
   return (
     <div style={{ marginBottom: 10, padding: 12, background: 'rgba(14,165,233,.06)', borderRadius: 10, borderLeft: '3px solid #0ea5e9' }}>
       {/* 材料头：标题行 + 字数；整行可点折叠/展开（受控或自治） */}
@@ -379,7 +379,7 @@ interface QwPaperModeProps {
 }
 
 /** 题组材料 key：取材料文本头 24 字（同组题材料一致 → key 稳定 → 切题不重挂） */
-function qwMatKey(text) {
+function qwMatKey(text: any) {
   return String(text || '').slice(0, 24)
 }
 
@@ -418,7 +418,7 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <span style={{ fontWeight: 700, fontSize: 12.5 }}>{'🗂 答题卡'}</span>
-          <button style={{ ...KV_BTN, fontSize: 10.5, padding: '2px 8px' }} onClick={() => setNavCollapsed(v => !v)}>
+          <button style={{ ...KV_BTN, fontSize: 10.5, padding: '2px 8px' }} onClick={() => setNavCollapsed((v: any) => !v)}>
             {navCollapsed ? '展开答题卡' : '收起答题卡'}
           </button>
         </div>

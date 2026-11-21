@@ -38,11 +38,11 @@ export function resetPaperIndex() {
   paperIndex = { ts: 0, data: null }
 }
 
-function safeRead(p, max = 400000) {
+function safeRead(p: any, max = 400000) {
   try { const c = readFileSync(p, 'utf-8'); return c.length > max ? c.slice(0, max) : c } catch { return null }
 }
-function safeReaddir(p) { try { return readdirSync(p) } catch { return [] } }
-function isDir(p) { try { return statSync(p).isDirectory() } catch { return false } }
+function safeReaddir(p: any) { try { return readdirSync(p) } catch { return [] } }
+function isDir(p: any) { try { return statSync(p).isDirectory() } catch { return false } }
 
 /** 构建真题卷索引：递归遍历 gwy-zhenti；磁盘快照缓存（1683 卷约 30s→首建一次，之后 ~10ms） */
 const INDEX_FILE = () => join(process.cwd(), 'data', '.paper-index.json')
@@ -54,9 +54,9 @@ const INDEX_FILE = () => join(process.cwd(), 'data', '.paper-index.json')
  * 请求到达时几乎总命中热缓存；若请求抢先到达，同步路径仍在（行为回退不变）。 */
 
 /** 第一段：只收集候选 .md 路径（readdir 级别，毫秒级）；排序保证确定性（跨机器同序） */
-function collectPaperFiles(root) {
+function collectPaperFiles(root: any) {
   const files: any[] = []
-  function walk(dir, depth) {
+  function walk(dir: any, depth: any) {
     if (depth > 5) return
     for (const entry of safeReaddir(dir)) {
       if (entry.startsWith('.') || entry.startsWith('_') || entry === 'node_modules') continue
@@ -75,7 +75,7 @@ function collectPaperFiles(root) {
 }
 
 /** 第二段：单文件 → 索引记录（只读头部 2500 字 + frontmatter/overview 解析，纯函数） */
-function buildPaperRecord(root, full) {
+function buildPaperRecord(root: any, full: any) {
   const head = safeRead(full, 2500)
   if (!head) return null
   const meta = parseFrontmatter(head)
@@ -106,7 +106,7 @@ function buildPaperRecord(root, full) {
 }
 
 /** 第三段：聚合维度（按科目/省份）+ 快照落盘 + 写进程缓存。sync/分块两路径共用同一实现。 */
-function aggregateIndex(now, papers) {
+function aggregateIndex(now: any, papers: any) {
   const bySubject: any = {}
   for (const p of papers) (bySubject[p.subject] = bySubject[p.subject] || []).push(p)
   const subjects = entries(bySubject).map(([subject, list]) => ({
@@ -148,7 +148,7 @@ function aggregateIndex(now, papers) {
   return data
 }
 
-export function buildPaperIndex(repoRoot, force = false) {
+export function buildPaperIndex(repoRoot: any, force = false) {
   const now = Date.now()
   // 代际令牌：同步重建一经启动即作废进行中的分块预热（否则两路并发扫盘互相争抢，首查反而变慢——cycle-14 实测 31.5s 教训）
   prewarmRun++
@@ -176,7 +176,7 @@ export function buildPaperIndex(repoRoot, force = false) {
 /* ── 分块预热（cycle-14）：服务启动后后台把索引热进内存，消除首请求 ~10-16s 冻结 ── */
 let prewarmStarted = false
 let prewarmRun = 0   // 代际令牌：同步 buildPaperIndex 启动时自增 → 在途预热批次检测到换代即退出
-export function prewarmPaperIndex(repoRoot) {
+export function prewarmPaperIndex(repoRoot: any) {
   if (prewarmStarted) return
   prewarmStarted = true
   const chunkMs = 600   // 启动后让路：先让 listen/attach/UI 首屏就绪
@@ -218,7 +218,7 @@ export function prewarmPaperIndex(repoRoot) {
 }
 
 /** 取单套卷详情：材料 + 题目（含参考答案） */
-export function loadPaper(repoRoot, paperId): any {
+export function loadPaper(repoRoot: any, paperId: any): any {
   const root = join(repoRoot, PAPER_REPO)
   const filePath = join(root, paperId + '.md')
   // 防路径穿越：解析后必须仍在 root 内
@@ -246,7 +246,7 @@ export function loadPaper(repoRoot, paperId): any {
 }
 
 /** 专题：按科目/年份/卷型聚合的可练习单元（行测按模块、申论按题型） */
-export function buildTopics(repoRoot) {
+export function buildTopics(repoRoot: any) {
   const idx = buildPaperIndex(repoRoot)
   const topics: any[] = []
   // 科目级专题
@@ -276,13 +276,13 @@ export function buildTopics(repoRoot) {
 export function listPapers(repoRoot: string, { subject, exam, year, province, q }: any = {}) {
   const idx = buildPaperIndex(repoRoot)
   let list = idx.papers
-  if (subject) list = list.filter(p => p.subject === subject)
-  if (exam) list = list.filter(p => p.exam === exam)
-  if (province) list = list.filter(p => p.province === province)
-  if (year) list = list.filter(p => p.year === +year)
+  if (subject) list = list.filter((p: any) => p.subject === subject)
+  if (exam) list = list.filter((p: any) => p.exam === exam)
+  if (province) list = list.filter((p: any) => p.province === province)
+  if (year) list = list.filter((p: any) => p.year === +year)
   if (q) {
     const k = q.toLowerCase()
-    list = list.filter(p => (p.id + p.exam + p.paperType).toLowerCase().includes(k))
+    list = list.filter((p: any) => (p.id + p.exam + p.paperType).toLowerCase().includes(k))
   }
   // 年份新→旧，同年按卷型（码点比较，不依赖环境 locale —— 确定性纪律）
   list = [...list].sort((a, b) => (b.year || 0) - (a.year || 0)
@@ -291,7 +291,7 @@ export function listPapers(repoRoot: string, { subject, exam, year, province, q 
 }
 
 /** 申论评分：按要点覆盖率 + 结构 + 字数 打分（离线规则引擎，非模型） */
-export function gradeEssay(question, answer) {
+export function gradeEssay(question: any, answer: any) {
   const text = String(answer || '').trim()
   const chars = text.replace(/\s/g, '').length
   const ref = String(question?.reference || '')
@@ -334,7 +334,7 @@ export function gradeEssay(question, answer) {
   }
   const terms = [...keyTerms]
   // 命中判定：作答包含该短语，或包含其 70% 以上的连续子串（容许语序微调）
-  const hitOf = (t) => {
+  const hitOf = (t: any) => {
     if (text.includes(t)) return true
     const need = Math.ceil(t.length * 0.7)
     for (let i = 0; i + need <= t.length; i++) {
@@ -393,7 +393,7 @@ export function gradeEssay(question, answer) {
  * @param text 作答全文
  * @param requirement 作答要求（用于抽字数限制）
  */
-export function gradeEssayArticle(text, requirement) {
+export function gradeEssayArticle(text: any, requirement: any) {
   const t = String(text || '')
   const chars = t.replace(/\s/g, '').length
   const limitM = String(requirement || '').match(/(\d{3,4})\s*字/)

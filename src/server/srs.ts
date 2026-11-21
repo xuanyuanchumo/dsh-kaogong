@@ -13,13 +13,13 @@ import { XINGCE_MODULES, getRandomQuestions } from '../adapters/repoData.js'
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
-function questionSig(q) {
+function questionSig(q: any) {
   return createHash('sha1').update((q.module || '') + '|' + (q.stem || '').slice(0, 120)).digest('hex').slice(0, 12)
 }
-function upsertWrong(progress, q) {
+function upsertWrong(progress: any, q: any) {
   progress.wrongBook = progress.wrongBook || []
   const sig = questionSig(q)
-  let item = progress.wrongBook.find(w => w.sig === sig)
+  let item = progress.wrongBook.find((w: any) => w.sig === sig)
   if (!item) {
     // cycle-21 出处标注：错题入库时快照题库出处（回炉时随题透出，UI 显示来源）
     // cycle-43（材料保真）：快照补 groupMaterial/groupMaterialNo——资料分析题没有材料
@@ -35,14 +35,14 @@ function upsertWrong(progress, q) {
   item.mastered = false
   item.lastAt = Date.now()
   if (progress.wrongBook.length > 300) { // 容量环形：先淘汰已掌握，再淘汰最旧
-    const i = progress.wrongBook.findIndex(w => w.mastered)
+    const i = progress.wrongBook.findIndex((w: any) => w.mastered)
     progress.wrongBook.splice(i >= 0 ? i : 0, 1)
   }
   return sig
 }
-function resolveRetry(progress, q) {
+function resolveRetry(progress: any, q: any) {
   const sig = questionSig(q)
-  const item = (progress.wrongBook || []).find(w => w.sig === sig)
+  const item = (progress.wrongBook || []).find((w: any) => w.sig === sig)
   if (!item) return null
   item.consecutive++
   item.box = Math.min(5, item.box + 1)   // 答对升箱：间隔拉长
@@ -52,7 +52,7 @@ function resolveRetry(progress, q) {
 }
 
 /** 路由：/api/memory(专项刷题记忆,cycle-15) /api/questions(sort=srs) /api/wrong /api/wrong/remove /api/stats；未命中返回 undefined */
-export function makeSrsApi({ repoRoot, store, pool }) {
+export function makeSrsApi({ repoRoot, store, pool }: any) {
   const { loadProgress, saveProgress } = store
 
   /* ── cycle-15 专项刷题记忆（progress.memory 域）──
@@ -87,13 +87,13 @@ export function makeSrsApi({ repoRoot, store, pool }) {
     return { ok: true, kind, memory: p.memory[kind] }
   }
 
-  function srsQuestions(wsRaw, moduleName, count) {
+  function srsQuestions(wsRaw: any, moduleName: any, count: any) {
     const p = loadProgress(wsRaw)
-    const due = (p.wrongBook || []).filter(w => !w.mastered && (!moduleName || moduleName === 'all' || w.module === moduleName))
-      .sort((a, b) => a.lastAt - b.lastAt).slice(0, count)
+    const due = (p.wrongBook || []).filter((w: any) => !w.mastered && (!moduleName || moduleName === 'all' || w.module === moduleName))
+      .sort((a: any, b: any) => a.lastAt - b.lastAt).slice(0, count)
     if (due.length) {
       return { file: '(错题回炉)', count: due.length, srs: true, mode: 'retry',
-        questions: due.map(w => ({ id: 'wrong-' + w.sig, number: 0, type: w.type, module: w.module, stem: w.stem, options: w.options, correctAnswer: w.correctAnswer, analysis: w.analysis, fromWrongBook: true, sig: w.sig, box: w.box, wrongCount: w.wrongCount,
+        questions: due.map((w: any) => ({ id: 'wrong-' + w.sig, number: 0, type: w.type, module: w.module, stem: w.stem, options: w.options, correctAnswer: w.correctAnswer, analysis: w.analysis, fromWrongBook: true, sig: w.sig, box: w.box, wrongCount: w.wrongCount,
           // cycle-21 出处标注：错题回炉继承入库时的题库出处（旧数据无 source 时按 module 推断显示）
           source: w.source || null, exam: w.exam || null, year: w.year || null, paperFile: w.paperFile || null,
           // cycle-43 材料保真：回炉透出快照材料（旧快照无此字段 → 空串，QwQuestionCard 有则渲染跳段）
@@ -118,7 +118,7 @@ export function makeSrsApi({ repoRoot, store, pool }) {
     return picked
   }
 
-  function statsSnapshot(wsRaw) {
+  function statsSnapshot(wsRaw: any) {
     const p = loadProgress(wsRaw)
     // cycle-21（issue #3）统计隔离：补录条目（source==='import'）是**历史**练习——
     // 不进「今日新刷/打卡/趋势」（否则整批历史算成今天新刷），只体现在错题本与累计量。
@@ -132,7 +132,7 @@ export function makeSrsApi({ repoRoot, store, pool }) {
     }
     const days = entries(byDay).sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-14)
       .map(([date, v]) => ({ date, ...v, rate: v.answered ? Math.round(v.correct / v.answered * 100) : 0 }))
-    const localDay = (dt) => new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    const localDay = (dt: any) => new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
     const set = new Set(Object.keys(byDay))
     let streak = 0
     const cur = new Date()
@@ -146,10 +146,10 @@ export function makeSrsApi({ repoRoot, store, pool }) {
     }
     const wb = p.wrongBook || []
     const importedTotal = (p.history || []).length - onlineHistory.length
-    return { days, streak, mastery, wrong: { open: wb.filter(w => !w.mastered).length, mastered: wb.filter(w => w.mastered).length, total: wb.length }, day: p.day, answered: p.answered, correct: p.correct, rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0, importedTotal }
+    return { days, streak, mastery, wrong: { open: wb.filter((w: any) => !w.mastered).length, mastered: wb.filter((w: any) => w.mastered).length, total: wb.length }, day: p.day, answered: p.answered, correct: p.correct, rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0, importedTotal }
   }
 
-  return function handleSrsApi(path, params, post, method, wsRaw) {
+  return function handleSrsApi(path: any, params: any, post: any, method: any, wsRaw: any) {
     if (path === '/api/memory' && (method === 'GET' || method === 'POST')) {
       return memoryApi(post, method, wsRaw)
     }
@@ -165,7 +165,7 @@ export function makeSrsApi({ repoRoot, store, pool }) {
     if (path === '/api/wrong/remove' && method === 'POST') {
       const p = loadProgress(wsRaw)
       const before = (p.wrongBook || []).length
-      p.wrongBook = (p.wrongBook || []).filter(w => w.sig !== post.sig)
+      p.wrongBook = (p.wrongBook || []).filter((w: any) => w.sig !== post.sig)
       saveProgress(wsRaw, p)
       return { removed: before - p.wrongBook.length, remaining: p.wrongBook.length }
     }

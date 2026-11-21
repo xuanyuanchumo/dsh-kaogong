@@ -24,7 +24,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
      * /api/graph 与 /api/stats 由视图自治拉取（原 data.g 由父层 Promise.all 下发）。
      * api 必传；statsApi 缺省复用 api；onGo 供节点直达业务视图。
      */
-    export function NativeGraphView(props) {
+    export function NativeGraphView(props: any) {
       const liveRef = React.useRef({})
       liveRef.current = { api: props && props.api, wsKey: props && props.wsKey }   // 每次渲染刷新最新 props（供异步回调用）
 
@@ -799,7 +799,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                   },
                 }
               }),
-              onPick: k => toggleType(k),
+              onPick: (k: any) => toggleType(k),
             }),
             h(KgChips, {
               gap: 4,
@@ -826,7 +826,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                   },
                 }
               }),
-              onPick: k => toggleEdge(k),
+              onPick: (k: any) => toggleEdge(k),
             }),
             // 着色模式图例（连续模式=渐变条+min/max；社区模式=色块+计数）
             renderColorLegend())

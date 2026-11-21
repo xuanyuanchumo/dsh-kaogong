@@ -108,8 +108,8 @@ function KgMemBanner(props: KgMemBannerProps) {
             const subj = (papers && papers.subjects) || []
             const extra = {
               paperTotal: (papers && papers.total) || 0,
-              essayPapers: (subj.find(x => x.subject === '申论') || {}).count || 0,
-              xingcePapers: (subj.find(x => x.subject === '行测') || {}).count || 0,
+              essayPapers: (subj.find((x: any) => x.subject === '申论') || {}).count || 0,
+              xingcePapers: (subj.find((x: any) => x.subject === '行测') || {}).count || 0,
               essayCount: (eh && eh.total) || 0, avgEssay: (eh && eh.avgRatio) || 0,
               examCount: (xh && xh.total) || 0, avgExam: (xh && xh.avgRate) || 0,
             }
@@ -195,7 +195,7 @@ function KgMemBanner(props: KgMemBannerProps) {
         remember(rest[0], module)   // cycle-15：翻题即记忆（写「上次练到」）
       }
 
-      const draw = React.useCallback(async (mod, useSrs) => {
+      const draw = React.useCallback(async (mod: any, useSrs: any) => {
         // 队列还有题 → 直接取下一题（不重复请求）
         if (queueRef.current.length > 1) { takeNext(); return }
         // cycle-46（用户确认项②·抽题器收敛）：practice 切到**纯池端点** /api/pool/questions
@@ -233,7 +233,7 @@ function KgMemBanner(props: KgMemBannerProps) {
             body: JSON.stringify({ question: q, answer: sel }),
           })
           setResult(r)
-          setStat(st => ({ done: st.done + 1, right: st.right + (r.isCorrect ? 1 : 0) }))
+          setStat((st: any) => ({ done: st.done + 1, right: st.right + (r.isCorrect ? 1 : 0) }))
         } finally { setBusy(false) }
       }
 
@@ -449,7 +449,7 @@ function KgMemBanner(props: KgMemBannerProps) {
             >{'🔁 SRS 回炉复习'}</button> : null}
             <button
               style={{ ...KV_BTN, ...(importOpen ? { background: 'rgba(99,102,241,.12)', borderColor: 'rgba(99,102,241,.5)', color: '#4f46e5', fontWeight: 700 } : {}) }}
-              onClick={() => setImportOpen(v => !v)}
+              onClick={() => setImportOpen((v: any) => !v)}
               data-kg-wb-import="1"
             >{importOpen ? '▲ 收起纸质补录' : '📥 纸质刷题补录'}</button>
             <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{(filtered || []).length + ' / ' + (wrong || []).length + ' 条'}</span>
@@ -468,7 +468,7 @@ function KgMemBanner(props: KgMemBannerProps) {
           {!(filtered || []).length && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
             {!(wrong || []).length ? '🎉 错题本空空如也 — 保持！' : '当前筛选无条目 — 试试放宽模块/状态筛选'}
           </div>}
-          {(filtered || []).map(w => <div key={w.sig} style={{ border: '1.5px solid rgba(148,163,184,.3)', borderRadius: 12, padding: '13px 15px', marginBottom: 9, background: 'var(--surface-card,#fff)', opacity: w.mastered ? .6 : 1 }}>
+          {(filtered || []).map((w: any) => <div key={w.sig} style={{ border: '1.5px solid rgba(148,163,184,.3)', borderRadius: 12, padding: '13px 15px', marginBottom: 9, background: 'var(--surface-card,#fff)', opacity: w.mastered ? .6 : 1 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={tagStyle}>{w.module}</span>
               <span style={tagStyle}>{'错' + w.wrongCount + '次'}</span>
@@ -480,11 +480,11 @@ function KgMemBanner(props: KgMemBannerProps) {
             {/* cycle-33 条目展开：点题干全文切换（默认 66px 截断，长题干看不全） */}
             <div
               style={{ fontSize: 12.5, lineHeight: 1.65, maxHeight: expanded[w.sig] ? 'none' : 66, overflow: 'hidden', cursor: 'pointer' }}
-              onClick={() => setExpanded(m => ({ ...m, [w.sig]: !m[w.sig] }))}
+              onClick={() => setExpanded((m: any) => ({ ...m, [w.sig]: !m[w.sig] }))}
               title={expanded[w.sig] ? '点击收起' : '点击展开全文'}
             >{w.stem}</div>
             {!expanded[w.sig] && String(w.stem || '').length > 90
-              ? <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 3, cursor: 'pointer' }} onClick={() => setExpanded(m => ({ ...m, [w.sig]: true }))}>{'… 展开全文'}</div>
+              ? <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 3, cursor: 'pointer' }} onClick={() => setExpanded((m: any) => ({ ...m, [w.sig]: true }))}>{'… 展开全文'}</div>
               : null}
           </div>)}
         </div>
@@ -695,7 +695,7 @@ function KgMemBanner(props: KgMemBannerProps) {
 
       React.useEffect(() => { api('/naoku/status').then(setStatus).catch(() => setStatus({ ready: false })) }, [api])
 
-      const draw = React.useCallback(async (mod) => {
+      const draw = React.useCallback(async (mod: any) => {
         setBusy(true)
         try {
           const qs = 'count=1'
@@ -725,7 +725,7 @@ function KgMemBanner(props: KgMemBannerProps) {
         setKadians(d.list || [])
       }
 
-      const drawByKadian = async (k) => {
+      const drawByKadian = async (k: any) => {
         const d = await api('/naoku/practice?kadian=' + encodeURIComponent(k) + '&count=1')
         const dq = (d.questions || [])[0] || null
         setQ(dq)
@@ -760,7 +760,7 @@ function KgMemBanner(props: KgMemBannerProps) {
 
       const kadiansBlock = kadians.length > 0
         ? <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-            {kadians.map((k, i) => <div
+            {kadians.map((k: any, i: any) => <div
               key={i}
               style={{ padding: '8px 10px', borderRadius: 9, marginBottom: 4, background: 'rgba(148,163,184,.06)', cursor: 'pointer', fontSize: 12.5 }}
               onClick={() => drawByKadian(k.kadian)}
@@ -807,7 +807,7 @@ function KgMemBanner(props: KgMemBannerProps) {
       </Card>
 
       // 题目区（分块构造，避免深嵌套三元）
-      let questionCard = null
+      let questionCard: any = null
       if (q) {
         const headerTags: any[] = []
         if (q.module) headerTags.push(<span key="m" style={KV_TAG}>{q.module}</span>)

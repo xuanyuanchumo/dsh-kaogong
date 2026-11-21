@@ -19,7 +19,7 @@ export function parseFrontmatter(content: string): Record<string, string> {
 }
 
 /** overview 注释块里的「N 题 · 图片 M 处」 */
-export function parseOverview(content) {
+export function parseOverview(content: any) {
   const m = content.match(/<!--\s*gwy:overview:start\s*-->([\s\S]*?)<!--\s*gwy:overview:end\s*-->/)
   if (!m) return { questionCount: 0, imageCount: 0 }
   const q = m[1].match(/(\d+)\s*题/)
@@ -34,7 +34,7 @@ export function parseOverview(content) {
  * 行测形态由 parsePaperText 的 H2 流扫描处理（材料归属「其后第一题」的题组），
  * 本函数仍只负责申论形态（向后兼容，返回值语义不变）。
  */
-export function parseMaterials(content) {
+export function parseMaterials(content: any) {
   const out: any[] = []
   const start = content.search(/^##\s*给定材料\s*$/m)
   if (start < 0) return out
@@ -56,7 +56,7 @@ export function parseMaterials(content) {
  * **必须含下一个题头（H3 `### 第 N 题`）**——浙江卷「材料 1」后无 H2 时段文本会
  * 吞到文末，把后续全部题干与 <details> 答案解析吞进材料（泄露事故）。
  */
-export function parseGroupMaterials(content) {
+export function parseGroupMaterials(content: any) {
   const out = new Map()
   const re = /^##\s*材料\s*(\d+)\s*$/gm
   const marks: any[] = []
@@ -76,7 +76,7 @@ export function parseGroupMaterials(content) {
 }
 
 /** 行测题：选项为 `A. xxx` 纯文本行，答案为 details 内单独字母行 */
-function parseXingceBody(body, stemLines, optLines) {
+function parseXingceBody(body: any, stemLines: any, optLines: any) {
   let correctAnswer = null
   let analysis = ''
   const det = body.match(/<details>[\s\S]*?<\/details>/)
@@ -91,7 +91,7 @@ function parseXingceBody(body, stemLines, optLines) {
 }
 
 /** 申论题：题干加粗，details 内多段参考答案 */
-function parseEssayBody(beforeDetails, body) {
+function parseEssayBody(beforeDetails: any, body: any) {
   const stemMatch = beforeDetails.match(/\*\*([\s\S]+?)\*\*/)
   const stem = stemMatch ? stemMatch[1].trim() : beforeDetails.trim().slice(0, 400)
   let reference = ''
@@ -112,7 +112,7 @@ function parseEssayBody(beforeDetails, body) {
  * 行测题型推断：无前置标签的卷靠题干典型问法归类六大模块。
  * 顺序敏感：先匹配强特征（图形/类比/定义/逻辑），再落通用。
  */
-export function guessXingceType(stem) {
+export function guessXingceType(stem: any) {
   const t = String(stem || '')
   if (/图形|折纸|截面|立体|平面拼合|九宫格|规律.*图形/.test(t)) return '图形推理'
   if (/类比|对于.*相当于|相当于/.test(t)) return '类比推理'
@@ -128,7 +128,7 @@ export function guessXingceType(stem) {
 }
 
 /** 解析单题：按科目形态分流。groupMaterial = 行测题组共享材料（cycle-26 D-1，可选注入） */
-export function parseQuestion(no, body, subject, groupMaterial) {
+export function parseQuestion(no: any, body: any, subject: any, groupMaterial: any) {
   let beforeDetails = body.split(/<details>/)[0] || ''
   const isXingce = subject === '行测'
   // cycle-26 D-1：`## 材料 N` 段文本会残留在「上一题块」尾部（split 以题头为界）——
@@ -145,8 +145,8 @@ export function parseQuestion(no, body, subject, groupMaterial) {
       else stemLines.push(ln)
     }
   }
-  parsed = isXingce ? parseXingceBody(body, stemLines, optLines) : parseEssayBody(beforeDetails, body)
-  const options = {}
+  parsed = (isXingce ? parseXingceBody(body, stemLines, optLines) : parseEssayBody(beforeDetails, body)) as any
+  const options: Record<string, any> = {}
   if (Array.isArray(parsed.options)) for (const o of parsed.options) options[o.key] = o.text
   else Object.assign(options, parsed.options || {})
 
@@ -171,7 +171,7 @@ export function parseQuestion(no, body, subject, groupMaterial) {
 }
 
 /** 整卷解析：materials（申论形态）+ questions（含行测题组材料注入） */
-export function parsePaperText(content, meta) {
+export function parsePaperText(content: any, meta: any) {
   const materials = parseMaterials(content)
   // cycle-26 D-1：行测 `## 材料 N` 组材料段（资料分析形态，夹在题目流中）
   const groupMats = parseGroupMaterials(content)
@@ -222,13 +222,13 @@ export function parsePaperText(content, meta) {
       const freq: Record<string, number> = {}
       for (const w of toks) { let n = 0, idx = -1; while ((idx = text.indexOf(w, idx + 1)) > 0) n++; freq[w] = n }
       const top = toks.sort((a, b) => (freq[b] - freq[a]) || (text.indexOf(a) - text.indexOf(b))).slice(0, 24)
-      const bodyOf = (no) => {
+      const bodyOf = (no: any) => {
         const at = qPositions.find(x => x.no === no)
         if (!at) return ''
         const nxt = qPositions.find(x => x.no > no)
         return content.slice(at.at, nxt ? nxt.at : rangeEnd)
       }
-      const hits = (body) => top.reduce((n, w) => n + (body.includes(w) ? 1 : 0), 0)
+      const hits = (body: any) => top.reduce((n, w) => n + (body.includes(w) ? 1 : 0), 0)
       // 引用链：材料后第一题必须命中（≥2 词）——首题就不引用说明材料段解析异常，整组放弃；
       // 后续题命中 ≥1 维持链路，命中 0 = 组结束
       const nos: number[] = []

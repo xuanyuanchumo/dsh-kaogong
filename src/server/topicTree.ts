@@ -13,13 +13,13 @@ import { buildPaperIndex, } from '../adapters/paperData.js'
 import { naokuStats } from '../adapters/naoku.js'
 
 /** 行测专题：模块 + 细分题型（有 naoku 数据时用真实题量） */
-function xingceTopics(idx, stats) {
+function xingceTopics(idx: any, stats: any) {
   const MODULES = ['判断推理', '言语理解与表达', '数量关系', '资料分析', '常识判断', '政治理论']
   const out: any[] = []
   // 模块级
   for (const m of MODULES) {
-    const subj = (idx.subjects || []).find(s => s.subject === '行测')
-    const nk = stats ? (stats.modules || []).find(x => x.m === m) : null
+    const subj = (idx.subjects || []).find((s: any) => s.subject === '行测')
+    const nk = stats ? (stats.modules || []).find((x: any) => x.m === m) : null
     out.push({
       id: 'xc:module:' + m, channel: '行测', kind: 'module', title: m,
       desc: nk ? `深度题库 ${nk.c} 题（含解题链标注）` : '考纲六大模块之一',
@@ -31,7 +31,7 @@ function xingceTopics(idx, stats) {
   // 题型级（来自 naoku categories，取行测相关高频）
   const CATS = ['图形推理', '逻辑判断', '定义判断', '类比推理', '逻辑填空', '片段阅读', '语句表达', '数学运算', '资料分析', '人文常识', '科技常识', '法律常识', '政治常识']
   for (const c of CATS) {
-    const nk = stats ? (stats.categories || []).find(x => x.k === c) : null
+    const nk = stats ? (stats.categories || []).find((x: any) => x.k === c) : null
     if (!nk) continue
     out.push({
       id: 'xc:cat:' + c, channel: '行测', kind: 'category', title: c,
@@ -62,14 +62,14 @@ function shenlunTopics() {
  * 统一专题树
  * @returns { channels, topics, stats }
  */
-export function buildTopicTree(repoRoot) {
+export function buildTopicTree(repoRoot: any) {
   const idx = buildPaperIndex(repoRoot)
   const naoku = naokuStats()
   const xc = xingceTopics(idx, naoku)
   const sl = shenlunTopics()
 
-  const essayPapers = (idx.subjects || []).find(s => s.subject === '申论')
-  const xcPapers = (idx.subjects || []).find(s => s.subject === '行测')
+  const essayPapers = (idx.subjects || []).find((s: any) => s.subject === '申论')
+  const xcPapers = (idx.subjects || []).find((s: any) => s.subject === '行测')
 
   return {
     channels: [

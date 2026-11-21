@@ -37,7 +37,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
 
 ;(window as any).__ModuleLoader__.load({
   id: 'dsh-kaogong',
-  factory(require) {
+  factory(require: any) {
     const PANEL_ID = 'dsh-kaogong'
     const TAB_KIND = 'kaogong'
     let lastWsKey = 'default'
@@ -45,10 +45,10 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
       zh: { title: '考公学习', guideDesc: '离线题库 · 30天计划 · SRS错题本 · 知识图谱 · 可观测仪表盘（15个开源仓库）', loading: '正在连接学习服务…', down: '本地学习服务未运行', downHint: 'Host 插件加载时自动启动；若刚崩溃请执行热重载', openExternal: '↗ 浏览器标签', retry: '↻', probe: '项目', native: '宿主原生', fallback: 'iframe 兜底' },
       en: { title: 'Exam Study', guideDesc: 'Offline bank · 30-day plan · SRS wrong-book · knowledge graph · observability', loading: 'Connecting to study service…', down: 'Local study service not running', downHint: 'It starts when the Host plugin loads; hot-reload if it crashed', openExternal: '↗ Browser tab', retry: '↻', probe: 'project', native: 'native', fallback: 'iframe fallback' },
     }
-    function KaogongMainBounded(props) { return h(KaogongErrorBoundary, null, h(KaogongMainPanel, props)) }
-    function KaogongTabBounded(props) { return h(KaogongErrorBoundary, null, h(KaogongTabBody, props)) }
+    function KaogongMainBounded(props: any) { return h(KaogongErrorBoundary, null, h(KaogongMainPanel, props)) }
+    function KaogongTabBounded(props: any) { return h(KaogongErrorBoundary, null, h(KaogongTabBody, props)) }
     /** 会话 → 工作区路径（隔离 key）；逐级兜底且永不崩 */
-    function resolveWorkspaceKey(ctx, sessionId) {
+    function resolveWorkspaceKey(ctx: any, sessionId: any) {
       try {
         if (!sessionId) return 'default'
         const sessions = ctx.get('sessions')
@@ -90,7 +90,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
     }
 
     /** 宿主原生面板：同源 fetch + React 渲染（左栏 main 席位，全屏沉浸） */
-    function KaogongMainPanel({ wsKey, t }) {
+    function KaogongMainPanel({ wsKey, t }: any) {
       const channel = useChannel()
       const [view, setViewRaw] = React.useState(() => localStorage.getItem('kg-native-view') || 'dashboard')
       const [viewParams, setViewParams] = React.useState({})   // v1.7.1：专题 entry 传参（模块/题型/科目）
@@ -104,8 +104,8 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
       const setView = React.useCallback((v: any, params?: any) => {
         localStorage.setItem('kg-native-view', v)
         setViewParams(params || {})
-        setViewRaw(prev => {
-          if (prev === v) setTick(t => t + 1)   // 同一视图重入 → 强制重挂载重取
+        setViewRaw((prev: any) => {
+          if (prev === v) setTick((t: any) => t + 1)   // 同一视图重入 → 强制重挂载重取
           return v
         })
       }, [])
@@ -133,7 +133,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
         // cycle-46（用户确认项①·路由对齐）：manifest 声明 id 是 observability，路由键曾用 obs
         //（三方对账假漂移第三形态：同名异键）——统一为 manifest 口径；旧 'obs' 键保留一行
         // 别名分发（localStorage kg-native-view 可能存着旧键，读到了也能渲染）。
-        observability: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onReload: () => setTick(t => t + 1) }) },
+        observability: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onReload: () => setTick((t: any) => t + 1) }) },
         papers: { comp: NativePapersView, key: t => 'pp' + t, props: () => ({ api, initialSubject: viewParams.subject || '' }) },
         exam: { comp: NativeExamView, key: t => 'ex' + t, props: () => ({ api }) },
         practice: { comp: NativePracticeView, key: t => 'pr' + t + JSON.stringify(viewParams), props: () => ({ api, initialModule: viewParams.module || '', onGoWrongbook: () => setView('wrongbook') }) },
@@ -197,7 +197,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
           routeEl))
     }
     /** 左栏面板图标（shell 事件委托接管点击/选中） */
-    function KaogongPanelIcon({ size }) {
+    function KaogongPanelIcon({ size }: any) {
       return h('svg', {
         'data-dsh-panel-entry': PANEL_ID,
         viewBox: '0 0 16 16', width: size, height: size,
@@ -215,7 +215,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
      * 右侧只做轻量摘要 —— /api/stats 单端点取数，字段全部可选降级（缺什么藏什么）。
      * R9：真组件 + h() 挂载，hook 数恒定（useState×2 + useEffect×1）。
      */
-    function KaogongTabHome({ wsKey, t, channel, reloadKey }) {
+    function KaogongTabHome({ wsKey, t, channel, reloadKey }: any) {
       const [stats, setStats] = React.useState(null)
       const [goHint, setGoHint] = React.useState('')
       React.useEffect(() => {
@@ -271,7 +271,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
           goHint ? h('div', { style: { fontSize: 11, color: '#10b981', marginTop: 8 } }, goHint) : null))
     }
     /** 右侧 tab 正文：同源优先原生精简体，端口兜底 iframe */
-    function KaogongTabBody({ wsKey, sidebarRight, t }) {
+    function KaogongTabBody({ wsKey, sidebarRight, t }: any) {
       const channel = useChannel()
       const [reloadKey, setReloadKey] = React.useState(0)
 
@@ -286,7 +286,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
             h('span', { className: 'kg-dot', 'aria-hidden': 'true' }),
             h('span', null, '🏠 ' + t('native') + ' · ' + channel.base),
             h('span', { style: { opacity: .6, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, `${t('probe')} ${String(wsKey).split(/[\\/]/).pop()}`),
-            h('button', { 'aria-label': t('retry'), style: { marginLeft: 'auto' }, onClick: () => setReloadKey(k => k + 1) }, t('retry'))),
+            h('button', { 'aria-label': t('retry'), style: { marginLeft: 'auto' }, onClick: () => setReloadKey((k: any) => k + 1) }, t('retry'))),
           // cycle-13 对话窗口瘦身：不再内嵌完整面板，改为引导卡 + 摘要 + 快捷入口
           h('div', { className: 'kg-frame', style: { overflowY: 'auto' } },
             h(KaogongTabHome, { wsKey, t, channel, reloadKey, key: reloadKey })))
@@ -300,7 +300,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
             'aria-label': t('openExternal'), style: { marginLeft: 'auto' },
             onClick: () => { try { sidebarRight && sidebarRight.openTab && sidebarRight.openTab('browser', { params: { url } }) } catch { window.open(url, '_blank') } },
           }, t('openExternal')),
-          h('button', { 'aria-label': t('retry'), onClick: () => setReloadKey(k => k + 1) }, t('retry'))),
+          h('button', { 'aria-label': t('retry'), onClick: () => setReloadKey((k: any) => k + 1) }, t('retry'))),
         h('div', { className: 'kg-frame' },
           h('iframe', { src: url, title: t('title'), 'aria-label': t('title'), allow: 'clipboard-write' })))
     }
@@ -308,14 +308,14 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
        缺失 return → 加载器收到 undefined → "invalid plugin"）══ */
     return {
       inject: ['slots', 'locale'],
-      apply(ctx) {
+      apply(ctx: any) {
         try { ctx.locale.register('dsh-kaogong', { zh: DICTS.zh, en: DICTS.en }) } catch { /* locale 缺席不影响核心 */ }
-        const t = (k) => {
+        const t = (k: any) => {
           try {
             const tt = ctx.locale.bind('dsh-kaogong')
             const v = tt && tt(k)
-            return v && v !== k ? v : DICTS.zh[k] || k
-          } catch { return DICTS.zh[k] || k }
+            return v && v !== k ? v : (DICTS.zh as Record<string, any>)[k] || k
+          } catch { return (DICTS.zh as Record<string, any>)[k] || k }
         }
 
         // ══ 主题适配层（cycle-39 · 研究 20 §2）══
@@ -348,7 +348,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
           const apply = () => {
             const cs = getComputedStyle(document.body)
             const dark = isDark()
-            const read = (v, darkFallback, lightFallback) => {
+            const read = (v: any, darkFallback: any, lightFallback: any) => {
               const dsw = cs.getPropertyValue(v).trim()
               // ⚠️ dsw 值必须与当前 scheme 明暗**方向**一致才可用（亮度守卫，双向判）：
               //   · 暗色下拒收「暗文本」（实测 label-primary-foreground=#0f1115 未跟随 → 暗底暗字）
@@ -455,7 +455,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
         ), 'kaogong main panel')
 
         // ── 右侧边栏 tab（双注册同 id + guide 入口）──
-        ctx.inject(['sidebarRightTabs'], (injected) => {
+        ctx.inject(['sidebarRightTabs'], (injected: any) => {
           const tabs = injected.get('sidebarRightTabs')
           if (!tabs) { console.error('sidebarRightTabs 服务缺失，标签注册跳过'); return }
           const disposers: any[] = []
@@ -468,7 +468,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
             ctx.slots.register(
               {
                 name: 'sidebar.right.pane.tab', key: PANEL_ID,
-                inject: (sessionId) => {
+                inject: (sessionId: any) => {
                   lastWsKey = resolveWorkspaceKey(ctx, sessionId)
                   return { wsKey: lastWsKey, sidebarRight: ctx.get('sidebarRight') || null, t }
                 },

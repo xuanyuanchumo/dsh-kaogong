@@ -315,7 +315,7 @@ export function NativeReposView({ api }: NativeReposViewProps) {
       {/* ③b cycle-20 G3：最近作业归档（失败原因/耗时可追溯，折叠省空间） */}
       {Array.isArray(data.recentJobs) && data.recentJobs.length
         ? <Card title={'🕘 最近作业 · ' + data.recentJobs.length + ' 条'}>
-            <button style={KV_BTN} onClick={() => setJobsOpen(v => !v)}>{jobsOpen ? '▾ 收起' : '▸ 展开历史'}</button>
+            <button style={KV_BTN} onClick={() => setJobsOpen((v: any) => !v)}>{jobsOpen ? '▾ 收起' : '▸ 展开历史'}</button>
             {jobsOpen ? <div style={{ marginTop: 6 }}>
               {data.recentJobs.map((j: any, i: number) => <div key={'rj' + i} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '4px 0', borderBottom: '1px dashed rgba(148,163,184,.15)', fontSize: 10.5, color: 'var(--text-muted)' }}>
                 <span style={{ fontFamily: 'monospace', minWidth: 130 }}>{String(j.key || '?')}</span>

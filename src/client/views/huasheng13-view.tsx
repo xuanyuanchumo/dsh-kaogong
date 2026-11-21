@@ -53,12 +53,12 @@ const HS13_EP_LABEL = {
     '/api/huasheng13/trace': '链路追踪',
 };
 /** 归一到 [0,1]（覆盖率、进度条共用） */
-function hs13Clamp01(v) {
+function hs13Clamp01(v: any) {
     const n = hs13Num(v);
     return n < 0 ? 0 : n > 1 ? 1 : n;
 }
 /** 字数可读化：13107 → 1.3 万字 */
-function hs13FmtChars(v) {
+function hs13FmtChars(v: any) {
     const n = hs13Num(v);
     if (n <= 0)
         return '—';
@@ -67,11 +67,11 @@ function hs13FmtChars(v) {
     return Math.round(n) + ' 字';
 }
 /** 比例可读化：0.9756 → 97.6% */
-function hs13FmtPct(v) {
+function hs13FmtPct(v: any) {
     return (hs13Clamp01(v) * 100).toFixed(1) + '%';
 }
 /** 毫秒时间戳 → 本地 HH:MM:SS（0/无效 → '—'，绝不显示 Invalid Date） */
-function hs13FmtTime(ts) {
+function hs13FmtTime(ts: any) {
     const n = hs13Num(ts);
     if (n <= 0)
         return '—';
@@ -79,7 +79,7 @@ function hs13FmtTime(ts) {
         const d = new Date(n);
         if (!d || isNaN(d.getTime()))
             return '—';
-        const p = (x) => String(x).padStart(2, '0');
+        const p = (x: any) => String(x).padStart(2, '0');
         return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
     }
     catch {
@@ -87,7 +87,7 @@ function hs13FmtTime(ts) {
     }
 }
 /** 耗时/分值可读化：12.3456 → '12.35'（固定两位，避免长尾小数撑爆布局） */
-function hs13Fmt2(v) {
+function hs13Fmt2(v: any) {
     const n = hs13Num(v);
     return n.toFixed(2);
 }
@@ -96,7 +96,7 @@ function hs13Fmt2(v) {
  * 服务端 answerIsLetter 的判据是 `/^[A-Da-d](\s|$)/`，这里做同样的归一：
  * 允许前导 '*'（加粗残留）与空白，取首个 A-D 字母并大写；非字母形态返回 ''。
  */
-function hs13AnswerKey(answer) {
+function hs13AnswerKey(answer: any) {
     const m = /^[\s*"「『]*([A-Da-d])(?![\u4e00-\u9fa5A-Za-z])/.exec(String(answer == null ? '' : answer));
     return m ? m[1].toUpperCase() : '';
 }
@@ -105,7 +105,7 @@ function hs13ColorOf(m: any) {
     const c = m && typeof m.color === 'string' ? m.color : '';
     return c || 'var(--brand,#6366f1)';
 }
-function hs13CatalogGroups(cat): any[] {
+function hs13CatalogGroups(cat: any): any[] {
     const out: any[] = [];
     const mods = cat && Array.isArray(cat.modules) ? cat.modules : [];
     for (const m of mods) {
@@ -123,13 +123,13 @@ function hs13CatalogGroups(cat): any[] {
         out.push({ id: String(m.id || ''), label: m.label || m.id || '模块', icon: m.icon || '📄', color: hs13ColorOf(m), docs });
     }
     const strat: any[] = (cat && Array.isArray(cat.strategy) ? cat.strategy : [])
-        .filter((d) => d && d.file)
-        .map((d) => ({ file: String(d.file), title: d.title || d.file, desc: d.desc || '', chars: d.chars, tables: d.tables, formulas: d.formulas, kind: 'strategy' }));
+        .filter((d: any) => d && d.file)
+        .map((d: any) => ({ file: String(d.file), title: d.title || d.file, desc: d.desc || '', chars: d.chars, tables: d.tables, formulas: d.formulas, kind: 'strategy' }));
     if (strat.length)
         out.push({ id: '__strategy', label: '跨模块策略', icon: '🧭', color: '#6366f1', docs: strat });
     const exs: any[] = (cat && Array.isArray(cat.examples) ? cat.examples : [])
-        .filter((d) => d && d.file)
-        .map((d) => ({ file: String(d.file), title: d.title || d.file, desc: d.desc || '', chars: d.chars, tables: d.tables, formulas: d.formulas, kind: 'example' }));
+        .filter((d: any) => d && d.file)
+        .map((d: any) => ({ file: String(d.file), title: d.title || d.file, desc: d.desc || '', chars: d.chars, tables: d.tables, formulas: d.formulas, kind: 'example' }));
     if (exs.length)
         out.push({ id: '__examples', label: '真题示例', icon: '🏆', color: '#10b981', docs: exs });
     return out;
@@ -139,7 +139,7 @@ function hs13CatalogGroups(cat): any[] {
  * 必须同时满足 ① 服务端标注 answerIsLetter===true ② 能解析出 A-D 字母 ③ 选项非空。
  * 任一不满足即走「查看解析 + 自评」路径，绝不渲染空壳选择题。
  */
-function hs13CanAutoGrade(it) {
+function hs13CanAutoGrade(it: any) {
     if (!it || typeof it !== 'object')
         return false;
     if (it.answerIsLetter !== true)
@@ -188,7 +188,7 @@ function Hs13ModuleCard(props: Hs13ModuleCardProps) {
     const pct = cov ? hs13Clamp01(cov.coverage) * 100 : 0;
     const docs = Array.isArray(m.docs) ? m.docs : [];
     const exs = Array.isArray(m.examples) ? m.examples : [];
-    const present = docs.filter((d) => d && d.present !== false).length;
+    const present = docs.filter((d: any) => d && d.present !== false).length;
     const pick = props && props.onPick ? props.onPick : null;
     return (
         <div style={{
@@ -248,14 +248,14 @@ function Hs13Overview(props: Hs13OverviewProps) {
         return () => { dead = true; };
     }, [api]);
     const mods = cat && Array.isArray(cat.modules) ? cat.modules : [];
-    const covById = {};
+    const covById: Record<string, any> = {};
     const covMods = cov && Array.isArray(cov.modules) ? cov.modules : [];
     for (const m of covMods)
         if (m && m.id)
             covById[String(m.id)] = m;
     const meta = (cat && cat.meta) || {};
     const overall = cov ? hs13Clamp01(cov.overall) : 0;
-    const docCount = hs13Num(meta.docCount) || mods.reduce((a, m) => a + (Array.isArray(m.docs) ? m.docs.length : 0) + (Array.isArray(m.examples) ? m.examples.length : 0), 0);
+    const docCount = hs13Num(meta.docCount) || mods.reduce((a: any, m: any) => a + (Array.isArray(m.docs) ? m.docs.length : 0) + (Array.isArray(m.examples) ? m.examples.length : 0), 0);
     const available = meta.available != null ? hs13Num(meta.available) : docCount;
     const gaps = cov && Array.isArray(cov.gaps) ? cov.gaps : [];
     const pick = typeof (props && props.onPick) === 'function' ? props.onPick : null;
@@ -289,22 +289,22 @@ function Hs13Overview(props: Hs13OverviewProps) {
                     </Hs13Donut>
                     <Stat v={mods.length || covMods.length || 0} l="模块" color="#6366f1" />
                     <Stat v={docCount} l="语料篇数" color="#0ea5e9" />
-                    <Stat v={covMods.reduce((a, m) => a + (hs13Num(m.formulas) || 0), 0)} l="公式条目" color="#f59e0b" />
-                    <Stat v={covMods.reduce((a, m) => a + (hs13Num(m.tables) || 0), 0)} l="表格数" color="#10b981" />
+                    <Stat v={covMods.reduce((a: any, m: any) => a + (hs13Num(m.formulas) || 0), 0)} l="公式条目" color="#f59e0b" />
+                    <Stat v={covMods.reduce((a: any, m: any) => a + (hs13Num(m.tables) || 0), 0)} l="表格数" color="#10b981" />
                 </div>
             </Card>
             {/* ── 六模块卡网格（auto-fit → <720px 自然单列）── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12, marginBottom: 14 }}>
                 {mods.length
-                    ? mods.map((m, i) => <Hs13ModuleCard {...{ key: 'hs13mod' + i }} m={m} cov={covById[String(m.id)] || null}
-                        onPick={pick ? (mm) => pick(mm) : null} />)
+                    ? mods.map((m: any, i: any) => <Hs13ModuleCard {...{ key: 'hs13mod' + i }} m={m} cov={covById[String(m.id)] || null}
+                        onPick={pick ? (mm: any) => pick(mm) : null} />)
                     : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{cat ? '目录暂无可展示的模块' : '正在读取方法论目录…'}</div>}
             </div>
             {/* ── 缺口清单（有则列，无则一句「无缺口」）── */}
             <Card title="🧩 覆盖缺口">
                 {gaps.length
                     ? <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                        {gaps.slice(0, 24).map((g, i) => <div {...{ key: 'hs13gap' + i }}
+                        {gaps.slice(0, 24).map((g: any, i: any) => <div {...{ key: 'hs13gap' + i }}
                             style={{ fontSize: 11.5, color: 'var(--text-secondary)', padding: '5px 9px', borderRadius: 8, background: 'rgba(245,158,11,.08)' }}>
                             {'· ' + String(g.label || g.module || '模块') + '：' + String(g.detail || '')}
                         </div>)}
@@ -411,7 +411,7 @@ function Hs13Catalog(props: Hs13CatalogProps) {
     const cur = groups.find((g) => g.id === modId) || groups[0] || null;
     const docs = cur ? cur.docs : [];
     const sel = file || (docs[0] ? docs[0].file : '');
-    const pickDoc = (f) => setFile(f);
+    const pickDoc = (f: any) => setFile(f);
     /** 左栏：模块胶囊 + 当前模块文档列表 */
     const left = (
         <div>
@@ -427,7 +427,7 @@ function Hs13Catalog(props: Hs13CatalogProps) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {docs.length
-                    ? docs.map((d) => {
+                    ? docs.map((d: any) => {
                         const on = d.file === sel;
                         return (
                             <div {...{ key: 'hs13d' + d.file }}
@@ -470,7 +470,7 @@ function Hs13Search(props: Hs13SearchProps) {
     const [busy, setBusy] = React.useState(false);
     const [err, setErr] = React.useState('');
     const [openFile, setOpenFile] = React.useState('');
-    const run = async (text) => {
+    const run = async (text: any) => {
         const query = String(text == null ? '' : text).trim();
         setOpenFile('');
         setErr('');
@@ -543,7 +543,7 @@ function Hs13Search(props: Hs13SearchProps) {
             {/* 结果列表 */}
             {results.length
                 ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {results.map((r, i) => {
+                    {results.map((r: any, i: any) => {
                         const on = r.file === openFile;
                         return (
                             <div {...{ key: 'hs13r' + (r.file || i) }}
@@ -558,7 +558,7 @@ function Hs13Search(props: Hs13SearchProps) {
                                     {r.moduleId ? <span style={{ ...KV_TAG, fontSize: 10 }}>{String(r.moduleId)}</span> : null}
                                     <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{String(r.file || '')}</span>
                                 </div>
-                                {(Array.isArray(r.snippets) ? r.snippets : []).slice(0, 2).map((s, si) => <div {...{ key: 'hs13sn' + si }}>
+                                {(Array.isArray(r.snippets) ? r.snippets : []).slice(0, 2).map((s: any, si: any) => <div {...{ key: 'hs13sn' + si }}>
                                     {s && s.heading ? <div style={{ fontSize: 10.5, color: '#6366f1', fontWeight: 700, marginTop: 6 }}>{'§ ' + String(s.heading)}</div> : null}
                                     <Hs13Snippet text={(s && s.text) || ''} terms={r.terms} />
                                 </div>)}
@@ -611,7 +611,7 @@ function Hs13Practice(props: Hs13PracticeProps) {
                 }
                 setFiles(list);
                 if (list.length) {
-                    setFile((prev) => (list.some((x) => x.file === prev) ? prev : list[0].file));
+                    setFile((prev: any) => (list.some((x) => x.file === prev) ? prev : list[0].file));
                 }
             }
             catch {
@@ -660,7 +660,7 @@ function Hs13Practice(props: Hs13PracticeProps) {
     const selfMark = st.self === 'right' || st.self === 'wrong' ? st.self : '';
     const showVerdict = canAuto ? revealed : !!selfMark;
     const isRight = canAuto ? (revealed && !!st.chosen && st.chosen === answerKey) : selfMark === 'right';
-    const patchMark = (k, patch) => setMarks((prev) => {
+    const patchMark = (k: any, patch: any) => setMarks((prev: any) => {
         if (!k)
             return prev;
         const next = Object.assign({}, prev);
@@ -671,7 +671,7 @@ function Hs13Practice(props: Hs13PracticeProps) {
     let answered = 0;
     let correct = 0;
     for (const k of Object.keys(marks)) {
-        const it = items.find((x) => String(x.index) === k);
+        const it = items.find((x: any) => String(x.index) === k);
         if (!it)
             continue;
         const m = marks[k] || {};
@@ -688,10 +688,10 @@ function Hs13Practice(props: Hs13PracticeProps) {
                 correct++;
         }
     }
-    const pickFileChip = (f) => { setFile(f); setMarks({}); };
+    const pickFileChip = (f: any) => { setFile(f); setMarks({}); };
     /* ── 选项区：自动判分分支用可点击 OptionRow；否则只读参考列表 ── */
     const optionRows = optCount
-        ? cur.options.map((o) => {
+        ? cur.options.map((o: any) => {
             const key = String(o && o.key != null ? o.key : '');
             const text = String(o && o.text != null ? o.text : '');
             // 自动判分分支的状态着色；只读分支统一 idle（不可点）
@@ -716,7 +716,7 @@ function Hs13Practice(props: Hs13PracticeProps) {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
                 <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>练习集：</span>
                 {files.length
-                    ? files.map((f) => <button {...{ key: 'hs13pf' + f.file }}
+                    ? files.map((f: any) => <button {...{ key: 'hs13pf' + f.file }}
                         style={{
                             ...KV_BTN, borderRadius: 20, padding: '2px 11px', fontSize: 11,
                             ...(f.file === file ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}),
@@ -724,7 +724,7 @@ function Hs13Practice(props: Hs13PracticeProps) {
                         onClick={() => pickFileChip(f.file)}>{f.label || f.title}</button>)
                     : <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>练习清单读取中…</span>}
                 <button style={{ ...KV_BTN, marginLeft: 'auto', fontSize: 11 }}
-                    onClick={() => { setMarks({}); setNonce((n) => n + 1); }}>↻ 重新抽题</button>
+                    onClick={() => { setMarks({}); setNonce((n: any) => n + 1); }}>↻ 重新抽题</button>
             </div>
             {err ? <div style={{ fontSize: 11.5, color: '#b45309', marginBottom: 10 }}>{'⚠ ' + err}</div> : null}
             {data && data.degraded ? <div style={{ fontSize: 11.5, color: '#b45309', marginBottom: 10 }}>{'⚠ ' + String(data.error || '语料缺失，练习不可用')}</div> : null}
@@ -771,9 +771,9 @@ function Hs13Practice(props: Hs13PracticeProps) {
                     {/* 翻页 */}
                     <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                         <button style={{ ...KV_BTN, fontSize: 11 }}
-                            onClick={() => setIdx((n) => Math.max(0, n - 1))}>← 上一题</button>
+                            onClick={() => setIdx((n: any) => Math.max(0, n - 1))}>← 上一题</button>
                         <button style={{ ...KV_BTN, fontSize: 11 }}
-                            onClick={() => setIdx((n) => Math.min(items.length - 1, n + 1))}>下一题 →</button>
+                            onClick={() => setIdx((n: any) => Math.min(items.length - 1, n + 1))}>下一题 →</button>
                     </span>
                 </div>
                 {/* ── 判分后：解析 + 易错点（纯展示，无 alert 角色）── */}
@@ -830,7 +830,7 @@ function Hs13Trace(props: Hs13TraceProps) {
     const eps = (tr && tr.endpoints && typeof tr.endpoints === 'object') ? tr.endpoints : {};
     const epRows = Object.keys(eps).map((p) => ({
         path: p,
-        label: HS13_EP_LABEL[p] || p,
+        label: (HS13_EP_LABEL as Record<string, any>)[p] || p,
         hits: hs13Num(eps[p] && eps[p].hits),
         p50: hs13Num(eps[p] && eps[p].p50),
         p95: hs13Num(eps[p] && eps[p].p95),
@@ -853,7 +853,7 @@ function Hs13Trace(props: Hs13TraceProps) {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>本域调用计数（按工作区分槽隔离，?ws= 互不污染）</span>
                 <button style={{ ...KV_BTN, padding: '4px 12px', fontWeight: 700 }}
-                    onClick={() => setNonce((n) => n + 1)}>↻ 刷新</button>
+                    onClick={() => setNonce((n: any) => n + 1)}>↻ 刷新</button>
                 {tr && tr.at ? <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{'采样 ' + hs13FmtTime(tr.at)}</span> : null}
             </div>
             {err ? <div style={{ fontSize: 11.5, color: '#b45309', marginBottom: 10 }}>{'⚠ ' + err}</div> : null}
@@ -926,14 +926,14 @@ function Hs13Trace(props: Hs13TraceProps) {
                     <span style={{ ...KV_TAG, fontSize: 10 }}>{'声明总数 ' + hs13Num(decl.declaredTotal)}</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 10.5, color: 'var(--text-muted)' }}>
-                    {(Array.isArray(decl.endpoints) ? decl.endpoints : []).map((d, i) => <div {...{ key: 'hs13dc' + i }}>{(d && d.declared ? '✓ ' : '✗ ') + String((d && d.path) || '')}</div>)}
+                    {(Array.isArray(decl.endpoints) ? decl.endpoints : []).map((d: any, i: any) => <div {...{ key: 'hs13dc' + i }}>{(d && d.declared ? '✓ ' : '✗ ') + String((d && d.path) || '')}</div>)}
                 </div>
             </Card> : null}
             {/* 最近调用流 */}
             {tr ? <Card title={'🧵 最近调用流（环形缓冲尾部 ' + recent.length + ' 条）'}>
                 {recent.length
                     ? <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 260, overflowY: 'auto' }}>
-                        {recent.slice().reverse().map((ev, i) => <div {...{ key: 'hs13ev' + i }}
+                        {recent.slice().reverse().map((ev: any, i: any) => <div {...{ key: 'hs13ev' + i }}
                             style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 10.5, padding: '3px 7px', borderRadius: 7, background: i % 2 ? 'transparent' : 'rgba(148,163,184,.06)' }}>
                             <span style={{ color: 'var(--text-faint)', fontFamily: 'ui-monospace,Consolas,monospace', flexShrink: 0 }}>{hs13FmtTime(ev && ev.at)}</span>
                             <span style={{ ...KV_TAG, fontSize: 9, padding: '0 6px', background: 'rgba(99,102,241,.10)', color: '#4f46e5', flexShrink: 0 }}>{String((ev && ev.kind) || '—')}</span>
@@ -952,7 +952,7 @@ function Hs13Trace(props: Hs13TraceProps) {
     );
 }
 /** trace 用的键值行（纯函数式小工具，无 hook） */
-function hs13Kv(k, v) {
+function hs13Kv(k: any, v: any) {
     return (
         <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
             <span style={{ color: 'var(--text-muted)', minWidth: 96 }}>{String(k)}</span>
@@ -976,11 +976,11 @@ export function NativeHuasheng13View(props: NativeHuasheng13ViewProps) {
     const [visited, setVisited] = React.useState({ overview: true });
     // 跨分区跳转参数：总览点模块 → 目录浏览定位到该模块；检索/练习共用同一注入口
     const [catalogSeed, setCatalogSeed] = React.useState({ moduleId: '', file: '' });
-    const visit = (id) => {
+    const visit = (id: any) => {
         setSec(id);
-        setVisited((v) => (v[id] ? v : Object.assign({}, v, { [id]: true })));
+        setVisited((v: any) => (v[id] ? v : Object.assign({}, v, { [id]: true })));
     };
-    const jumpToCatalog = (m) => {
+    const jumpToCatalog = (m: any) => {
         const docs = m && Array.isArray(m.docs) ? m.docs : [];
         setCatalogSeed({ moduleId: String((m && m.id) || ''), file: docs.length ? String(docs[0].file || '') : '' });
         visit('catalog');
@@ -997,7 +997,7 @@ export function NativeHuasheng13View(props: NativeHuasheng13ViewProps) {
         </div>
     );
     // 非当前分区 display:none 隐藏（保持挂载 → 状态不丢，R9：hook 链恒定）
-    const wrap = (id, node) => <div {...{ key: 'hs13w-' + id }} style={sec === id ? undefined : { display: 'none' }}>{node}</div>;
+    const wrap = (id: any, node: any) => <div {...{ key: 'hs13w-' + id }} style={sec === id ? undefined : { display: 'none' }}>{node}</div>;
     return (
         <div {...{ 'data-kg-hs13-root': '1' }}>
             {tabRow}

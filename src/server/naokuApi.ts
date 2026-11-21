@@ -19,17 +19,17 @@ export { initNaoku, resetNaoku }
 
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }
 
-export function makeNaokuApi({ repoRoot, dataDir, store }) {
+export function makeNaokuApi({ repoRoot, dataDir, store }: any) {
 
   /** 深度题库配图端点（二进制；DB 记 webp 磁盘为 png，由 resolveNaokuImage 换扩展名） */
-  function serveImage(params, res) {
-    const dec = (v) => { try { return decodeURIComponent(v || '') } catch { return v || '' } }
+  function serveImage(params: any, res: any) {
+    const dec = (v: any) => { try { return decodeURIComponent(v || '') } catch { return v || '' } }
     const rel = dec(params.get('p'))
     if (!rel) { try { res.writeHead(400); res.end('bad request') } catch {} ; return }
     const target = safeImagePath(repoRoot, rel)
     if (!target) { try { res.writeHead(404); res.end('not found') } catch {} ; return }
     const ext = extname(target).toLowerCase()
-    const mime = MIME[ext]
+    const mime = (MIME as Record<string, any>)[ext]
     if (!mime) { try { res.writeHead(415); res.end('unsupported') } catch {} ; return }
     let size = 0
     try { size = statSync(target).size; res.writeHead(200, { 'Content-Type': mime, 'Content-Length': size, 'Cache-Control': 'public, max-age=86400' }) }
@@ -39,7 +39,7 @@ export function makeNaokuApi({ repoRoot, dataDir, store }) {
     st.pipe(res)
   }
 
-  function handleNaokuApi(path, params, post, method, wsRaw) {
+  function handleNaokuApi(path: any, params: any, post: any, method: any, wsRaw: any) {
     if (!path.startsWith('/api/naoku/')) return undefined
 
     if (path === '/api/naoku/status') {

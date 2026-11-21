@@ -17,7 +17,7 @@ let dbFailed = false
 let dbPath: any = null
 
 /** 合并分片（源仓 GongkaoNaoku/kaogong.db.part-*）到本地 data/.naoku.db */
-function ensureDb(repoRoot, dataDir) {
+function ensureDb(repoRoot: any, dataDir: any) {
   const target = join(dataDir, '.naoku.db')
   if (existsSync(target)) { dbPath = target; return target }
   const srcDir = join(repoRoot, 'GongkaoNaoku')
@@ -42,7 +42,7 @@ function ensureDb(repoRoot, dataDir) {
 }
 
 /** 惰性打开（失败只降级一次，不反复重试拖慢请求） */
-export function open(repoRoot, dataDir) {
+export function open(repoRoot: any, dataDir: any) {
   if (db) return db
   if (dbFailed) return null
   try {
@@ -59,7 +59,7 @@ export function open(repoRoot, dataDir) {
  * 由于 node:sqlite 需动态加载（同步 import 在 ESM 里不便），
  * 这里用 top-level 的延迟初始化：首次调用前由 index 侧 await init()。
  */
-export async function initNaoku(repoRoot, dataDir) {
+export async function initNaoku(repoRoot: any, dataDir: any) {
   if (db) return true
   if (dbFailed) return false
   try {
@@ -88,11 +88,11 @@ export function resetNaoku() {
   dbFailed = false
 }
 
-function safeAll(sql, params: any[] = []): any[] {
+function safeAll(sql: any, params: any[] = []): any[] {
   if (!db) return []
   try { return db.prepare(sql).all(...params) } catch { return [] }
 }
-function safeGet(sql, params: any[] = []): any {
+function safeGet(sql: any, params: any[] = []): any {
   if (!db) return null
   try { return db.prepare(sql).get(...params) } catch { return null }
 }
@@ -182,7 +182,7 @@ export function naokuQuestions({ module, category, kadian, count = 1, random = t
 }
 
 /** 知识点检索：从 kadian 字段找「考什么 + 怎么想」 */
-export function searchKadian(keyword, limit = 20) {
+export function searchKadian(keyword: any, limit = 20) {
   if (!db) return []
   const rows: any[] = safeAll(
     `SELECT kadian, category, module, COUNT(*) c FROM questions
@@ -239,7 +239,7 @@ export function questionsByKadian(kadian: string, limit = 10, repoRoot: any = nu
 // 前端 RichText 渲染时才改写为 /api/kg-img?p= 绝对 URL，服务端按 basename 探测真实扩展名——
 // DB 记 .webp 而磁盘是 .png，kg-img 端点用 resolveNaokuImage 兜底换扩展名）。
 const KG_IMG_TAG_RE = /<img[^>]*\ssrc=["']([^"']+)["'][^>]*\/?>/gi
-function neutralizeImages(s) {
+function neutralizeImages(s: any) {
   return String(s || '').replace(KG_IMG_TAG_RE, (full, src) => {
     const rel = String(src || '').replace(/\\/g, '/')
     if (!rel || /^https?:/i.test(rel)) return full          // 外链原样保留
@@ -247,7 +247,7 @@ function neutralizeImages(s) {
   })
 }
 /** 剥 HTML 但保留图片占位（选项/解析/五维标注/题干共用） */
-function stripHtmlKeepImg(s) {
+function stripHtmlKeepImg(s: any) {
   return neutralizeImages(s)
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
@@ -257,7 +257,7 @@ function stripHtmlKeepImg(s) {
     .trim()
 }
 
-function parseOptions(raw) {
+function parseOptions(raw: any) {
   const out: any = {}
   if (!raw) return out
   try {

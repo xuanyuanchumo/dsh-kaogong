@@ -38,7 +38,7 @@ test('cycle-14 材料逐份折叠：双视图状态 + 总开关 + 字数提示 +
   expect((papersView.match(/collapsedMats/g) || []).length >= 6 && (papersView.match(/toggleMat/g) || []).length >= 4).toBe(true)
   expect(papersView.includes("'▼ 全部展开'") && papersView.includes("'▲ 全部收起'") && papersView.includes("'▼ 展开全部材料")).toBe(true)
   expect(papersView.includes("约 ' + wordCount + ' 字") && papersView.includes('· 已折叠')).toBe(true)
-  expect(/jumpToMaterial[\s\S]{0,220}setCollapsedMats\(m => \(m\[no\] \? \{ \.\.\.m, \[no\]: false \} : m\)\)/.test(papersView)).toBe(true)
+  expect(/jumpToMaterial[\s\S]{0,220}setCollapsedMats\(\(m: any\) => \(m\[no\] \? \{ \.\.\.m, \[no\]: false \} : m\)\)/.test(papersView)).toBe(true)
 })
 
 test('cycle-14 申论草稿：localStorage 暂存三态 + 装载/清除 + UI 提示', () => {
