@@ -67,7 +67,7 @@ React 内联样式体系无法用 `:hover`——**不自管 onMouseEnter 状态*
 新增代码与新拆子组件必须消费（不再手写 cancelled 模式）。
 
 **纪律**：
-1. hooks.ts 属 client/ 根基建（C24-03 白名单已加）；React 经  获取（C24-06 单 require 纪律）；
+1. hooks/ 目录属 client/ 基建层（C24-03 白名单已含目录）；React 经  获取（C24-06 单 require 纪律）；
 2. 依赖数组必须含路径变化源与刷新令牌（教训「永久 spinner」）；
 3. 主源错误进 、弱依赖失败静默降级（fallbackNull）——不阻塞整页；
 4. 早退 return（loading/err）仍放在全部 hooks 之后（R9）。
