@@ -334,7 +334,7 @@ export function buildGraph({ banks, modules, telemetry, plan }: any = {}) {
   const pluginId = addNode('plugin', 'kaogong', 'dsh-kaogong', { version: CAPABILITIES.plugin.version })
 
   // 生命周期链
-  let prev = null
+  let prev: string | null = null
   for (const lc of CAPABILITIES.lifecycle) {
     const id = addNode('lifecycle', lc.stage, lc.stage, { desc: lc.desc })
     addEdge(pluginId, id, 'registers')
@@ -617,12 +617,12 @@ export function labelPropagation(nodes: any[] = [], edges: any[] = [], { maxIter
       const counts = new Map<string, number>()
       for (const nb of adj.get(id) || []) {
         const lb = label.get(nb)
-        counts.set(lb, (counts.get(lb) || 0) + 1)
+        counts.set(String(lb), (counts.get(String(lb)) || 0) + 1)
       }
       if (!counts.size) continue
       // 平票裁决：计数最大且标签字典序最小（排序后取首个达标项）
-      let best = null, bestCount = 0
-      for (const [lb, c] of [...counts].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
+      let best: string | null = null, bestCount = 0
+      for (const [lb, c] of [...counts].sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : String(a[0]) > String(b[0]) ? 1 : 0))) {
         if (c > bestCount) { best = lb; bestCount = c }
       }
       if (best && best !== label.get(id)) { label.set(id, best); changed = true }
@@ -631,8 +631,8 @@ export function labelPropagation(nodes: any[] = [], edges: any[] = [], { maxIter
   const groups = new Map<string, string[]>()
   for (const id of ids) {
     const lb = label.get(id)
-    if (!groups.has(lb)) groups.set(lb, [])
-    groups.get(lb).push(id)
+    if (!groups.has(String(lb))) groups.set(String(lb), [])
+    groups.get(String(lb))!.push(id)
   }
   const out = [...groups.values()].map(members => {
     const sorted = members.slice().sort()
@@ -656,12 +656,12 @@ export function clusteringCoefficient(nodes: any[] = [], edges: any[] = []) {
   let sum = 0, cnt = 0
   for (const id of ids) {
     const nb = adj.get(id)
-    const k = nb.length
+    const k = nb!.length
     if (k < 2) { coef[id] = 0; continue }
     let links = 0
     for (let i = 0; i < k; i++) {
-      const set = nbSets.get(nb[i])
-      for (let j = i + 1; j < k; j++) if (set.has(nb[j])) links++
+      const set = nbSets.get(nb[i]!)!
+      for (let j = i + 1; j < k; j++) if (set.has(nb[j]!)) links++
     }
     const c = (2 * links) / (k * (k - 1))
     coef[id] = +c.toFixed(4)
@@ -690,7 +690,7 @@ export function brandesBetweenness(nodes: any[] = [], edges: any[] = []) {
   if (n < 3) return ids.map(id => ({ id, score: 0 }))
   const idx = new Map<string, number>()
   for (let i = 0; i < n; i++) idx.set(ids[i], i)
-  const adjIdx: number[][] = ids.map(id => adj.get(id).map(x => idx.get(x)))
+  const adjIdx: number[][] = ids.map(id => adj.get(id)!.map(x => idx.get(x)!))
   // 前驱表用「CSR 式链表」而非 Array<number[]>：每源零分配、零 GC 抖动。
   // 容量上界 = 邻接表条目总数（每源每条 BFS 边最多贡献 1 个前驱条目）。
   let cap = 0
@@ -757,25 +757,25 @@ export function topoLayers(nodes: any[] = [], edges: any[] = []) {
   for (const id of ids) { inDeg.set(id, 0); outAdj.set(id, []) }
   for (const e of edges) {
     if (!e || !inDeg.has(e.source) || !inDeg.has(e.target)) continue
-    outAdj.get(e.source).push(e.target)
-    inDeg.set(e.target, inDeg.get(e.target) + 1)
+    outAdj.get(e.source)!.push(e.target)
+    inDeg.set(e.target, inDeg.get(e.target)! + 1)
   }
-  for (const id of ids) outAdj.get(id).sort()
+  for (const id of ids) outAdj.get(id)!.sort()
   const layer = new Map<string, number>()
   for (const id of ids) layer.set(id, 0)
   // 初始队列即已按字典序（ids 有序），后续入队顺序由出邻表有序保证 → 确定性
   const queue = ids.filter(id => inDeg.get(id) === 0)
   for (let qi = 0; qi < queue.length; qi++) {
     const v = queue[qi]
-    for (const w of outAdj.get(v)) {
-      if (layer.get(w) < layer.get(v) + 1) layer.set(w, layer.get(v) + 1)
-      inDeg.set(w, inDeg.get(w) - 1)
-      if (inDeg.get(w) === 0) queue.push(w)
+    for (const w of outAdj.get(v)!) {
+      if (layer.get(w)! < layer.get(v)! + 1) layer.set(w, layer.get(v)! + 1)
+      inDeg.set(w, inDeg.get(w)! - 1)
+      if (inDeg.get(w)! === 0) queue.push(w)
     }
   }
   let maxLayer = 0
-  for (const id of ids) maxLayer = Math.max(maxLayer, layer.get(id))
-  const leftover = ids.filter(id => inDeg.get(id) > 0)
+  for (const id of ids) maxLayer = Math.max(maxLayer, layer.get(id)!)
+  const leftover = ids.filter(id => inDeg.get(id)! > 0)
   if (leftover.length) {
     const tail = maxLayer + 1
     for (const id of leftover) layer.set(id, tail)
@@ -801,7 +801,7 @@ export function shortestPath(nodes: any[] = [], edges: any[] = [], from: string,
   let found = false
   for (let qi = 0; qi < queue.length && !found; qi++) {
     const v = queue[qi]
-    for (const w of adj.get(v)) {
+    for (const w of adj.get(v)!) {
       if (seen.has(w)) continue
       seen.add(w); prev.set(w, v)
       if (w === to) { found = true; break }
@@ -810,7 +810,7 @@ export function shortestPath(nodes: any[] = [], edges: any[] = [], from: string,
   }
   if (!found) return { found: false, path: [], length: 0 }
   const rev: string[] = [to]
-  while (rev[rev.length - 1] !== from) rev.push(prev.get(rev[rev.length - 1]))
+  while (rev[rev.length - 1] !== from) rev.push(prev.get(rev[rev.length - 1])!)
   const path = rev.reverse()
   return { found: true, path, length: path.length - 1 }
 }
@@ -830,7 +830,7 @@ export function neighborhood(nodes: any[] = [], edges: any[] = [], id: string, d
   for (let k = 0; k < d; k++) {
     const next: string[] = []
     for (const v of frontier) {
-      for (const w of adj.get(v)) {
+      for (const w of adj.get(v)!) {
         if (seen.has(w)) continue
         seen.add(w); next.push(w)
       }
@@ -863,13 +863,13 @@ export function reverseReach(nodes: any[] = [], edges: any[] = [], id: string) {
   for (const x of ids) radj.set(x, [])
   for (const e of edges) {
     if (!e || !radj.has(e.target) || !radj.has(e.source)) continue
-    radj.get(e.target).push(e.source)
+    radj.get(e.target)!.push(e.source)
   }
-  for (const x of ids) radj.get(x).sort()
+  for (const x of ids) radj.get(x)!.sort()
   const seen = new Set<string>([id])
   const queue: string[] = [id]
   for (let qi = 0; qi < queue.length; qi++) {
-    for (const w of radj.get(queue[qi])) {
+    for (const w of radj.get(queue[qi])!) {
       if (seen.has(w)) continue
       seen.add(w); queue.push(w)
     }
