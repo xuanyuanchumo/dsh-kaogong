@@ -84,9 +84,11 @@ test('k 跳邻域与反向可达、分层布局', async () => {
   const rr = G.reverseReach(g.nodes, g.edges, 'endpoint:/api/questions')
   expect(rr.dependents.includes('endpoint:/api/questions')).toBe(true)
   expect(rr.count).toBe(rr.dependents.length)
-  // 分层布局：全部节点有坐标（lay.id 覆盖 == V）
+  // 分层布局：全部节点有坐标（lay.id 覆盖 == V）+ 坐标归一化 0..1（含容差）
   const lay = G.layeredLayout(g.nodes, g.edges)
   expect(Object.keys(lay.id).length).toBe(g.nodes.length)
+  const inRange = Object.values(lay.id).every(p => p.x >= -0.001 && p.x <= 1.001 && p.y >= -0.001 && p.y <= 1.001)
+  expect(inRange, '分层布局坐标归一化 0..1').toBe(true)
 })
 
 test('确定性：分层布局与标签传播两次输出深相等', async () => {
