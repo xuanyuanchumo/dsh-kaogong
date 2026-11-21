@@ -166,3 +166,33 @@ POST /api/pool/rebuild（桌面端走宿主端点——外部进程 EPERM）
 | SMOKE-MAT-01..05 | 材料保真（抽题带材料/组整体/回炉快照/摄入/错题三路） |
 | SMOKE-PERF-01..04 | 统计快照缓存 / rowid 采样 / 单列索引 |
 | C24-03 / C44-01..03 | client 分层 / 三态 chips 基建单一事实源 |
+
+---
+
+## 附录：cycle-45 性能审计结论（2026-11-21 · 真实库 86,534 题实测）
+
+### 服务端基线（startServer 8498 端口实测，n=3-10 中位数）
+
+| 业务面 | 端点 | 时延 | 状态 |
+|---|---|---|---|
+| 练习抽题 | `/api/questions?count=10` | 稳态 88ms（首查含快照首建 ~0.5s） | ✅ |
+| 统一检索 | `/api/pool/search` | 18ms | ✅ |
+| 深度题库抽题 | `/api/naoku/questions` | **12ms**（优化前 110ms，9 倍） | ✅ 本轮修复 |
+| 真题卷列表 | `/api/papers` | 3.6ms | ✅ |
+| 真题卷单卷 | `/api/paper` | 15ms | ✅ |
+| 方法论目录/检索 | `/api/huasheng13/*` | 1.7/3.9ms | ✅ |
+| 知识搜索 | `/api/search` | 138ms（DFS 直读，低频） | ⚠️ 可接受 |
+| 错题本/统计/排程 | `/api/wrong` `/api/stats` `/api/plan/schedule` | 0.9/0.9/2.5ms | ✅ |
+| 能力对账 | `/api/capabilities` | 5.8ms | ✅ |
+
+### 本轮性能修复（cycle-45）
+
+1. **naokuQuestions 无过滤路径**：`ORDER BY RANDOM()` 在 27,506 行宽表 = 91.7ms（全表物化排序）→ 随机 rowid 起点补捞 0.1ms；带 WHERE 子集保留 RANDOM（1.7ms）。**110ms → 12ms**
+2. **poolDb schema v5**：`ix_q_mat` 部分索引（`WHERE group_material != ''`）——L0 材料组快照首建 735ms → 281ms（稳态 0.09ms 不变）。三条纪律：查询 WHERE 蕴含索引 WHERE / 索引列含查询所需列 / 排序放内存。
+3. **显式收口**：L1 带图层 31.5ms（stem LIKE 固有成本）经四方案对比后**保留现状**（收益 ≤30ms/请求 vs 首建+一致性复杂度）。
+
+### 前端审计（bundle 598KB · 524K 字符）
+
+- **体积分布**：huasheng13-view 68KB / graph-view 66KB / question-kit 62KB；注释占 ~9%（bundler 铁律不删中文注释；本地文件体积非运行时成本，宿主同源加载无 gzip 也 <1MB 一次性）
+- **render 热点**：papers-view 24 个 `.map` 渲染点、56 useState——但真题卷列表**服务端已截断 200 条**（listPapers `slice(0,200)` + total 全量口径，㊼ 纪律），渲染成本 ≤200 行 ≈ 4ms，无虚拟滚动必要
+- **池化状态**（更新 §2.2）：前端零直连不变；抽题主链路池化不变；本轮验证「保留直读面」四项收益/复杂度比后**维持现状**（理由已固化 CLAUDE.md cycle-45 段）
