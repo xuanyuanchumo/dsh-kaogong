@@ -59,3 +59,17 @@ React 内联样式体系无法用 `:hover`——**不自管 onMouseEnter 状态*
 | 卡片级降级 | render 旅程全量 role="alert" 断言 | ✅ 长期守卫 |
 | KgLoad 禁手写 | C44-02 静态守卫 | ✅ 长期守卫 |
 | 组件消费 ≥4 视图 | C44-03 静态守卫 | ✅ 长期守卫 |
+
+## 六、取数 hooks（cycle-48 · client/hooks.ts）
+
+视图取数优先消费 （单端点）/ （多端点并行，条目可声明 
+弱依赖）——内置 cancelled 防御 +  收敛 + loading 生命周期。**现有视图不强制回改**，
+新增代码与新拆子组件必须消费（不再手写 cancelled 模式）。
+
+**纪律**：
+1. hooks.ts 属 client/ 根基建（C24-03 白名单已加）；React 经  获取（C24-06 单 require 纪律）；
+2. 依赖数组必须含路径变化源与刷新令牌（教训「永久 spinner」）；
+3. 主源错误进 、弱依赖失败静默降级（fallbackNull）——不阻塞整页；
+4. 早退 return（loading/err）仍放在全部 hooks 之后（R9）。
+
+**迁移进度**：plan-view 已迁（示范）；其余 9 处 cancelled 模式逐视图迁移，每批 test:all 兜底。

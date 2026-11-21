@@ -70,7 +70,8 @@ test('C24-01..06 组件规范：注册表路由/目录分层/tsx 全覆盖/jsx c
   expect(/const VIEW_ROUTES: Record</.test(cl24) && /h\(route\.comp, \{ key: route\.key\(tick\)/.test(cl24)).toBe(true)
   expect((cl24.match(/view === '[a-z]+' \? h\(Native/g) || []).length <= 1).toBe(true)
   const root = fs.readdirSync(path.join(REPO, 'src', 'client'), { withFileTypes: true })
-  expect(root.filter(f => f.isFile()).every(f => ['client.tsx', 'ui-kit.tsx'].includes(f.name))).toBe(true)
+  // cycle-48：hooks.ts 加入白名单（自定义 hooks 基建——非视图级，与 ui-kit 同层）
+  expect(root.filter(f => f.isFile()).every(f => ['client.tsx', 'ui-kit.tsx', 'hooks.ts'].includes(f.name))).toBe(true)
   expect(fs.readdirSync(path.join(REPO, 'src', 'client', 'views')).every(f => f.endsWith('.tsx'))).toBe(true)
   expect(/"jsx": "react"/.test(readSrc('tsconfig.json')) && !/"jsx": "react-jsx"/.test(readSrc('tsconfig.json'))).toBe(true)
   // .tsx 禁 import React（唯一 require('react') 在 ui-kit）
