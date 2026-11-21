@@ -325,3 +325,17 @@ DSH 社区 dsh-testkit（npm v0.4.4，MIT）提供「真实宿主发布门禁」
 **累计：67/478 断言已迁移。** 剩余大头为需 server 的运行时域（RP/RM 题库管理、HS13 运行时、IMG 链路、SRS/判分旅程）与 render.test 的 41 旅程组——待 server harness 域迁移时统一处理。
 
 **阶段 4 新增教训**：迁移静态判据前先定位判据的**事实源**——HS13-10 的 META↔磁盘对账在旧文件里 import dist 的 HUASHENG13_META，初版迁移误用源码 grep 形态查错了文件（META 定义在 manifest.ts）导致假红。**规矩：迁移 = 判据逐字等价 + 事实源同一，两者缺一不可。**
+### 阶段 5 迁移记录（cycle-47 · server 运行时域首迁）
+
+| 域 | 文件 | 断言 | 特征 |
+|---|---|---|---|
+| srs | tests/smoke/srs.test.mjs | 4 test | §4 工作区隔离/判分 + §11 SRS 闭环全旅程 + §5-§9 抽验（**首个 server 运行时域**） |
+
+**累计：71/478 断言已迁移（8 个测试文件全绿）。**
+
+**阶段 5 三个基建收口**：
+1. **setupDomain({ws})**：分域 server 域文件的最短启动样板（server+base+J/P/JW/PW+测前清理一次拿到）——后续 server 域迁移全部走此入口；
+2. **vitest.config.mjs**：exclude tests/e2e/**（loader.test 为 node 直跑形态，vitest 聚合报「No test suite found」——e2e 车道分离于单元车道由配置化收口，不再依赖文件内环境检测）；
+3. **fileParallelism: false**：分域文件共享用户数据根与 8495 端口段——实测并发下 progress 写覆盖假红（HIST 域），串行消除竞态。**教训：vitest 默认文件级并行的前提是「测试间资源隔离」，共享外部状态的分域文件必须显式关并行或做资源分片**。
+
+**剩余 407 断言的迁移路径**：server 运行时域（RP/RM 题库管理、HS13 运行时、IMG 链路、模考/申论/真题卷端到端）全部走 setupDomain 样板；render.test 的 41 旅程组待 render harness（React 三件套 mock）抽取后分域。
