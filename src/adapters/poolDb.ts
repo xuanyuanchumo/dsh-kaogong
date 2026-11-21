@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
 /** 存储层 schema 版本（变更必须 bump；与 manifest 声明对账——SMOKE-KGDB-01） */
-export const POOL_SCHEMA_VERSION = 4
+export const POOL_SCHEMA_VERSION = 5
 
 /** 库文件基名（研究 15 §1.1 统一口径：`.kaogong.db`） */
 export const POOL_DB_NAME = '.kaogong.db'
@@ -98,6 +98,12 @@ CREATE INDEX IF NOT EXISTS ix_q_mod ON question(module, category);
 CREATE INDEX IF NOT EXISTS ix_q_kadian ON question(kadian);
 CREATE INDEX IF NOT EXISTS ix_q_source ON question(source_id, local_key);
 CREATE INDEX IF NOT EXISTS ix_q_cfp ON question(content_fp);
+-- cycle-45（性能·研究 23 实测）：材料组索引（L0 层 sampleQuestions 首建用）。
+-- 全表行拆包扫 86,534 行宽表 = 735ms/次；**部分索引**（仅 18,419 有材料行入索引页）
+-- 扫描 281ms（2.6 倍）且随索引成长不随全表成长。WHERE 与查询条件一致（部分索引
+-- 匹配规则：查询 WHERE 须蕴含索引 WHERE）；排序不放 SQL（索引键序是 group_material
+-- 前缀，ORDER BY seq 无法利用 → 内存排序 20ms 内），首建成本由快照缓存 amortize。
+CREATE INDEX IF NOT EXISTS ix_q_mat ON question(group_material, canonical_id, module, seq) WHERE group_material != '';
 
 -- ④b 一题多出处（跨源聚合——设计 §9b.4 pool_sources）
 -- 同一 canonical_id 在多个源/多套卷出现时，题目本体只存一份，出处存这张表。

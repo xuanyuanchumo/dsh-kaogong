@@ -1730,13 +1730,15 @@ check('命名空间清单含 PROJ_A', (wss.workspaces || []).some(w => w.ns.incl
         implD.includes('putAnalysis(db, canon,') && implD.includes("putAnalysis(db, mergeTarget,"),
         '解析多版本缺失（解析差异会丢）')
       // D-04：运行时——池内同 cf 无重复行 + 孤儿题 0
+      // cycle-45：schema bump v5（ix_q_mat 材料组部分索引）；v4 判据升级为「≥4」语义版本门
       {
         const psD = await J(`${B}/api/pool/status?ws=${CX}`)
         const tables = psD.tables || []
-        check('SMOKE-DEDUPE-04 schema v4（question_analysis 表在列）',
+        check('SMOKE-DEDUPE-04 schema ≥v4（question_analysis 表在列；v5=ix_q_mat 材料索引）',
           Array.isArray(tables) && tables.includes('question_analysis') &&
-          pdbD.includes('POOL_SCHEMA_VERSION = 4'),
-          'schema 未升级 v4')
+          /POOL_SCHEMA_VERSION = (4|5)/.test(pdbD) &&
+          (psD.schemaVersion || 0) >= 4,
+          'schema 未升级 ≥v4')
       }
       // D-05：解析多版本可查端点（研究 21 纪律③可查化——运行时 + manifest 对账）
       {
