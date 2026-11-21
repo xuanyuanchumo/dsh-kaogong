@@ -64,9 +64,9 @@ function hs13BlockStart(line) {
  * 支持的块：标题(#1-6) / 段落 / 无序列表 / 有序列表 / 表格 / 代码围栏 / 引用 / 分隔线。
  * CRLF 先归一（语料历史是 CRLF，不归一会让表头判定全部失败）。
  */
-function hs13MarkdownBlocks(src) {
+function hs13MarkdownBlocks(src): any[] {
     const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
-    const blocks = [];
+    const blocks: any[] = [];
     let i = 0;
     while (i < lines.length) {
         const raw = lines[i];
@@ -259,7 +259,7 @@ function hs13Inline(text, keyBase) {
     return out;
 }
 /** 单块渲染（纯函数，无 hook；供 hs13RenderBlocks 调用） */
-function hs13RenderBlock(b, key) {
+function hs13RenderBlock(b: any, key) {
     if (!b || typeof b !== 'object')
         return null;
     if (b.t === 'h') {
