@@ -35,7 +35,7 @@ export function parseOverview(content) {
  * 本函数仍只负责申论形态（向后兼容，返回值语义不变）。
  */
 export function parseMaterials(content) {
-  const out = []
+  const out: any[] = []
   const start = content.search(/^##\s*给定材料\s*$/m)
   if (start < 0) return out
   const after = content.slice(start)
@@ -59,7 +59,7 @@ export function parseMaterials(content) {
 export function parseGroupMaterials(content) {
   const out = new Map()
   const re = /^##\s*材料\s*(\d+)\s*$/gm
-  const marks = []
+  const marks: any[] = []
   let m
   while ((m = re.exec(content)) !== null) marks.push({ no: +m[1], at: m.index, after: m.index + m[0].length })
   for (let i = 0; i < marks.length; i++) {
@@ -135,8 +135,8 @@ export function parseQuestion(no, body, subject, groupMaterial) {
   // 本题题干若包含下一个材料段头，则从这里裁剪（材料正文由位置扫描注入下一题组）
   const cutAt = beforeDetails.search(/^##\s*材料\s*\d+\s*$/m)
   if (cutAt >= 0) beforeDetails = beforeDetails.slice(0, cutAt)
-  let stemLines = []
-  let optLines = []
+  let stemLines: any[] = []
+  let optLines: any[] = []
   let parsed
   if (isXingce) {
     for (const ln of beforeDetails.split('\n')) {
@@ -178,7 +178,7 @@ export function parsePaperText(content, meta) {
   const qStart = content.search(/^##\s*题目\s*$/m)
   const qText = qStart >= 0 ? content.slice(qStart) : content
   const blocks = qText.split(/\n###\s*第\s*(\d+)\s*题\s*\n/)
-  const questions = []
+  const questions: any[] = []
   for (let i = 1; i < blocks.length; i += 2) {
     questions.push(parseQuestion(+blocks[i], blocks[i + 1] || '', meta.科目 || '', null))
   }
@@ -188,10 +188,10 @@ export function parsePaperText(content, meta) {
   if (groupMats.size) {
     const reMat = /^##\s*材料\s*(\d+)\s*$/gm
     const reQ = /^###\s*第\s*(\d+)\s*题/gm
-    const qPositions = []
+    const qPositions: any[] = []
     let qm
     while ((qm = reQ.exec(content)) !== null) qPositions.push({ no: +qm[1], at: qm.index })
-    const matRanges = []
+    const matRanges: any[] = []
     let mm
     reMat.lastIndex = 0
     while ((mm = reMat.exec(content)) !== null) matRanges.push({ no: +mm[1], at: mm.index, after: mm.index + mm[0].length })
