@@ -69,6 +69,14 @@ export async function rebuildPool(repoRoot: string, dataDir: string, opts: { reb
     } catch { /* 清理失败不阻塞重建 */ }
     // FTS 重建（外部内容表模式；实测 5 万行 311ms）
     rebuildFts(db)
+    // cycle-46：USES_METHOD 边生产必须在 FTS rebuild **之后**（特征短语经 question_fts
+    // 反查命中题——FTS 空表时全跳过=静默 0 边。曾内联在 ingestKadianNodes 时序错误，
+    // rebuild 实测 0 边的根因；抽为独立函数由本处显式调用）。
+    try {
+      const { produceUsesMethodEdges } = await import('./poolSourceKnowledge.js')
+      const um = produceUsesMethodEdges({ db })
+      if (um && um.relations) sources['uses-method'] = um
+    } catch { /* USES_METHOD 生产失败不阻塞 rebuild 主链路 */ }
     const stats = poolStats(db)
     setMeta(db, 'ingest_stats', JSON.stringify(sources))
     const totalQ = Object.values(sources).reduce((s: number, x: any) => s + ((x && x.questions) || 0), 0)

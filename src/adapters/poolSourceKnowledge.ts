@@ -201,6 +201,64 @@ export function ingestKadianNodes(ctx: any): any {
 }
 
 /**
+ * USES_METHOD 边生产（cycle-46 · 用户确认项④：「方法论↔题」关联从声明变数据）。
+ *
+ * ⚠️ 时序纪律（本轮 rebuild 实测 0 边的根因）：本函数**必须**在 `rebuildFts(db)` 之后调用——
+ * FTS trigram 表在 ingestAll 完成后才 rebuild（poolIngest 尾段），kadian 源在 registry
+ * 中排 huasheng13 之后、早于 FTS rebuild → 在 ingestKadianNodes 内联生产时 FTS 是空表，
+ * 全部短语命中 0 → continue 跳过（静默 0 边——「时序导致的声明不落地」）。
+ *
+ * 事实基础（本轮实测）：FTS 内题目解析已含方法论关键词（「截位直除」1605 题）。
+ * 落法 = **方法论文档特征短语反查**：每个 methodology 节点抽 2-8 字特征短语
+ * （复用 FTS trigram 匹配），命中题 ≥3 条才建边（防噪声单点）；上限 200 边/文档
+ * （防止「常识判断」类大模块把关系表撑爆）。
+ */
+export function produceUsesMethodEdges(ctx: { db: any }): any {
+  const { db } = ctx
+  const stats = { relations: 0, docs: 0, skipped: false }
+  try {
+    // 特征短语表：方法论高频技巧名（手工登记——机器切分会产出碎词，教训㉜）
+    const SIGNATURES: Array<{ kn: string, phrases: string[] }> = [
+      { kn: 'hs13:ziliao-fenxi', phrases: ['截位直除', '增长率', '比重', '基期', '现期', '年均增长', '百化分'] },
+      { kn: 'hs13:shuliang-guanxi', phrases: ['代入排除', '赋值', '方程', '行程', '工程', '排列组合', '倍数'] },
+      { kn: 'hs13:panduan-tuili', phrases: ['翻译推理', '加强论证', '削弱论证', '定义判断', '类比推理', '真假话'] },
+      { kn: 'hs13:yanyu-ciyu', phrases: ['逻辑填空', '中心理解', '主旨', '意图判断', '细节判断', '语句排序'] },
+      { kn: 'hs13:panduan-tuxing', phrases: ['位置规律', '对称性', '面数量', '一笔画', '黑白块', '空间重构'] },
+      { kn: 'hs13:changshi-panduan', phrases: ['时政', '法律常识', '政治常识', '科技常识', '人文常识'] },
+    ]
+    withTx(db, () => {
+      for (const sig of SIGNATURES) {
+        // 文档节点存在才建边（语料未安装时 putRelation 的 dst 无主——跳过）
+        const kn = db.prepare(`SELECT kn_id FROM knowledge WHERE kn_id = ?`).get(sig.kn)
+        if (!kn) continue
+        let edges = 0
+        for (const phrase of sig.phrases) {
+          if (edges >= 200) break
+          const hits = db.prepare(
+            // ⚠️ question_fts 是外部内容表（content='question', content_rowid='id'）——
+            // FTS 列只有 stem/options/analysis/...（无 canonical_id）；rowid 即 question.id。
+            // 反查经 rowid → question.canonical_id 两跳完成（本轮实测 no such column 修正）。
+            `SELECT q.canonical_id FROM question_fts f JOIN question q ON q.id = f.rowid WHERE question_fts MATCH ? LIMIT 400`,
+          ).all('"' + phrase + '"')
+          if (!hits.length || hits.length < 3) continue
+          for (const h of hits as any[]) {
+            if (edges >= 200) break
+            putRelation(db, 'USES_METHOD', 'question', String(h.canonical_id), 'knowledge', sig.kn, 0.7,
+              JSON.stringify({ src: 'method-signature', rule: 'fts-reverse', phrase }))
+            edges++
+          }
+        }
+        if (edges) stats.docs++
+        stats.relations += edges
+      }
+    })
+  } catch (e: any) {
+    return { source: 'uses-method', skipped: true, reason: String(e && e.message).slice(0, 120), ...stats }
+  }
+  return { source: 'uses-method', ...stats }
+}
+
+/**
  * 纯文档仓资产登记（sakib / developer2gwy / Exam_Database / NovaForge / yunduanqiqu）。
  * 只有 asset 账本（L1 引用），不产知识节点（正文无结构化语义）。
  * Exam_Database 上游 data/raw+processed 为空 → available 探针语义由「目录存在」承担（如实登记）。

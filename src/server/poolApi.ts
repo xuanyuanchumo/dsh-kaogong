@@ -223,7 +223,42 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
       })
       const picked = weightedPick(cand, weights, count)
       const ids = picked.map((r: any) => String(r.canonical_id))
-      const questions = ids.map((id) => poolQuestionDetail(db, id)).filter(Boolean)
+      // cycle-46（用户确认项②·抽题器收敛）：poolQuestionDetail 形状是**池原生**（correctAnswer
+      // 缺失/id=canonicalId/source=paper 等）——practice 卡片与 /api/check 消费旧形状
+      // （correctAnswer/id/source/paperFile/number/kadian）。正解 = **出站映射为旧形状超集**
+      //（字段加法不改既有键——池独有字段 sources/dims 保留，兼容硬约束零删改）。
+      // ⚠️ POOL-04 教训：首版映射漏了 kadian 字段 → 守卫「考点多样性 ≥5」当场假红
+      //（kadian=0 空考点 60/60）——字段清单必须对照消费面逐个核对，不能凭印象裁剪。
+      const questions = ids.map((id) => {
+        const d = poolQuestionDetail(db, id)
+        if (!d) return null
+        const s0 = (d.sources && d.sources[0]) || {}
+        return {
+          // 旧形状兼容字段（/api/check 与 question-kit 消费面）
+          id: d.canonicalId,
+          number: 0,
+          type: d.qtype || d.category || '',
+          module: d.module,
+          kadian: d.kadian || '',
+          exam: s0.paper || '',
+          region: d.region || '',
+          year: d.year || '',
+          source: (d.sources && d.sources[0] && d.sources[0].source) || 'pool',
+          paperFile: d.paper || '',
+          qid: d.qid || '',
+          stem: d.stem || '',
+          options: d.options || {},
+          correctAnswer: String(d.answer || '').trim().toUpperCase(),
+          analysis: d.analysis || '',
+          dims: d.dims,
+          groupMaterial: d.groupMaterial || '',
+          groupMaterialNo: d.groupMaterialNo || 0,
+          // 池富字段保留（sources 供白盒/溯源；canonicalId 供 study_event 双写）
+          canonicalId: d.canonicalId,
+          sources: d.sources,
+          sourceCount: d.sourceCount,
+        }
+      }).filter(Boolean)
       // cycle-42 结果层确定性配额（IMG-04 根治第二步）：加权池稀释使带图行实际命中
       // 不可控（补捞 10 行进 510 池期望命中 0.2）——**结果层补足**：带图题不足 ⌈count/2⌉
       // 时从带图层直查 poolQuestionDetail 补入头部（与 sampleQuestions L1 同构；
@@ -244,8 +279,24 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
               const er = pool[(start + i) % pool.length]
               const cid = String(er.canonical_id)
               if (have.has(cid)) continue
-              const q = poolQuestionDetail(db, cid)
-              if (q && String(q.stem || '').includes('kgimg://')) { questions.unshift(q); have.add(cid); imgNeed-- }
+              const d = poolQuestionDetail(db, cid)
+              // cycle-46：补足题也过同族映射（原生形状混入 = correctAnswer 缺失 → /check 报错）
+              if (d && String(d.stem || '').includes('kgimg://')) {
+                const s0 = (d.sources && d.sources[0]) || {}
+                questions.unshift({
+                  id: d.canonicalId, number: 0, type: d.qtype || d.category || '', module: d.module,
+                  kadian: d.kadian || '',
+                  exam: s0.paper || '', region: d.region || '', year: d.year || '',
+                  source: (d.sources && d.sources[0] && d.sources[0].source) || 'pool',
+                  paperFile: d.paper || '', qid: d.qid || '',
+                  stem: d.stem || '', options: d.options || {},
+                  correctAnswer: String(d.answer || '').trim().toUpperCase(),
+                  analysis: d.analysis || '', dims: d.dims,
+                  groupMaterial: d.groupMaterial || '', groupMaterialNo: d.groupMaterialNo || 0,
+                  canonicalId: d.canonicalId, sources: d.sources, sourceCount: d.sourceCount,
+                } as any)
+                have.add(cid); imgNeed--
+              }
             }
           }
           // 截断语义修正（R49）：带图补足 unshift 在头部，但截断「保前 count」会把
