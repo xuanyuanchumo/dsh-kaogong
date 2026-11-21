@@ -359,3 +359,19 @@ render.test 41 旅程组（待 render harness 抽取）。
 **累计：101/478 断言已迁移（11 文件全绿）——突破百位。**
 
 **阶段 7 新增教训**：迁移「受控回落」类探针时必须核对探针的**实际 URL**——HS13-02 的未知子路径探针打的是域内 （域链回落语义），初版误译成根路径裸探针（拿到独立端口 404 文本非 JSON）。「探针打到哪」和「探针证明什么」是两件事，判定语义不变则 URL 也不许变。
+### 阶段 17-19 迁移记录（cycle-47 · render 旅程域全部完成）
+
+| 域 | 文件 | 断言 |
+|---|---|---|
+| render harness | tests/_harness/render.mjs | 设施（combo 加载+49 端点 mock+mountPanel） |
+| smoke-journey | tests/render/smoke-journey.test.mjs | 7 |
+| papers-journey | tests/render/papers-journey.test.mjs | 5 |
+| obs-journey | tests/render/obs-journey.test.mjs | 10 |
+| graph-journey | tests/render/graph-journey.test.mjs | 8 |
+| memory-repos | tests/render/memory-repos.test.mjs | 7 |
+| huasheng13-journey | tests/render/huasheng13-journey.test.mjs | 8 |
+| ghost-journey | tests/render/ghost-journey.test.mjs | 3 |
+
+**累计：276/478 断言已迁移（35 文件全绿）。render.test 66 旅程断言已全部等价覆盖。**
+
+**harness 抽取教训**：机械切割三次失败（残尾注释/重复声明/try 闭合/captured 作用域/combo 相对路径）——教训㉙「顶层声明行号切点」对『块内互相引用的设施』不适用；正解 = 切割后必须逐项修结构依赖（变量提升/catch 补齐/路径重锚），且每次修后 node --check + 实跑验证。
