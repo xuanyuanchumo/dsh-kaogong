@@ -141,7 +141,7 @@ export function parseQuestions(filePath, maxQ = 20) {
     const optPattern = /-\s*\*\*([A-D])\*\*\.\s*(.+?)(?:\s*✅)?(?:\n|$)/g
     let m2
     while ((m2 = optPattern.exec(block)) !== null) options[m2[1]] = stripHtmlKeepImg(m2[2])
-    let correctAnswer = null
+    let correctAnswer: any = null
     const am = block.match(/\*\*答案\*\*[：:]\s*([A-D])/)
     if (am) correctAnswer = am[1]
     let analysis = ''

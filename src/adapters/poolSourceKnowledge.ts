@@ -71,7 +71,7 @@ export async function ingestMethodologySource(ctx: any): Promise<any> {
   const { repoRoot, db } = ctx
   const stats = { knowledge: 0, assets: 0, relations: 0, skipped: false, files: 0, lastError: '' }
   if (!existsSync(join(repoRoot, 'huasheng13'))) {
-    return { source: 'huasheng13', skipped: true, reason: 'huasheng13 语料未安装（题库管理可装）', ...stats }
+    return { source: 'huasheng13', ...stats, skipped: true, reason: 'huasheng13 语料未安装（题库管理可装）' }
   }
 
   // ① 方法论 25 篇：复用既有 buildIndex（磁盘快照，fixtureHash 失效——不重造轮子）。
@@ -149,7 +149,7 @@ export function ingestKadianNodes(ctx: any): any {
     const kadians = db.prepare(
       `SELECT DISTINCT dst_id k FROM relation WHERE rel_type = 'BELONGS_TO' AND dst_kind = 'kadian' AND LENGTH(dst_id) > 0`,
     ).all()
-    if (!kadians.length) return { source: 'kadian', skipped: true, reason: '库内无 BELONGS_TO/kadian 边（先摄入题目）', ...stats }
+    if (!kadians.length) return { source: 'kadian', ...stats, skipped: true, reason: '库内无 BELONGS_TO/kadian 边（先摄入题目）' }
 
     withTx(db, () => {
       // ① 考点节点入库
@@ -195,7 +195,7 @@ export function ingestKadianNodes(ctx: any): any {
       } catch { /* 连接失败不阻塞节点入库 */ }
     })
   } catch (e: any) {
-    return { source: 'kadian', skipped: true, reason: '考点节点摄入异常: ' + (e && e.message), ...stats }
+    return { source: 'kadian', ...stats, skipped: true, reason: '考点节点摄入异常: ' + (e && e.message) }
   }
   return { source: 'kadian', ...stats }
 }
@@ -253,7 +253,7 @@ export function produceUsesMethodEdges(ctx: { db: any }): any {
       }
     })
   } catch (e: any) {
-    return { source: 'uses-method', skipped: true, reason: String(e && e.message).slice(0, 120), ...stats }
+    return { source: 'uses-method', ...stats, skipped: true, reason: String(e && e.message).slice(0, 120) }
   }
   return { source: 'uses-method', ...stats }
 }

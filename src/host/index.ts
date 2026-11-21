@@ -28,7 +28,7 @@ const PREFERRED_PORT = Number.isInteger(KG_PORT_RAW) && KG_PORT_RAW >= 1 && KG_P
   ? KG_PORT_RAW
   : 8400
 const MOUNT_PATH = '/kaogong'   // 宿主同源路由前缀（与 client 半的契约）
-const runtime = { port: null, server: null, adopted: false, boot: 'pending', tools: 0, mounted: false }
+const runtime: any = { port: null, server: null, adopted: false, boot: 'pending', tools: 0, mounted: false }
 
 // 工具输出契约：canonical JSON {text} → 模型内容块
 // cycle-19 R-OUT-1（dsh-ops host-contract 技巧落地）：统一「正文 + 标记行」结构化卡片。

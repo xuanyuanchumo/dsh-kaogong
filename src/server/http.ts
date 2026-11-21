@@ -272,7 +272,7 @@ function graphSnapshot(wsRaw) {
   const ge = buildGraph({ banks, modules, plan })
   const metrics = graphMetrics(ge.nodes, ge.edges)
   const tel = telemetrySnapshot(telemetry, CAPABILITIES.endpoints.length, BOOT_TS)
-  const p = domains.store.loadProgress(wsRaw)
+  const p = domains.store.loadProgress(wsRaw || undefined)
   // ── v1.8 追加：分析层（纯函数、确定性；每次缓存未命中重算，5s TTL）──
   const deg = degreeAnalysis(ge.nodes, ge.edges)
   const analytics = {
@@ -354,7 +354,7 @@ async function handleApi(path, params, post, method, wsRaw, port) {
 function coreApi(path, params, post, method, wsRaw, port) {
   if (path === '/api/status') {
     const rs = repoStats(domains.root)
-    const p = domains.store.loadProgress(wsRaw)
+    const p = domains.store.loadProgress(wsRaw || undefined)
     return {
       app: APP_NAME, port, pid: process.pid, uptimeSec: Math.round((Date.now() - BOOT_TS) / 1000),
       repos: rs,
@@ -380,7 +380,7 @@ function coreApi(path, params, post, method, wsRaw, port) {
     if (!q || !q.correctAnswer) return { error: '缺少题目对象（需含 correctAnswer）' }
     const answer = (post.answer || '').toUpperCase().trim()
     const isCorrect = answer === q.correctAnswer
-    const progress = domains.store.loadProgress(wsRaw)
+    const progress = domains.store.loadProgress(wsRaw || undefined)
     if (post.label && !progress.label) progress.label = post.label
     progress.answered++
     if (isCorrect) progress.correct++; else progress.wrong++
@@ -420,11 +420,11 @@ function coreApi(path, params, post, method, wsRaw, port) {
     return { isCorrect, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongEvent, progress: { answered: progress.answered, correct: progress.correct, wrong: progress.wrong, rate: Math.round(progress.correct / progress.answered * 100) } }
   }
   if (path === '/api/progress' && method === 'GET') {
-    const p = domains.store.loadProgress(wsRaw)
+    const p = domains.store.loadProgress(wsRaw || undefined)
     return { ...p, ws: domains.store.wsKey(wsRaw), rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
   }
   if (path === '/api/progress' && method === 'POST') {
-    const p = domains.store.loadProgress(wsRaw)
+    const p = domains.store.loadProgress(wsRaw || undefined)
     if (post.day) p.day = Math.max(1, Math.min(30, post.day))
     if (post.label) p.label = post.label
     if (post.reset) { p.answered = 0; p.correct = 0; p.wrong = 0; p.history = []; p.byModule = {}; p.wrongBook = [] }
@@ -436,7 +436,7 @@ function coreApi(path, params, post, method, wsRaw, port) {
   // 每日侧重标注 + 题量分配（纯函数；错误收敛 {error} 200，不冒泡）
   if (path === '/api/plan/schedule') {
     const plan = domains.studyPlan('all')
-    const p = domains.store.loadProgress(wsRaw)
+    const p = domains.store.loadProgress(wsRaw || undefined)
     return schedulePlan(plan, p.byModule, p.wrongBook)
   }
   // v1.8 图查询三端点（未知节点 → {error} 且 200，不让异常冒泡）

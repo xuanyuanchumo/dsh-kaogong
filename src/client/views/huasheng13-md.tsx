@@ -20,7 +20,7 @@ import { h } from '../ui-kit.js'
 const HS13_HIT_BG = 'rgba(245,158,11,.32)';
 /* ═══════════════════ 纯函数工具 ═══════════════════ */
 /** 数值兜底：非数/NaN/Infinity 一律归 0（接口字段全部可选，不能把 NaN 带进渲染） */
-export function hs13Num(v) {
+export function hs13Num(v: any) {
     const n = typeof v === 'number' ? v : parseFloat(String(v == null ? '' : v));
     return isFinite(n) ? n : 0;
 }
@@ -196,7 +196,7 @@ function hs13EscapeRe(s) {
  * terms 是服务端 BM25 的 token（中文 bigram + 单字），可能重叠 → 交替匹配即可，
  * 视觉上仍正确（不会重复叠加样式）。空 terms 原样返回单段，调用方无需分支。
  */
-function hs13HighlightParts(text, terms) {
+function hs13HighlightParts(text: any, terms: any) {
     const src = String(text == null ? '' : text);
     const list = (Array.isArray(terms) ? terms : [])
         .filter((x) => typeof x === 'string' && x.length > 0)
@@ -225,7 +225,7 @@ function hs13HighlightParts(text, terms) {
  * 行内 markdown → React 节点数组：**加粗** / `行内代码` / ![alt](src) 图片。
  * 必须用 h() 生成元素（不能拼 HTML 字符串，服务端不注入 HTML 就是为了避免 XSS 面）。
  */
-function hs13Inline(text, keyBase) {
+function hs13Inline(text: any, keyBase: any) {
     const src = String(text == null ? '' : text);
     const out = [];
     const re = /!\[([^\]]*)\]\(([^)\s]+)[^)]*\)|\*\*([^*]+)\*\*|`([^`]+)`/g;
@@ -302,7 +302,7 @@ function hs13RenderBlock(b: any, key) {
     return null;
 }
 /** 块数组 → React 节点数组 */
-function hs13RenderBlocks(src, keyBase) {
+function hs13RenderBlocks(src: any, keyBase: any) {
     const blocks = hs13MarkdownBlocks(src);
     return blocks.map((b, i) => hs13RenderBlock(b, keyBase + '-k' + i)).filter(Boolean);
 }

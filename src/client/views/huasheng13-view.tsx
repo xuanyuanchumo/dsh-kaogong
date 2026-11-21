@@ -101,7 +101,7 @@ function hs13AnswerKey(answer) {
     return m ? m[1].toUpperCase() : '';
 }
 /** 模块色兜底链：接口 color → 主题变量（不新增色板） */
-function hs13ColorOf(m) {
+function hs13ColorOf(m: any) {
     const c = m && typeof m.color === 'string' ? m.color : '';
     return c || 'var(--brand,#6366f1)';
 }
