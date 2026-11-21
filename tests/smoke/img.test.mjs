@@ -6,6 +6,7 @@
  * 环境降级三态保留（naoku 未就绪 → 跳过不假红——旧文件同语义）。
  * 判定逐字等价。
  *
+  * 旧 ID 对照：SMOKE-IMG-02（RichText 渲染）/03（双通道分流）/05（占位服务）
  * 运行：npx vitest run tests/smoke/img.test.mjs
  */
 import { test, expect, beforeAll, afterAll } from 'vitest'

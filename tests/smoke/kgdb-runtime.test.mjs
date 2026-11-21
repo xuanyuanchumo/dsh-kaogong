@@ -8,6 +8,7 @@
  * pool.test.mjs 已覆盖 POOL-01..04b/KGDB-04 检索近似断言——本文件迁的是**未迁的
  * KGDB-02/02b/03/03b/03c/04b/05/05b/05c 精确判据**。环境降级三态保留。
  *
+  * 旧 ID 对照：SMOKE-POOL-02b（无孤儿出处）
  * 运行：npx vitest run tests/smoke/kgdb-runtime.test.mjs
  */
 import { test, expect, beforeAll, afterAll } from 'vitest'

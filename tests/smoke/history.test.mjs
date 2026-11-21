@@ -5,6 +5,7 @@
  * 原段自带独立 ws（CX=PROJ_C）+ 批次撤销清理——与共享 server 状态弱耦合，适合分域文件。
  * 断言判定逐字等价；ws 改为 PROJ_VTEST_HIST（迁移期不与旧文件共用命名空间）。
  *
+  * 旧 ID 对照：SMOKE-HIST-03（fromImport）/04（conflicts）/05（撤销）/06（清尾）/08（统计隔离）
  * 运行：npx vitest run tests/smoke/history.test.mjs
  */
 import { test, expect, beforeAll, afterAll } from 'vitest'

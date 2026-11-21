@@ -7,6 +7,7 @@
  * C29-02/03（批四漏迁的展示契约细项）+ C26-04（加载死循环根治）。
  * 纯静态段（零 server）。判定逐字等价。
  *
+  * 旧 ID 对照：C24-02（三元分发链）/C24-04（tsx 全覆盖）/C24-06（React 纪律）/C25-04/05/C44-02/03
  * 运行：npx vitest run tests/smoke/client-arch.test.mjs
  */
 import { test, expect } from 'vitest'
