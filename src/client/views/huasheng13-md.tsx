@@ -79,7 +79,7 @@ function hs13MarkdownBlocks(src): any[] {
         const fence = /^```\s*([\w#+-]*)\s*$/.exec(t);
         if (fence) {
             const lang = fence[1] || '';
-            const buf = [];
+            const buf: any[] = [];
             i++;
             while (i < lines.length && !/^```\s*$/.test(String(lines[i]).trim())) {
                 buf.push(lines[i]);
@@ -105,7 +105,7 @@ function hs13MarkdownBlocks(src): any[] {
         // ── 表格（当前行以 | 开头 且 下一行是分隔行）──
         if (/^\|/.test(t) && i + 1 < lines.length && hs13IsTableSep(lines[i + 1])) {
             const head = hs13SplitRow(t);
-            const rows = [];
+            const rows: any[] = [];
             i += 2;
             while (i < lines.length && /^\|/.test(String(lines[i]).trim())) {
                 rows.push(hs13SplitRow(lines[i]));
@@ -116,7 +116,7 @@ function hs13MarkdownBlocks(src): any[] {
         }
         // ── 引用（连续的 > 行合并为一块）──
         if (/^>\s?/.test(t)) {
-            const buf = [];
+            const buf: any[] = [];
             while (i < lines.length && /^>\s?/.test(String(lines[i]).trim())) {
                 buf.push(String(lines[i]).trim().replace(/^>\s?/, ''));
                 i++;
@@ -126,7 +126,7 @@ function hs13MarkdownBlocks(src): any[] {
         }
         // ── 无序列表（后续非块行并进上一项，兼容软换行）──
         if (/^([-*+])\s+/.test(t)) {
-            const items = [];
+            const items: any[] = [];
             while (i < lines.length) {
                 const s = String(lines[i]).trim();
                 if (/^([-*+])\s+/.test(s)) {
@@ -146,7 +146,7 @@ function hs13MarkdownBlocks(src): any[] {
         // ── 有序列表 ──
         const ol = /^(\d+)[.)]\s+/.exec(t);
         if (ol) {
-            const items = [];
+            const items: any[] = [];
             while (i < lines.length) {
                 const s = String(lines[i]).trim();
                 const m2 = /^(\d+)[.)]\s+/.exec(s);
@@ -165,7 +165,7 @@ function hs13MarkdownBlocks(src): any[] {
             continue;
         }
         // ── 段落：连续非块起始行合并（保留原换行，CJK 语料不宜强行补空格）──
-        const buf = [];
+        const buf: any[] = [];
         while (i < lines.length) {
             const s = String(lines[i]);
             if (!String(s).trim())
@@ -204,7 +204,7 @@ function hs13HighlightParts(text: any, terms: any) {
     if (!src || !list.length)
         return [{ hit: false, v: src }];
     const re = new RegExp('(' + list.map(hs13EscapeRe).join('|') + ')', 'g');
-    const out = [];
+    const out: any[] = [];
     let last = 0;
     let m;
     while ((m = re.exec(src)) !== null) {
@@ -227,7 +227,7 @@ function hs13HighlightParts(text: any, terms: any) {
  */
 function hs13Inline(text: any, keyBase: any) {
     const src = String(text == null ? '' : text);
-    const out = [];
+    const out: any[] = [];
     const re = /!\[([^\]]*)\]\(([^)\s]+)[^)]*\)|\*\*([^*]+)\*\*|`([^`]+)`/g;
     let last = 0;
     let n = 0;

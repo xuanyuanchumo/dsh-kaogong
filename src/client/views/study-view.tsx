@@ -614,7 +614,7 @@ function KgMemBanner(props: KgMemBannerProps) {
       })
 
       // 解析区（答案 + 思路 + 分析 + 陷阱）
-      const dims = []
+      const dims: any[] = []
       if (revealed) {
         dims.push(<div key="ans" style={{ marginBottom: 10, padding: 12, background: q.ans === sel ? 'rgba(16,185,129,.08)' : 'rgba(239,68,68,.06)', borderRadius: 10 }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: q.ans === sel ? '#10b981' : '#ef4444' }}>

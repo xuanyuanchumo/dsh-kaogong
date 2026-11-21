@@ -585,7 +585,7 @@ function buildHttpServer(port) {
     // 未捕获异常会直接击杀宿主进程（cycle-0 同族）。
     try {
       const t0 = Date.now()
-      const url = new URL(req.url, `http://127.0.0.1:${port}`)
+      const url = new URL(req.url || '/', `http://127.0.0.1:${port}`)
       // 独立端口也接受带挂载前缀（/kaogong/...）的路径：同源改写的图片 URL 在两种通道下通用
       const rawPath = url.pathname
       const path = rawPath.startsWith('/kaogong/') ? rawPath.slice('/kaogong'.length) : rawPath
