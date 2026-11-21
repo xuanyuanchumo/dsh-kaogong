@@ -74,3 +74,18 @@ React 内联样式体系无法用 `:hover`——**不自管 onMouseEnter 状态*
 
 **迁移进度**：plan-view 已迁（示范）；其余 9 处 cancelled 模式逐视图迁移，每批 test:all 兜底。
 **⚠️ barrel 形态纪律（cycle-48 实测新增）**：hooks/index.ts **禁用 `export { x } from '...'`**（export-from 带源形态）——bundler 的 collectExports 只认 function/class/const/let/var 声明，该形态被剥成孤立 `from '...';` 残行且重导出函数体不进依赖图 → 组件 undefined → render 旅程全 skipped（C29 教训的 export-from 变体复现）。正解 = import + 独立 export 两行式。守卫 = tests/smoke/client-arch.test.mjs C24-03（barrel 形态断言）。
+
+## 七、TS 严格化渐进路线（cycle-48 盘点 · 分三档）
+
+| 档位 | 选项 | 当前错误数 | 结论 |
+|---|---|---|---|
+| ① | noUnusedLocals | 69（32 文件）| **可清**——单文件 ≤10 处，逐文件清理（防删副作用依赖），清完即开启 |
+| ② | strictNullChecks | 218 | 分域渐进（先 server/ 后 client/，逐域开） |
+| ③ | noImplicitAny | 2306 | 长期档（Props/参数类型化随重构逐步收敛，不设 deadline） |
+
+**React 客户端规范现状（cycle-48 核对）**：29 组件 Props 类型化 25/29（4 缺口已补齐）·
+事件驼峰违规 0（R6 纪律稳固）· map 渲染 key 缺失 0（ObsFlowChart 已修）·
+hooks 单 require 纪律稳固（C24-06 守卫）。
+
+**新增纪律**：新组件必须声明 Props interface（render/smoke 守卫已在 C24 族，
+TS 编译层 strict 渐进开启后自然强制）。
