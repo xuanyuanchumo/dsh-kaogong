@@ -115,7 +115,8 @@ export function apply(ctx) {
   })
 
   // ── 兜底通道：独立端口（Electron 无 webServer / 测试 / 降级）──
-  let myServer = null, myAdopted = false
+  // cycle-48 strictNullChecks：null 初始化显式类型（赋值后为 Server/boolean/number）
+  let myServer: any = null, myAdopted: any = false
   startServer(PREFERRED_PORT)
     .then(({ server, port, adopted }) => {
       myServer = server; myAdopted = adopted

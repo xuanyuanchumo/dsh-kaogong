@@ -334,7 +334,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
           const style = document.createElement('style')
           style.id = 'kg-theme-adapter'
           document.head.appendChild(style)
-          let mq = null
+          let mq: any = null
           // 「当前是否暗色」的判据要**三通道**：宿主在 html.style 上写 color-scheme
           // （JS 强制），系统偏好走 matchMedia——两者可能不一致（宿主初始化时序竞态，
           // cycle-39 亮色回归实证：apply 时 dsw 尚未加载/被取到 #fff 残值）。

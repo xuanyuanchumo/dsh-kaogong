@@ -89,3 +89,16 @@ hooks 单 require 纪律稳固（C24-06 守卫）。
 
 **新增纪律**：新组件必须声明 Props interface（render/smoke 守卫已在 C24 族，
 TS 编译层 strict 渐进开启后自然强制）。
+## 八、strictNullChecks 渐进（档②进行中）
+
+**分布实测（218 错误）**：server/ 7 文件 55 错（paperApi 35 / http 11 / methodologyApi 3 /
+poolApi 2 / ws 2 / historyApi 1 / repoManager 1）· client/ 6 文件 56 错 · shared 107。
+**依赖闭包警告**：tsconfig files 单文件探测会牵连全依赖链编译（实测 ws.ts 探测暴露
+全部 218）——分域渐进必须以「错误清单归档 + 逐批清零 + 全局开启」路径走，不能按域开。
+
+**批 1 已修 3 处**：ws.ts filter(Boolean) → 类型谓词（sort 比较器 possibly null）；
+host/index myServer/myAdopted null 初始化 → any 标注；client.tsx mq null 初始化 → any。
+**剩余 215 错误主体**：progress/state 变量 null 初始化缺类型标注（let x = null → any/类型）、
+.map/.filter(Boolean) 链 never 收窄、可选字段访问。修法统一：null 初始化补类型标注。
+
+**推进节奏**：每批修 20-50 处 + test:all 全量兜底；全清后全局开启 strictNullChecks。
