@@ -106,7 +106,8 @@ test('R11-GUARD-01 config.yml 无裸 tsc 产物命令（门禁走 npm run build 
 test('R11-GUARD-02 全部产物产出脚本接 bundler + assert-combo 守卫', () => {
   const pkgSrc = JSON.stringify(pkg.scripts)
   // 所有产 dist 的 scripts（test/test:render/test:all/prepack/prepare/build）都必须串 bundler
-  const emitScripts = ['build', 'test', 'test:render', 'test:all', 'prepack', 'prepare']
+  // cycle-47 退役：test:render/test:all 已并入 vitest 车道（不再产 dist），emitters 同步收敛
+  const emitScripts = ['build', 'test', 'test:all', 'prepack', 'prepare']
   const badEmit = emitScripts.filter(k => pkg.scripts[k] && (!pkg.scripts[k].includes('bundle-client.mjs') || !pkg.scripts[k].includes('assert-combo')))
   expect(badEmit, '未接 bundler 的产物脚本').toEqual([])
   void pkgSrc

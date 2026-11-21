@@ -32,7 +32,10 @@ test('RDOC-01b 研究 11-15 落地闭环：关键断言在已实现代码中可�
   const manifestSrc34 = readSrc('src/shared/manifest.ts')
   const poolRegSrc = readSrc('src/adapters/poolSources.ts')
   const poolObsSrc = readSrc('src/server/poolObservability.ts')
-  const smokeSelf = fs.readFileSync(path.join(REPO, 'smoke.test.mjs'), 'utf-8')
+  // R14 六不变量守卫的判据源：旧 smoke.test.mjs 已退役（cycle-47），六不变量守卫
+  // 已迁移为 tests/smoke/kgdb.test.mjs + kernel.test.mjs 域文件——判据源同步更新
+  const kgdbGuard = fs.readFileSync(path.join(REPO, 'tests', 'smoke', 'kgdb.test.mjs'), 'utf-8')
+  const kernelGuard = fs.readFileSync(path.join(REPO, 'tests', 'smoke', 'kernel.test.mjs'), 'utf-8')
   const landing = [
     ['R13 canonical_id qid 优先', poolDbSrc.includes("'q:'") && poolDbSrc.includes("'fp:'") && poolDbSrc.includes("'h:'")],
     ['R13 十表 schema', poolDbSrc.includes('CREATE TABLE IF NOT EXISTS question') &&
@@ -41,7 +44,7 @@ test('RDOC-01b 研究 11-15 落地闭环：关键断言在已实现代码中可�
       poolDbSrc.includes('CREATE VIRTUAL TABLE IF NOT EXISTS question_fts')],
     ['R13 FTS5 trigram', poolDbSrc.includes("tokenize='trigram'")],
     ['R13 统一边表 + rel_type', poolDbSrc.includes('REL_TYPES') && poolDbSrc.includes('SAME_AS') && poolDbSrc.includes('BELONGS_TO')],
-    ['R14 六不变量守卫', smokeSelf.includes('SMOKE-KERNEL-01') && smokeSelf.includes('SMOKE-KERNEL-06b')],
+    ['R14 六不变量守卫', kgdbGuard.includes('SMOKE-KGDB-06c') && kernelGuard.includes('SMOKE-KERNEL-01')],
     ['R15 poolApi 域链位置', httpSrc34.includes('domains.historyApi.handle') &&
       httpSrc34.indexOf('domains.poolApi.handle') > httpSrc34.indexOf('domains.historyApi.handle') &&
       httpSrc34.indexOf('domains.poolApi.handle') < httpSrc34.indexOf('domains.tuxingApi.handle')],
