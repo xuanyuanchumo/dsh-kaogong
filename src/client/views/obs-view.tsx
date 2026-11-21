@@ -266,7 +266,9 @@ function ObsFlowChart(props: any) {
   const isDim = (k: any) => !!active && active !== k   // 有高亮目标时压暗无关节点
 
   /* 贝塞尔链接（生产链路：左列→中列→右列；漂移链路红色虚线） */
-  const link = (x1: any, y1: any, x2: any, y2: any, color: any, dashed: any, emph: any, title: any) => h('path', {
+  const link = (x1: any, y1: any, x2: any, y2: any, color: any, dashed: any, emph: any, title: any, lk?: any) => h('path', {
+    // cycle-48：links 数组元素补 key（React 警告——vitest render 旅程实测暴露）
+    key: lk || ('lk' + x1 + '_' + y1 + '_' + x2 + '_' + y2),
     d: 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + (x2 - x1) * 0.45) + ' ' + y1 + ', ' + (x2 - (x2 - x1) * 0.45) + ' ' + y2 + ', ' + x2 + ' ' + y2,
     fill: 'none', stroke: emph ? '#4f46e5' : color, strokeWidth: emph ? 2.4 : 1.4,
     strokeDasharray: dashed ? '4 3' : undefined, opacity: emph ? 1 : (active ? 0.12 : 0.55),
@@ -297,7 +299,7 @@ function ObsFlowChart(props: any) {
     warnRed ? h('circle', { cx: x + label.length * 7 + (warnAmber ? 36 : 24), cy: 12, r: 4, fill: '#ef4444' }, h('title', null, '未声明/漂移 ' + warnRed + ' 个')) : null)
 
   const items: any[] = []
-  items.push(h('style', null,
+  items.push(h('style', { key: 'flow-style' },
     '.kgobs-tb tbody tr:hover td{background:rgba(99,102,241,.055)}' +
     '.kgobs-node{cursor:pointer}.kgobs-node:hover rect{stroke-width:2}'))
 
@@ -315,13 +317,13 @@ function ObsFlowChart(props: any) {
     if (isGrouped) continue
     if (!n.produced) continue
     const emph = !!active && (active === n.path)
-    links.push(link(leftOut, yAt(leftIdx[n.path]), midX, yAt(midIdx[n.path]), meta(n.state).dot, n.state === 'red', emph, n.path + ' · ' + meta(n.state).label))
+    links.push(link(leftOut, yAt(leftIdx[n.path]), midX, yAt(midIdx[n.path]), meta(n.state).dot, n.state === 'red', emph, n.path + ' · ' + meta(n.state).label, 'p2m-' + n.path))
   }
   for (const n of nodes) {
     if (isGrouped) continue
     if (!n.consumed) continue
     const emph = !!active && (active === n.path)
-    links.push(link(midOut, yAt(midIdx[n.path]), rightX, yAt(rightRows.length ? rightIdx[n.path] : 0), meta(n.state).dot, n.state === 'red', emph, n.path + ' · 消费触达'))
+    links.push(link(midOut, yAt(midIdx[n.path]), rightX, yAt(rightRows.length ? rightIdx[n.path] : 0), meta(n.state).dot, n.state === 'red', emph, n.path + ' · 消费触达', 'm2c-' + n.path))
   }
   for (const g of gOrder) {
     if (!isGrouped) continue
@@ -329,9 +331,9 @@ function ObsFlowChart(props: any) {
     if (G.produced > 0) {
       const emph = !!active && (active === g)
       links.push(link(leftOut, yAt(leftIdx[g]), midX, yAt(midIdx[g]), meta(G.state).dot, G.state === 'red', emph,
-        G.key + ' → 生产 · ' + G.produced + '/' + G.members.length + ' 端点活跃'))
+        G.key + ' → 生产 · ' + G.produced + '/' + G.members.length + ' 端点活跃', 'gp2m-' + g))
       links.push(link(midOut, yAt(midIdx[g]), rightX, yAt(rightIdx[g]), meta(G.state).dot, G.state === 'red', emph,
-        G.key + ' → 消费 · ' + G.consumed + '/' + G.members.length + ' 端点触达'))
+        G.key + ' → 消费 · ' + G.consumed + '/' + G.members.length + ' 端点触达', 'gm2c-' + g))
     }
   }
   items.push(h('g', { key: 'links' }, links))
@@ -951,7 +953,7 @@ export function NativeObsView({ api, onReload }) {
 
   return h('div', {},
     /* ── 行 hover 高亮样式（React 内联样式写不了 :hover，注入一次作用域样式） ── */
-    h('style', null, '.kgobs-tb tbody tr:hover td{background:rgba(99,102,241,.055)}.kgobs-node{cursor:pointer}.kgobs-node:hover rect{stroke-width:2}'),
+    h('style', { key: 'obs-tb-style' }, '.kgobs-tb tbody tr:hover td{background:rgba(99,102,241,.055)}.kgobs-node{cursor:pointer}.kgobs-node:hover rect{stroke-width:2}'),
 
     /* ── H 管理动作条 ── */
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12, padding: '8px 12px', borderRadius: 12, background: 'rgba(148,163,184,.08)', border: '1px solid rgba(148,163,184,.2)' } },
