@@ -339,3 +339,13 @@ DSH 社区 dsh-testkit（npm v0.4.4，MIT）提供「真实宿主发布门禁」
 3. **fileParallelism: false**：分域文件共享用户数据根与 8495 端口段——实测并发下 progress 写覆盖假红（HIST 域），串行消除竞态。**教训：vitest 默认文件级并行的前提是「测试间资源隔离」，共享外部状态的分域文件必须显式关并行或做资源分片**。
 
 **剩余 407 断言的迁移路径**：server 运行时域（RP/RM 题库管理、HS13 运行时、IMG 链路、模考/申论/真题卷端到端）全部走 setupDomain 样板；render.test 的 41 旅程组待 render harness（React 三件套 mock）抽取后分域。
+### 阶段 6 迁移记录（cycle-47 · 续）
+
+| 域 | 文件 | 断言 | 特征 |
+|---|---|---|---|
+| repos | tests/smoke/repos.test.mjs | 12 | RP-01..06 题库管理（第二个 server 运行时域，setupDomain 样板零新 harness 代码） |
+
+**累计：83/478 断言已迁移（9 文件全绿）。** server 运行时域迁移形态已稳定：
+setupDomain({ws}) → h.J/h.JW/h.PW → 每测试独立命名空间 → afterAll close。
+剩余 395 断言：HS13 运行时、IMG 链路、模考/申论/真题卷端到端（同样板），
+render.test 41 旅程组（待 render harness 抽取）。
