@@ -92,3 +92,32 @@ export async function clearProgressNamespace(ws) {
     return removed
   } catch (e) { console.log('[harness] 清理跳过:', String(e).slice(0, 60)); return 0 }
 }
+
+/**
+ * 便捷聚合：一次拿到「server + base + J/P 域内包装 + ws 清理」全套。
+ * 分域文件的最短启动样板：
+ *   const h = await setupDomain({ ws: 'PROJ_X' })
+ *   // h.base / h.J('/api/...') / h.JW('/api/...') / h.PW('/api/...', body)
+ *   // 测试结束：await h.close()
+ */
+export async function setupDomain({ ws, portBase } = {}) {
+  if (ws) await clearProgressNamespace(ws)
+  const { base, server } = await getTestServer(portBase)
+  const withWs = (u) => u + (u.includes('?') ? '&' : '?') + 'ws=' + encodeURIComponent(ws)
+  return {
+    base,
+    server,
+    ws,
+    /** GET JSON（相对路径，自动拼 base；不含 ws——由调用方按需拼） */
+    J: (u) => J(base, u),
+    /** POST JSON（相对路径） */
+    P: (u, body) => P(base, u, body),
+    /** 带 ws 的 GET（u 内可含 '?a=b'，自动接 &ws=） */
+    JW: (u) => J(base, withWs(u)),
+    /** 带 ws 的 POST */
+    PW: (u, body) => P(base, withWs(u), body),
+    close: async () => {
+      await closeTestServer()
+    },
+  }
+}
