@@ -73,3 +73,4 @@ React 内联样式体系无法用 `:hover`——**不自管 onMouseEnter 状态*
 4. 早退 return（loading/err）仍放在全部 hooks 之后（R9）。
 
 **迁移进度**：plan-view 已迁（示范）；其余 9 处 cancelled 模式逐视图迁移，每批 test:all 兜底。
+**⚠️ barrel 形态纪律（cycle-48 实测新增）**：hooks/index.ts **禁用 `export { x } from '...'`**（export-from 带源形态）——bundler 的 collectExports 只认 function/class/const/let/var 声明，该形态被剥成孤立 `from '...';` 残行且重导出函数体不进依赖图 → 组件 undefined → render 旅程全 skipped（C29 教训的 export-from 变体复现）。正解 = import + 独立 export 两行式。守卫 = tests/smoke/client-arch.test.mjs C24-03（barrel 形态断言）。
