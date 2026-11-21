@@ -349,3 +349,13 @@ DSH 社区 dsh-testkit（npm v0.4.4，MIT）提供「真实宿主发布门禁」
 setupDomain({ws}) → h.J/h.JW/h.PW → 每测试独立命名空间 → afterAll close。
 剩余 395 断言：HS13 运行时、IMG 链路、模考/申论/真题卷端到端（同样板），
 render.test 41 旅程组（待 render harness 抽取）。
+### 阶段 7 迁移记录（cycle-47 · 续）
+
+| 域 | 文件 | 断言 | 特征 |
+|---|---|---|---|
+| huasheng13-runtime | tests/smoke/huasheng13-runtime.test.mjs | 10 | HS13-01/02/03 catalog+端点口径+检索（server 域 #3） |
+| img | tests/smoke/img.test.mjs | 8 | IMG22/C23 图片链路 + kg-img 服务 + 越级防线（server 域 #4） |
+
+**累计：101/478 断言已迁移（11 文件全绿）——突破百位。**
+
+**阶段 7 新增教训**：迁移「受控回落」类探针时必须核对探针的**实际 URL**——HS13-02 的未知子路径探针打的是域内 （域链回落语义），初版误译成根路径裸探针（拿到独立端口 404 文本非 JSON）。「探针打到哪」和「探针证明什么」是两件事，判定语义不变则 URL 也不许变。
