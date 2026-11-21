@@ -415,6 +415,9 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
           .kg-page-body{flex:1;min-height:0}
           .kg-navbtn{border:0;cursor:pointer;font-size:12px;font-weight:600;padding:5px 10px;border-radius:8px;font-family:inherit;background:transparent;color:var(--text-muted,#64748b)}
           .kg-navbtn:hover{background:rgba(99,102,241,.08)}
+          /* cycle-48 全局可点反馈：cursor:pointer 元素统一 hover 提示（内联样式体系无法用 :hover 的兜底） */
+          [style*="cursor: pointer"]:hover,[style*="cursor:pointer"]:hover{filter:brightness(1.06)}
+          [style*="cursor: pointer"]:active,[style*="cursor:pointer"]:active{filter:brightness(.94)}
           .kg-navbtn.on{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
           .kg-tabhome{flex:1;min-height:0;display:block;width:100%}
           @media (max-width:420px){.kg-bar{font-size:10.5px;gap:5px}}
