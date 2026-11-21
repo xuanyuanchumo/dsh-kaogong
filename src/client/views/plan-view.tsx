@@ -12,6 +12,7 @@
  * Props 类型化 · 全中文注释 · R9 零直调。
  */
 import { h, React, Stat, Card, KV_TAG, KV_BTN, KgLoad, KgErr, KgEmpty, Bar } from '../ui-kit.js'
+import { useApiMany } from '../hooks.js'
 
 /* ══════════════ NativePlanView · 学习计划 ══════════════ */
 
@@ -24,31 +25,14 @@ function planPhaseColor(i: number): string {
 }
 
 export function NativePlanView({ api }: PlanViewProps) {
-  const [plan, setPlan] = React.useState(null)
-  const [sched, setSched] = React.useState(null)
-  const [err, setErr] = React.useState('')
-  const [loading, setLoading] = React.useState(true)
-
-  React.useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const [p, s] = await Promise.all([
-          api('/plan').catch(() => null),
-          api('/plan/schedule').catch(() => null),
-        ])
-        if (cancelled) return
-        if (!p || p.error) { setErr(String((p && p.error) || '计划数据不可用')); return }
-        setPlan(p)
-        if (s && !s.error) setSched(s)
-      } catch (e: any) {
-        if (!cancelled) setErr(String((e && e.message) || e))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [api])
+    // cycle-48：取数迁 useApiMany（语义逐字等价——plan 主源 err 收敛 + sched 弱依赖 fallbackNull）
+  const { data: dApi, loading, err: schedErr } = useApiMany(api, [
+    { key: 'plan', path: '/plan' },
+    { key: 'sched', path: '/plan/schedule', fallbackNull: true },
+  ], [api])
+  const plan = dApi && dApi.plan
+  const sched = dApi && dApi.sched
+  const err = schedErr || (!plan && loading ? '' : (!plan ? '计划数据不可用' : ''))
 
   if (loading) return <KgLoad flex />
   if (err || !plan) return <KgErr msg={err || '无数据'} label="学习计划加载失败" />
