@@ -103,7 +103,7 @@ import { graphHash, graphClamp, graphShade, GRAPH_NODE_META, GRAPH_EDGE_META } f
         } catch {}
         return { x: sx, y: sy }
       }
-      export function hitTest(sx: any, sy: any, simNodes: any, view: any, focusSet: any, zoom: any, panX: any, panY: any) {
+      export function hitTest(sx: any, sy: any, simNodes: any, view: any, focusSet: any, zoom: any, panX: any, panY: any): any {
         let best = null, bestD = Infinity
         for (let i = simNodes.length - 1; i >= 0; i--) {
           const n = simNodes[i]

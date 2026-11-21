@@ -195,7 +195,7 @@ export function searchKadian(keyword, limit = 20) {
 /** cycle-21（issue #3）：题干关键词全文搜索（补录候选）——DB LIKE 全量（非前 60 条截取），
  *  排除「已删/破损」行；与 naokuQuestions 同一映射链路（cycle-23 P0 同步：补 material、
  *  移除 img_refs 追加——300 题抽检 refs basename 100% 内联覆盖，追加=重复渲染）。 */
-export function searchQuestionsByStem(keyword, limit = 12, repoRoot = null, mountPath = '/kaogong') {
+export function searchQuestionsByStem(keyword: any, limit = 12, repoRoot: any = null, mountPath = '/kaogong'): any {
   if (!db) return []
   const kw = String(keyword || '').trim()
   if (!kw) return []

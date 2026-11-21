@@ -56,7 +56,7 @@ function diskFreeMB(dir: string): number | null {
 
 /** git 可用性探测（进程内一次；异步不阻塞启动） */
 let gitProbe: Promise<boolean> | null = null
-function probeGit(): Promise<boolean> {
+function probeGit(): Promise<boolean | null> {
   if (gitProbe) return gitProbe
   gitProbe = new Promise((res) => {
     try {
@@ -250,7 +250,7 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
       previousRoot: previousRoot && previousRoot !== root ? previousRoot : null,
       previousRootRepos,
       self: SELF_META,   // 本插件自身元数据（面板「关于本项目」卡片消费；单一事实源在 manifest）
-      git: null, // 异步探测结果单独字段（见下）
+      git: null as boolean | null, // 异步探测结果单独字段（见下）
       diskFreeMB: diskFreeMB(root),       // cycle-20 G8：安装前可用空间（null=无法探测，UI 降级）
       repos: list,
       recentJobs: jobHistory.slice(-5).reverse(),

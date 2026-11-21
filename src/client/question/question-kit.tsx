@@ -329,7 +329,7 @@ export function QwQuestionCard({ q, mode = 'single', interactive, selected, righ
         </div>
       </div>
       {/* 3 材料（受控折叠；matRef 为材料副标题——ref 是 React 保留 prop，禁用作 prop 名） */}
-      <QwMaterial text={q.material} matRef={q.materialRef} collapsed={matCollapsed} onToggle={matOnToggle} />
+      <QwMaterial text={q.material || ''} matRef={q.materialRef || ''} collapsed={matCollapsed} onToggle={matOnToggle} />
       {/* 4 题干 */}
       <QwStem q={q} />
       {/* 5 选项 */}

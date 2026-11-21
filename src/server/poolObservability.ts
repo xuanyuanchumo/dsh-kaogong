@@ -50,7 +50,7 @@ function q1(db: any, sql: string, ...args: any[]): any {
  *
  * @returns 结构化健康报告；库不可用时返回 `{ available: false, ... }`（诚实降级）
  */
-export function poolHealth(db: any, extra: { bytes?: number, path?: string, builtAt?: string } = {}): any {
+export function poolHealth(db: any, extra: { bytes?: number, path?: string, builtAt?: string | null | undefined } = {}): any {
   if (!db) {
     return {
       available: false,

@@ -106,7 +106,7 @@ function hs13ColorOf(m: any) {
     return c || 'var(--brand,#6366f1)';
 }
 function hs13CatalogGroups(cat): any[] {
-    const out = [];
+    const out: any[] = [];
     const mods = cat && Array.isArray(cat.modules) ? cat.modules : [];
     for (const m of mods) {
         if (!m || typeof m !== 'object')

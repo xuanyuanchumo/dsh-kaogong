@@ -655,8 +655,8 @@ export function clusteringCoefficient(nodes: any[] = [], edges: any[] = []) {
   const coef: any = {}
   let sum = 0, cnt = 0
   for (const id of ids) {
-    const nb = adj.get(id)
-    const k = nb!.length
+    const nb = adj.get(id)!
+    const k = nb.length
     if (k < 2) { coef[id] = 0; continue }
     let links = 0
     for (let i = 0; i < k; i++) {

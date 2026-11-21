@@ -265,7 +265,7 @@ export function parsePlanStructure(content) {
   const lines = content.split('\n')
   const phases: any[] = []
   const days: any[] = []
-  let currentPhase = null
+  let currentPhase: any = null
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     const phM = line.match(/^##\s*(第[一二三四五]阶段[:：]\s*[^（(]+)[（(]第(\d+)-(\d+)天[）)]/)

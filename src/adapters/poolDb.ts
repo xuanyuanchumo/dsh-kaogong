@@ -494,7 +494,7 @@ export function putStudyEvent(
   db: any,
   ev: { ws?: string, qid?: string, canonicalId?: string, module?: string, kadian?: string,
         action: string, userAnswer?: string, correctAnswer?: string, isCorrect?: boolean | null,
-        box?: number, consecutive?: number, durationMs?: number },
+        box?: number | null, consecutive?: number | null, durationMs?: number },
 ): boolean {
   if (!db || !ev || !ev.action) return false
   try {
