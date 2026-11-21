@@ -237,3 +237,22 @@ anic_flows_archive   # 归档到 .cycles/archive/cycle-N
 - **沙箱 profile 必须配合独立 `DSH_HOME` 或 `KG_DATA_DIR`**：数据根按用户而非按 profile 隔离，
   仅开独立 profile 仍会写主力 `~/.dsh/kaogong`（实测证据见 ISOLATION.md §1）。
 - 跑完确认真实端口（8400/8401）没有被测试进程占用；`git status` 无新增噪音。
+
+### 阶段 2 迁移记录（cycle-47 · 2026-11-21）
+
+| 域 | 文件 | 断言 | 特征 |
+|---|---|---|---|
+| pool | tests/smoke/pool.test.mjs | 12 | POOL-01..04b + KGDB-04/04b/05b + MAT-01..03 |
+| guards | tests/smoke/guards.test.mjs | 12 | 前端静态守卫（零 server 依赖，纯源码/产物扫描） |
+| history | tests/smoke/history.test.mjs | 6 test | SMOKE-HIST-01..12 补录全旅程 |
+
+**迁移期抓出的 harness 语义缺口**（迁移本身的价值证明——大单文件时代这些语义隐式存在）：
+1. **J/P 签名形态**：旧 smoke 全局 `J(u)/P(u,body)` 直用单例 base；harness 版是
+   `J(base,u)/P(base,u,body)`。域文件用 `J1/P2` 包装（bind base，兼容全 URL 与
+   相对路径两种入参）。**教训：拆全局单例为显式参数时，先盘点调用形态再定签名**。
+2. **测前清理**：progress json 持久化在用户数据根——分域文件重跑时上轮
+   `importedSigs` 台账残留会让补录幂等闸误判 `accepted=0`。harness 补
+   `clearProgressNamespace(ws)`（按 ws 前缀删 progress 文件），域文件 beforeAll 自清理。
+   **教训：旧大文件的「全量清理段」是隐式全局前置，拆域后必须显式化为每域前置**。
+
+**累计进度：30/478 断言已迁移（阶段 3 起按域继续：KGDB 静态段 → HIST 后续 → RP/RM → render 分域）。**
