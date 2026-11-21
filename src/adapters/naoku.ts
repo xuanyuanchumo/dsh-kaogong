@@ -88,11 +88,11 @@ export function resetNaoku() {
   dbFailed = false
 }
 
-function safeAll(sql, params = []): any[] {
+function safeAll(sql, params: any[] = []): any[] {
   if (!db) return []
   try { return db.prepare(sql).all(...params) } catch { return [] }
 }
-function safeGet(sql, params = []): any {
+function safeGet(sql, params: any[] = []): any {
   if (!db) return null
   try { return db.prepare(sql).get(...params) } catch { return null }
 }

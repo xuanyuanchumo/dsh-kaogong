@@ -392,7 +392,7 @@ function coreApi(path, params, post, method, wsRaw, port) {
     progress.history.push({ date: new Date().toISOString().slice(0, 10), module: q.module, type: q.type, userAnswer: answer, correctAnswer: q.correctAnswer, isCorrect })
     if (progress.history.length > 500) progress.history = progress.history.slice(-500)
     // 错题本闭环钩子（srs 域）：答错收集降箱；回炉答对升箱判掌握
-    let wrongEvent = null
+    let wrongEvent: any = null
     if (!isCorrect) wrongEvent = { type: 'collected', sig: srsHooks.upsertWrong(progress, q) }
     else if (q.fromWrongBook) {
       const item = srsHooks.resolveRetry(progress, q)
