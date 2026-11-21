@@ -101,13 +101,13 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       const typeChips: any[] = React.useMemo(() => {
         const seen: any = {}
         for (const n of nodes) if (n && n.type) seen[String(n.type)] = true
-        return Object.keys(seen).map(t => ({ type: t, meta: nodeMeta[t] || GRAPH_NODE_META[t] || { label: t, color: '#94a3b8', icon: '•', layer: 0 } }))
+        return Object.keys(seen).map(t => ({ type: t, meta: nodeMeta[t] || GRAPH_NODE_META[t] || { label: t, color: 'var(--text-faint)', icon: '•', layer: 0 } }))
           .sort((a, b) => (a.meta.layer || 0) - (b.meta.layer || 0) || String(a.meta.label).localeCompare(String(b.meta.label)))
       }, [nodes, nodeMeta])
       const edgeChips: any[] = React.useMemo(() => {
         const seen: any = {}
         for (const e of edges) if (e && e.rel) seen[String(e.rel)] = true
-        return Object.keys(seen).map(r => ({ rel: r, meta: edgeMeta[r] || GRAPH_EDGE_META[r] || { label: r, color: '#94a3b8' } }))
+        return Object.keys(seen).map(r => ({ rel: r, meta: edgeMeta[r] || GRAPH_EDGE_META[r] || { label: r, color: 'var(--text-faint)' } }))
       }, [edges, edgeMeta])
       // W2b：节点/边类型计数（图例卡显示；确定性）
       const typeCounts: any = React.useMemo(() => {
@@ -435,12 +435,12 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         const fmt = (v: any) => (typeof v === 'number' ? (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : String(v))
         if (lg.kind === 'seq') {
           const modeLabel = (GRAPH_COLOR_MODES.find((m: any) => m.id === colorMode) || {}).label || ''
-          return h('div', { key: 'g-legend-seq', style: { marginTop: 8, fontSize: 10, color: '#64748b' } },
+          return h('div', { key: 'g-legend-seq', style: { marginTop: 8, fontSize: 10, color: 'var(--text-muted)' } },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
               h('span', { style: { fontVariantNumeric: 'tabular-nums' } }, fmt(lg.min)),
               h('i', { style: { flex: 1, height: 8, borderRadius: 4, display: 'inline-block', border: '1px solid rgba(148,163,184,.25)', background: 'linear-gradient(90deg,' + GRAPH_SEQ_STOPS.join(',') + ')' } }),
               h('span', { style: { fontVariantNumeric: 'tabular-nums' } }, fmt(lg.max))),
-            h('div', { style: { marginTop: 3, color: '#94a3b8' } },
+            h('div', { style: { marginTop: 3, color: 'var(--text-faint)' } },
               modeLabel + ' 低 → 高（min-max 归一化着色' + (radiusBoost ? '，半径 +10%~30%' : '') + '）'))
         }
         if (lg.kind === 'community') {
@@ -452,11 +452,11 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
             },
               h('i', { style: { width: 7, height: 7, borderRadius: '50%', background: it.color, display: 'inline-block' } }),
               '社区' + (it.idx + 1) + ' · ' + it.count)),
-            lg.rest > 0 ? h('span', { style: { color: '#94a3b8', alignSelf: 'center' } }, '其余 ' + lg.rest + ' 个社区（色板循环）') : null)
+            lg.rest > 0 ? h('span', { style: { color: 'var(--text-faint)', alignSelf: 'center' } }, '其余 ' + lg.rest + ' 个社区（色板循环）') : null)
         }
         // cycle-21 W2 学习画像图例：模块掌握率 chips（红=弱区→绿=强区，与 graphSeqColor 反向语义一致）
         if (lg.kind === 'mastery') {
-          return h('div', { key: 'g-legend-mastery', style: { marginTop: 8, fontSize: 10, color: '#64748b' } },
+          return h('div', { key: 'g-legend-mastery', style: { marginTop: 8, fontSize: 10, color: 'var(--text-muted)' } },
             h('div', { style: { marginBottom: 4 } }, '学习画像 · 我的模块掌握率（' + (lg.covered || 0) + ' 个模块有数据）· 红色=弱区'),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 4 } },
               (lg.items || []).slice().sort((a: any, b: any) => a.rate - b.rate).map((it: any) => h('span', {
@@ -565,7 +565,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       function renderDrawer() {
         const n = selectedNode
         if (!n) return null
-        const m = nodeMeta[n.type] || GRAPH_NODE_META[n.type] || { label: String(n.type || '未知'), color: '#94a3b8', icon: '•' }
+        const m = nodeMeta[n.type] || GRAPH_NODE_META[n.type] || { label: String(n.type || '未知'), color: 'var(--text-faint)', icon: '•' }
         const deg = degreeOf(String(n.id))
         const rows = neighborRows(String(n.id))
         // cycle-22 P1（图谱直达业务）：节点 id 形如 `type:id`——view:/module:/method: 三类
@@ -594,7 +594,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
             h('i', { style: { width: 10, height: 10, borderRadius: '50%', background: m.color, display: 'inline-block', flexShrink: 0 } }),
             h('span', { style: { fontWeight: 700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, String(n.label == null ? n.id : n.label)),
             h('button', { style: Object.assign({}, G_BTN, { padding: '0 6px', fontSize: 14, lineHeight: 1.2 }), onClick: () => setSelected(null), 'aria-label': '关闭详情抽屉' }, '×')),
-          h('div', { style: { fontFamily: 'monospace', fontSize: 10, color: '#94a3b8', wordBreak: 'break-all', marginBottom: 8 } }, String(n.id)),
+          h('div', { style: { fontFamily: 'monospace', fontSize: 10, color: 'var(--text-faint)', wordBreak: 'break-all', marginBottom: 8 } }, String(n.id)),
           h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 } },
             h('span', { style: Object.assign({}, G_TAG, { background: m.color + '1a', color: m.color }) }, (m.icon || '•') + ' ' + (m.label || n.type)),
             h('span', { style: G_TAG }, '入 ' + deg.in + ' · 出 ' + deg.out),
@@ -608,10 +608,10 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                 onClick: () => locate(r.other),
                 title: r.other,
               },
-                h('span', { style: { color: '#94a3b8', fontSize: 10, width: 30, flexShrink: 0 } }, r.dir),
+                h('span', { style: { color: 'var(--text-faint)', fontSize: 10, width: 30, flexShrink: 0 } }, r.dir),
                 h('span', { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, r.label),
-                h('span', { style: { fontSize: 10, color: '#94a3b8', flexShrink: 0 } }, r.relLabel)))
-            : h('div', { style: { fontSize: 11, color: '#94a3b8' } }, '无邻接边（可能是孤儿节点）'),
+                h('span', { style: { fontSize: 10, color: 'var(--text-faint)', flexShrink: 0 } }, r.relLabel)))
+            : h('div', { style: { fontSize: 11, color: 'var(--text-faint)' } }, '无邻接边（可能是孤儿节点）'),
           h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 } },
             // cycle-22 P1：直达业务按钮（图谱节点 → 业务视图的连通性闭环）
             goItems.length ? goItems.map(it => h('button', {
@@ -648,7 +648,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
               title: '反向可达：谁会因该节点变化受影响（影响面量化）',
               onClick: () => { try { loadSubgraph('impact', n.id, null) } catch {} },
             }, '⚡ 影响面')),
-          h('div', { style: { fontSize: 10.5, color: '#94a3b8', marginTop: 8, lineHeight: 1.6 } },
+          h('div', { style: { fontSize: 10.5, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.6 } },
             '提示：Shift+点击另一节点可直接做路径分析'))
       }
 
@@ -703,7 +703,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
             : null,
           // W2b：导出 PNG（主 canvas 原生分辨率；失败静默）
           gbtn('⬇ 导出 PNG', false, exportPNG),
-          h('span', { style: { marginLeft: 'auto', fontSize: 10.5, color: '#94a3b8' } },
+          h('span', { style: { marginLeft: 'auto', fontSize: 10.5, color: 'var(--text-faint)' } },
             '滚轮缩放 · 拖空白平移 · 拖节点钉住 · 双击聚焦 · Shift+点击路径 · 快捷键 +/−/0/f/l/Esc')),
         // cycle-29 P1：子图模式面包屑（engine 装配的是 activeNodes/activeEdges；此处仅状态提示与返回全图）
         subData ? h('div', {
@@ -715,10 +715,10 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           },
         },
           h('span', { style: { fontWeight: 800, color: '#059669' } }, '🧩 子图模式'),
-          h('span', { style: { color: '#475569' } },
+          h('span', { style: { color: 'var(--text-secondary)' } },
             subData.label + ' · ' + subData.nodes.length + ' 节点 / ' + subData.edges.length + ' 边' +
             (subData.kind === 'impact' ? '（反向可达 · 含自身）' : '')),
-          h('span', { style: { fontSize: 10, color: '#94a3b8' } }, '统计面板/图例仍按全图口径；分析完成后回到全图继续探索'),
+          h('span', { style: { fontSize: 10, color: 'var(--text-faint)' } }, '统计面板/图例仍按全图口径；分析完成后回到全图继续探索'),
           h('button', {
             style: Object.assign({}, G_BTN, { marginLeft: 'auto', background: 'rgba(16,185,129,.12)', borderColor: 'rgba(16,185,129,.5)', color: '#059669', fontWeight: 700 }),
             onClick: () => { setSubData(null); setSubErr(null) },
@@ -745,13 +745,13 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                   onClick: () => pickSearchResult(mm.id),
                 },
                   h('span', { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, mm.label),
-                  h('span', { style: { fontFamily: 'monospace', fontSize: 9.5, color: '#94a3b8' } }, shortId(mm.id)))),
+                  h('span', { style: { fontFamily: 'monospace', fontSize: 9.5, color: 'var(--text-faint)' } }, shortId(mm.id)))),
                 // R-GRAPH-1 循环提示行：回车循环命中数（≥2 时才显示，避免噪音）
                 searchMatches.length > 1
-                  ? h('div', { style: { padding: '4px 10px', fontSize: 9.5, color: '#94a3b8', borderTop: '1px dashed rgba(148,163,184,.2)' } },
+                  ? h('div', { style: { padding: '4px 10px', fontSize: 9.5, color: 'var(--text-faint)', borderTop: '1px dashed rgba(148,163,184,.2)' } },
                       '回车循环定位 ' + (searchHit + 1) + '/' + searchMatches.length + ' · Esc 收起')
                   : null)
-            : searchQ ? h('div', { style: { fontSize: 11, color: '#94a3b8', marginTop: 4 } }, '无匹配节点') : null),
+            : searchQ ? h('div', { style: { fontSize: 11, color: 'var(--text-faint)', marginTop: 4 } }, '无匹配节点') : null),
         // ③ W2b 图例卡（可折叠）：节点类型（色点+图标+label+计数+点击显隐）+
         //    边类型过滤（色点+label+计数+点击显隐）+ 孤儿开关 + 着色模式图例联动
         h('div', {
@@ -769,7 +769,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
             title: '点击折叠/展开图例与过滤',
           },
             h('span', { style: { fontSize: 11.5, fontWeight: 800 } }, '🎨 图例与过滤'),
-            h('span', { style: { fontSize: 10, color: '#94a3b8' } },
+            h('span', { style: { fontSize: 10, color: 'var(--text-faint)' } },
               typeChips.length + ' 类节点 · ' + edgeChips.length + ' 类边' + (allTypesHidden ? ' · ⚠ 全部节点类型已被过滤' : '')),
             h('button', {
               'aria-label': '折叠或展开图例',
@@ -779,7 +779,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           legendOpen ? h('div', { style: { marginTop: 7 } },
             // 节点类型行（保留 button 形态：点击显隐 = 过滤；计数与色点增强）
             // cycle-44b：chips 走 ui-kit 基建 KgChips（icon=色点 ReactNode；显隐态由调用方 style 声明）
-            h('div', { style: { fontSize: 10, color: '#94a3b8', marginBottom: 4 } }, '节点类型（点击显隐）'),
+            h('div', { style: { fontSize: 10, color: 'var(--text-faint)', marginBottom: 4 } }, '节点类型（点击显隐）'),
             h(KgChips, {
               gap: 4,
               items: typeChips.map((c: any) => {
@@ -793,7 +793,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     borderColor: c.meta.color + '66',
                     background: hid ? 'transparent' : c.meta.color + '1f',
-                    color: hid ? '#94a3b8' : c.meta.color,
+                    color: hid ? 'var(--text-faint)' : c.meta.color,
                     opacity: hid ? 0.55 : 1,
                     textDecoration: hid ? 'line-through' : 'none',
                   },
@@ -808,7 +808,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
               onPick: () => setShowOrphans((v: any) => !v),
             }),
             // 边类型过滤行（engine setView 的 hiddenEdges 消费端）
-            h('div', { style: { fontSize: 10, color: '#94a3b8', margin: '8px 0 4px' } }, '边类型（点击显隐）'),
+            h('div', { style: { fontSize: 10, color: 'var(--text-faint)', margin: '8px 0 4px' } }, '边类型（点击显隐）'),
             h(KgChips, {
               gap: 4,
               items: edgeChips.map((ec: any) => {
@@ -820,7 +820,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                   title: '点击显示/隐藏「' + (ec.meta.label || ec.rel) + '」边（' + (edgeCounts[ec.rel] || 0) + ' 条）',
                   style: {
                     display: 'inline-flex', alignItems: 'center', gap: 4,
-                    borderColor: (ec.meta.color || '#94a3b8') + '55',
+                    borderColor: (ec.meta.color || 'var(--text-faint)') + '55',
                     opacity: hid ? 0.45 : 1,
                     textDecoration: hid ? 'line-through' : 'none',
                   },
@@ -861,10 +861,10 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                   h('canvas', { ref: miniRef, style: { width: '100%', height: '100%', display: 'block', touchAction: 'none' } }))
               : null,
             !hasNodes
-              ? h('div', { style: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#64748b', fontSize: 12.5, textAlign: 'center', padding: 16, pointerEvents: 'none' } },
+              ? h('div', { style: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text-muted)', fontSize: 12.5, textAlign: 'center', padding: 16, pointerEvents: 'none' } },
                   h('div', { style: { fontSize: 26 } }, loading ? '⏳' : '🕸️'),
                   h('div', { style: { fontWeight: 700 } }, loading ? '图谱数据加载中…' : '图谱数据为空'),
-                  h('div', { style: { fontSize: 11, color: '#94a3b8', lineHeight: 1.7 } },
+                  h('div', { style: { fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.7 } },
                     loading
                       ? '正在从 /api/graph 拉取图谱快照（骨架条仅过渡展示）'
                       : banksNotReady
@@ -872,7 +872,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                         : '成因提示：/api/graph 未返回 nodes（数据层降级，非渲染错误，其他视图不受影响）'))
               : allTypesHidden
                 ? h('div', { style: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 } },
-                    h('div', { style: { fontSize: 11.5, color: '#64748b', background: 'rgba(248,250,252,.9)', border: '1px solid rgba(148,163,184,.35)', borderRadius: 10, padding: '8px 14px' } },
+                    h('div', { style: { fontSize: 11.5, color: 'var(--text-muted)', background: 'rgba(248,250,252,.9)', border: '1px solid rgba(148,163,184,.35)', borderRadius: 10, padding: '8px 14px' } },
                       '当前所有节点类型都被过滤 —— 点击图例中的节点类型可恢复显示'))
                 : null,
             !canvasOk && hasNodes
@@ -890,11 +890,11 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
               h('span', null, '🛤 路径 ' + shortId(pathState.from) + ' → ' + shortId(pathState.to) + ' · ' + Math.max(0, pathState.path.length - 1) + ' 跳：' + pathState.path.map((x: any) => shortId(x)).join(' → ')),
               h('button', { style: G_BTN, onClick: () => setPathState({ from: null, to: null, path: null, loading: false, error: null }) }, '清除路径'))
           : pathState.loading
-            ? h('div', { style: { marginTop: 8, fontSize: 11, color: '#64748b' } }, '路径分析中…')
+            ? h('div', { style: { marginTop: 8, fontSize: 11, color: 'var(--text-muted)' } }, '路径分析中…')
             : pathState.error
-              ? h('div', { style: { marginTop: 8, fontSize: 10.5, color: '#94a3b8' } }, '⚠ ' + pathState.error)
+              ? h('div', { style: { marginTop: 8, fontSize: 10.5, color: 'var(--text-faint)' } }, '⚠ ' + pathState.error)
               : pathState.from
-                ? h('div', { style: { marginTop: 8, fontSize: 10.5, color: '#94a3b8' } }, '路径起点：' + shortId(pathState.from) + ' —— 按住 Shift 点击终点节点，或到详情抽屉点「设为终点并分析」')
+                ? h('div', { style: { marginTop: 8, fontSize: 10.5, color: 'var(--text-faint)' } }, '路径起点：' + shortId(pathState.from) + ' —— 按住 Shift 点击终点节点，或到详情抽屉点「设为终点并分析」')
                 : null,
         // ⑧ 指标条（现代卡片风格统一由 Stat 承担；直方图卡片紧随其后）
         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(104px,1fr))', gap: 8, marginTop: 12, marginBottom: 12 } },
@@ -903,7 +903,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
           h(Stat, { v: metrics.density, l: '密度 ρ' }),
           h(Stat, { v: metrics.components, l: '连通分量' }),
           h(Stat, { v: metrics.orphans, l: '孤儿', color: metrics.orphans ? '#ef4444' : '#10b981' }),
-          h(Stat, { v: metrics.health == null ? '—' : metrics.health, l: '健康度', color: metrics.health == null ? '#64748b' : (metrics.health >= 80 ? '#10b981' : '#f59e0b') }),
+          h(Stat, { v: metrics.health == null ? '—' : metrics.health, l: '健康度', color: metrics.health == null ? 'var(--text-muted)' : (metrics.health >= 80 ? '#10b981' : '#f59e0b') }),
           h(Stat, { v: metrics.communities, l: '社区数', color: '#8b5cf6' }),
           h(Stat, { v: metrics.clustering, l: '平均集聚系数' })),
         // ⑧b W2b：度分布直方图（迷你条形图；bins 来自服务端 degreeStats 或本地确定性兜底）
@@ -918,7 +918,7 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
                     borderRadius: 2, background: 'linear-gradient(180deg,#6366f1,#8b5cf6)', opacity: 0.9,
                   },
                 }))),
-              h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: '#94a3b8', marginTop: 4 } },
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: 'var(--text-faint)', marginTop: 4 } },
                 h('span', null, '度 ' + hist[0].deg),
                 h('span', null, '峰值 ' + histMax + ' 个'),
                 h('span', null, '度 ' + hist[hist.length - 1].deg + (hist.length >= 26 ? '+' : ''))))
@@ -934,16 +934,16 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
               ? rk.map((r: any) => h('div', { key: r.id, style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, fontSize: 12 } },
                   h('span', { title: String(r.id), style: { width: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 10.5, cursor: 'pointer' }, onClick: () => locate(String(r.id)) }, String(r.id)),
                   h('div', { style: { flex: 1 } }, h(Bar, { pct: Math.min(100, (Number(r.pr) || 0) / maxPr * 100) })),
-                  h('span', { style: { width: 62, textAlign: 'right', color: '#64748b' } }, Number(r.pr || 0).toFixed(4))))
-              : h('div', { style: { fontSize: 11.5, color: '#64748b' } }, '暂无中心性数据')
+                  h('span', { style: { width: 62, textAlign: 'right', color: 'var(--text-muted)' } }, Number(r.pr || 0).toFixed(4))))
+              : h('div', { style: { fontSize: 11.5, color: 'var(--text-muted)' } }, '暂无中心性数据')
           })()),
         // ⑩ 既有「我的考点掌握」卡片（数据来自自治 statsData.mastery，逻辑保持原样）
         h(Card, { title: '🔥 我的考点掌握（弱 → 强）' },
           mRows.length === 0
-            ? h('div', { style: { fontSize: 12, color: '#64748b' } }, '暂无作答数据 —— 去「刷题」或「模考」后再看')
+            ? h('div', { style: { fontSize: 12, color: 'var(--text-muted)' } }, '暂无作答数据 —— 去「刷题」或「模考」后再看')
             : mRows.map((r: any) => h('div', { key: r.m, style: { marginBottom: 9 } },
                 h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 } },
                   h('span', null, r.m),
-                  h('span', { style: { color: '#64748b' } }, r.correct + '/' + r.answered + ' · ' + r.rate + '%')),
+                  h('span', { style: { color: 'var(--text-muted)' } }, r.correct + '/' + r.answered + ' · ' + r.rate + '%')),
                 h(Bar, { pct: r.rate, color: r.rate >= 75 ? 'linear-gradient(135deg,#10b981,#34d399)' : r.rate >= 50 ? undefined : 'linear-gradient(135deg,#ef4444,#f87171)' })))))
     }

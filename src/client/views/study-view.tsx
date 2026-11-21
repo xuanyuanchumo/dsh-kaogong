@@ -69,13 +69,13 @@ function KgMemBanner(props: KgMemBannerProps) {
       border: '1px solid rgba(99,102,241,.28)',
     }}>
       <span style={{ fontSize: 12.5, fontWeight: 700, color: '#4f46e5' }}>{'💾 ' + String(props.text || '上次练到这里')}</span>
-      {d.at ? <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{kgMemAgo(d.at)}</span> : null}
+      {d.at ? <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{kgMemAgo(d.at)}</span> : null}
       <button
         style={{ marginLeft: 'auto', border: 0, cursor: 'pointer', fontFamily: 'inherit', padding: '6px 14px', borderRadius: 9, fontSize: 12, fontWeight: 700, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff' }}
         onClick={props.onResume}
       >{'▶ 继续上次'}</button>
       <button
-        style={{ border: '1px solid rgba(148,163,184,.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', padding: '6px 12px', borderRadius: 9, fontSize: 12, color: '#64748b' }}
+        style={{ border: '1px solid rgba(148,163,184,.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', padding: '6px 12px', borderRadius: 9, fontSize: 12, color: 'var(--text-muted)' }}
         onClick={props.onDismiss}
       >{'从头开始'}</button>
     </div>
@@ -138,11 +138,11 @@ function KgMemBanner(props: KgMemBannerProps) {
               <div key={m} style={{ marginBottom: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
                   <span>{m}</span>
-                  <span style={{ color: '#64748b' }}>{`${s.answered}题 · ${s.rate}% · 掌握${s.mastery}`}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{`${s.answered}题 · ${s.rate}% · 掌握${s.mastery}`}</span>
                 </div>
                 <Bar pct={s.mastery} color={s.mastery >= 80 ? 'linear-gradient(135deg,#10b981,#34d399)' : s.mastery < 50 ? 'linear-gradient(135deg,#f59e0b,#fbbf24)' : undefined} />
               </div>)}
-            {!Object.keys(stats.mastery || {}).length && <div style={{ fontSize: 12, color: '#64748b' }}>{'暂无数据 — 去「✏️ 刷题」开练'}</div>}
+            {!Object.keys(stats.mastery || {}).length && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'暂无数据 — 去「✏️ 刷题」开练'}</div>}
           </Card>
           {/* v1.7 数据总览：题库规模 + 申论/模考战绩 */}
           {extra ? <Card title="📚 资源总览">
@@ -270,7 +270,7 @@ function KgMemBanner(props: KgMemBannerProps) {
                   onClick={() => { setModule(m2); queueRef.current = []; setQueueLen(0); draw(m2, srs) }}
                 >
                   <div style={{ fontWeight: 800, fontSize: 13.5 }}>{m2}</div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{'点击开始'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{'点击开始'}</div>
                 </div>)}
               </div>
             </Card>
@@ -313,8 +313,8 @@ function KgMemBanner(props: KgMemBannerProps) {
             <span style={KV_TAG}>{q.module || module}</span>
             {q.type ? <span style={{ ...KV_TAG, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' }}>{q.type}</span> : null}
             {q.fromWrongBook ? <span style={{ ...KV_TAG, background: 'rgba(239,68,68,.12)', color: '#ef4444' }}>{'📕 错题回炉·箱' + q.box}</span> : null}
-            <span style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b' }}>{'本次 ' + stat.done + ' 题 · 对 ' + stat.right}</span>
-            <span style={{ fontSize: 11.5, color: '#94a3b8' }}>{'队列 ' + (queueLen + 1)}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--text-muted)' }}>{'本次 ' + stat.done + ' 题 · 对 ' + stat.right}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>{'队列 ' + (queueLen + 1)}</span>
           </div>
           {/* cycle-25：QwZoomHost 整卡图片可放大。本仓 JSX 工厂（classic/preact 签名）不把 JSX children 折叠进
               attrs 类型校验（ui-kit Card 能用是因其 children? 可选），QwZoomHostProps.children 必填 → 显式传参 */}
@@ -363,7 +363,7 @@ function KgMemBanner(props: KgMemBannerProps) {
               </div>
             : null}
           {legacyNoImg && !lettersOnly
-            ? <div style={{ fontSize: 11.5, color: '#64748b', background: 'rgba(148,163,184,.08)', border: '1px dashed rgba(148,163,184,.3)', borderRadius: 9, padding: '7px 10px', marginTop: 8 }}>
+            ? <div style={{ fontSize: 11.5, color: 'var(--text-muted)', background: 'rgba(148,163,184,.08)', border: '1px dashed rgba(148,163,184,.3)', borderRadius: 9, padding: '7px 10px', marginTop: 8 }}>
                 {'ℹ 该题引用了图表但题干未携带配图（修复前入库的历史错题，或原文即文字题）——可到「📚 真题卷」查看原卷完整配图。'}
               </div>
             : null}
@@ -371,7 +371,7 @@ function KgMemBanner(props: KgMemBannerProps) {
             className="kg-navbtn on" disabled={busy}
             style={{ marginTop: 6, padding: '9px 22px', borderRadius: 10 }}
             onClick={submit}
-          >{busy ? '判分中…' : '✅ 提交判分'}</button> : <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 6 }}>{'选择一个选项后提交'}</div>) : null}
+          >{busy ? '判分中…' : '✅ 提交判分'}</button> : <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 6 }}>{'选择一个选项后提交'}</div>) : null}
           {/* 判分反馈（v1.7 新增：这是此前缺失的关键环节；解析改由 QwQuestionCard 第 6 段呈现，此处保留对错结论与导航） */}
           {answered ? <Card title={correct ? '✅ 回答正确' : '❌ 回答错误'}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10, fontSize: 12.5, flexWrap: 'wrap' }}>
@@ -381,7 +381,7 @@ function KgMemBanner(props: KgMemBannerProps) {
                 {result.wrongEvent.type === 'mastered' ? '🎉 错题已掌握' : result.wrongEvent.type === 'promoted' ? '⬆ 升箱至 ' + result.wrongEvent.box : '📕 已入错题本'}</span> : null}
             </div>
             {/* cycle-25：解析改由 QwQuestionCard 第 6 段呈现；无解析题的诚实占位保留（旧文案契约，render 提交后断言锚定） */}
-            {!q.analysis ? <div style={{ fontSize: 12, color: '#64748b' }}>{'该题无解析'}</div> : null}
+            {!q.analysis ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'该题无解析'}</div> : null}
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
               <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '8px 18px' }} onClick={() => draw(module, srs)}>{'下一题 →'}</button>
               <button style={KV_BTN} onClick={() => { setSel(null); setResult(null) }}>{'重答本题'}</button>
@@ -452,7 +452,7 @@ function KgMemBanner(props: KgMemBannerProps) {
               onClick={() => setImportOpen(v => !v)}
               data-kg-wb-import="1"
             >{importOpen ? '▲ 收起纸质补录' : '📥 纸质刷题补录'}</button>
-            <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{(filtered || []).length + ' / ' + (wrong || []).length + ' 条'}</span>
+            <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }}>{(filtered || []).length + ' / ' + (wrong || []).length + ' 条'}</span>
           </div>
           {importOpen ? <div style={{ marginBottom: 14 }}><KgHistoryImport api={api} /></div> : null}
           {/* cycle-33 筛选条：模块 chips + 状态三态（cycle-44：chips 走 ui-kit 基建组件，
@@ -465,7 +465,7 @@ function KgMemBanner(props: KgMemBannerProps) {
             .map(([k, label]: any) => ({ key: String(k), text: String(label), active: stateFilter === String(k),
               style: stateFilter === String(k) ? { background: 'linear-gradient(135deg,#f59e0b,#f97316)', color: '#fff', border: 0 } : {} }))}
             onPick={k => setStateFilter(k)} />
-          {!(filtered || []).length && <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
+          {!(filtered || []).length && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
             {!(wrong || []).length ? '🎉 错题本空空如也 — 保持！' : '当前筛选无条目 — 试试放宽模块/状态筛选'}
           </div>}
           {(filtered || []).map(w => <div key={w.sig} style={{ border: '1.5px solid rgba(148,163,184,.3)', borderRadius: 12, padding: '13px 15px', marginBottom: 9, background: 'var(--surface-card,#fff)', opacity: w.mastered ? .6 : 1 }}>
@@ -484,7 +484,7 @@ function KgMemBanner(props: KgMemBannerProps) {
               title={expanded[w.sig] ? '点击收起' : '点击展开全文'}
             >{w.stem}</div>
             {!expanded[w.sig] && String(w.stem || '').length > 90
-              ? <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3, cursor: 'pointer' }} onClick={() => setExpanded(m => ({ ...m, [w.sig]: true }))}>{'… 展开全文'}</div>
+              ? <div style={{ fontSize: 10.5, color: 'var(--text-faint)', marginTop: 3, cursor: 'pointer' }} onClick={() => setExpanded(m => ({ ...m, [w.sig]: true }))}>{'… 展开全文'}</div>
               : null}
           </div>)}
         </div>
@@ -535,7 +535,7 @@ function KgMemBanner(props: KgMemBannerProps) {
         return (
           <Card title="🔷 图形推理专项">
             <div style={{ fontSize: 13, color: '#f59e0b' }}>{'⚠️ gk-tuxing 数据不可用（assets/data.js 缺失）'}</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>{'回落方案：用「🧠 深度题库 → 图形推理专项」或「✏️ 刷题」。'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{'回落方案：用「🧠 深度题库 → 图形推理专项」或「✏️ 刷题」。'}</div>
           </Card>
         )
       }
@@ -573,10 +573,10 @@ function KgMemBanner(props: KgMemBannerProps) {
                   onClick={() => { setCat(c.cat); load(c.cat) }}
                 >
                   <div style={{ fontWeight: 800, fontSize: 14 }}>{c.name}</div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{c.count + ' 题'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{c.count + ' 题'}</div>
                 </div>)}
               </div>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>{busy ? '加载中…' : '点击规律类型开始专项练习'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{busy ? '加载中…' : '点击规律类型开始专项练习'}</div>
             </Card>
           </div>
         )
@@ -591,8 +591,8 @@ function KgMemBanner(props: KgMemBannerProps) {
           <button style={KV_BTN} onClick={() => { setList(null); setSel(''); setRevealed(false) }}>{'← 换规律'}</button>
           <span style={KV_TAG}>{q.catName}</span>
           {q.src ? <span style={{ ...KV_TAG, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' }}>{q.src}</span> : null}
-          <span style={{ fontSize: 11.5, color: '#64748b' }}>{(idx + 1) + ' / ' + total}</span>
-          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b' }}>{'本次 ' + stat.done + ' 题 · 对 ' + stat.right + (stat.done ? ' · ' + pct + '%' : '')}</span>
+          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{(idx + 1) + ' / ' + total}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--text-muted)' }}>{'本次 ' + stat.done + ' 题 · 对 ' + stat.right + (stat.done ? ' · ' + pct + '%' : '')}</span>
         </div>
       )
 
@@ -641,7 +641,7 @@ function KgMemBanner(props: KgMemBannerProps) {
             <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '8px 20px' }} onClick={() => { if (idx < (list.questions.length - 1)) { setIdx(idx + 1); setSel(''); setRevealed(false) } else { load(cat) } }}>{idx < (list.questions.length - 1) ? '下一题 →' : '再来一组 →'}</button>
             <button style={KV_BTN} onClick={() => { setSel(''); setRevealed(false) }}>{'重做本题'}</button>
           </div>
-        : <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 10 }}>{sel ? '' : '先选一个答案'}</div>
+        : <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 10 }}>{sel ? '' : '先选一个答案'}</div>
 
       return (
         <div>
@@ -740,7 +740,7 @@ function KgMemBanner(props: KgMemBannerProps) {
         return (
           <Card title="📚 深度题库">
             <div style={{ fontSize: 13, color: '#f59e0b' }}>{'⚠️ ' + (status.hint || '深度题库不可用')}</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
               {'需要 Node ≥ 22.19（内置 node:sqlite）且 GongkaoNaoku 分片存在。回落方案：用「✏️ 刷题」或「📚 真题卷」。'}
             </div>
           </Card>
@@ -768,7 +768,7 @@ function KgMemBanner(props: KgMemBannerProps) {
               <div style={{ display: 'flex', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
                 <span style={KV_TAG}>{k.module || ''}</span>
                 {k.category ? <span style={{ ...KV_TAG, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' }}>{k.category}</span> : null}
-                <span style={{ fontSize: 10.5, color: '#64748b' }}>{k.count + ' 题'}</span>
+                <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{k.count + ' 题'}</span>
               </div>
               <div>{k.kadian}</div>
             </div>)}
@@ -777,11 +777,11 @@ function KgMemBanner(props: KgMemBannerProps) {
 
       // T-023 图形推理专项卡（懒加载规律分类）
       const tuxingCard = <Card title="🔷 图形推理专项（按规律类型）">
-        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
           {'图形推理是行测最大失分模块。下面按「数量规律 / 位置规律 / 样式规律 / 属性规律」分类，点即刷该规律。'}
         </div>
         {!tuxing ? <button style={KV_BTN} onClick={loadTuxing}>{'展开规律分类'}</button> : null}
-        {tuxing && tuxing.length === 0 ? <div style={{ fontSize: 12, color: '#64748b' }}>{'暂无规律分类数据'}</div> : null}
+        {tuxing && tuxing.length === 0 ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'暂无规律分类数据'}</div> : null}
         {tuxing ? <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {tuxing.map((t2: any, i: number) => <button
             key={i}
@@ -868,13 +868,13 @@ function KgMemBanner(props: KgMemBannerProps) {
             {q.material ? <div style={{ marginBottom: 10, padding: 12, background: 'rgba(148,163,184,.07)', borderRadius: 10, borderLeft: '3px solid rgba(148,163,184,.5)' }}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
                 <span style={{ ...KV_TAG, background: 'rgba(14,165,233,.12)', color: '#0ea5e9' }}>{'📄 材料'}</span>
-                {q.materialRef ? <span style={{ fontSize: 10.5, color: '#64748b' }}>{String(q.materialRef).slice(0, 40)}</span> : null}
+                {q.materialRef ? <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{String(q.materialRef).slice(0, 40)}</span> : null}
               </div>
               <RichText text={q.material} fontSize={12.5} maxHeight={'38vh' as any} /></div> : null}
             <RichText text={q.stem} fontSize={13.5} maxHeight={'30vh' as any} />
             {optRows}
             <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>{actionBtn}</div>
-            {revealed ? null : <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 6 }}>{'答完可查看「考点定位 / 推理链 / 最快解法 / 易错点 / 母题」五维标注'}</div>}
+            {revealed ? null : <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 6 }}>{'答完可查看「考点定位 / 推理链 / 最快解法 / 易错点 / 母题」五维标注'}</div>}
             {dims.length > 0 ? <div style={{ marginTop: 14 }}>{dims}</div> : null}
           </div>
         )
@@ -906,7 +906,7 @@ function KgMemBanner(props: KgMemBannerProps) {
             : null}
           <Card title="🎯 深度刷题（带解题思维链）">
             <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>{moduleBtns}</div>
-            {busy ? <div style={{ fontSize: 12, color: '#64748b' }}>{'抽题中…'}</div> : null}
+            {busy ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'抽题中…'}</div> : null}
             {questionCard}
           </Card>
         </div>
@@ -991,7 +991,7 @@ function KgMemBanner(props: KgMemBannerProps) {
       const pickList = Object.values(picks)
       return (
         <Card title="📥 纸质刷题补录（把纸上的对错记进系统）">
-          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
             {'① 输入题干关键词搜现有题库 → ② 核对候选（题干/选项/来源）→ ③ 标记 已做对/已做错/结果未知 → ④ 保存（错题自动进错题本，同批次可撤销）。原始日期未知可留空。'}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -1024,7 +1024,7 @@ function KgMemBanner(props: KgMemBannerProps) {
                     </div>
                   )
                 })
-              : <div style={{ fontSize: 12, color: '#94a3b8', padding: '10px 0' }}>{'未找到含该关键词的题目——换个更短的关键词试试'}</div>}
+              : <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '10px 0' }}>{'未找到含该关键词的题目——换个更短的关键词试试'}</div>}
           </div> : null}
           {/* ③ 补录附加信息 + 提交 */}
           {pickList.length ? <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '8px 10px', borderRadius: 10, background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.18)' }}>
@@ -1037,8 +1037,8 @@ function KgMemBanner(props: KgMemBannerProps) {
           {/* ④ 批次台账 + 撤销 */}
           {batches && batches.importedTotal > 0
             ? <div style={{ marginTop: 10, borderTop: '1px dashed rgba(148,163,184,.2)', paddingTop: 8 }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 5 }}>{'累计补录 ' + batches.importedTotal + ' 题 · 近 ' + (batches.batches || []).length + ' 批（可撤销窗口 30 批）'}</div>
-                {(batches.batches || []).slice(0, 5).map((b: any) => <div key={b.batchId} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10.5, color: '#64748b', padding: '2px 0' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 5 }}>{'累计补录 ' + batches.importedTotal + ' 题 · 近 ' + (batches.batches || []).length + ' 批（可撤销窗口 30 批）'}</div>
+                {(batches.batches || []).slice(0, 5).map((b: any) => <div key={b.batchId} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10.5, color: 'var(--text-muted)', padding: '2px 0' }}>
                   <span style={{ fontFamily: 'monospace' }}>{String(b.batchId).slice(0, 14)}</span>
                   <span>{b.count + ' 题'}</span>
                   {b.source ? <span>{'· ' + String(b.source).slice(0, 24)}</span> : null}

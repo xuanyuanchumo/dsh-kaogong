@@ -65,7 +65,7 @@ export function NativePlanView({ api }: PlanViewProps) {
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 800, fontSize: 15 }}>🗓 学习计划</span>
-        <span style={{ fontSize: 11.5, color: '#64748b' }}>
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
           {phases.length + ' 阶段 · ' + days.length + ' 天模板（study-plan.md 事实源）'}
           {sched ? ' · 智能排程已按画像重排侧重' : ''}
         </span>
@@ -77,7 +77,7 @@ export function NativePlanView({ api }: PlanViewProps) {
             {(profile.focus || []).slice(0, 6).map((f: any, i: number) => (
               <div key={String(f.module) + i} style={{ background: 'var(--surface-card,#fff)', border: '1px solid rgba(148,163,184,.15)', borderRadius: 10, padding: '8px 10px' }}>
                 <div style={{ fontWeight: 700, fontSize: 12 }}>{f.module}</div>
-                <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 2 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
                   {typeof f.primaryRate === 'number' ? '正确率 ' + Math.round(f.primaryRate * 100) + '%' : '无作答数据'}
                   {typeof f.backlog === 'number' && f.backlog > 0 ? ' · 积压 ' + f.backlog : ''}
                 </div>
@@ -105,14 +105,14 @@ export function NativePlanView({ api }: PlanViewProps) {
                 {isToday ? <span style={{ ...KV_TAG, background: 'rgba(99,102,241,.14)', color: '#4338ca' }}>今天</span> : null}
               </div>
               {(d.tasks || []).slice(0, 3).map((t: string, ti: number) => (
-                <div key={ti} style={{ fontSize: 11, color: '#475569', lineHeight: 1.5, marginBottom: 2 }}>{'· ' + t}</div>
+                <div key={ti} style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 2 }}>{'· ' + t}</div>
               ))}
               {s && Array.isArray(s.focus) && s.focus.length ? (
                 <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed rgba(148,163,184,.25)' }}>
                   {s.focus.slice(0, 3).map((f: any, fi: number) => (
                     <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                      <span style={{ fontSize: 10.5, color: '#475569', flex: 1, minWidth: 0 }}>{f.module}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, color: fi === 0 ? '#4338ca' : '#64748b' }}>{(f.suggested || 0) + ' 题'}</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}>{f.module}</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: fi === 0 ? '#4338ca' : 'var(--text-muted)' }}>{(f.suggested || 0) + ' 题'}</span>
                     </div>
                   ))}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -154,7 +154,7 @@ export function NativeSearchView({ api }: SearchViewProps) {
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
         <span style={{ fontWeight: 800, fontSize: 15 }}>🔎 知识检索</span>
-        <span style={{ fontSize: 11.5, color: '#64748b' }}>sakib / kaogong-skill / developer2gwy 三库全文（DFS 限深 3 · 命中上限 15）</span>
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>sakib / kaogong-skill / developer2gwy 三库全文（DFS 限深 3 · 命中上限 15）</span>
       </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         <input
@@ -223,7 +223,7 @@ export function NativeMethodView({ api }: MethodViewProps) {
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 800, fontSize: 15 }}>📖 方法参考</span>
-        <span style={{ fontSize: 11.5, color: '#64748b' }}>kaogong-skill 十主题参考文档（行测/申论/职测/公基…）</span>
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>kaogong-skill 十主题参考文档（行测/申论/职测/公基…）</span>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
         {(topics || []).map((t: any) => (

@@ -285,10 +285,10 @@ function hs13RenderBlock(b, key) {
         return h(b.t === 'ol' ? 'ol' : 'ul', { key, style: { margin: '8px 0', paddingLeft: 22, fontSize: 13, lineHeight: 1.85 } }, items.map((it, i) => h('li', { key: key + '-li' + i, style: { marginBottom: 3, whiteSpace: 'pre-wrap' } }, ...hs13Inline(it, key + '-li' + i))));
     }
     if (b.t === 'quote') {
-        return h('div', { key, style: { margin: '10px 0', padding: '8px 12px', borderLeft: '3px solid rgba(148,163,184,.6)', background: 'rgba(148,163,184,.09)', borderRadius: '0 8px 8px 0', fontSize: 12.5, lineHeight: 1.8, color: '#475569', whiteSpace: 'pre-wrap' } }, ...hs13Inline(b.text, key));
+        return h('div', { key, style: { margin: '10px 0', padding: '8px 12px', borderLeft: '3px solid rgba(148,163,184,.6)', background: 'rgba(148,163,184,.09)', borderRadius: '0 8px 8px 0', fontSize: 12.5, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' } }, ...hs13Inline(b.text, key));
     }
     if (b.t === 'code') {
-        return h('div', { key, style: { margin: '10px 0', background: 'rgba(15,23,42,.05)', borderRadius: 9, padding: '9px 12px', overflowX: 'auto' } }, h('pre', { style: { margin: 0, fontFamily: 'ui-monospace,Consolas,Menlo,monospace', fontSize: 11.5, lineHeight: 1.7, color: '#334155', whiteSpace: 'pre' } }, b.text || ''));
+        return h('div', { key, style: { margin: '10px 0', background: 'rgba(15,23,42,.05)', borderRadius: 9, padding: '9px 12px', overflowX: 'auto' } }, h('pre', { style: { margin: 0, fontFamily: 'ui-monospace,Consolas,Menlo,monospace', fontSize: 11.5, lineHeight: 1.7, color: 'var(--text-primary)', whiteSpace: 'pre' } }, b.text || ''));
     }
     if (b.t === 'table') {
         const head = Array.isArray(b.head) ? b.head : [];
@@ -315,7 +315,7 @@ function hs13RenderBlocks(src, keyBase) {
 export function Hs13Markdown(props) {
     const src = props && props.src != null ? props.src : '';
     if (!String(src).trim())
-        return h('div', { style: { fontSize: 12, color: '#94a3b8' } }, '（正文为空）');
+        return h('div', { style: { fontSize: 12, color: 'var(--text-faint)' } }, '（正文为空）');
     return h('div', { style: { fontSize: props && props.fontSize ? props.fontSize : 13 } }, ...hs13RenderBlocks(src, 'hs13md'));
 }
 /** 命中高亮片段（检索结果 / 摘要共用） */
@@ -326,7 +326,7 @@ export function Hs13Snippet(props) {
     const parts = hs13HighlightParts(text, props && props.terms);
     return h('div', {
         style: {
-            fontSize: 11.5, lineHeight: 1.75, color: '#475569', whiteSpace: 'pre-wrap',
+            fontSize: 11.5, lineHeight: 1.75, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap',
             background: 'rgba(148,163,184,.07)', borderRadius: 8, padding: '6px 9px', marginTop: 5,
         },
     }, parts.map((p, i) => (p.hit

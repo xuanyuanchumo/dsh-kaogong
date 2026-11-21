@@ -44,7 +44,7 @@ const OBS_STATE_META: any = {
   ok: { dot: '#10b981', fg: '#059669', bg: 'rgba(16,185,129,.12)', border: '#10b981', label: '正常（已声明 ∧ 已消费）' },
   amber: { dot: '#f59e0b', fg: '#b45309', bg: 'rgba(245,158,11,.14)', border: '#f59e0b', label: '注册未消费（声明 ∧ ¬消费，= reconciliation.unconsumedEndpoints）' },
   red: { dot: '#ef4444', fg: '#dc2626', bg: 'rgba(239,68,68,.14)', border: '#ef4444', label: '未声明/漂移（消费 ∧ ¬声明，= reconciliation.missingProducers）' },
-  gray: { dot: '#94a3b8', fg: '#64748b', bg: 'rgba(148,163,184,.14)', border: '#94a3b8', label: '未生产（遥测请求数 = 0）' },
+  gray: { dot: 'var(--text-faint)', fg: 'var(--text-muted)', bg: 'rgba(148,163,184,.14)', border: 'var(--text-faint)', label: '未生产（遥测请求数 = 0）' },
 }
 /** 三态优先级（聚合胶囊取组内最差态着色：红 > 琥珀 > 绿） */
 const OBS_STATE_RANK: any = { red: 0, amber: 1, ok: 2, gray: 3 }
@@ -173,10 +173,10 @@ function ObsQuantCards(props: any) {
         key: 'q' + i,
         style: Object.assign({}, OBS_GLASS, { padding: '12px 14px', marginBottom: 0 }),
       },
-        h('div', { style: { fontSize: 10.5, color: '#64748b', fontWeight: 700, letterSpacing: '.4px' } }, c.label),
+        h('div', { style: { fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '.4px' } }, c.label),
         h('div', { style: obsGradNum(c.grad[0], c.grad[1]) }, c.v),
-        h('div', { style: { fontSize: 9.5, color: '#94a3b8', marginTop: 2, lineHeight: 1.5 } }, c.sub)))),
-    h('div', { style: { fontSize: 9.5, color: '#94a3b8', margin: '2px 2px 12px', lineHeight: 1.6 } },
+        h('div', { style: { fontSize: 9.5, color: 'var(--text-faint)', marginTop: 2, lineHeight: 1.5 } }, c.sub)))),
+    h('div', { style: { fontSize: 9.5, color: 'var(--text-faint)', margin: '2px 2px 12px', lineHeight: 1.6 } },
       '算法标注：对账图 V/E（O(V+E)）· 密度 ρ=|E|/(V·(V−1)) · PageRank 幂迭代 d=0.85（O(40·E)）· 孤儿=零入度（Union-Find O(V·α)）· ',
       '健康度 H=Σwᵢ·mᵢ（连通.25/活跃.2/延迟.2/错误.15/数据.2，/api/graph 输出）· 量化卡健康度由对账四率派生（.30/.30/.20/.20）'))
 }
@@ -243,9 +243,9 @@ function ObsFlowChart(props: any) {
       h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 } },
         ['注册（manifest）', '生产（服务端活跃）', '消费（遥测触达）'].map((t, i) => h('div', {
           key: 'ef' + i,
-          style: { border: '1.5px dashed rgba(148,163,184,.4)', borderRadius: 12, padding: '26px 8px', textAlign: 'center', fontSize: 11, color: '#94a3b8', background: 'rgba(148,163,184,.05)' },
+          style: { border: '1.5px dashed rgba(148,163,184,.4)', borderRadius: 12, padding: '26px 8px', textAlign: 'center', fontSize: 11, color: 'var(--text-faint)', background: 'rgba(148,163,184,.05)' },
         }, h('div', { style: { fontWeight: 700, marginBottom: 6 } }, t), h('div', null, '—')))),
-      h('div', { style: { fontSize: 11, color: '#94a3b8', marginTop: 10 } },
+      h('div', { style: { fontSize: 11, color: 'var(--text-faint)', marginTop: 10 } },
         '能力/遥测数据不可用（/api/capabilities 或 /api/telemetry 未就绪）—— 服务可用，仅该卡片降级'))
   }
 
@@ -289,12 +289,12 @@ function ObsFlowChart(props: any) {
       }),
       h('circle', { cx: x + 10, cy: y + capH / 2, r: 3, fill: m.dot }),
       h('text', { x: x + 18, y: y + 13, fontSize: 9, fontFamily: 'monospace', fill: m.fg }, obsClip(main, 22)),
-      tail ? h('text', { x: x + nodeW - 6, y: y + 13, fontSize: 8.5, fontFamily: 'monospace', fill: '#94a3b8', textAnchor: 'end' }, obsClip(tail, 10)) : null)
+      tail ? h('text', { x: x + nodeW - 6, y: y + 13, fontSize: 8.5, fontFamily: 'monospace', fill: 'var(--text-faint)', textAnchor: 'end' }, obsClip(tail, 10)) : null)
   }
 
   /* 列头（计数徽章 + 漂移/未消费醒目点） */
   const colHead = (x: any, label: any, n: any, warnAmber: any, warnRed: any, key: any) => h('g', { key },
-    h('text', { x: x + 2, y: 16, fontSize: 10.5, fontWeight: 800, fill: '#475569' }, label + ' ' + n),
+    h('text', { x: x + 2, y: 16, fontSize: 10.5, fontWeight: 800, fill: 'var(--text-secondary)' }, label + ' ' + n),
     warnAmber ? h('circle', { cx: x + label.length * 7 + 24, cy: 12, r: 4, fill: '#f59e0b' }, h('title', null, '注册未消费 ' + warnAmber + ' 个')) : null,
     warnRed ? h('circle', { cx: x + label.length * 7 + (warnAmber ? 36 : 24), cy: 12, r: 4, fill: '#ef4444' }, h('title', null, '未声明/漂移 ' + warnRed + ' 个')) : null)
 
@@ -373,7 +373,7 @@ function ObsFlowChart(props: any) {
     const r = activeNode.r || {}
     detail.push(h('div', { key: 'd0', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 11 } },
       h('span', { style: { background: m.bg, color: m.fg, padding: '2px 8px', borderRadius: 20, fontSize: 9.5, fontWeight: 700 } }, m.label.split('（')[0]),
-      h('span', { style: { fontFamily: 'monospace', fontSize: 10.5, color: '#334155' } }, activeNode.path),
+      h('span', { style: { fontFamily: 'monospace', fontSize: 10.5, color: 'var(--text-primary)' } }, activeNode.path),
       h('span', { style: G_TAG }, '请求 ' + (r.count || 0)),
       h('span', { style: G_TAG }, 'p50 ' + (r.p50 !== undefined ? r.p50 : '—') + 'ms'),
       h('span', { style: G_TAG }, 'p95 ' + (r.p95 !== undefined ? r.p95 : '—') + 'ms'),
@@ -381,7 +381,7 @@ function ObsFlowChart(props: any) {
       activeNode.consumers.length ? h('span', { style: G_TAG }, '消费者 ' + activeNode.consumers.join(' · ')) : null))
   } else if (activeGroup) {
     const G = activeGroup
-    detail.push(h('div', { key: 'g0', style: { fontSize: 10.5, color: '#475569', marginBottom: 4 } },
+    detail.push(h('div', { key: 'g0', style: { fontSize: 10.5, color: 'var(--text-secondary)', marginBottom: 4 } },
       h('span', { style: { fontFamily: 'monospace', fontWeight: 700 } }, G.key + '/*'),
       '　' + G.members.length + ' 端点 · 正常 ' + G.ok + ' · 未消费 ' + G.amber + ' · 漂移 ' + G.red))
     detail.push(h('div', { key: 'g1', style: { display: 'flex', flexDirection: 'column', gap: 2 } },
@@ -389,10 +389,10 @@ function ObsFlowChart(props: any) {
         const m = meta(n.state)
         return h('div', { key: n.path, style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 10.5, fontFamily: 'monospace' } },
           h('i', { style: { width: 7, height: 7, borderRadius: '50%', background: m.dot, flex: '0 0 auto' }, title: m.label }),
-          h('span', { style: { color: '#334155', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, n.path),
-          h('span', { style: { color: '#94a3b8' } }, (n.r.count || 0) + '次 · p95 ' + (n.r.p95 || 0) + 'ms'))
+          h('span', { style: { color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, n.path),
+          h('span', { style: { color: 'var(--text-faint)' } }, (n.r.count || 0) + '次 · p95 ' + (n.r.p95 || 0) + 'ms'))
       }),
-      G.members.length > 10 ? h('div', { key: 'more', style: { fontSize: 10, color: '#94a3b8' } }, '… 其余 ' + (G.members.length - 10) + ' 个见下方对账表') : null))
+      G.members.length > 10 ? h('div', { key: 'more', style: { fontSize: 10, color: 'var(--text-faint)' } }, '… 其余 ' + (G.members.length - 10) + ' 个见下方对账表') : null))
   }
 
   return h('div', null,
@@ -402,13 +402,13 @@ function ObsFlowChart(props: any) {
         style: Object.assign({}, G_BTN, (grouped === null ? nodes.length > 40 : grouped) ? G_BTN_ON : {}),
         title: '按 /api/<域> 前缀聚合端点（>40 节点自动启用；点胶囊展开成员）',
       }, '聚合', (grouped === null ? nodes.length > 40 : grouped) ? ' ✓' : ''),
-      h('span', { style: { fontSize: 10, color: '#94a3b8' } }, '悬停/点击节点高亮链路并看明细 · 点击空白清除')),
+      h('span', { style: { fontSize: 10, color: 'var(--text-faint)' } }, '悬停/点击节点高亮链路并看明细 · 点击空白清除')),
     h('div', { style: { maxHeight: 330, overflowY: 'auto', overflowX: 'auto', borderRadius: 10, background: 'rgba(148,163,184,.05)', border: '1px solid rgba(148,163,184,.14)' } },
       h('svg', { width: '100%', viewBox: '0 0 ' + (colX[2] + nodeW + 10) + ' ' + Math.max(svgH, 120), style: { display: 'block', minWidth: 620 } }, items)),
     detail.length
       ? h('div', { style: { marginTop: 8, padding: '8px 10px', borderRadius: 10, background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.18)' } }, detail)
       : null,
-    h('div', { style: { fontSize: 9.5, color: '#94a3b8', marginTop: 6 } },
+    h('div', { style: { fontSize: 9.5, color: 'var(--text-faint)', marginTop: 6 } },
       '● 正常（声明∧已消费）　● 注册未消费　● 未声明/漂移　· 三态=声明集×遥测集集合运算（口径=相对挂载点逻辑路径）'))
 }
 
@@ -456,7 +456,7 @@ function ObsLaneHeat(props: any) {
     const isCur = st === currentStage
     cells.push(h('text', {
       key: 'lb' + st, x: 4, y: topH + r * (cell + gap) + 12,
-      fontSize: 9.5, fontWeight: isCur ? 800 : 500, fill: isCur ? '#4f46e5' : '#64748b',
+      fontSize: 9.5, fontWeight: isCur ? 800 : 500, fill: isCur ? '#4f46e5' : 'var(--text-muted)',
     }, obsClip(st, 11) + (isCur ? ' ●' : '')))
     if (isCur) cells.push(h('rect', { key: 'cur' + st, x: 0, y: topH + r * (cell + gap) - 2, width: gridW - 6, height: cell + 4, rx: 5, fill: 'none', stroke: 'rgba(99,102,241,.4)', strokeWidth: 1 }))
     days.forEach((d, c) => {
@@ -471,9 +471,9 @@ function ObsLaneHeat(props: any) {
   })
 
   return h('div', { style: { marginTop: 4, paddingTop: 10, borderTop: '1px dashed rgba(148,163,184,.25)' } },
-    h('div', { style: { fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6 } },
+    h('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 } },
       '🔥 事件泳道 · 阶段 × 近 14 天',
-      h('span', { style: { fontWeight: 400, fontSize: 9.5, color: '#94a3b8', marginLeft: 8 } },
+      h('span', { style: { fontWeight: 400, fontSize: 9.5, color: 'var(--text-faint)', marginLeft: 8 } },
         days[0] + ' ~ ' + days[13] + '（本地时区，色深=事件数）')),
     h('svg', { width: '100%', viewBox: '0 0 ' + gridW + ' ' + gridH, style: { display: 'block', maxWidth: gridW } }, cells))
 }
@@ -506,14 +506,14 @@ function ObsQuantLadder(props: any) {
   rows.forEach((r: any, i: number) => {
     const y = topPad + i * (barH + gap)
     const col = r[1] > 500 ? '#ef4444' : r[1] > 200 ? '#f59e0b' : '#10b981'
-    items.push(h('text', { key: 'k' + i, x: 2, y: y + 12, fontSize: 9.5, fontFamily: 'monospace', fill: '#64748b' }, r[0]))
+    items.push(h('text', { key: 'k' + i, x: 2, y: y + 12, fontSize: 9.5, fontFamily: 'monospace', fill: 'var(--text-muted)' }, r[0]))
     items.push(h('rect', { key: 'b' + i, x: labelW, y, width: Math.max(2, xOf(r[1]) - labelW), height: barH, rx: 4, fill: col, opacity: .82 }))
-    items.push(h('text', { key: 'v' + i, x: xOf(r[1]) + 5, y: y + 12, fontSize: 9, fontFamily: 'monospace', fill: '#475569' }, r[1] + 'ms'))
+    items.push(h('text', { key: 'v' + i, x: xOf(r[1]) + 5, y: y + 12, fontSize: 9, fontFamily: 'monospace', fill: 'var(--text-secondary)' }, r[1] + 'ms'))
   })
   return h('div', null,
-    h('div', { style: { fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6 } }, '⏱ 延迟分位阶梯（全局合并样本）'),
+    h('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 } }, '⏱ 延迟分位阶梯（全局合并样本）'),
     h('svg', { width: '100%', viewBox: '0 0 ' + W + ' ' + Hh, style: { display: 'block', maxWidth: W }, role: 'img', 'aria-label': '延迟分位阶梯图' }, items),
-    h('div', { style: { fontSize: 9.5, color: '#94a3b8', marginTop: 4 } },
+    h('div', { style: { fontSize: 9.5, color: 'var(--text-faint)', marginTop: 4 } },
       'p50/p90/p95/p99/max = 各端点环形样本合并后的有序统计量 · 绿<200ms ≤ 琥珀<500ms ≤ 红'))
 }
 
@@ -536,8 +536,8 @@ function ObsLifeRing(props: any) {
       h('circle', { cx: 19, cy: 19, r: R, fill: 'none', stroke: col, strokeWidth: 4, strokeLinecap: 'round',
         strokeDasharray: (C * pct / 100).toFixed(2) + ' ' + C.toFixed(2),
         transform: 'rotate(-90 19 19)' }),
-      h('text', { x: 19, y: 23, textAnchor: 'middle', fontSize: 9.5, fontWeight: 800, fill: '#475569' }, pct + '%')),
-    h('span', { style: { fontSize: 10, color: '#64748b' } }, done + '/' + total + ' 阶段'))
+      h('text', { x: 19, y: 23, textAnchor: 'middle', fontSize: 9.5, fontWeight: 800, fill: 'var(--text-secondary)' }, pct + '%')),
+    h('span', { style: { fontSize: 10, color: 'var(--text-muted)' } }, done + '/' + total + ' 阶段'))
 }
 
 /* ═══ cycle-18 方法论链路卡（消费 /api/huasheng13/* 三源；无 hook、纯渲染） ═══
@@ -589,7 +589,7 @@ function Obs13HeatBar(props: any) {
           border: '1px solid color-mix(in srgb, ' + col + ' 38%, transparent)',
         },
       },
-      h('div', { style: { fontSize: 10, color: '#475569', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
+      h('div', { style: { fontSize: 10, color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
         String((m && m.label) || id)),
       h('div', { style: { height: 5, background: 'rgba(148,163,184,.25)', borderRadius: 3, overflow: 'hidden', marginTop: 4 } },
         h('i', { style: { display: 'block', height: '100%', width: Math.round(Math.max(0, Math.min(1, cov)) * 100) + '%', background: col, borderRadius: 3 } })),
@@ -607,7 +607,7 @@ function Obs13Stat(props: any) {
   },
   h('div', { style: { fontSize: 17, fontWeight: 800, color: props.color || 'var(--text-primary,#0f172a)', lineHeight: 1.2 } },
     props.v == null ? '—' : props.v),
-  h('div', { style: { fontSize: 10, color: '#64748b', marginTop: 2 } }, props.l))
+  h('div', { style: { fontSize: 10, color: 'var(--text-muted)', marginTop: 2 } }, props.l))
 }
 
 /**
@@ -636,7 +636,7 @@ function ObsMethodologyCard(props: any) {
   const degraded = !!(cat && cat.meta && cat.meta.degraded)
 
   // 三块独立降级提示（各自只影响自己那行）
-  const miss = (what: string) => h('div', { style: { fontSize: 11, color: '#94a3b8', padding: '6px 0' } },
+  const miss = (what: string) => h('div', { style: { fontSize: 11, color: 'var(--text-faint)', padding: '6px 0' } },
     what + '未就绪（/api/huasheng13/' + (what === '覆盖矩阵' ? 'coverage' : what === '链路追踪' ? 'trace' : 'catalog') + ' 未返回）—— 服务可用，仅该块降级')
 
   return h('div', { style: OBS_GLASS },
@@ -668,7 +668,7 @@ function ObsMethodologyCard(props: any) {
           covRaw.gaps.slice(0, 3).map((g: any) => String(g.label || g.module) + '·' + String(g.detail || '')).join('；'))
       : null,
     !mods.length && !trace ? h('div', {}, miss('链路追踪')) : null,
-    h('div', { style: { fontSize: 10, color: '#94a3b8', marginTop: 8, lineHeight: 1.7 } },
+    h('div', { style: { fontSize: 10, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.7 } },
       '覆盖率 = presentDims / expectedDims（常识/申论不考公式，不把不考公式的模块判缺失）· ' +
       '命中率 = hit/total（空查询不进分母）· p50/p95 仅统计真实被调用过的端点。'))
 }
@@ -700,18 +700,18 @@ function ObsScatter(props: any) {
   // y 轴刻度（0 / 200 / yMax）+ x 轴刻度（1/10/100/… 数量级）
   for (const yv of [0, 200, yMax]) {
     if (yv > yMax) continue
-    items.push(h('text', { key: 'yt' + yv, x: padL - 4, y: yOf(yv) + 3, fontSize: 8.5, fontFamily: 'monospace', fill: '#94a3b8', textAnchor: 'end' }, String(yv)))
+    items.push(h('text', { key: 'yt' + yv, x: padL - 4, y: yOf(yv) + 3, fontSize: 8.5, fontFamily: 'monospace', fill: 'var(--text-faint)', textAnchor: 'end' }, String(yv)))
   }
   // x 轴数量级刻度：count=10^dec → 精确位置 log10(1+10^dec)（dec=0 即 count=1）
   for (let dec = 0; dec <= 6; dec++) {
     const xv = Math.log10(1 + Math.pow(10, dec))
     if (xv > xMax) break
-    items.push(h('text', { key: 'xt' + dec, x: xOf(xv), y: Hh - padB + 12, fontSize: 8.5, fontFamily: 'monospace', fill: '#94a3b8', textAnchor: 'middle' }, '10' + (dec ? supDigits(String(dec)) : '')))
+    items.push(h('text', { key: 'xt' + dec, x: xOf(xv), y: Hh - padB + 12, fontSize: 8.5, fontFamily: 'monospace', fill: 'var(--text-faint)', textAnchor: 'middle' }, '10' + (dec ? supDigits(String(dec)) : '')))
   }
   items.push(h('line', { key: 'slo', x1: padL, y1: yOf(200), x2: W - 8, y2: yOf(200), stroke: '#f59e0b', strokeWidth: 1, strokeDasharray: '4 3', opacity: .8 }))
   items.push(h('text', { key: 'slol', x: W - 12, y: yOf(200) - 3, fontSize: 8, fill: '#b45309', textAnchor: 'end' }, 'SLO 200ms'))
-  items.push(h('line', { key: 'med', x1: xOf(medX), y1: padT - 2, x2: xOf(medX), y2: Hh - padB, stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '2 3', opacity: .7 }))
-  items.push(h('text', { key: 'medl', x: xOf(medX) + 3, y: padT + 8, fontSize: 8, fill: '#64748b' }, '中位吞吐'))
+  items.push(h('line', { key: 'med', x1: xOf(medX), y1: padT - 2, x2: xOf(medX), y2: Hh - padB, stroke: 'var(--text-faint)', strokeWidth: 1, strokeDasharray: '2 3', opacity: .7 }))
+  items.push(h('text', { key: 'medl', x: xOf(medX) + 3, y: padT + 8, fontSize: 8, fill: 'var(--text-muted)' }, '中位吞吐'))
   pts.forEach((p: any, i: number) => {
     const r2 = 2.5 + Math.sqrt(Math.min(p.errors, 50)) * 1.1
     items.push(h('circle', {
@@ -719,12 +719,12 @@ function ObsScatter(props: any) {
       fill: p.color, opacity: .78, stroke: '#fff', strokeWidth: .8,
     }, h('title', null, p.path + ' · ' + p.count + ' 次 · p95 ' + p.p95 + 'ms · 错 ' + p.errors)))
   })
-  items.push(h('text', { key: 'xl', x: W - 8, y: Hh - 4, fontSize: 8.5, fill: '#94a3b8', textAnchor: 'end' }, '请求数（log₁₀）'))
-  items.push(h('text', { key: 'yl', x: padL - 26, y: padT + 2, fontSize: 8.5, fill: '#94a3b8' }, 'p95 ms'))
+  items.push(h('text', { key: 'xl', x: W - 8, y: Hh - 4, fontSize: 8.5, fill: 'var(--text-faint)', textAnchor: 'end' }, '请求数（log₁₀）'))
+  items.push(h('text', { key: 'yl', x: padL - 26, y: padT + 2, fontSize: 8.5, fill: 'var(--text-faint)' }, 'p95 ms'))
   return h('div', null,
-    h('div', { style: { fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6 } }, '🔵 吞吐 × 延迟四象限（治理优先级直读）'),
+    h('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 } }, '🔵 吞吐 × 延迟四象限（治理优先级直读）'),
     h('svg', { width: '100%', viewBox: '0 0 ' + W + ' ' + Hh, style: { display: 'block', maxWidth: W }, role: 'img', 'aria-label': '吞吐延迟四象限散点图' }, items),
-    h('div', { style: { fontSize: 9.5, color: '#94a3b8', marginTop: 4 } },
+    h('div', { style: { fontSize: 9.5, color: 'var(--text-faint)', marginTop: 4 } },
       'x=log₁₀(1+请求数) · y=p95（1200ms 截断）· 泡径∝√错误数 · 右上（高吞吐∧慢）= 治理优先 · 红=漂移/孤儿'))
 }
 
@@ -874,7 +874,7 @@ export function NativeObsView({ api, onReload }) {
   const problemCount = rows.filter(r => r.undeclared || (r.count > 0 && (r.p95 > 200 || r.errRate > 0.01))).length
   const maxP95 = Math.max.apply(null, [1].concat(rows.map(r => r.p95 || 0)))
 
-  const th: any = { textAlign: 'left', padding: '7px 8px', fontSize: 11, color: '#64748b', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(148,163,184,.3)' }
+  const th: any = { textAlign: 'left', padding: '7px 8px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(148,163,184,.3)' }
   const thSort: any = { ...th, cursor: 'pointer', userSelect: 'none' }
   const td: any = { padding: '6px 8px', fontSize: 11.5, borderBottom: '1px solid rgba(148,163,184,.12)', verticalAlign: 'middle' }
   const doSort = (key: any) => {
@@ -882,7 +882,7 @@ export function NativeObsView({ api, onReload }) {
     else { setSortKey(key); setSortAsc(false) }
   }
   const sortHead = (key: any, label: any) => h('th', {
-    style: Object.assign({}, thSort, { color: sortKey === key ? '#4f46e5' : '#64748b' }),
+    style: Object.assign({}, thSort, { color: sortKey === key ? '#4f46e5' : 'var(--text-muted)' }),
     onClick: () => doSort(key),
     title: '点击按「' + label + '」排序',
   }, label + (sortKey === key ? (sortAsc ? ' ↑' : ' ↓') : ''))
@@ -891,7 +891,7 @@ export function NativeObsView({ api, onReload }) {
   const lamp = (color: any, title: any, key: any) => h('span', { key, title, style: { color, fontSize: 10, lineHeight: 1 } }, '●')
   const lamps = (r: any) => h('span', { style: { display: 'inline-flex', gap: 5, alignItems: 'center' } },
     lamp(r.undeclared ? '#ef4444' : '#10b981', r.undeclared ? '注册：漂移——遥测出现但 manifest 未声明（绕过单一事实源）' : '注册：manifest 已声明', 'lp'),
-    lamp(r.count > 0 ? '#10b981' : '#94a3b8', r.count > 0 ? '生产：遥测请求数 ' + r.count + ' > 0' : '生产：零请求（从未被调用）', 'pp'),
+    lamp(r.count > 0 ? '#10b981' : 'var(--text-faint)', r.count > 0 ? '生产：遥测请求数 ' + r.count + ' > 0' : '生产：零请求（从未被调用）', 'pp'),
     lamp(r.active ? '#10b981' : (r.undeclared ? '#10b981' : '#f59e0b'), r.active ? '消费：telemetry.endpoints 已触达' : (r.undeclared ? '消费：已触达（但未声明）' : '消费：注册未消费——遥测无样本'), 'cp'))
 
   /* ── 管理动作：刷新 / 导出诊断 / 复制摘要 ── */
@@ -943,7 +943,7 @@ export function NativeObsView({ api, onReload }) {
   }
   const mgBtn = (label: any, fn: any, title: any) => h('button', {
     key: label, onClick: fn, title: title || label,
-    style: { border: '1px solid rgba(148,163,184,.4)', background: 'rgba(255,255,255,.7)', color: '#475569', borderRadius: 9, padding: '5px 11px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
+    style: { border: '1px solid rgba(148,163,184,.4)', background: 'rgba(255,255,255,.7)', color: 'var(--text-secondary)', borderRadius: 9, padding: '5px 11px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
   }, label)
 
   /* ── R9 早退守卫：必须放在全部 hooks（含两个 useMemo）之后 —— 渲染期 hook 数量跨渲染恒定 ── */
@@ -957,8 +957,8 @@ export function NativeObsView({ api, onReload }) {
 
     /* ── H 管理动作条 ── */
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12, padding: '8px 12px', borderRadius: 12, background: 'rgba(148,163,184,.08)', border: '1px solid rgba(148,163,184,.2)' } },
-      h('span', { style: { fontWeight: 800, fontSize: 12.5, color: '#334155' } }, '📡 白盒管理面板'),
-      h('span', { style: { fontSize: 10.5, color: '#94a3b8' } }, '覆盖 ' + (coverage * 100).toFixed(0) + '% · ' + (lastAt ? '刷新于 ' + lastAt.toLocaleTimeString() : '实时')),
+      h('span', { style: { fontWeight: 800, fontSize: 12.5, color: 'var(--text-primary)' } }, '📡 白盒管理面板'),
+      h('span', { style: { fontSize: 10.5, color: 'var(--text-faint)' } }, '覆盖 ' + (coverage * 100).toFixed(0) + '% · ' + (lastAt ? '刷新于 ' + lastAt.toLocaleTimeString() : '实时')),
       h('div', { style: { marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' } },
         mgBtn(busy ? '刷新中…' : '↻ 刷新', doRefresh, '重新拉取遥测/能力/生命周期'),
         mgBtn('⤓ 导出诊断', doExport, '下载完整诊断 JSON（仅本机数据，无凭据）'),
@@ -1046,13 +1046,13 @@ export function NativeObsView({ api, onReload }) {
             h(ObsLaneHeat, { life }),
             lifeEvents.length
               ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 190, overflowY: 'auto', marginTop: 8 } },
-                  lifeEvents.map((e, i) => h('div', { key: 'ev' + i, style: { display: 'flex', gap: 8, fontSize: 10.5, color: '#64748b', padding: '2px 0', borderBottom: '1px dashed rgba(148,163,184,.15)' } },
-                    h('span', { style: { fontFamily: 'monospace', color: '#94a3b8', flex: '0 0 62px' } }, String(e.ts || '').slice(11, 19)),
-                    h('span', { style: { fontWeight: 700, color: '#475569' } }, String(e.event || '')),
+                  lifeEvents.map((e, i) => h('div', { key: 'ev' + i, style: { display: 'flex', gap: 8, fontSize: 10.5, color: 'var(--text-muted)', padding: '2px 0', borderBottom: '1px dashed rgba(148,163,184,.15)' } },
+                    h('span', { style: { fontFamily: 'monospace', color: 'var(--text-faint)', flex: '0 0 62px' } }, String(e.ts || '').slice(11, 19)),
+                    h('span', { style: { fontWeight: 700, color: 'var(--text-secondary)' } }, String(e.event || '')),
                     e.port ? h('span', null, ':' + e.port) : null,
                     e.pid ? h('span', null, 'pid ' + e.pid) : null)))
               : null)
-        : h('div', { style: { fontSize: 12, color: '#94a3b8' } }, '生命周期端点未就绪（/api/lifecycle 未返回 stages）—— 服务可用，仅该卡片降级')),
+        : h('div', { style: { fontSize: 12, color: 'var(--text-faint)' } }, '生命周期端点未就绪（/api/lifecycle 未返回 stages）—— 服务可用，仅该卡片降级')),
 
     /* ── C2 cycle-18 方法论链路（六模块覆盖热力条 + 检索命中率 + p50/p95） ── */
     h(ObsMethodologyCard, { hs13: hs }),
@@ -1081,7 +1081,7 @@ export function NativeObsView({ api, onReload }) {
               style: Object.assign({}, G_BTN, triFilter === k ? G_BTN_ON : {}),
               title: k === 'all' ? '显示全部端点' : k === 'abnormal' ? '漂移/孤儿/慢/错误 端点' : '注册未消费（琥珀灯）端点',
             }, (triFilter === k ? '✓ ' : '') + (k === 'all' ? '全部' : k === 'abnormal' ? '异常' : '未消费'))),
-            h('span', { style: { fontSize: 10.5, color: '#94a3b8' } }, viewRows.length + ' / ' + rows.length + ' 行'))
+            h('span', { style: { fontSize: 10.5, color: 'var(--text-faint)' } }, viewRows.length + ' / ' + rows.length + ' 行'))
         : null,
       rows.length
         ? h('div', { style: { overflowX: 'auto' } },
@@ -1098,23 +1098,23 @@ export function NativeObsView({ api, onReload }) {
               h('tbody', null, viewRows.slice(0, 60).map(r => {
                 const bad = r.p95 > 200 || r.errRate > 0.01
                 const statusBg = r.undeclared ? 'rgba(245,158,11,.15)' : r.orphan ? 'rgba(239,68,68,.15)' : r.active ? 'rgba(16,185,129,.15)' : 'rgba(148,163,184,.15)'
-                const statusFg = r.undeclared ? '#b45309' : r.orphan ? '#dc2626' : r.active ? '#059669' : '#64748b'
+                const statusFg = r.undeclared ? '#b45309' : r.orphan ? '#dc2626' : r.active ? '#059669' : 'var(--text-muted)'
                 const statusText = r.undeclared ? '未声明' : r.orphan ? '孤儿' : r.active ? '活跃' : '未触达'
                 return h('tr', { key: r.path, style: { background: bad ? 'rgba(245,158,11,.045)' : 'transparent' } },
                   h('td', { style: Object.assign({}, td, { fontFamily: 'monospace', fontSize: 10.5 }) },
                     h('div', null, r.path),
                     (r.label && r.label !== '未在 manifest 声明')
-                      ? h('div', { style: { fontSize: 9.5, color: '#94a3b8', marginTop: 1, fontFamily: 'inherit' } }, r.label + ' · ' + r.consumers.length + ' 消费者')
+                      ? h('div', { style: { fontSize: 9.5, color: 'var(--text-faint)', marginTop: 1, fontFamily: 'inherit' } }, r.label + ' · ' + r.consumers.length + ' 消费者')
                       : null),
                   h('td', { style: td }, lamps(r)),
                   h('td', { style: td }, r.count),
                   h('td', { style: Object.assign({}, td, { color: r.p50 > 100 ? '#b45309' : 'inherit' }) }, r.p50 ? r.p50 + 'ms' : '—'),
                   h('td', { style: Object.assign({}, td, { fontWeight: bad ? 800 : 400, color: bad ? '#dc2626' : 'inherit' }) }, r.p95 ? r.p95 + 'ms' : '—'),
-                  h('td', { style: Object.assign({}, td, { color: r.errRate > 0.01 ? '#dc2626' : '#94a3b8' }) }, r.errRate ? (r.errRate * 100).toFixed(1) + '%' : '0%'),
+                  h('td', { style: Object.assign({}, td, { color: r.errRate > 0.01 ? '#dc2626' : 'var(--text-faint)' }) }, r.errRate ? (r.errRate * 100).toFixed(1) + '%' : '0%'),
                   h('td', { style: td }, h(Sparkline, { series: r.series, color: bad ? '#ef4444' : '#6366f1' })),
                   h('td', { style: td }, h('span', { style: { background: statusBg, color: statusFg, padding: '2px 8px', borderRadius: 20, fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap' } }, statusText)))
               }))))
-        : h('div', { style: { fontSize: 12, color: '#94a3b8' } }, '能力矩阵未就绪（/api/capabilities 未返回 endpoints）—— 服务可用，仅该卡片降级')),
+        : h('div', { style: { fontSize: 12, color: 'var(--text-faint)' } }, '能力矩阵未就绪（/api/capabilities 未返回 endpoints）—— 服务可用，仅该卡片降级')),
 
     /* ── E 慢端点 TOP（性能优先级直读） ── */
     topSlow.length
@@ -1123,7 +1123,7 @@ export function NativeObsView({ api, onReload }) {
             topSlow.slice(0, 6).map(r => h('div', { key: String(r.path), style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5 } },
               h('span', { style: { flex: '0 0 auto', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 10.5 } }, String(r.path)),
               h('div', { style: { flex: 1 } }, h(Bar, { pct: Math.min(100, Math.round(((r.p95 || 0) / maxP95) * 100)), color: (r.p95 || 0) > 200 ? 'linear-gradient(135deg,#ef4444,#f87171)' : undefined })),
-              h('span', { style: { flex: '0 0 66px', textAlign: 'right', color: '#64748b', fontSize: 10.5 } }, (r.p95 || 0) + 'ms · ' + (r.count || 0) + '次')))))
+              h('span', { style: { flex: '0 0 66px', textAlign: 'right', color: 'var(--text-muted)', fontSize: 10.5 } }, (r.p95 || 0) + 'ms · ' + (r.count || 0) + '次')))))
       : null,
 
     /* ── G 命名空间清单 ── */
@@ -1135,10 +1135,10 @@ export function NativeObsView({ api, onReload }) {
               title: '答题 ' + (w.answered || 0) + ' · 正确率 ' + (w.rate || 0) + '%',
               style: Object.assign({}, G_TAG, { fontFamily: 'monospace', fontSize: 10 }),
             }, String(w.ns || w.label || '?') + ' · D' + (w.day || 1) + ' · ' + (w.answered || 0) + '题')))
-        : h('div', { style: { fontSize: 12, color: '#94a3b8' } }, '命名空间端点未就绪（/api/workspaces）—— 服务可用，仅该卡片降级')),
+        : h('div', { style: { fontSize: 12, color: 'var(--text-faint)' } }, '命名空间端点未就绪（/api/workspaces）—— 服务可用，仅该卡片降级')),
 
     /* ── 白盒口径说明 ── */
-    h('div', { style: { fontSize: 10.5, color: '#94a3b8', lineHeight: 1.8, marginTop: 4 } },
+    h('div', { style: { fontSize: 10.5, color: 'var(--text-faint)', lineHeight: 1.8, marginTop: 4 } },
       '口径：p50/p95 = 每端点最近 100 次请求的环形样本百分位；覆盖 = 运行态被触达端点数 / 声明端点数；',
       '孤儿 = 声明了但能力图上无人消费（矩阵断裂点）；「未声明」= 运行态出现但 manifest 未登记（绕过单一事实源的证据）；',
       '三态 = 声明集 × 遥测集 的集合运算（绿=声明∧消费 · 琥珀=声明∧¬消费 · 红=消费∧¬声明），与 reconciliation 口径一致；',
