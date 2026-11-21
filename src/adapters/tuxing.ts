@@ -11,7 +11,7 @@
  * 图片走 /api/tuxing-img 二进制服务（基准目录 gk-tuxing/）。
  */
 import { readFileSync, existsSync, statSync, createReadStream } from 'node:fs'
-import { join, resolve, extname, dirname, sep } from 'node:path'
+import { join, resolve, extname, sep } from 'node:path'
 
 const REPO = 'gk-tuxing'
 const DATA_FILE = 'assets/data.js'

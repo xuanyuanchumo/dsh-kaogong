@@ -11,7 +11,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, basename, extname, resolve, sep } from 'node:path'
 
 const IMG_ROOT_NAME = 'xingcezhenti'
-const IMG_SUBDIR = '90-图片'
+export const IMG_SUBDIR = '90-图片'
 const TRY_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']
 
 // 目录扫描缓存（同一目录只列一次；39051 文件全扫太慢）

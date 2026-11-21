@@ -11,7 +11,7 @@
  * 组件规范（cycle-24/C44）：自治 fetch · 早退在全部 hooks 后 · KgLoad/KgErr/KgEmpty 三态基建 ·
  * Props 类型化 · 全中文注释 · R9 零直调。
  */
-import { h, React, Stat, Card, KV_TAG, KV_BTN, KgLoad, KgErr, KgEmpty, Bar } from '../ui-kit.js'
+import { React, Card, KV_TAG, KgLoad, KgErr, KgEmpty, Bar } from '../ui-kit.js'
 import { useApiMany } from '../hooks/index.js'
 
 /* ══════════════ NativePlanView · 学习计划 ══════════════ */

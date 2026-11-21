@@ -9,7 +9,7 @@
  *  - 申论专题：按五类题型（概括/分析/对策/应用文/大作文）
  *  - 每个专题带 entry：{ view, params } 指向对应练习视图（统一路由）
  */
-import { buildPaperIndex, buildTopics } from '../adapters/paperData.js'
+import { buildPaperIndex, } from '../adapters/paperData.js'
 import { naokuStats } from '../adapters/naoku.js'
 
 /** 行测专题：模块 + 细分题型（有 naoku 数据时用真实题量） */

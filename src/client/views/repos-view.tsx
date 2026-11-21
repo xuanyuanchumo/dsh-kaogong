@@ -10,7 +10,7 @@
  *  ③ 顶层名全部 Rp* 前缀（combo 单作用域防重名，教训⑨）；
  *  ④ 作业轮询：有 running 作业时 2s 一次，无作业自动停表（省电停帧同构理念）。
  */
-import { h, React, entries, Stat, Card, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
+import { React, Stat, Card, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
 
 /** tier 元数据（颜色/文案/排序；与 server REPOS_META.tier 词表同源） */
 const RP_TIERS: any = {

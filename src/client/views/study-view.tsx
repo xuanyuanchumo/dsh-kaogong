@@ -5,9 +5,9 @@
  * 练题流程收敛到左栏「考公学习」面板（对话窗口回归纯对话）。
  */
 
-import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, OptionRow, SourceBadge, KgLoad, KgErr, KgChips, KgEmpty } from '../ui-kit.js'
-// cycle-25：题目七段渲染接入统一组件域 question-kit（QwQuestionCard 组装器 + QwZoomHost 图片放大宿主）
-import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-kit.js'
+import { React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, SourceBadge, KgLoad, KgErr, KgChips, KgEmpty } from '../ui-kit.js'
+// cycle-25：题目七段渲染接入统一组件域 question-kit（组装器 + QwZoomHost 图片放大宿主）
+import { QwZoomHost, QwPaperMode } from '../question/question-kit.js'
 
 /* ════════════ cycle-15 专项刷题记忆（/api/memory · 按工作区命名空间隔离）════════════
    三端同步契约：manifest 声明 /api/memory → server/srs.js memoryApi 实现 → 本视图族消费。

@@ -22,7 +22,7 @@
  */
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
-import { openPoolDb, rebuildFts, setMeta, poolStats, withTx, invalidateStatsCache, POOL_SCHEMA_VERSION } from './poolDb.js'
+import { openPoolDb, rebuildFts, setMeta, poolStats, invalidateStatsCache, POOL_SCHEMA_VERSION } from './poolDb.js'
 import { ingestAll, registrySnapshot, SOURCE_REGISTRY } from './poolSources.js'
 
 export { stripHtmlKeepImg, extractImages } from './poolSourceImpls.js'

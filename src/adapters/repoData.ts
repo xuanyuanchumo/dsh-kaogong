@@ -8,7 +8,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
-const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
+export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 export const REPOS = {
   huasheng13:             '花生十三体系方法论 25 篇（六模块技巧库，方法论视图主数据源）',

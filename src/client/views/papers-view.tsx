@@ -3,14 +3,14 @@
  * 模考 / 真题卷库 / 专题 / 申论评改。
  */
 
-import { h, React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, KgLoad, KgChips } from '../ui-kit.js'
+import { React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, KgLoad, KgChips } from '../ui-kit.js'
 // cycle-13 专题枢纽：行测刷题 / 图形推理 / 深度题库 三个既有视图嵌入本页分区（R9：h() 挂载）
 import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
 // cycle-18：专题枢纽「📖 方法论」分区直接挂花生十三体系（语料由「📦 题库管理」安装到数据根）。
 // 依赖方向 papers-view → huasheng13-view 是单向的；bundler 会按拓扑序排布（不会成环）。
 import { NativeHuasheng13View } from './huasheng13-view.js'
-// cycle-25：题目渲染接入统一组件域（QwQuestionCard 七段卡 / QwExamNavigator 答题卡 / QwZoomHost 图片放大宿主）
-import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../question/question-kit.js'
+// cycle-25：题目渲染接入统一组件域（QwQuestionCard 七段卡 / 答题卡 / QwZoomHost 图片放大宿主）
+import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-kit.js'
 
     /* ══ v1.6 新增：真题卷 / 专题 / 申论评改（全部宿主原生渲染，组件自管数据）══ */
 
@@ -274,8 +274,7 @@ import { QwQuestionCard, QwExamNavigator, QwZoomHost, QwPaperMode } from '../que
       // 交卷后从 report.detail（mine/right/isCorrect）重建每题判色 + 用 detail.questions 的 analysis 展示解析）
       const answerQ = answerExam && Array.isArray(answerExam.questions) ? answerExam.questions[answerIdx] : null
       const answerDetailRow = answerReport && Array.isArray(answerReport.detail) ? answerReport.detail.find(d => d.no === (answerQ && answerQ.no)) : null
-      const answerQFull = detail && Array.isArray(detail.questions) ? detail.questions.find(q => q.no === (answerQ && answerQ.no)) : null
-      const answerRevealed = !!answerReport   // 交卷后全部揭示（判色 + 解析）
+          const answerRevealed = !!answerReport   // 交卷后全部揭示（判色 + 解析）
       // 换卷重置双模式全部状态（browseSel/browseReveal/答题态/学习态）
       React.useEffect(() => {
         if (!openId) return

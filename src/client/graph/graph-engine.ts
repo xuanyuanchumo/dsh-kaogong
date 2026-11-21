@@ -61,7 +61,7 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
          radiusBoost 与 colorModel 一起经 setView 传入（只影响绘制半径，不影响布局/hitTest）；
          trans：350ms 布局过渡（force↔layered），过渡期物理步进暂停。 */
       let colorModel: any = null
-      let radiusBoost = false
+      let radiusBoost = false   // cycle-22 P1 半成品：学习画像半径提升（写入链已通，绘制消费待接线）
       // cycle-22 P1：学习画像掌握率表（tooltip 第三行；setView 传入，结构与 stats.mastery 一致）
       let masteryMap: any = null
       const trans: any = { active: false, t0: 0, dur: 350, fx: null, fy: null, tx: null, ty: null }
@@ -89,7 +89,6 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
           const ms = graphMeasureSize(wrap, canvas)
           W = ms.w
           H = ms.h
-          const prevW = W, prevH = H
           graphApplyCanvasSize(canvas, ctx, W, H, dpr)
           if (!sized) {
             sized = true
@@ -181,6 +180,7 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
             hoverId, selectedId, simNodes, simEdges, byId, view, pathNodeSet, pathEdgeSet,
             hoverPos, focusSet, nodeMeta, edgeMeta, colorModel, pulse: ph,
             masteryMap,           // cycle-22 P1：tooltip 掌握率（空表时零开销）
+            radiusBoost,          // cycle-48 接线补全：学习画像半径提升 → analytics 消费（半断链修复）
             flow: { on: flowOn, t: now / 1700 },   // cycle-15：粒子时间项（确定性相位 + 时间推进）
           })
           // 小地图：同一帧内绘制（数据/视口/着色天然一致，无第二循环）
@@ -461,7 +461,6 @@ import { graphMeasureSize, graphApplyCanvasSize, graphSetCursor, graphBindMiniMa
       }
       function onUp(ev: any) {
         try {
-          const p = localPt(ev, canvas)
           pointers.delete(ev.pointerId)
           if (pointers.size < 2) pinch = null
           if (drag) {

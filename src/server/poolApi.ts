@@ -23,7 +23,6 @@ import { poolDb, poolDbStatus, poolStats, poolDbBytes, getMeta, getCachedStats, 
 import { rebuildPool, incrementalRebuild, registrySnapshot } from '../adapters/poolIngest.js'
 import { poolHealth, ingestDiagnostics, REL_TYPE_META } from './poolObservability.js'
 
-const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 /** 抽题权重：复用 SRS 同源模型 1/(rate+0.15)（单一事实源纪律——不另立一套公式） */
 function weaknessOf(rate: any): number {
@@ -669,15 +668,6 @@ export function makePoolApi({ repoRoot, dataDir, store }) {
     } catch { return { error: '统一池查询失败' } }
     if (!rows.length) return { error: '统一池内无匹配题（module=' + (module || 'all') + '）' }
 
-    // 优选排序（练习链路体验）：带图 / 带五维标注的题优先——图推与资料分析的
-    // 「有图才可作答」「有思路链才有深度」是内容价值，统一池可显式提升。
-    // 分层：候选按 (rich=带图∨带五维) → 顺序填充，rich 不足时普通题补足到 n。
-    const richScore = (r: any): number => {
-      const stem = String(r.stem || '')
-      const hasImg = stem.includes('kgimg://') || Number(r.has_image || 0) === 1
-      const hasDims = !!(String(r.reasoning || '').trim() || String(r.fastest || '').trim() || String(r.pitfalls || '').trim())
-      return (hasImg ? 2 : 0) + (hasDims ? 1 : 0)
-    }
     // ── cycle-42 根治（研究 22 §1）：两级**确定性**配额，替代概率性候选窗口 ──
     // 旧设计两层随机漏空：① 候选池 ORDER BY RANDOM() n*3 行——带图 15% 时 18 行候选
     // 可能 0 带图；② 补捞条件 richCount < n/2 又被「带五维但无图」题（5599 条，69%）

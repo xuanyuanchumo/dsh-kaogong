@@ -9,10 +9,9 @@
  *  - Node 内置 node:sqlite（Node ≥22.19）只读打开，惰性连接 + 失败优雅降级
  *  - 所有查询只读；不可用时返回 null 让上层回落到 xingcezhenti 目录解析
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, } from 'node:fs'
+import { join, } from 'node:path'
 
-const NL = String.fromCharCode(10)
 let db = null
 let dbFailed = false
 let dbPath = null
@@ -43,7 +42,7 @@ function ensureDb(repoRoot, dataDir) {
 }
 
 /** 惰性打开（失败只降级一次，不反复重试拖慢请求） */
-function open(repoRoot, dataDir) {
+export function open(repoRoot, dataDir) {
   if (db) return db
   if (dbFailed) return null
   try {

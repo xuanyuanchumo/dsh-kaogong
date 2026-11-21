@@ -20,7 +20,6 @@ export { initNaoku, resetNaoku }
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }
 
 export function makeNaokuApi({ repoRoot, dataDir, store }) {
-  const { loadProgress, saveProgress } = store
 
   /** 深度题库配图端点（二进制；DB 记 webp 磁盘为 png，由 resolveNaokuImage 换扩展名） */
   function serveImage(params, res) {

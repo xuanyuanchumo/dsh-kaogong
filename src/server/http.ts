@@ -19,7 +19,7 @@ import { safeImagePath, resolveNaokuImage } from '../adapters/naokuImage.js'
 import {
   CAPABILITIES, NODE_META, EDGE_META, buildGraph, graphMetrics, healthScore,
   degreeAnalysis, labelPropagation, clusteringCoefficient, brandesBetweenness,
-  topoLayers, shortestPath, neighborhood, reverseReach, layeredLayout,
+  topoLayers, layeredLayout,
 } from '../shared/manifest.js'
 import { REPOS, XINGCE_MODULES, safeReadFile, exists, safeReadDir, getRandomQuestions, repoStats } from '../adapters/repoData.js'
 import { prewarmPaperIndex, resetPaperIndex } from '../adapters/paperData.js'

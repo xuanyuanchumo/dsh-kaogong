@@ -14,10 +14,10 @@
  * 零依赖（node:child_process/node:fs/node:path）。
  */
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, statSync, rmSync, mkdirSync, writeFileSync, renameSync, statfsSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, rmSync, mkdirSync, writeFileSync, statfsSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { REPOS_META, SELF_META } from '../shared/manifest.js'
-import { readReposConfig, writeReposConfig, isInside, looksLikeReposRoot } from './dataRoot.js'
+import { readReposConfig, writeReposConfig, isInside, } from './dataRoot.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
