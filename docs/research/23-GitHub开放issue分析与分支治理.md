@@ -1,3 +1,8 @@
+---
+title: 23 · GitHub 开放 issues 分析 + 分支治理落地（gitflow PR #7）
+status: current
+updated: 2026-11-26
+---
 # 23 · GitHub 开放 issues 分析 + 分支治理落地（gitflow PR #7）
 
 > dsh-kaogong 研究文档 · cycle-42b · 目标驱动（GitHub issues + 分支合并 + 规范文档）

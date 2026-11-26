@@ -1,3 +1,8 @@
+---
+title: dsh-kaogong 数据流向与交互业务图
+status: current
+updated: 2026-11-26
+---
 # dsh-kaogong 数据流向与交互业务图
 
 > status: current · updated: 2026-11-21 · 适用版本：v1.31.0+（含 cycle-43 材料保真 / cycle-44 前端组件化）

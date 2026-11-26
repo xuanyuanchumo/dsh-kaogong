@@ -1,3 +1,8 @@
+---
+title: 开发规范与技术选型
+status: current
+updated: 2026-11-26
+---
 # 开发规范与技术选型
 
 ## 一、为什么是「React + JS 无 JSX」，而不是 TypeScript + JSX？

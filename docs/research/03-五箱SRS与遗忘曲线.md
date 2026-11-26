@@ -1,3 +1,8 @@
+---
+title: 03 · 五箱 SRS 与遗忘曲线：从「间隔重复」到「错题回炉调度」
+status: current
+updated: 2026-11-26
+---
 # 03 · 五箱 SRS 与遗忘曲线：从「间隔重复」到「错题回炉调度」
 
 > dsh-kaogong 研究文档 · cycle-19

@@ -1,3 +1,8 @@
+---
+title: 前端 UI 规范（cycle-48 固化 · 守卫随测试演进）
+status: current
+updated: 2026-11-26
+---
 # 前端 UI 规范（cycle-48 固化 · 守卫随测试演进）
 
 > 适用范围：`src/client/**`（ui-kit.tsx + views/*.tsx + question/*.tsx）。

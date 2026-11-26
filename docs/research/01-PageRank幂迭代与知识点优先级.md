@@ -1,3 +1,8 @@
+---
+title: 01 · PageRank 幂迭代：从「被引用的权重」到「知识点的出题优先级」
+status: current
+updated: 2026-11-26
+---
 # 01 · PageRank 幂迭代：从「被引用的权重」到「知识点的出题优先级」
 
 > dsh-kaogong 研究文档 · cycle-19 · 全部落地代码可在本仓库定位验证

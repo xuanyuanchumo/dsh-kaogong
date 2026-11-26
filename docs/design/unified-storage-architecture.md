@@ -1,3 +1,8 @@
+---
+title: 统一存储与模型自选架构 — 设计契约（unified-storage-architecture）
+status: current
+updated: 2026-11-26
+---
 # 统一存储与模型自选架构 — 设计契约（unified-storage-architecture）
 
 > 本文件是 **cycle-34** 的架构设计契约，回应 GitHub issue #4（图片搜题）并修正「无统一数据层」的既有判断。

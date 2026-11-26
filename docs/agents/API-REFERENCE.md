@@ -1,3 +1,8 @@
+---
+title: API 参考（v1.15.0 · 60 端点 · 与 src/shared/manifest.ts 逐条同步）
+status: current
+updated: 2026-11-26
+---
 # API 参考（v1.15.0 · 60 端点 · 与 src/shared/manifest.ts 逐条同步）
 
 > 所有端点前缀：宿主通道 `/kaogong/api/*`，独立端口通道 `/api/*`（两侧都接受带前缀路径）。

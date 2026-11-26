@@ -1,3 +1,8 @@
+---
+title: dsh-kaogong · Agent 开发文档
+status: current
+updated: 2026-11-26
+---
 # dsh-kaogong · Agent 开发文档
 
 > 本目录是 **面向 AI agent 与本项目开发者** 的事实基线，与代码同源、随迭代更新。
@@ -35,6 +40,14 @@
 | [**MARKETPLACE-ENTRY.md**](./MARKETPLACE-ENTRY.md) | awesome-dsh-plugin 条目 YAML 草案 + 合规证据 | 投稿/条目更新时 |
 | [INCIDENTS.md](./INCIDENTS.md) | R1–R25 事故簿（根因+修复+守卫；含 cycle-18 方法论语料/覆盖/检索三案） | 每次线上/真机事故后 |
 | [ROADMAP.md](./ROADMAP.md) | 技术债清单与演进方向（v1.13.0 基线） | 每轮迭代收口时 |
+| [**BACKLOG.md**](./BACKLOG.md) | **未完成事项唯一事实源（SSOT）**：`BL-<域>-<序号>` 编号、优先级、验收标准、完成记录 | **每轮迭代收口前复核状态；新增工作先登记编号** |
+| [**BRANCHING-STRATEGY.md**](./BRANCHING-STRATEGY.md) | gitflow 双线（develop→main）+ 血缘嫁接 + 发布/回滚 runbook | 改分支模型或发布流程时 |
+| [ARCH-LAYOUT.md](./ARCH-LAYOUT.md) | 目录职责与分层禁区（`src/` 六域划分） | 调整目录结构时 |
+| [ARCH-CONVERGENCE-BASELINE.md](./ARCH-CONVERGENCE-BASELINE.md) | 架构收敛基线（cycle-49~59 实施账本与不变量） | 架构分层调整时 |
+| [DATA-FLOW.md](./DATA-FLOW.md) | 数据流全景（摄入→池→检索→判分→落盘）与写路径清单 | 改数据流或新增写路径时 |
+| [**ISOLATION.md**](./ISOLATION.md) | 验证环境三层隔离（沙箱/真机/端口/数据根）与 `KG_PORT`/`KG_DATA_DIR` | **跑验证前必读（防污染主力数据根）** |
+| [**REVIEW.md**](./REVIEW.md) | 评审规范：四员分工 + 五维检查单 + 负向验证要求 | 开评审或加新守卫时 |
+| [UI-GUIDE.md](./UI-GUIDE.md) | 客户端 UI 规范（可点反馈、颜色 token、视图注册表纪律） | 改客户端视图时 |
 
 ## 铁律（违反即回归）
 

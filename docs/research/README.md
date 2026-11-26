@@ -1,3 +1,8 @@
+---
+title: dsh-kaogong 研究文档索引（docs/research/）
+status: current
+updated: 2026-11-26
+---
 # dsh-kaogong 研究文档索引（docs/research/）
 
 > 中文思维 · 数学模型/数据结构/算法 → 语言/学习场景启发 → 代码落地 → 验证方式
@@ -22,9 +27,20 @@
 | 题库和关系怎么统一入库 | [13-kaogong-db统一知识库.md](13-kaogong-db统一知识库.md) | 统一边表关系 + 可重建派生库 | `adapters/naoku.ts` `server/http.ts` |
 | 什么算本项目内核/边界在哪 | [14-内核边界契约.md](14-内核边界契约.md) | 四层依赖 + 六条不变量 | `adapters/repoData.ts` `server/http.ts` |
 | **四篇怎么合起来做** | [15-全局整合分析.md](15-全局整合分析.md) | 统一口径 + 单条主线 + 一致性核对 | 全部 `src/**` |
+| 题库覆盖到底全不全 | [16-题库覆盖审计.md](16-题库覆盖审计.md) | 16 仓库 × 摄入矩阵 | `adapters/poolSources.ts` |
+| 白盒面板的性能数字归因 | [17-性能研究白盒面板.md](17-性能研究白盒面板.md) | 分位数归因 + 优化路径 | `server/poolObservability.ts` |
+| 研究怎么闭环回代码 | [18-研究迭代闭环T032T033.md](18-研究迭代闭环T032T033.md) | T-033 检索降权 + T-032 重建作业化 | `server/poolApi.ts` |
+| 取题层怎么升级的 | [19-阶段2取题层升级.md](19-阶段2取题层升级.md) | 五维贯通 + 学习事件双写 | `server/srs.ts` `src/client/views/study-view.tsx` |
+| 外源题库最后一公里 | [20-端到端打通与主题适配.md](20-端到端打通与主题适配.md) | 端到端链路 + 主题适配 | `src/client/views/**` |
+| 跨源重复题怎么合并 | [21-跨源去重治理.md](21-跨源去重治理.md) | 内容指纹 + 来源全标记 + 解析多版本 | `adapters/poolUpsert.ts` `adapters/poolDb.ts` |
+| 间歇假红怎么根治 | [22-IMG04间歇假红根治.md](22-IMG04间歇假红根治.md) | 概率补捞 → 确定性两级配额 | `adapters/poolDb.ts` `src/server/dataApi.ts` |
+| issue 与分支治理怎么落地 | [23-GitHub开放issue分析与分支治理.md](23-GitHub开放issue分析与分支治理.md) | gitflow 血缘嫁接 + PR #7 | `docs/agents/BRANCHING-STRATEGY.md` |
+| 纸质补录为何「好像没实现」 | [2026-11-14-issue3-history-import-gap.md](2026-11-14-issue3-history-import-gap.md) | 搜索三通道 + 随机抽样失效根因 | `adapters/paperData.ts` `src/server/historyApi.ts` |
+| issue #1/#2/#3 关闭核对 | [2026-11-14-issues-1-2-3-implementation-audit.md](2026-11-14-issues-1-2-3-implementation-audit.md) | 实现全量核对审计 | 全部 `src/**` |
 | **统一架构的数学模型总纲** | [25-统一架构的数学模型与数据结构.md](25-统一架构的数学模型与数据结构.md) | canonical 身份 + 统一边图 + 租户分区 + 新鲜度单调闸门 + 四维缓存键 | `poolDb.ts` `kernel.ts` `cache.ts` `poolObservability.ts` |
 | **v9 统一架构（六层收敛）** | [26-统一架构数学模型v9.md](26-统一架构数学模型v9.md) | 域五元组 + 检索信封 + 键空间·失效图 + 配额函数 + 权威库·镜像 + 视图注册表 | `shared/domains.ts` `server/dataGate.ts` `server/cache.ts` `server/dataEvents.ts` `shared/kernel.ts` `server/reviewStore.ts` `client/view-registry.ts` |
 | **v9 数据层库表设计** | [27-数据层库表设计v9.md](27-数据层库表设计v9.md) | 派生/用户/控制三分组 + 26 表设计依据 + 7 条迁移纪律 + 3 条扩展路径 | `shared/storage.ts` `adapters/poolDb.ts` `server/reviewStore.ts` |
+| **架构收敛实施账本** | [24-架构收敛实施账本.md](24-架构收敛实施账本.md) | cycle-49~59 收敛任务逐条账本（做什么/落点/验证） | 全部 `src/**` |
 
 ## 🏗 架构升级总纲（cycle-35 · 11~15 五篇合读）
 

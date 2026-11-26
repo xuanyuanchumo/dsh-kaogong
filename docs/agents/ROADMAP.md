@@ -1,3 +1,8 @@
+---
+title: 路线图与技术债
+status: current
+updated: 2026-11-26
+---
 # 路线图与技术债
 
 > 债务清单同步 `.cycles/tech-debt/backlog.md`。每轮迭代收口时更新状态。

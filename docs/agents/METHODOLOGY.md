@@ -1,3 +1,8 @@
+---
+title: 花生十三体系方法论适配库（METHODOLOGY）
+status: current
+updated: 2026-11-26
+---
 # 花生十三体系方法论适配库（METHODOLOGY）
 
 > 状态：cycle-18 / v1.13.0 已交付。

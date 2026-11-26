@@ -1,3 +1,8 @@
+---
+title: 分支管理与合并策略
+status: current
+updated: 2026-11-26
+---
 # 分支管理与合并策略
 
 > 规范契约见 [CONTRIBUTING.md](../../CONTRIBUTING.md)。本文记录**本项目实际分支拓扑与合并方案**。

@@ -1,3 +1,8 @@
+---
+title: 插件市场收录条目（awesome-dsh-plugin）
+status: current
+updated: 2026-11-26
+---
 # 插件市场收录条目（awesome-dsh-plugin）
 
 > 规范来源：<https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md>（2026-11-20 核对）。

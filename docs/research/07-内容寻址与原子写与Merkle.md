@@ -1,3 +1,8 @@
+---
+title: 07 · 内容寻址、原子写与 Merkle 根：从「一致性」到「数据完整性工程」
+status: current
+updated: 2026-11-26
+---
 # 07 · 内容寻址、原子写与 Merkle 根：从「一致性」到「数据完整性工程」
 
 > dsh-kaogong 研究文档 · cycle-19

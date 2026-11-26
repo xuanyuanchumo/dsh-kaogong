@@ -1,3 +1,8 @@
+---
+title: 13 · `.kaogong.db`：把「散落各源的题库」收敛成「一张可查询的知识库」
+status: current
+updated: 2026-11-26
+---
 # 13 · `.kaogong.db`：把「散落各源的题库」收敛成「一张可查询的知识库」
 
 > dsh-kaogong 研究文档 · cycle-35 · 架构升级：新建项目自有数据库

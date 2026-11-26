@@ -1,3 +1,8 @@
+---
+title: 统一题目池（`.kaogong.db`）· 开发规范与设计契约
+status: current
+updated: 2026-11-26
+---
 # 统一题目池（`.kaogong.db`）· 开发规范与设计契约
 
 > cycle-34 阶段 1 · 存储层（L3）+ 适配层（L2）落地

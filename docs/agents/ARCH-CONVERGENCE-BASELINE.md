@@ -1,3 +1,8 @@
+---
+title: 架构收敛基线（cycle-49 起 · cycle-61 v9 收口）
+status: current
+updated: 2026-11-26
+---
 # 架构收敛基线（cycle-49 起 · cycle-61 v9 收口）
 
 > 目标：收敛为「只维护 `.kaogong.db` 统一数据库 + 统一检索层 + 优化适配层/内核层 + 统一前端组件化架构」。
