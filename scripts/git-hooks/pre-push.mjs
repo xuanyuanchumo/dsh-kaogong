@@ -32,6 +32,48 @@ if (process.env.SKIP_PREPUSH_CHECK === '1') {
   process.exit(0)
 }
 
+/**
+ * ── tag 推送识别（cycle-68 修复）──
+ *
+ * pre-push 钩子从 stdin 收到的每一行是 `<local ref> <local sha> <remote ref> <remote sha>`。
+ * 原实现完全不看 stdin，把所有推送都当「分支推送」检查——于是**推 tag 时**：
+ *   · backlog 检查去读 `git log -1`（拿到的是 GitHub 生成的合并提交，消息里没 BL 编号）→ 拒推
+ *   · 而 tag 本身不承载 backlog 编号，这个检查对它根本不成立
+ * 结果 = 发布流程（develop → main → **tag**）必然卡在最后一步，只能靠逃生门。
+ * 正解 = 识别出「纯 tag 推送」后走 tag 自己的判据（见下），不再套用分支规则。
+ */
+const stdinRaw = await (async () => {
+  try {
+    const chunks = []
+    for await (const c of process.stdin) chunks.push(c)
+    return Buffer.concat(chunks).toString('utf8')
+  } catch { return '' }
+})()
+const pushedRefs = stdinRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  .map(l => { const [localRef, localSha, remoteRef] = l.split(/\s+/); return { localRef, localSha, remoteRef } })
+const onlyTags = pushedRefs.length > 0 && pushedRefs.every(r => r.localRef.startsWith('refs/tags/'))
+if (onlyTags) {
+  // tag 推送的判据：必须在 main 上、且 tag 名与 package.json 版本一致（发布锚点不可漂移）
+  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'])
+  const pkgVer = (() => { try { return JSON.parse(git(['show', 'HEAD:package.json'])) .version } catch { return '' } })()
+  const tags = pushedRefs.map(r => r.localRef.replace('refs/tags/', ''))
+  let bad = 0
+  console.log(`[tag] 推送 ${tags.length} 个 tag：${tags.join(', ')}（分支 ${branch}）`)
+  if (['main', 'master'].indexOf(branch) < 0) {
+    console.error(`[tag] ❌ tag 只应在发布线（main）打，当前分支：${branch}`)
+    bad = 1
+  }
+  for (const t of tags) {
+    const name = t.replace(/^v/, '')
+    if (pkgVer && name !== pkgVer) {
+      console.error(`[tag] ❌ tag ${t} 与 package.json 版本 ${pkgVer} 不一致（发布锚点必须同源）`)
+      bad = 1
+    }
+  }
+  if (!bad) console.log('[tag] ✅ tag 推送合规（发布线 + 版本锚点一致）')
+  process.exit(bad)
+}
+
 let fail = 0
 const warn = []
 
