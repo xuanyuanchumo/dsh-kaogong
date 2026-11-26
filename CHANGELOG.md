@@ -2,6 +2,60 @@
 
 本文件记录 dsh-kaogong 的版本级变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.34.1] - 2026-11-26
+
+**CI 长期红根治 + 2 个生产缺陷修复（BL-TEST-05）**：CI 自 2026-11-21 起持续红（25 个文件 /
+54 个断言），根因是**测试断言的是环境而非被测行为**——CI runner 上没有题库数据。
+
+### 修复（生产代码 · 影响运行时）
+
+- **naoku 源可用判定自锁**：统一池摄入需要上游投影库 `.naoku.db`，但该库**只由
+  `ensureNaokuDb` 合并分片产生**，而合并在 **ingest 阶段**才触发——`available` 探针只认
+  投影库 → 「从未访问过深度题库端点」的用户/CI 在探测阶段就判定源不可用 → 压根走不到
+  ingest → 永远合不出来（池少 27,506 题五维标注 + kadian 边）。
+  修法 = 可用判定改为「投影库 **或** 上游分片任一存在」+ 摄入阶段自动合并
+  （`ensureNaokuDb` 对外可见）。**实测**：池五维 0 → 27,497，kadian 边恢复。
+- **数据根绝对路径判定跨平台错误**：`/api/repos/config` 的 root 校验原用
+  `resolve(raw).startsWith('/')` 兜底——在 **Linux 上 `resolve('relative/path')` 返回
+  cwd 下的绝对路径且以 `/` 开头** → 相对路径被误判为合法 → 配置落盘后数据根指向意外位置。
+  修法 = 改用 `path.isAbsolute`（跨平台正确）。**守卫**：SMOKE-RM-05（CI 实测红）。
+
+### 修复（测试基建 · 不改运行时行为）
+
+- **render harness 硬编码开发机路径**：React 依赖原写死 `../_kgtest/node_modules` →
+  CI runner 上不存在 → 7 个 render 旅程文件整体失败。修法 = React / react-test-renderer 进
+  **devDependencies**（**不进运行时依赖面**，`dependencies` 仍为空），harness 改
+  「本仓 node_modules 优先 · 开发机路径回退」。
+- **rebuild-safety 测试离线自足**：原依赖开发机上级目录的真实题库仓 → CI 上基线库为空 →
+  断言红。修法 = 测试自建 fixture 源（恒可用 + 自己写入题/边）注入 SOURCE_REGISTRY，
+  走**生产的 `rebuildPool` 全路径**（含故障闸 + `rolledBack` 标记）——完全离线自足，
+  且本地覆盖一字不减。
+- **npm pack JSON 解析**：`npm pack --dry-run --json` 的输出前缀随 npm 版本变化
+  （Node 22 + npm 10 与本机不同），原 `indexOf('[')` 截断会截到警告行里的方括号 →
+  JSON.parse 失败 → 打包卫生断言假红。修法 = 定位**顶层数组起点**（`[` 后紧跟 `{`）。
+- **占位图 403 判读**：服务端对绝对路径 / 越级引用返回 403 是**安全模型正确生效**，
+  但测试随机抽题 → CI 与本机抽样不同 → 偶发假红。修法 = 区分 403（安全拒绝，降级）/
+  404（实体缺失，降级）/ 200（实质断言）。
+
+### CI（从「长期红」到「首次全绿」）
+
+- **CI 装全量题库 + 一次性建池**：`scripts/ci/question-banks.txt`（题库清单单一事实源）
+  + `scripts/ci/build-pool.mjs`（建池，须在 Build 之后跑——`dist/` 由 build 产出且不入库）。
+  **测试代码零改动**（对比方案「给 12 个测试文件加环境降级守卫」被弃用：漏一处 CI 就红，
+  且本地覆盖被悄悄削弱）。
+- **并发克隆 + 稳定 cache key**：9 个题库仓并发克隆（串行数分钟 → 约 1 分钟）；
+  cache key 用**题库清单文件哈希**（改 workflow 不会让 1.9GB 缓存失效）。
+- **CI 实跑全绿**：建池 68.2s（题 87,768 · 关系 583,993 · 出处 230,871 · 五维 27,497 ·
+  带图 5,960），**51 文件 / 417 断言全过**（此前 25 文件 / 54 断言红）。
+
+### 新增
+
+- `tests/smoke/market-entry.test.mjs`（6 断言）：市场条目规范守卫（字段集合 / 禁 `npm:` 键 /
+  `description.en` 单行句号结尾 / icon GitHub 位图 / category 词表 / **描述数字与 manifest
+  事实源一致**）——此前 `MARKETPLACE-ENTRY.md` 声称有守卫但实际没有（文档漂移）。
+- `scripts/ci/question-banks.txt`（题库清单单一事实源）、`scripts/ci/build-pool.mjs`（CI 建池）。
+  两者**均不进 npm 包**（`package.json files` 只白名单 3 个 scripts 文件）。
+
 ## [1.34.0] - 2026-11-26
 
 **重建不阻塞宿主 + 真增量 + 原子回滚（cycle-61 v9-b）**：修复用户报告的
