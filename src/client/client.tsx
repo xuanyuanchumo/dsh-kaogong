@@ -25,7 +25,7 @@
 // cycle-52：localStorage 收敛到 kgStorage 门面（含隐私模式防御，修复视图偏好初始化无 try/catch 崩溃点）
 import { h, React, MOUNT_PATH, PORTS, APP_NAME, KaogongErrorBoundary, kgStorage } from './ui-kit.js'
 // cycle-13 对话窗口瘦身：会话练题控件已删除（会话输入区 slot 随之下线）
-import { NativeDashboardView, NativePracticeView, NativeWrongbookView, NativeTuxingView, NativeDeepBankView } from './views/study-view.js'
+import { NativeDashboardView, NativePracticeView, NativeWrongbookView, NativeTuxingView } from './views/study-view.js'
 import { NativePapersView, NativeTopicsView, NativeEssayView } from './views/papers-view.js'
 // cycle-深链融合：NativeExamView 组件本体保留在 papers-view（别名兼容导出），exam 路由收敛为深链。
 import { NativeGraphView } from './views/graph-view.js'
@@ -123,7 +123,7 @@ import { buildNavGroups, viewMeta } from './view-registry.js'
       // cycle-24 P0-1：取数下沉段整体移除 —— dashboard/wrongbook/graph/obs 四视图改为自治 fetch
       //（原 90 行 data.kind 分发 + Promise.all 整包下传删除；各视图错误各自就地降级）
       /** 自管视图名单（组件内自行 fetch，不经父层）：cycle-24 起为全部视图（cycle-48 全部收敛进 VIEW_ROUTES，本名单留作契约存档） */
-      void new Set(['papers', 'topics', 'essay', 'exam', 'practice', 'deepbank', 'tuxing', 'repos', 'huasheng13'])
+      void new Set(['papers', 'topics', 'essay', 'exam', 'practice', 'tuxing', 'repos', 'huasheng13'])
 
       /**
        * cycle-24 P0-2：视图路由注册表（唯一分发事实源）。
@@ -133,7 +133,7 @@ import { buildNavGroups, viewMeta } from './view-registry.js'
       /**
        * cycle-49 统一跳转契约：onGo(view, params?) → setView。
        * 全部视图注入同一出口，消灭「只有入口没有出口」的死胡同视图
-       * （调研实证：dashboard/tuxing/deepbank/plan/search/method/pool/repos/exam/essay
+       * （调研实证：dashboard/tuxing/plan/search/method/pool/repos/exam/essay
        * 此前零跨视图出口）。params 形状约定 { module?, kadian?, srs?, topic?, paperId?, section?, tab? }。
        */
       const go = (v: any, params?: any) => setView(v, params || {})
@@ -145,20 +145,19 @@ import { buildNavGroups, viewMeta } from './view-registry.js'
         //（三方对账假漂移第三形态：同名异键）——统一为 manifest 口径；旧 'obs' 键保留一行
         // 别名分发（localStorage kg-native-view 可能存着旧键，读到了也能渲染）。
         observability: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onGo: go, onReload: () => setTick((t: any) => t + 1) }) },
-        papers: { comp: NativePapersView, key: t => 'pp' + t, props: () => ({ api, onGo: go, initialSubject: viewParams.subject || '' }) },
+        papers: { comp: NativePapersView, key: t => 'pp' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialSubject: viewParams.subject || '' }) },
         // cycle-深链融合：exam 改为 papers + mode 深链的别名路由（消灭重复实现）。
         // 保留 exam 键兼容 localStorage 旧键、导航入口、onGo 出口；无 paperId 时进入卷列表，
         // 点卷即直入 answer 模式（组件内 initialMode 驱动）；带 paperId 深链命中卷即自动开考。
         exam: { comp: NativePapersView, key: t => 'ex' + t, props: () => ({ api, onGo: go, initialMode: 'answer', initialPaperId: viewParams.paperId || '' }) },
         // cycle-49：initialSrs 消费错题本 {srs:1} 深链（修复死参——回炉跳转真正生效）
-        practice: { comp: NativePracticeView, key: t => 'pr' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialSrs: viewParams.srs === undefined ? undefined : !!viewParams.srs, onGoWrongbook: () => setView('wrongbook') }) },
-        deepbank: { comp: NativeDeepBankView, key: t => 'dp' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialCategory: viewParams.category || '', initialKadian: viewParams.kadian || '' }) },
+        practice: { comp: NativePracticeView, key: t => 'pr' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialSrs: viewParams.srs === undefined ? undefined : !!viewParams.srs, initialKadian: viewParams.kadian || '', initialCategory: viewParams.category || '', onGoWrongbook: () => setView('wrongbook') }) },
         tuxing: { comp: NativeTuxingView, key: t => 'tx' + t, props: () => ({ api, onGo: go }) },
         repos: { comp: NativeReposView, key: t => 'rp' + t, props: () => ({ api, onGo: go }) },
         // cycle-34 阶段 1：统一题库（不进一级导航——收敛进「题库」组，与 discipline㉛ 一致）
-        pool: { comp: NativePoolView, key: t => 'pl' + t, props: () => ({ api, onGo: go, initialModule: viewParams.module || '' }) },
-        huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t, props: () => ({ api, initialSection: viewParams.section || '', onGo: go }) },
-        topics: { comp: NativeTopicsView, key: t => 'tp' + t, props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialTab: viewParams.tab || '' }) },
+        pool: { comp: NativePoolView, key: t => 'pl' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialCategory: viewParams.category || '', initialQuery: viewParams.q || '' }) },
+        huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t + String(viewParams.section || ''), props: () => ({ api, initialSection: viewParams.section || '', onGo: go }) },
+        topics: { comp: NativeTopicsView, key: t => 'tp' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialTab: viewParams.tab || '' }) },
         essay: { comp: NativeEssayView, key: t => 'es' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialType: viewParams.type || '' }) },
         // cycle-46（用户确认项①·幽灵视图补齐）：plan/search/method 在 manifest 声明、
         // 服务端端点全部存活，但无路由无页面（声明漂移第四形态）。补齐为真页面，

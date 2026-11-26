@@ -140,7 +140,7 @@ globalThis.fetch = async (url) => {
         no: 1, number: 1,
         source: 'naoku', paperFile: '2024年国考《行测》', region: '国考', year: '2024',
         type: 'single', module: '判断推理', qid: 'mock-1',
-        groupMaterial: '【材料】某市 2018-2023 年铁路旅客运输量变化情况如下表所示。',
+        groupMaterial: '【材料】某市 2018-2023 年铁路旅客运输量变化情况如下表所示。【图:kgimg://90-图片/题目图/mock-material.png】',
         groupMaterialNo: 1, materialRef: '材料 1',
         stem: '抽到的统一池题目：下列推断正确的是（　）',
         options: { A: '选项甲', B: '选项乙', C: '选项丙', D: '选项丁' },
@@ -366,8 +366,27 @@ globalThis.fetch = async (url) => {
   if (u.includes('/api/papers')) return { json: async () => ({ total: 1683, papers: [{ id: '国考/2009/申论-副省级', exam: '国考', year: 2009, subject: '申论', paperType: '副省级', province: '全国', questionCount: 4, verified: true }], subjects: [{ subject: '申论', count: 944 }, { subject: '行测', count: 739 }], provinces: [{ name: '山东', total: 12, minYear: 2009, maxYear: 2024, subjects: { 申论: 6, 行测: 6 } }, { name: '全国', total: 100, minYear: 2008, maxYear: 2026, subjects: { 申论: 50, 行测: 50 } }, { name: '广东', total: 30, minYear: 2010, maxYear: 2025, subjects: { 申论: 15, 行测: 15 } }] }) }
   if (u.includes('/api/paper?')) return { json: async () => ({ id: 'x', exam: '国考', year: 2009, subject: '申论', paperType: '副省级', materials: [{ no: 1, text: '材料正文' }], questions: [{ no: 1, stem: '题干', score: 20, requirement: '不超过300字', relatedMaterials: '材料1', reference: '参考答案内容' }, { no: 2, type: '单项选择题', module: '判断推理', stem: '行测题干', options: { A: '选项A', B: '选项B', C: '选项C', D: '选项D' }, correctAnswer: 'B', analysis: '解析文本' }] }) }
   if (u.includes('/api/topics')) return { json: async () => ({
+    /**
+     * cycle-65：mock 补齐 **kind='category'（细分题型）** —— 真实 `/api/topics` 的行测频道
+     * 会返回 12 个细分题型（逻辑判断/定义判断/片段阅读…），但旧 mock 只有 1 个 module 类，
+     * 于是「总览区细分题型分组」这条链路的渲染**从未被测试覆盖**
+     * （用户两次追问「细分题型更新了吗」正是这里漏测）。
+     * 纪律同 cycle-62：**mock 必须照抄服务端出站形状**，否则测的是 mock 不是产品。
+     */
     channels: [
-      { id: 'xingce', name: '行测', icon: '📐', desc: '深度题库 27506 题', entries: [{ label: '刷题（SRS）', view: 'practice', params: {} }], topics: [{ id: 'xc:module:判断推理', channel: '行测', kind: 'module', title: '判断推理', desc: '模块', questionCount: 7749, entry: { view: 'practice', params: { module: '判断推理' } } }] },
+      { id: 'xingce', name: '行测', icon: '📐', desc: '统一池 87434 题 + 真题卷 739 套',
+        entries: [
+          { label: '刷题（SRS）', view: 'practice', params: {} },
+          { label: '统一题库（按考点/来源检索）', view: 'pool', params: {} },
+          { label: '图形推理专项', view: 'tuxing', params: {} },
+        ],
+        topics: [
+          { id: 'xc:module:判断推理', channel: '行测', kind: 'module', title: '判断推理', desc: '统一池 7747 题（跨源去重 · 五维标注）', questionCount: 7747, entry: { view: 'practice', params: { module: '判断推理' } } },
+          { id: 'xc:cat:逻辑判断', channel: '行测', kind: 'category', title: '逻辑判断', desc: '统一池 5220 题（跨源去重 · 五维标注 · 可反查出处）', questionCount: 5220, entry: { view: 'practice', params: { category: '逻辑判断' } } },
+          { id: 'xc:cat:定义判断', channel: '行测', kind: 'category', title: '定义判断', desc: '统一池 3885 题（跨源去重 · 五维标注 · 可反查出处）', questionCount: 3885, entry: { view: 'practice', params: { category: '定义判断' } } },
+          { id: 'xc:cat:片段阅读', channel: '行测', kind: 'category', title: '片段阅读', desc: '统一池 6396 题（跨源去重 · 五维标注 · 可反查出处）', questionCount: 6396, entry: { view: 'practice', params: { category: '片段阅读' } } },
+          { id: 'xc:cat:图形推理', channel: '行测', kind: 'category', title: '图形推理', desc: '统一池 4795 题', questionCount: 4795, entry: { view: 'tuxing', params: {} } },
+        ] },
       { id: 'shenlun', name: '申论', icon: '✍️', desc: '944 套', entries: [{ label: '申论练习', view: 'essay', params: {} }], topics: [{ id: 'sl:概括', channel: '申论', kind: 'essay-type', title: '申论 · 概括', desc: '采分点制', entry: { view: 'essay', params: { type: '概括' } } }] },
     ],
     stats: { paperTotal: 1683, essayPapers: 944, xingcePapers: 739, naokuTotal: 27506 },

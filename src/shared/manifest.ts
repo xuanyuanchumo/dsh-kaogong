@@ -68,9 +68,9 @@ export const CAPABILITIES = {
     { path: '/api/essay/grade', label: '申论离线评分', consumers: ['ui:essay', 'tool:kaogong_ai_shenlun'] },
     { path: '/api/essay/history', label: '申论历史', consumers: ['ui:essay', 'ui:dashboard'] },
     { path: '/api/essay/article', label: '大作文分档评估', consumers: ['ui:essay'] },
-    { path: '/api/paper-img', label: '题目配图服务', consumers: ['ui:papers', 'ui:practice', 'ui:deepbank'] },
+    { path: '/api/paper-img', label: '题目配图服务', consumers: ['ui:papers', 'ui:practice'] },
     // cycle-22：kg-img 占位配图服务补登记（cycle-21 起服务端已实现、RichText 已消费，但漏声明 → 能力对账假漂移）
-    { path: '/api/kg-img', label: '题库占位配图服务(kgimg://)', consumers: ['ui:practice', 'ui:deepbank', 'ui:topics'] },
+    { path: '/api/kg-img', label: '题库占位配图服务(kgimg://)', consumers: ['ui:practice', 'ui:topics'] },
     { path: '/api/paper/exam/start', label: '整卷模考开始', consumers: ['ui:exam'] },
     { path: '/api/paper/exam/submit', label: '整卷模考交卷', consumers: ['ui:exam'] },
     { path: '/api/paper/exam/history', label: '模考历史', consumers: ['ui:exam', 'ui:dashboard'] },
@@ -81,7 +81,7 @@ export const CAPABILITIES = {
     //   /api/naoku/papers                          → /api/pool/papers-by-kadian
     //   /api/naoku/questions + /api/naoku/status   → 已由 /api/pool/questions + /api/pool/status 覆盖
     // 保留 naoku-img：图片是媒体引用（L3 不做 BLOB），不是题目事实直读。
-    { path: '/api/naoku-img', label: '深度题库配图服务', consumers: ['ui:deepbank', 'ui:practice'] },
+    { path: '/api/naoku-img', label: '深度题库配图服务', consumers: ['ui:practice'] },
     // cycle-21 数据外置白盒端点（issue #2）：用户数据根位置 / 迁移状态 / 包内残留透出
     { path: '/api/data-location', label: '数据位置白盒', consumers: ['ui:repos', 'ui:observability'] },
     { path: '/api/tuxing/cats', label: '图形推理规律分类', consumers: ['ui:tuxing'] },
@@ -102,7 +102,7 @@ export const CAPABILITIES = {
     { path: '/api/progress', label: '进度', consumers: ['ui:dashboard', 'ui:plan', 'tool:kaogong_ai_plan'] },
     // cycle-15 专项刷题记忆：按工作区命名空间隔离的「上次练到 xx 的 xx 题」；
     // 消费方=三个专项视图（刷题/图形推理/深度题库），进入视图时读、翻题时写
-    { path: '/api/memory', label: '专项刷题记忆', consumers: ['ui:practice', 'ui:tuxing', 'ui:deepbank'] },
+    { path: '/api/memory', label: '专项刷题记忆', consumers: ['ui:practice', 'ui:tuxing'] },
     // cycle-16 题库管理：原始仓库一键安装/更新/删除/浏览/自定义数据根/镜像代理
     { path: '/api/repos', label: '题库状态总览', consumers: ['ui:repos'] },
     { path: '/api/repos/install', label: '题库安装/更新', consumers: ['ui:repos'] },
@@ -126,10 +126,10 @@ export const CAPABILITIES = {
     { path: '/api/huasheng13/practice', label: '方法论配套练习抽取', consumers: ['ui:huasheng13'] },
     { path: '/api/huasheng13/trace', label: '方法论消费链路追踪', consumers: ['ui:huasheng13', 'ui:observability'] },
     // cycle-21 纸质练习历史补录（issue #3 第一阶段）：搜索现有题库 / 补录历史对错 / 批次撤销
-    { path: '/api/history/search', label: '题干关键词搜索(补录候选)', consumers: ['ui:deepbank'] },
-    { path: '/api/history/entries', label: '纸质补录(逐题/批量)', consumers: ['ui:deepbank'] },
-    { path: '/api/history/undo', label: '补录批次撤销', consumers: ['ui:deepbank'] },
-    { path: '/api/history/batches', label: '补录批次台账', consumers: ['ui:deepbank'] },
+    { path: '/api/history/search', label: '题干关键词搜索(补录候选)', consumers: ['ui:wrongbook'] },
+    { path: '/api/history/entries', label: '纸质补录(逐题/批量)', consumers: ['ui:wrongbook'] },
+    { path: '/api/history/undo', label: '补录批次撤销', consumers: ['ui:wrongbook'] },
+    { path: '/api/history/batches', label: '补录批次台账', consumers: ['ui:wrongbook'] },
     // cycle-34 阶段 1：统一题目池（`.kaogong.db` 存储层；设计 §9c.4 八端点）
     // 端点四步纪律：manifest → server → UI → smoke（manifest 是唯一事实源，对账只认声明）
     { method: 'GET', path: '/api/pool/status', label: '统一池状态(库/构建/覆盖)', consumers: ['ui:pool', 'tool:kaogong_launch'], desc: '库就绪/构建时间/表结构/统计/健康/逐源诊断' },
@@ -141,8 +141,8 @@ export const CAPABILITIES = {
     { method: 'GET', path: '/api/pool/search', label: '统一池跨源检索(去重聚合)', consumers: ['ui:pool', 'ui:search'], desc: '?q&limit → FTS5 trigram 命中 + 跨源去重聚合 + 源多样性轮转(rotation/sources)' },
     { method: 'GET', path: '/api/pool/question', label: '统一池单题聚合视图', consumers: ['ui:pool'], desc: '?id=<canonical_id> → 一题+N 出处+关系邻居+五维 dims' },
     // cycle-62 收敛：原 /api/naoku/* 的 3 个「池没有等价能力」的语义下沉至此
-    { method: 'GET', path: '/api/pool/kadians', label: '统一池考点清单/检索', consumers: ['ui:deepbank', 'ui:papers'], desc: '?q=<关键词>&limit → 有 q=按词检索（{kadian,category,module,count}）；无 q=分类清单（k 与 kadian 双写兼容旧形状）' },
-    { method: 'GET', path: '/api/pool/by-kadian', label: '统一池按考点反查题目', consumers: ['ui:deepbank', 'ui:topics'], desc: '?kadian=<考点>&count → 按考点抽题（支持模糊匹配；原 /api/naoku/practice 语义）' },
+    { method: 'GET', path: '/api/pool/kadians', label: '统一池考点清单/检索', consumers: ['ui:papers', 'ui:pool'], desc: '?q=<关键词>&limit → 有 q=按词检索（{kadian,category,module,count}）；无 q=分类清单（k 与 kadian 双写兼容旧形状）' },
+    { method: 'GET', path: '/api/pool/by-kadian', label: '统一池按考点反查题目', consumers: ['ui:practice', 'ui:topics'], desc: '?kadian=<考点>&count → 按考点抽题（支持模糊匹配；原 /api/naoku/practice 语义）' },
     { method: 'GET', path: '/api/pool/papers-by-kadian', label: '统一池考点→试卷反查', consumers: ['ui:papers', 'ui:topics'], desc: '?category=<考点分类>&limit → {papers[{paper,region,year,count}]}（原 /api/naoku/papers 语义）' },
   { method: 'GET', path: '/api/pool/analysis-versions', label: '解析多版本查询', consumers: ['ui:pool', 'tool:kaogong_launch'], desc: '研究 21 纪律③：?id=<canonical_id> → {versions[{sourceId,localKey,localKeys[],analysis,answer,at}], count, rawCount}——跨源不同来源的解析各存一行可查（展示层按 source+analysis 聚合，localKeys 汇总全部卷出处）' },
     { method: 'GET', path: '/api/pool/relations', label: '统一池关系查询', consumers: ['ui:pool'], desc: '?rel_type&limit → 按关系类型分页' },
@@ -178,8 +178,12 @@ export const CAPABILITIES = {
   views: [
     { id: 'dashboard', label: '仪表盘' },
     { id: 'practice', label: '刷题' },
-    { id: 'deepbank', label: '深度题库' },
     { id: 'tuxing', label: '图形推理' },
+    // cycle-65：补登记 pool（统一题库）——它在 view-registry 是一级导航项（group:'bank'），
+    // 视图组件也真实存在，但 manifest.views 一直漏登记 → 能力对账把「行测频道的
+    // 题型深链 entry.view='pool'」判成「视图不存在」（假漂移）。
+    // 教训同 cycle-22 的 kg-img 漏声明：**「能跑通」不等于「已声明」**。
+    { id: 'pool', label: '统一题库' },
     { id: 'exam', label: '整卷模考' },
     { id: 'papers', label: '真题卷' },
     { id: 'topics', label: '专题' },

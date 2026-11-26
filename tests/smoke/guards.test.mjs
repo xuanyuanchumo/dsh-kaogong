@@ -110,22 +110,27 @@ test('SMOKE-N-01b exam 别名路由：exam 键保留 + papers 深链 answer（�
   expect(/guideDesc: '[^']*（多源离线题库）'/.test(cl) && !/15个开源仓库/.test(cl), 'guideDesc 陈旧数字残留').toBe(true)
 })
 
-test('SMOKE-N-01 导航精简：四练习视图退出一级导航（文案级防回归）', () => {
+test('SMOKE-N-01 导航精简：三练习视图退出一级导航（文案级防回归）', () => {
   // v9：改由注册表断言（导航从 VIEW_META 派生，源码里已无手写数组）
+  // cycle-63：deepbank 已删除（数据层与语义并入统一池），剩三视图仍不得进一级导航
   const navIds = buildNavGroups().flatMap(g => g.items.map(i => i[0]))
-  for (const id of ['practice', 'deepbank', 'tuxing', 'essay']) {
+  for (const id of ['practice', 'tuxing', 'essay']) {
     expect(navIds, id + ' 不应在一级导航（应经专题枢纽进入）').not.toContain(id)
   }
   const labels = buildNavGroups().flatMap(g => g.items.map(i => i[1])).join(' ')
-  expect(/刷题|深度题库|图形推理|申论/.test(labels)).toBe(false)
+  expect(/刷题|图形推理|申论/.test(labels)).toBe(false)
+  // cycle-63 反向断言：deepbank 既不在导航、也不在路由登记（彻底退役）
+  expect(navIds, 'deepbank 应已彻底退役').not.toContain('deepbank')
 })
 
-test('SMOKE-N-01 四视图路由仍可达（VIEW_ROUTES 键位登记）', () => {
+test('SMOKE-N-01 三视图路由仍可达（VIEW_ROUTES 键位登记）+ deepbank 已退役', () => {
   const cl = readSrc('./src/client/client.tsx')
   expect(/practice: \{ comp: NativePracticeView/.test(cl)).toBe(true)
-  expect(/deepbank: \{ comp: NativeDeepBankView/.test(cl)).toBe(true)
   expect(/tuxing: \{ comp: NativeTuxingView/.test(cl)).toBe(true)
   expect(/essay: \{ comp: NativeEssayView/.test(cl)).toBe(true)
+  // cycle-63（用户要求）：深度题库分区与视图已删除——路由表不得再有登记
+  expect(/deepbank: \{ comp: NativeDeepBankView/.test(cl), 'deepbank 路由应已移除').toBe(false)
+  expect(/NativeDeepBankView/.test(cl), 'client.tsx 不应再引用 NativeDeepBankView').toBe(false)
 })
 
 test('SMOKE-N-46 幽灵视图补齐：plan/search/method 路由 + 导航可达', () => {

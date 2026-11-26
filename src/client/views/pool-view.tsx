@@ -23,6 +23,10 @@ import { h, React, Stat, Card, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
 interface NativePoolViewProps {
   api: (p: string, opts?: any) => Promise<any>
   initialModule?: string
+  /** cycle-65：「行测频道 → 某题型」深链——挂载即按该题型检索并展示结果 */
+  /** cycle-65：行测频道细分题型深链——挂载即按 category 精确过滤取题 */
+  initialCategory?: string
+  initialQuery?: string
   /** cycle-49：统一跳转出口——未就绪引导去题库管理、单题详情一键开练 */
   onGo?: (v: string, params?: any) => void
 }
@@ -187,7 +191,7 @@ function PoolDetail({ d, onClose, onGo }: any) {
     <Card title="🔎 单题聚合视图">
       <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
         {/* cycle-49：单题聚合视图不再是死胡同——按知识点/模块一键开练 */}
-        {onGo && d.kadian ? <button style={KV_BTN} onClick={() => onGo('deepbank', { kadian: d.kadian })}>✏️ 练此知识点 ›</button> : null}
+        {onGo && d.kadian ? <button style={KV_BTN} onClick={() => onGo('practice', { kadian: d.kadian })}>✏️ 练此知识点 ›</button> : null}
         {onGo && d.module ? <button style={KV_BTN} onClick={() => onGo('practice', { module: d.module })}>🎯 练此模块 ›</button> : null}
         <button style={KV_BTN} onClick={onClose}>关闭</button>
       </div>
@@ -246,7 +250,7 @@ function PoolDetail({ d, onClose, onGo }: any) {
  * ⚠️ 早退守卫用 `st === null`（未加载）而不是 `!st`（未就绪）——未就绪是**合法状态**，
  *    必须在视图内降级展示（卡片级），不能提前 return 把整个视图清空。
  */
-export function NativePoolView({ api, initialModule, onGo }: NativePoolViewProps) {
+export function NativePoolView({ api, initialModule, initialCategory = '', initialQuery = '', onGo }: NativePoolViewProps) {
   /* ── hooks 顶部恒定 ── */
   const [st, setSt] = React.useState(null)          // /api/pool/status
   const [q, setQ] = React.useState('')                // 检索词
@@ -273,6 +277,58 @@ export function NativePoolView({ api, initialModule, onGo }: NativePoolViewProps
     load()
     return () => { aliveRef.current = false }
   }, [load])
+
+  /**
+   * cycle-65：`initialQuery` 深链——从「🎯 专题 → 🧭 总览 → 行测频道」点某个**题型**
+   * （片段阅读/逻辑填空/图形推理…）时，直接带该题型名进统一题库并**立即检索出该题型的题**。
+   *
+   * 背景：行测频道的题型 entry 原指向已删除的 `deepbank` 视图（点进去路由不到）。
+   * 落点改为统一题库后，仅传参不自动检索的话用户还得自己再敲一次关键词——
+   * 那是「能进去但要手动再操作一遍」的半成品体验。故此处挂载即搜。
+   */
+  /**
+   * cycle-65：`initialCategory` 深链——从「🎯 专题 → 🧭 总览 → 行测频道」点某个**细分题型**
+   * （逻辑判断/定义判断/片段阅读…）时，挂载即按该题型**精确过滤**取题并展示。
+   *
+   * ⚠️ 为什么不用 `pool/search?q=题型名`（我上一版的做法，已证伪）：
+   * search 是**全文检索**，不是按题型字段过滤。实测「定义判断」命中 5 条里仅 1 条真属该题型
+   * （其余是解析里恰好出现了这几个字）→ 用户点题型看到一堆杂题。
+   * 正解 = `pool/questions?category=<题型>` 按 `question.category` **等值**过滤。
+   */
+  const bootCatRef = React.useRef(false)
+  React.useEffect(() => {
+    const cat0 = String(initialCategory || '').trim()
+    if (bootCatRef.current || !cat0) return
+    bootCatRef.current = true
+    ;(async () => {
+      setBusy(true)
+      try {
+        const d = await api('/pool/questions?category=' + encodeURIComponent(cat0) + '&count=10')
+        if (!aliveRef.current) return
+        setSampled(d)
+        setErr('')
+      } catch (e: any) { if (aliveRef.current) setErr(String((e && e.message) || e)) }
+      finally { if (aliveRef.current) setBusy(false) }
+    })()
+  }, [initialCategory, api])
+
+  const bootQueryRef = React.useRef(false)
+  React.useEffect(() => {
+    const kw0 = String(initialQuery || '').trim()
+    if (bootQueryRef.current || !kw0) return
+    bootQueryRef.current = true
+    setQ(kw0)
+    // 直接发检索（不能只 setQ 等用户点按钮——「点了题型却什么都没出来」= 半成品体验）
+    ;(async () => {
+      setSearching(true)
+      try {
+        const d = await api('/pool/search?q=' + encodeURIComponent(kw0) + '&limit=20')
+        if (!aliveRef.current) return
+        setResults(d)
+      } catch (e: any) { if (aliveRef.current) setErr(String((e && e.message) || e)) }
+      finally { if (aliveRef.current) setSearching(false) }
+    })()
+  }, [initialQuery, api])
 
   const doSearch = React.useCallback(async () => {
     const kw = String(q || '').trim()
