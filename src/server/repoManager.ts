@@ -15,7 +15,7 @@
  */
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, statSync, rmSync, mkdirSync, writeFileSync, statfsSync } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { join, resolve, dirname, isAbsolute } from 'node:path'
 import { REPOS_META, SELF_META } from '../shared/manifest.js'
 import { readReposConfig, writeReposConfig, isInside, } from './dataRoot.js'
 
@@ -428,7 +428,13 @@ export function makeRepoManager({ getRoot, onRootChanged }: any) {
       const patch: any = {}
       if (post && typeof post.root === 'string' && post.root.trim()) {
         const raw = post.root.trim()
-        if (!/^[A-Za-z]:[\\/]|^\\{2}|^\//.test(raw) && !resolve(raw).startsWith('/')) {
+        // 绝对路径判定必须用 `isAbsolute`（**跨平台**）——
+        // 原实现用 `resolve(raw).startsWith('/')` 兜底，在 **Linux 上 `resolve('relative/path')`
+        // 返回 cwd 下的绝对路径且 startsWith('/') 为真** → 相对路径被误判为合法 →
+        // 配置落盘后数据根指向意外位置（CI 实测 SMOKE-RM-05 红）。
+        // `isAbsolute` 在 POSIX 上认 `/` 开头、在 Windows 上认 `C:\` 与 `\\` 共享前缀，
+        // 与用户实际输入形态一致。
+        if (!isAbsolute(raw)) {
           return { error: '数据根须为绝对路径（如 D:/repos 或 /home/me/repos）' }
         }
         const nr = resolve(raw)
