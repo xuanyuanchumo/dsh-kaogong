@@ -174,3 +174,28 @@ test('SEC-CORS-01 独立端口不得用通配 CORS（市场评审指出的真实
   // 写请求必须被拦（CORS 管不住写副作用）
   expect(/拒绝跨站写请求|403/.test(http), '变更类请求缺跨站拦截').toBe(true)
 })
+
+test('SEC-BRANCH-01 钩子的分支类型必须覆盖 CONTRIBUTING 的分支模型（同源）', () => {
+  /**
+   * cycle-68 事故：CONTRIBUTING §一 的 gitflow 写了 `release/*` 与 `hotfix/*`，
+   * 但 pre-push 钩子的类型表漏了这两个 → **按规范建的分支被钩子拒推**，
+   * 逼人用 SKIP_PREPUSH_CHECK=1 逃生门绕过检查（守卫形同失效）。
+   * 本守卫锁死：规范里出现的分支类型，钩子必须都认。
+   */
+  const hook = readSrc('./scripts/git-hooks/pre-push.mjs')
+  // 稳健提取：从 `const BRANCH_RE = ` 到该行末尾的 `/`（源文件里正则含转义斜杠，故按行切）
+  const line = hook.split(/\r?\n/).find(l => l.includes('const BRANCH_RE ='))
+  expect(!!line, '未找到 BRANCH_RE 定义').toBe(true)
+  const body = line.slice(line.indexOf('= /') + 3, line.lastIndexOf('/')).replace(/\\\\\//g, '/')
+  const re = new RegExp(body)
+  // 规范里明确存在的四种分支形态都必须能通过
+  for (const b of ['feat/pool-x', 'fix/ui-y', 'docs/marketplace-entry', 'release/v1.34.4', 'hotfix/v1.34.5']) {
+    expect(re.test(b), '分支名 ' + b + ' 被钩子拒（与 CONTRIBUTING 不同源）').toBe(true)
+  }
+  // 反向：非法名仍必须被拒（不能为了放行而放成通天规则）
+  for (const b of ['badname', 'release/', 'feat/']) {
+    expect(re.test(b), '非法分支名 ' + b + ' 竟通过').toBe(false)
+  }
+  // 长驻分支走白名单
+  expect(hook.includes("['main', 'develop', 'master', 'dev-history']"), '长驻分支白名单缺失').toBe(true)
+})
