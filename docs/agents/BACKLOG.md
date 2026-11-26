@@ -107,6 +107,7 @@ BL-<域>-<两位序号>
 | **BL-PROC-09** | hotfix 流程演练 | `CONTRIBUTING.md:13` 有规定，git 历史无 hotfix 痕迹 | 无真实紧急场景 | 桌面演练记录（双 PR 顺序、bump 时机） | ⬜ |
 | **BL-SEC-01** | 验证环境隔离（沙箱/真机是否污染目录） | 实测发现：数据根 `~/.dsh/kaogong` 按用户而非按 profile 隔离，未设 `KG_DATA_DIR` 的探针 adopt 到主力 8400 实例并读到主力进度；端口 8400 硬编码导致假阳性 | — | `docs/agents/ISOLATION.md` 三层隔离；`KG_PORT` 可配置；`loader.test.mjs` 断言 pid/port/数据根隔离；负向验证可观察污染 | ✅ |
 | **BL-REL-02** | v1.34.0 发布收口（文档事实校准 + GitHub/npm 发布 + 市场条目更新） | 文档端点数/断言数/题库口径三处漂移（78 端点 → 实为 82；276 断言 × 35 文件 → 实为 411 × 50；统一池仍写 v1.30 的 27,506 题 → 实为 86,454）；发布线 `main` 落后 `origin/main` 5 个提交；`.dsh/` overlay 70 个文件曾被 git 跟踪 | — | ① `npm run facts:check` 全绿；② `npm run test:all` 全绿（50 文件 / 411 断言 + Loader 17/17）；③ `.dsh/` 出库且 gitignore 覆盖；④ `develop` → `main` 合并 + tag `v1.34.0` + GitHub Release；⑤ npm `dsh-kaogong@1.34.0` 认证通道复验；⑥ 上游市场条目描述数字与 manifest 核对一致 | 🟡 |
+| **BL-TEST-05** | CI 环境依赖缺失（CI 长期红：25 文件 / 54 断言） | ① 一批 smoke 断言天然依赖真实题库数据（统一池五维/关系边/带图题、真题卷索引、方法论语料）——CI runner 无题库 → 必红；② render harness 硬编码开发机 `../_kgtest/node_modules` 的 React → 7 个 render 文件整体失败；③ naoku 源可用判定只认 `.naoku.db` 投影库，而合并只在 ingest 阶段触发 → **自锁**（池永远缺 27,506 题五维 + kadian 边）；④ paper-index 测试硬编码「仓库上级目录」找真题卷 | — | ① CI 装全量题库 + `scripts/ci/build-pool.mjs` 一次性建池（actions/cache 缓存题库与池），**测试代码零改动**；② React/react-test-renderer 进 devDependencies（**不进运行时依赖面**），harness 改「本仓优先 · 开发机回退」；③ naoku 可用判定改为「投影库 **或** 上游分片任一存在」+ 摄入阶段自动合并；④ paper-index 认 `KG_REPOS_DIR`；⑤ rebuild-safety 改自建 fixture 源（**完全离线自足**）；⑥ CI 实跑绿（50 文件 / 411 断言） | 🟡 |
 
 ---
 
