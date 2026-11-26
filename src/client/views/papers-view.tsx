@@ -7,7 +7,7 @@
 // cycle-52 续：手写加载/错误/空态收拢到 ui-kit 三态基建（KgLoad/KgErr/KgEmpty，C44 纪律）
 import { React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, KgLoad, KgErr, KgEmpty, KgChips, kgStorage } from '../ui-kit.js'
 // cycle-13 专题枢纽：行测刷题 / 图形推理 / 深度题库 三个既有视图嵌入本页分区（R9：h() 挂载）
-import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
+import { NativePracticeView, NativeTuxingView } from './study-view.js'
 // cycle-18：专题枢纽「📖 方法论」分区直接挂花生十三体系（语料由「📦 题库管理」安装到数据根）。
 // 依赖方向 papers-view → huasheng13-view 是单向的；bundler 会按拓扑序排布（不会成环）。
 import { NativeHuasheng13View } from './huasheng13-view.js'
@@ -701,7 +701,9 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       { id: 'overview', label: '🧭 总览' },
       { id: 'practice', label: '✏️ 行测刷题' },
       { id: 'tuxing', label: '🔷 图形推理' },
-      { id: 'deepbank', label: '🧠 深度题库' },
+      // cycle-63（用户要求）：深度题库分区已删除——数据层与语义完全并入统一池后，
+      // 「按模块/按 kadian 抽题」在「✏️ 行测刷题」与「🗄 统一题库」都能完成，
+      // 独立分区只剩重复入口价值。视图组件与路由登记同步移除。
       { id: 'essay', label: '✍️ 申论' },
       { id: 'method', label: '📖 方法论' },
     ]
@@ -824,7 +826,6 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
           {visited.overview ? wrap('overview', overview) : null}
           {visited.practice ? wrap('practice', <NativePracticeView {...{ key: 'topic-practice' }} api={api} initialModule={initialModule || ''} onGoWrongbook={onGo ? () => onGo('wrongbook', {}) : undefined} />) : null}
           {visited.tuxing ? wrap('tuxing', <NativeTuxingView {...{ key: 'topic-tuxing' }} api={api} />) : null}
-          {visited.deepbank ? wrap('deepbank', <NativeDeepBankView {...{ key: 'topic-deepbank' }} api={api} initialModule="" initialCategory="" />) : null}
           {visited.essay ? wrap('essay', <NativeEssayView {...{ key: 'topic-essay' }} api={api} initialType="" />) : null}
           {visited.method ? wrap('method', <TopicMethodHub {...{ key: 'topic-method-hub' }} api={api} />) : null}
         </div>

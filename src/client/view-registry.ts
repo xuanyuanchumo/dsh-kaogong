@@ -70,7 +70,6 @@ export const VIEW_META: ViewMeta[] = [
   { id: 'repos', label: '题库管理', icon: '📦', group: 'ref', order: 30, domain: 'pool', desc: '一键式题库管理：必选/推荐/可选分级 + 镜像 + 数据根 + 作业队列' },
   // ── 经专题枢纽进入（不进一级导航，纪律㉛）──
   { id: 'practice', label: '刷题', icon: '✏️', group: null, order: 10, domain: 'question', desc: '模块练习（SRS 回炉 / 弱点加权抽题）', viaHub: true },
-  { id: 'deepbank', label: '深度题库', icon: '🔬', group: null, order: 20, domain: 'pool', desc: '五维标注题（考点/推理/最快解法/易错/母题）', viaHub: true },
   { id: 'tuxing', label: '图形推理', icon: '🔷', group: null, order: 30, domain: 'tuxing', desc: '354 题图形推理专项（13 类规律 + 配图 + 原创思路）', viaHub: true },
   { id: 'essay', label: '申论', icon: '✍️', group: null, order: 40, domain: 'paper', desc: '申论小题采分点评分 + 大作文分档评估', viaHub: true },
   { id: 'huasheng13', label: '方法论', icon: '📐', group: null, order: 50, domain: 'method', desc: '花生十三六模块体系（目录/检索/练习/覆盖/链路五分区）', viaHub: true },

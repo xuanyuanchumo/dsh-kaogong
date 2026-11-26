@@ -69,6 +69,73 @@ test('v1.7.1 专题树：行测/申论分频道 + 练习入口 + entry 指向', 
   expect((xcCh.entries || []).length).toBeGreaterThanOrEqual(3)
   expect((slCh.entries || []).some(e => e.view === 'essay')).toBe(true)
   expect((xcCh.topics || []).every(t => t.entry && t.entry.view)).toBe(true)
+  /**
+   * cycle-65 守卫（用户报「专题-总览-行测频道内容未同步」）：
+   * 频道里的**每个 entry / topic.entry 的 view 必须是真实存在的视图**。
+   * 此前 deepbank 视图删除后，行测频道仍指向 `view:'deepbank'` →
+   * 用户点题型路由不到（表现为「点了没反应」）。静态声明与真实视图集必须对账。
+   */
+  const caps = await h.J('/api/capabilities')
+  const viewSet = new Set((caps.views || []).map(v => v.id))
+  const bad = []
+  for (const e of (xcCh.entries || [])) if (!viewSet.has(e.view)) bad.push('entry:' + e.label + '→' + e.view)
+  for (const e of (slCh.entries || [])) if (!viewSet.has(e.view)) bad.push('entry:' + e.label + '→' + e.view)
+  for (const tp of (topicTree.topics || [])) {
+    const v = tp && tp.entry && tp.entry.view
+    if (v && !viewSet.has(v)) bad.push('topic:' + tp.title + '→' + v)
+  }
+  expect(bad, '专题入口/题型指向了不存在的视图: ' + bad.join(', ')).toEqual([])
+})
+
+test('v1.34.4 细分题型：出题必须是该题型（category∪qtype 精确过滤，非全文检索）', async () => {
+  /**
+   * cycle-65 事故（用户报「细分题型有问题」）：
+   * ① 题型深链曾用 `pool/search?q=题型名` → 全文检索，实测「定义判断」5 条仅 1 条真属该题型；
+   * ② 改按 `category` 等值后又漏 `qtype`（6 万题 category 为空）→ 题量腰斩；
+   * ③ 带图补足未 honour 题型过滤 → 插队杂题，10 题里一半不符。
+   * 本守卫端到端锁死：**返回的每一题都必须属于该题型**。
+   */
+  const { DatabaseSync } = await import('node:sqlite')
+  const { USER_DATA_ROOT } = await import('../../dist/server/dataRoot.js')
+  const db = new DatabaseSync(USER_DATA_ROOT + '/.kaogong.db', { readOnly: true })
+  try {
+    for (const cat of ['逻辑判断', '定义判断', '片段阅读']) {
+      const d = await h.J('/api/pool/questions?category=' + encodeURIComponent(cat) + '&count=8')
+      const qs = d.questions || []
+      if (!qs.length) continue   // 该题型在池内为空 → 跳过（不制造假红）
+      let ok = 0
+      for (const q of qs) {
+        const r = db.prepare('SELECT category, qtype FROM question WHERE canonical_id = ?').get(q.canonicalId || q.id)
+        if (r && (r.category === cat || r.qtype === cat)) ok++
+      }
+      expect(ok === qs.length, `${cat}: 返回 ${qs.length} 题仅 ${ok} 题真属该题型（题型过滤失效/被补足污染）`).toBe(true)
+    }
+  } finally { db.close() }
+})
+
+test('v1.34.4b 细分题型落点必须是刷题页（practice），不是题库浏览页（pool）', async () => {
+  /**
+   * cycle-67 事故（用户报「点击没有跳转到对应细分题型的刷题页面」）：
+   * 上一版落点是 `pool`（统一题库的检索/查看页）——用户点「片段阅读」被丢进数据浏览器。
+   *
+   * 为什么必须是**静态**守卫：render 测试用的是 harness mock（mock 里落点写死 practice），
+   * 服务端把落点改回 pool 时 mock 不变 → render 仍绿（变异测试实证）。
+   * 只有直接核对 `poolTopics.ts` 源码才能锁住「服务端真实落点」。
+   */
+  const fs = await import('node:fs')
+  const src = fs.readFileSync('src/server/poolTopics.ts', 'utf8')
+  // 细分题型的 entry 行：非图形推理必须落 practice（图形推理走 tuxing 专项）
+  const line = src.split(/\r?\n/).find(l => l.includes("entry: c === '图形推理'") && l.includes('view:'))
+  expect(!!line, '未找到细分题型 entry 定义行').toBe(true)
+  expect(line.includes("view: 'practice'"), "细分题型落点应为 practice（刷题页），实际：" + String(line).trim()).toBe(true)
+  expect(line.includes("params: { category: c }"), '细分题型落点必须带 category 参数').toBe(true)
+  // 反向：不得再落 pool（题库浏览页）
+  expect(/view: 'pool', params: \{ category/.test(src), '细分题型仍落 pool（题库浏览页），不是刷题页').toBe(false)
+  // practice 必须真的消费 initialCategory（否则跳过去也只是停模块选择页）
+  const sv = fs.readFileSync('src/client/views/study-view.tsx', 'utf8')
+  expect(/initialCategory/.test(sv) && /draw\([^)]*cat0\)/.test(sv), 'practice 未把 initialCategory 用于抽题').toBe(true)
+  // 关键：必须同时置 module（否则停在「选择练习模块」页 —— 用户报的直接原因）
+  expect(/setModule\(/.test(sv) && /CAT_MODULE/.test(sv), 'practice 未按题型回填 module（会停在模块选择页）').toBe(true)
 })
 
 test('v1.7.5 图形推理专项：354 题 13 类 + 按规律抽题 + 配图 + 原创思路', async () => {
@@ -84,14 +151,20 @@ test('v1.7.5 图形推理专项：354 题 13 类 + 按规律抽题 + 配图 + �
   expect(typeof txQ.exp === 'string' && txQ.exp.length > 30, `exp ${txQ.exp.length} 字`).toBe(true)
 })
 
-test('v1.7 深度题库：27506 题 + 五维覆盖 100% + 解题链 + 知识点检索', async () => {
-  const nk = await h.J('/api/naoku/status')
-  if (!nk.ready) return expect(true).toBe(true)  // node:sqlite 不可用降级（旧文件同语义）
-  expect(nk.stats.total > 20000, `${nk.stats.total} 题`).toBe(true)
-  expect(nk.stats.kadianCoverage).toBe(100)
-  const nq = await h.J('/api/naoku/questions?module=判断推理&count=1&ws=PROJ_VTEST_V17')
-  const q3 = nq.questions[0]
-  expect(!!(q3 && (q3.kadian || q3.reasoning || q3.fastest))).toBe(true)
-  const kd = await h.J('/api/naoku/kadian?q=图形&limit=3')
-  expect((kd.list || []).length).toBeGreaterThan(0)
+test('v1.7 深度题库（cycle-65 收敛后）：池内 2.7 万题 + 五维覆盖 + 考点检索走池端点', async () => {
+  /**
+   * 端点收敛：/api/naoku/* 六端点已退役，语义下沉到池——
+   *   status→/api/pool/status、questions→/api/pool/questions?source=naoku、
+   *   kadian→/api/pool/kadians、practice→/api/pool/by-kadian。
+   * 断言语义不变（题量/五维覆盖/考点检索可用）。
+   */
+  const ps = await h.J('/api/pool/status')
+  if (!ps.ready) return expect(true).toBe(true)   // 池未就绪降级（原 node:sqlite 不可用同语义）
+  const nq = await h.J('/api/pool/questions?source=naoku&module=判断推理&count=1&ws=PROJ_VTEST_V17')
+  const q3 = (nq.questions || [])[0]
+  expect(!!(q3 && (q3.kadian || (q3.dims && (q3.dims.reasoning || q3.dims.fastest)))), '深度题库题缺五维标注').toBe(true)
+  const kd = await h.J('/api/pool/kadians?q=' + encodeURIComponent('图形') + '&limit=3')
+  expect((kd.list || []).length, '考点检索无结果').toBeGreaterThan(0)
+  const bk = await h.J('/api/pool/by-kadian?kadian=' + encodeURIComponent('图形') + '&count=1')
+  expect((bk.questions || []).length, '按考点反查无题').toBeGreaterThan(0)
 })

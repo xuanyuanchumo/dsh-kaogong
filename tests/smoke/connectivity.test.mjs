@@ -48,7 +48,7 @@ test('C59-B0: exam→papers answer 深链别名路由（17 路由含 exam，pape
   const papers = readSrc('src/client/views/papers-view.tsx')
   // API 视图契约：exam 仍在统一 onGo 出口的 17 项路由内（别名路由形态）
   const routes = ['dashboard', 'wrongbook', 'graph', 'observability', 'papers', 'exam',
-    'practice', 'deepbank', 'tuxing', 'repos', 'pool', 'huasheng13', 'topics', 'essay',
+    'practice', 'tuxing', 'repos', 'pool', 'huasheng13', 'topics', 'essay',
     'plan', 'search', 'method']
   const examLine = client.split('\n').find(l => l.trim().startsWith('exam:') && l.includes('comp:'))
   expect(routes).toContain('exam')
@@ -65,7 +65,7 @@ test('C49-B1: 所有视图统一 onGo 出口（死胡同视图消灭）', () => 
   const client = readSrc('src/client/client.tsx')
   expect(client.includes('const go = (v: any, params?: any) => setView(v, params || {})'), '统一 go 出口缺失').toBe(true)
   const routes = ['dashboard', 'wrongbook', 'graph', 'observability', 'papers', 'exam',
-    'practice', 'deepbank', 'tuxing', 'repos', 'pool', 'huasheng13', 'topics', 'essay',
+    'practice', 'tuxing', 'repos', 'pool', 'huasheng13', 'topics', 'essay',
     'plan', 'search', 'method']
   // 逐行校验每条路由都含 onGo: go（排除注释行）
   const routeLines = routes.map(id => client.split('\n').find(l => l.trim().startsWith(id + ':') && l.includes('comp:')))
@@ -83,11 +83,11 @@ test('C49-B2: 仪表盘薄弱模块/空态一键开练 + 计划日跳计划', ()
 test('C49-B3: 统一库数据链打通（未就绪→题库管理，单题→练知识点/模块）', () => {
   const p = readSrc('src/client/views/pool-view.tsx')
   expect(p.includes("onGo('repos')"), '库未就绪「去题库管理」出口缺失').toBe(true)
-  expect(p.includes("onGo('deepbank', { kadian: d.kadian })"), '单题「练此知识点」出口缺失').toBe(true)
+  expect(p.includes("onGo('practice', { kadian: d.kadian })"), '单题「练此知识点」出口缺失（cycle-63：deepbank 分区删除 → 深链改 practice）').toBe(true)
   expect(p.includes("onGo('practice', { module: d.module })"), '单题「练此模块」出口缺失').toBe(true)
-  // deepbank 消费 initialKadian 深链
+  // practice 消费 initialKadian 深链（cycle-63：原 deepbank 能力下沉）
   const s = readSrc('src/client/views/study-view.tsx')
-  expect(s.includes('initialKadian'), 'deepbank 未消费 kadian 深链').toBe(true)
+  expect(s.includes('initialKadian'), 'practice 未消费 kadian 深链').toBe(true)
 })
 
 test('C49-B4: 方法页与专题枢纽方法论主区连通（initialTab 深链）', () => {

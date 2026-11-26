@@ -17,7 +17,15 @@
 import { execFileSync } from 'node:child_process'
 
 const LONG_LIVED = ['main', 'develop', 'master', 'dev-history']
-const BRANCH_RE = /^(feat|fix|docs|refactor|perf|test|chore|ci)\/[a-z0-9]+(-[a-z0-9]+)*$/
+/**
+ * 分支名规范：`<type>/<scope>-<desc>`。
+ *
+ * ⚠️ cycle-68 修复：原类型表漏了 `release` 与 `hotfix`——而 CONTRIBUTING §一
+ * 的 gitflow 模型明确写了 `release/*`（main 接收其合并）与 `hotfix/*`（线上急修）。
+ * 结果是**按规范建的分支被钩子拒推**，逼人用逃生门绕过检查（那等于让守卫失效）。
+ * 钩子与规范必须同源：规范里出现的分支类型，这里必须都认。
+ */
+const BRANCH_RE = /^(feat|fix|docs|refactor|perf|test|chore|ci|release|hotfix)\/[a-z0-9]+([-./][a-z0-9]+)*$/
 
 function git(args) {
   try {

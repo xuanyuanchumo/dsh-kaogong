@@ -82,8 +82,11 @@ interface QwQuestion {
   answer?: string; correctAnswer?: string
   /* 7 解析与五维 */
   analysis?: string; dims?: QwDims; reference?: string
-  /* 溯源（白盒/双写用，不直接渲染） */
-  id?: string; canonicalId?: string; qid?: string; sources?: any[]; sourceCount?: number
+  /* 溯源（白盒/双写用 + 多源徽章） */
+  id?: string; canonicalId?: string; qid?: string
+  /** 出处链（跨源聚合：一题可能在多个外源题库出现）——SourceBadge 逐个列出 */
+  sources?: Array<{ sourceId?: string; source?: string; paper?: string; region?: string; year?: string; seq?: number }>
+  sourceCount?: number
 }
 
 /** 渲染模式：single=单题浏览 practice=练习判分 exam=整卷做题 browse=整卷只读 */
@@ -122,8 +125,9 @@ export function QwNumberBadge({ no, score, flagged, onToggleFlag }: QwNumberBadg
 interface QwSourceMetaProps { q: QwQuestion; hideInBrowse?: boolean }
 export function QwSourceMeta({ q, hideInBrowse }: QwSourceMetaProps) {
   if (hideInBrowse && !q.source) return null
-  if (!q.source && !q.exam && !q.paperFile) return null
-  return <SourceBadge {...({ source: q.source, exam: q.exam, year: q.year, region: q.region, paperFile: q.paperFile } as any)} />
+  if (!q.source && !q.exam && !q.paperFile && !(Array.isArray(q.sources) && q.sources.length)) return null
+  // cycle-64：透传 sources[]（多源同题 → 逐个列出具体外源题库，而非只说「统一题库」）
+  return <SourceBadge {...({ source: q.source, sources: q.sources, exam: q.exam, year: q.year, region: q.region, paperFile: q.paperFile } as any)} />
 }
 
 /* ══════════════ 2 类型 ══════════════ */
@@ -510,7 +514,7 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
               {/* 组边界提示：下一题是否仍在同组（首/尾题特别标注，用户可预期材料区即将隐藏/切换） */}
               {current + 1 < questions.length && questions[current + 1].groupMaterial === q.groupMaterial ? '' : current > 0 && questions[current - 1].groupMaterial === q.groupMaterial ? ' · 下一题换材料' : ''}
             </div>
-            <QwMaterial text={groupMaterial} matRef={'材料 ' + String(q.groupMaterialNo || '')} />
+            <QwMaterial text={groupMaterial} matRef={String(q.materialRef || '') || ('材料 ' + String(q.groupMaterialNo || ''))} />
           </div>
         ) : null}
         {/* 题目区：QwQuestionCard（material 禁传——材料已在区1；exam/practice 态交互选项） */}
@@ -530,7 +534,8 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
               exam: isExam || isPractice ? (paperMeta && paperMeta.subject) || q.exam : q.exam,
               year: isExam || isPractice ? (paperMeta && paperMeta.year) || q.year : q.year,
               module: q.module,
-              source: q.source, region: q.region, paperFile: q.paperFile,
+              // cycle-64：sources[] 透传（多源同题的出处链，徽章逐个列出外源题库）
+              source: q.source, sources: q.sources, region: q.region, paperFile: q.paperFile,
               stem: q.stem, options: q.options,
               // 标记旗与答题卡同键（位置号）——原实现用 q.no，专题下 seq=0 会全部撞键
               flagged: flags && flags.has ? flags.has(current + 1) : false,

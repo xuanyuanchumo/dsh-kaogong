@@ -161,11 +161,13 @@ test('C61-VIEW-04 四组导航项与注册表一致（学习3/题库3/复盘3/�
   expect(groups.map(g => g.id)).toEqual(['learn', 'bank', 'review', 'ref'])
   const counts = Object.fromEntries(groups.map(g => [g.id, g.items.length]))
   expect(counts).toEqual({ learn: 3, bank: 3, review: 3, ref: 3 })
-  // 枢纽内视图（practice/tuxing/deepbank/essay/huasheng13）不得出现在一级导航（纪律㉛）
+  // 枢纽内视图（practice/tuxing/essay/huasheng13）不得出现在一级导航（纪律㉛）
+  // cycle-63：deepbank 已删除，不再参与断言
   const navIds = groups.flatMap(g => g.items.map(i => i[0]))
-  for (const hub of ['practice', 'tuxing', 'deepbank', 'essay', 'huasheng13']) {
+  for (const hub of ['practice', 'tuxing', 'essay', 'huasheng13']) {
     expect(navIds, hub + ' 不应在一级导航（应经专题枢纽进入）').not.toContain(hub)
   }
+  expect(navIds, 'deepbank 已退役，不应出现在任何位置').not.toContain('deepbank')
 })
 
 test('C61-VIEW-05 视图元数据字段齐备（label/icon/desc/domain 全有）', () => {

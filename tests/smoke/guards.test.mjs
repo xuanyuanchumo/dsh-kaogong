@@ -110,22 +110,27 @@ test('SMOKE-N-01b exam 别名路由：exam 键保留 + papers 深链 answer（�
   expect(/guideDesc: '[^']*（多源离线题库）'/.test(cl) && !/15个开源仓库/.test(cl), 'guideDesc 陈旧数字残留').toBe(true)
 })
 
-test('SMOKE-N-01 导航精简：四练习视图退出一级导航（文案级防回归）', () => {
+test('SMOKE-N-01 导航精简：三练习视图退出一级导航（文案级防回归）', () => {
   // v9：改由注册表断言（导航从 VIEW_META 派生，源码里已无手写数组）
+  // cycle-63：deepbank 已删除（数据层与语义并入统一池），剩三视图仍不得进一级导航
   const navIds = buildNavGroups().flatMap(g => g.items.map(i => i[0]))
-  for (const id of ['practice', 'deepbank', 'tuxing', 'essay']) {
+  for (const id of ['practice', 'tuxing', 'essay']) {
     expect(navIds, id + ' 不应在一级导航（应经专题枢纽进入）').not.toContain(id)
   }
   const labels = buildNavGroups().flatMap(g => g.items.map(i => i[1])).join(' ')
-  expect(/刷题|深度题库|图形推理|申论/.test(labels)).toBe(false)
+  expect(/刷题|图形推理|申论/.test(labels)).toBe(false)
+  // cycle-63 反向断言：deepbank 既不在导航、也不在路由登记（彻底退役）
+  expect(navIds, 'deepbank 应已彻底退役').not.toContain('deepbank')
 })
 
-test('SMOKE-N-01 四视图路由仍可达（VIEW_ROUTES 键位登记）', () => {
+test('SMOKE-N-01 三视图路由仍可达（VIEW_ROUTES 键位登记）+ deepbank 已退役', () => {
   const cl = readSrc('./src/client/client.tsx')
   expect(/practice: \{ comp: NativePracticeView/.test(cl)).toBe(true)
-  expect(/deepbank: \{ comp: NativeDeepBankView/.test(cl)).toBe(true)
   expect(/tuxing: \{ comp: NativeTuxingView/.test(cl)).toBe(true)
   expect(/essay: \{ comp: NativeEssayView/.test(cl)).toBe(true)
+  // cycle-63（用户要求）：深度题库分区与视图已删除——路由表不得再有登记
+  expect(/deepbank: \{ comp: NativeDeepBankView/.test(cl), 'deepbank 路由应已移除').toBe(false)
+  expect(/NativeDeepBankView/.test(cl), 'client.tsx 不应再引用 NativeDeepBankView').toBe(false)
 })
 
 test('SMOKE-N-46 幽灵视图补齐：plan/search/method 路由 + 导航可达', () => {
@@ -152,4 +157,45 @@ test('SMOKE-N-02 对话窗口瘦身：QuickPractice 移除 + TabHome 精简体',
   expect(cl.includes('KaogongTabHome')).toBe(true)
   expect(/h\(KaogongTabHome,/.test(cl)).toBe(true)
   expect(/h\(KaogongMainPanel, \{ wsKey, t, key: reloadKey/.test(cl)).toBe(false)
+})
+
+test('SEC-CORS-01 独立端口不得用通配 CORS（市场评审指出的真实缺陷）', () => {
+  /**
+   * 上游 awesome-dsh-plugin 条目曾被维护者追加一句：
+   * "Its HTTP routes have no DSH access check, so a web page open in your browser could call them."
+   * 根因 = 独立端口无条件 `Access-Control-Allow-Origin: *` →
+   * 用户浏览的**任意网页**都能 fetch 本机 8400 端口读库数据 / 写进度。
+   * 本守卫锁死：① 禁通配 ACAO；② 必须有 Origin 白名单（回环）；③ 变更类请求必须校验来源。
+   */
+  const http = readSrc('./src/server/http.ts')
+  expect(/Access-Control-Allow-Origin',\s*'\*'/.test(http), '独立端口仍在用通配 CORS（任何网页都能读本地 API）').toBe(false)
+  expect(http.includes('originOk'), '缺 Origin 白名单判定').toBe(true)
+  expect(/127\\\.0\\\.0\\\.1/.test(http), 'Origin 白名单未覆盖回环地址').toBe(true)
+  // 写请求必须被拦（CORS 管不住写副作用）
+  expect(/拒绝跨站写请求|403/.test(http), '变更类请求缺跨站拦截').toBe(true)
+})
+
+test('SEC-BRANCH-01 钩子的分支类型必须覆盖 CONTRIBUTING 的分支模型（同源）', () => {
+  /**
+   * cycle-68 事故：CONTRIBUTING §一 的 gitflow 写了 `release/*` 与 `hotfix/*`，
+   * 但 pre-push 钩子的类型表漏了这两个 → **按规范建的分支被钩子拒推**，
+   * 逼人用 SKIP_PREPUSH_CHECK=1 逃生门绕过检查（守卫形同失效）。
+   * 本守卫锁死：规范里出现的分支类型，钩子必须都认。
+   */
+  const hook = readSrc('./scripts/git-hooks/pre-push.mjs')
+  // 稳健提取：从 `const BRANCH_RE = ` 到该行末尾的 `/`（源文件里正则含转义斜杠，故按行切）
+  const line = hook.split(/\r?\n/).find(l => l.includes('const BRANCH_RE ='))
+  expect(!!line, '未找到 BRANCH_RE 定义').toBe(true)
+  const body = line.slice(line.indexOf('= /') + 3, line.lastIndexOf('/')).replace(/\\\\\//g, '/')
+  const re = new RegExp(body)
+  // 规范里明确存在的四种分支形态都必须能通过
+  for (const b of ['feat/pool-x', 'fix/ui-y', 'docs/marketplace-entry', 'release/v1.34.4', 'hotfix/v1.34.5']) {
+    expect(re.test(b), '分支名 ' + b + ' 被钩子拒（与 CONTRIBUTING 不同源）').toBe(true)
+  }
+  // 反向：非法名仍必须被拒（不能为了放行而放成通天规则）
+  for (const b of ['badname', 'release/', 'feat/']) {
+    expect(re.test(b), '非法分支名 ' + b + ' 竟通过').toBe(false)
+  }
+  // 长驻分支走白名单
+  expect(hook.includes("['main', 'develop', 'master', 'dev-history']"), '长驻分支白名单缺失').toBe(true)
 })

@@ -67,14 +67,37 @@ test('QRF-02 题号不得再硬编码为 0（题号恒 ? 的直接根因）', ()
   expect(hardcoded, '仍有硬编码 number: 0（应为卷内序号 seq）：\n' + hardcoded.map(x => x.n + ': ' + x.l.trim()).join('\n')).toEqual([])
 })
 
-test('QRF-03 三条出站投影路径都发题号（no + number 双写）', () => {
-  // 池内有三条把题发给前端的路径，任何一条漏了题号都会让那条链路的题号失效
-  const seqNoUses = (poolApiSrc.match(/const seqNo = /g) || []).length
-  expect(seqNoUses, '应有三处题号计算（toLegacyShape / 带图补足 / 出站映射），实际 ' + seqNoUses).toBeGreaterThanOrEqual(2)
-  const noWrites = (poolApiSrc.match(/\bno:\s*seqNo\b/g) || []).length
-  const numberWrites = (poolApiSrc.match(/\bnumber:\s*seqNo\b/g) || []).length
-  expect(noWrites, '缺 no: seqNo 写入（前端 QwNumberBadge 读 no）').toBeGreaterThanOrEqual(2)
-  expect(numberWrites, '缺 number: seqNo 写入（池原生名）').toBeGreaterThanOrEqual(2)
+test('QRF-03 出站形状**唯一映射**（cycle-64 架构收敛：禁止第二份手写构造）', () => {
+  /**
+   * 历史：同一出站形状曾有三份手写实现（抽题主路径 / 带图补足 / srs 错题回炉），
+   * 每修一处必漏另外两处（cycle-62 修题号、cycle-64 修来源都踩过）。
+   * 现收敛为**唯一映射函数** `questionToLegacyRow`，所有路径都调它。
+   * 本守卫反向锁死：题号/来源/sources 的计算**只能出现在该函数内**。
+   */
+  const defAt = poolApiSrc.indexOf('function questionToLegacyRow')
+  expect(defAt > 0, '唯一映射函数 questionToLegacyRow 缺失（架构收敛被回退？）').toBe(true)
+  const noWrites = (poolApiSrc.match(/\bno:\s*seq\b/g) || []).length
+  const numberWrites = (poolApiSrc.match(/\bnumber:\s*seq\b/g) || []).length
+  expect(noWrites, 'no: seq 应只在唯一映射里出现一次，实际 ' + noWrites).toBe(1)
+  expect(numberWrites, 'number: seq 应只在唯一映射里出现一次，实际 ' + numberWrites).toBe(1)
+  // 三处调用点（主路径 / 带图补足 / detailBatch）
+  const calls = (poolApiSrc.match(/questionToLegacyRow\(/g) || []).length
+  expect(calls, 'questionToLegacyRow 调用点应 ≥3（主路径 / 带图补足 / detailBatch），实际 ' + calls).toBeGreaterThanOrEqual(3)
+  // 禁止再出现「手写 number: 0」
+  const codeLines = poolApiSrc.split(/\r?\n/).filter(l => !/^\s*(\*|\/\/|\/\*)/.test(l))
+  const hardcoded = codeLines.filter(l => /\bnumber\s*:\s*0\b/.test(l))
+  expect(hardcoded, '仍有硬编码 number: 0').toEqual([])
+})
+
+test('QRF-03b 来源必须细到具体外源题库（禁读错字段落到 pool 泛值）', () => {
+  // poolQuestionDetail 的出处行字段名是 source_id；读 .source 会恒落 'pool'
+  expect(/s0\.source_id \|\| s0\.source/.test(poolApiSrc), '来源读取未用 source_id 优先（会落到 pool 泛值）').toBe(true)
+  // 出处链必须归一去重（一题可能多卷多源）
+  expect(poolApiSrc.includes('function mergeSources'), '缺 mergeSources 归一（多源会刷屏）').toBe(true)
+  // 前端徽章必须消费 sources[]（逐个列出外源库）
+  expect(kitSrc.includes('sources: q.sources'), 'QwQuestionCard 未透传 sources[] 给徽章').toBe(true)
+  const uiKit = fs.readFileSync(path.join(REPO, 'src/client/ui-kit.tsx'), 'utf8')
+  expect(uiKit.includes('sources') && uiKit.includes("s !== 'pool'"), 'SourceBadge 未消费 sources[] / 未剥 pool 泛值').toBe(true)
 })
 
 test('QRF-04 sampleQuestions 的 SELECT 必须取 seq（否则题号无从透出）', () => {

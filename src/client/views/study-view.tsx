@@ -189,9 +189,19 @@ function KgMemBanner(props: KgMemBannerProps) {
       api: any; onGoWrongbook: any; initialModule?: any
       /** cycle-49：SRS 回炉深链——错题本「🔁 SRS 回炉」传入，强制进入错题优先模式 */
       initialSrs?: boolean
+      /** cycle-63：「练此知识点」深链——统一题库跳转时传入，挂载即按考点抽一题 */
+      initialKadian?: string
+  /** cycle-67：细分题型深链——专题-行测频道点题型时传入，挂载即开一张该题型的卷 */
+  initialCategory?: string
     }
-    export function NativePracticeView({ api, onGoWrongbook, initialModule = '', initialSrs }: NativePracticeViewProps) {
+    export function NativePracticeView({ api, onGoWrongbook, initialModule = '', initialSrs, initialKadian = '', initialCategory = '' }: NativePracticeViewProps) {
       const MODULES = ['判断推理', '言语理解与表达', '数量关系', '资料分析', '常识判断', '政治理论']
+      /**
+       * cycle-66（用户要求「改为每次固定几道答题卷」）：一轮练习 = 固定 N 题的一张卷。
+       * SRS 回炉与随机抽题**同一口径**（都抽 N 题），差别只在「怎么选这 N 题」。
+       * N=10：一次坐下能做完，又不至于每题都要回模块页重开。
+       */
+      const PAPER_SIZE = 10
       const [module, setModule] = React.useState(initialModule || '')
       // cycle-49：initialSrs 显式传入时以其为准（undefined → 保留默认 true）。
       // 修复 wrongbook 传 {srs:1} 但此处恒 true 的死参——用户切随机后从错题本跳回，
@@ -209,6 +219,8 @@ function KgMemBanner(props: KgMemBannerProps) {
 
       const queueRef = React.useRef([])   // 单一数据源：剩余题队列
       const [queueLen, setQueueLen] = React.useState(0)
+      /** cycle-66：本卷固定题数（抽题时确定；答完即交卷，不自动续抽） */
+      const [paperTotal, setPaperTotal] = React.useState(0)
 
       const takeNext = () => {
         const rest = queueRef.current.slice(1)
@@ -220,20 +232,35 @@ function KgMemBanner(props: KgMemBannerProps) {
         remember(rest[0], module)   // cycle-15：翻题即记忆（写「上次练到」）
       }
 
-      const draw = React.useCallback(async (mod: any, useSrs: any) => {
-        // 队列还有题 → 直接取下一题（不重复请求）
-        if (queueRef.current.length > 1) { takeNext(); return }
+      const draw = React.useCallback(async (mod: any, useSrs: any, cat?: any) => {
+        /**
+         * cycle-66：`draw` 现在语义 = **开一张新卷**（固定 N 题）。
+         * 原实现开头有「队列还有题 → takeNext() 复用」，那会让「再来一张」变成「下一题」，
+         * 用户永远开不了新卷。卷内前进由 `takeNext` 单独负责（见「下一题 →」按钮）。
+         */
         // cycle-46（用户确认项②·抽题器收敛）：practice 切到**纯池端点** /api/pool/questions
         //（分层配额 L0 材料组/L1 带图/L2 五维/L3 普通——确定性保障），替代旧 /api/questions
         //（池优先+目录回落双轨）。形状实测：池对象是旧对象超集且同形字段全兼容，
         // SRS 回炉语义由前端 useSrs 走 /api/questions?sort=srs 保留（池端点无错题本语义）。
+        //
+        // cycle-66（用户要求「改为每次固定几道答题卷」）：抽题即**一张固定 N 题的答题卷**，
+        // SRS 与随机抽题同一口径（都走下面同一个 count）。答完这张卷的最后一题 → 提示交卷/再抽一张，
+        // 不再「答完一题自动续抽」——那样用户永远不知道这一轮有多少题、什么时候算结束。
+        // N 取 10：一次坐下能做完，又不至于每题都要重新点「开始」。
+        //
+        // cycle-67（用户报「点细分题型没跳到刷题页」）：新增 `cat` 参数——按**题型**刷题。
+        // 专题-行测频道的细分题型（片段阅读/法律常识/逻辑判断…）现在直接落到本视图，
+        // 带 category 抽一张该题型的卷（而不是把用户丢进「统一题库」的检索页）。
+        const catQ = cat ? '&category=' + encodeURIComponent(cat) : ''
         const url = useSrs
-          ? '/questions?module=' + encodeURIComponent(mod || '判断推理') + '&count=6&sort=srs'
-          : '/pool/questions?module=' + encodeURIComponent(mod || '判断推理') + '&count=6'
+          ? '/questions?module=' + encodeURIComponent(mod || '判断推理') + '&count=' + PAPER_SIZE + '&sort=srs'
+          : '/pool/questions?module=' + encodeURIComponent(mod || '判断推理') + '&count=' + PAPER_SIZE + catQ
         const data = await api(url)
         const list = data.questions || []
-        if (!list.length) { queueRef.current = []; setQueueLen(0); setQ(null); return }
+        if (!list.length) { queueRef.current = []; setPaperTotal(0); setQueueLen(0); setQ(null); return }
         queueRef.current = list
+        // 本卷总题数（答题卡分母 + 「已答 x/N」进度口径）
+        setPaperTotal(list.length)
         setQueueLen(list.length - 1)
         setQ(list[0])
         setSel(null)
@@ -248,6 +275,66 @@ function KgMemBanner(props: KgMemBannerProps) {
         bootRef.current = true
         draw(initialModule, true)
       }, [initialModule, draw])
+
+      /**
+       * cycle-67（用户报「点细分题型没跳到刷题页」）：`initialCategory` 深链——
+       * 专题-行测频道的细分题型（片段阅读/法律常识/逻辑判断…）点进来**直接开一张该题型的卷**。
+       *
+       * 与 initialModule 的差异：模块是「六大模块之一」（判断推理），题型是更细的
+       * category（片段阅读属于「言语理解与表达」模块）。两者可同时给出——此时
+       * module 用于卷头展示、category 用于精确抽题。
+       */
+      const bootCatRef = React.useRef(false)
+      React.useEffect(() => {
+        const cat0 = String(initialCategory || '').trim()
+        if (bootCatRef.current || !cat0) return
+        bootCatRef.current = true
+        /**
+         * ⚠️ 必须同时置 `module`：模块选择页的判据是 `if (!module)`（见下方渲染分支），
+         * 只设 category 而 module 仍为空 → 页面停在「选择练习模块」，
+         * 用户点题型后看到的是模块列表（**这正是用户报「没跳转到刷题页面」的直接原因**）。
+         * 题型归属模块的映射与后端池口径一致（片段阅读/逻辑填空→言语，图形推理→判断分析…）。
+         */
+        const CAT_MODULE: Record<string, string> = {
+          图形推理: '判断推理', 逻辑判断: '判断推理', 定义判断: '判断推理', 类比推理: '判断推理',
+          逻辑填空: '言语理解与表达', 片段阅读: '言语理解与表达', 语句表达: '言语理解与表达',
+          数学运算: '数量关系', 资料分析: '资料分析',
+          常识判断: '常识判断', 人文常识: '常识判断', 科技常识: '常识判断',
+          法律常识: '常识判断', 政治常识: '常识判断', 思维策略: '数量关系',
+        }
+        const m0 = initialModule || CAT_MODULE[cat0] || '判断推理'
+        setModule(m0)
+        // 有 category 时用「随机」而非 SRS（题型精练语义，不掺错题回炉的到期队列）
+        draw(m0, false, cat0)
+      }, [initialCategory, initialModule, draw])
+
+      /**
+       * cycle-63：`initialKadian` 深链——「🗄 统一题库 → 练此知识点」直接跳到刷题页并按考点抽题。
+       *
+       * 背景：这条深链原指向已删除的「深度题库」分区（其视图带 initialKadian 能力）。
+       * 分区删除后深链不能失效 → 能力下沉到 practice：挂载即调 /api/pool/by-kadian 取一题。
+       * 与 practice 常规抽题的区别：按 kadian 精确命中（不是模块加权），且不排队（单题精练）。
+       */
+      const kadBootRef = React.useRef(false)
+      React.useEffect(() => {
+        if (kadBootRef.current || !initialKadian) return
+        kadBootRef.current = true
+        let cancelled = false
+        ;(async () => {
+          try {
+            const d = await api('/pool/by-kadian?kadian=' + encodeURIComponent(initialKadian) + '&count=1')
+            if (cancelled) return
+            const dq = (d.questions || [])[0] || null
+            queueRef.current = dq ? [dq] : []
+            setQueueLen(0)
+            setQ(dq)
+            setSel(null)
+            setResult(null)
+            if (dq) remember(dq, dq.module || '')
+          } catch { /* 网络失败降级为常规抽题（下方 effect 会跑） */ }
+        })()
+        return () => { cancelled = true }
+      }, [api, initialKadian, remember])
 
       const submit = async () => {
         if (!q || !sel || busy) return
@@ -339,7 +426,8 @@ function KgMemBanner(props: KgMemBannerProps) {
             {q.type ? <span style={{ ...KV_TAG, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' }}>{q.type}</span> : null}
             {q.fromWrongBook ? <span style={{ ...KV_TAG, background: 'rgba(239,68,68,.12)', color: '#ef4444' }}>{'📕 错题回炉·箱' + q.box}</span> : null}
             <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--text-muted)' }}>{'本次 ' + stat.done + ' 题 · 对 ' + stat.right}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>{'队列 ' + (queueLen + 1)}</span>
+            {/* cycle-66：进度改为「第 x/N 题」——用户必须知道这张卷有多少题、还剩几题 */}
+            <span style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>{'第 ' + Math.max(1, paperTotal - queueLen) + '/' + (paperTotal || queueLen + 1) + ' 题'}</span>
           </div>
           {/* cycle-25：QwZoomHost 整卡图片可放大。本仓 JSX 工厂（classic/preact 签名）不把 JSX children 折叠进
               attrs 类型校验（ui-kit Card 能用是因其 children? 可选），QwZoomHostProps.children 必填 → 显式传参 */}
@@ -408,12 +496,159 @@ function KgMemBanner(props: KgMemBannerProps) {
             {/* cycle-25：解析改由 QwQuestionCard 第 6 段呈现；无解析题的诚实占位保留（旧文案契约，render 提交后断言锚定） */}
             {!q.analysis ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'该题无解析'}</div> : null}
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '8px 18px' }} onClick={() => draw(module, srs)}>{'下一题 →'}</button>
+              {/**
+               * cycle-66（用户要求「每次固定几道答题卷」）：本卷答完 → 提示交卷 + 再来一张；
+               * 未答完 → 「下一题」在这张卷内前进（不跨卷续抽，用户知道边界在哪）。
+               */}
+              {queueLen > 0
+                ? <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '8px 18px' }} onClick={() => takeNext()}>{'下一题 →'}</button>
+                : <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 0, padding: '8px 18px' }} onClick={() => draw(module, srs)}>{'✅ 本卷已答完 · 再来一张'}</button>}
               <button style={KV_BTN} onClick={() => { setSel(null); setResult(null) }}>{'重答本题'}</button>
               {onGoWrongbook ? <button style={KV_BTN} onClick={onGoWrongbook}>{'去错题本'}</button> : null}
             </div>
+            {/* 本卷完成横幅：明确「这一轮结束」，而不是让用户以为还要无限答下去 */}
+            {queueLen === 0 ? <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(16,185,129,.1)', borderRadius: 8, fontSize: 12, color: '#059669' }}>
+              {'🎉 本卷（' + paperTotal + ' 题）已完成：答对 ' + stat.right + '/' + stat.done + ' 题' + (stat.done > stat.right ? '，错题已入错题本' : '')}
+            </div> : null}
           </Card> : null}
         </div>
+      )
+    }
+
+    /**
+     * 纸质刷题记录补录（cycle-21 H5 · issue #3 第一阶段）
+     * 四步旅程：① 题干关键词搜候选 → ② 展示题干/选项/来源供核对 →
+     * ③ 补录 对/错/结果未知（可选书名页码/原始日期）→ ④ 批次撤销（环形 30）。
+     * 纪律：历史补录不进「今日新刷」（服务端统计隔离）；重复补录=冲突提示；可整批撤销。
+     */
+    interface KgHistoryImportProps { api: any }
+    function KgHistoryImport({ api }: KgHistoryImportProps) {
+      const [kw, setHikw] = React.useState('')
+      const [results, setHiResults] = React.useState(null)     // 搜索结果
+      const [picks, setHiPicks] = React.useState({})           // sig → {question, result}
+      const [srcNote, setHiSrc] = React.useState('')           // 书名/页码（可选）
+      const [happenedAt, setHiDate] = React.useState('')       // 原始作答日期（可选）
+      const [msg, setHiMsg] = React.useState(null)             // {ok, text}
+      const [batches, setHiBatches] = React.useState(null)
+      const [busy, setHiBusy] = React.useState(false)
+
+      const loadBatches = React.useCallback(() => {
+        api('/history/batches').then((d: any) => setHiBatches(d)).catch(() => setHiBatches(null))
+      }, [api])
+      React.useEffect(() => { loadBatches() }, [loadBatches])
+
+      const doSearch = async () => {
+        if (!kw.trim()) return
+        setHiBusy(true)
+        try {
+          const d = await api('/history/search?q=' + encodeURIComponent(kw.trim()) + '&limit=12')
+          setHiResults(d && d.list ? d : { list: [] })
+          setHiPicks({})
+        } catch (e: any) { setHiMsg({ ok: false, text: '搜索失败: ' + ((e && e.message) || e) }) }
+        finally { setHiBusy(false) }
+      }
+
+      const pick = (item: any, result: string) => {
+        setHiPicks((p: any) => {
+          const next = Object.assign({}, p)
+          if (result === 'none') delete next[item.contentSig]
+          else next[item.contentSig] = { question: item, result, contentSig: item.contentSig }
+          return next
+        })
+      }
+
+      const submit = async () => {
+        const list = Object.values(picks)
+        if (!list.length) { setHiMsg({ ok: false, text: '先在候选里标记对/错' }); return }
+        setHiBusy(true)
+        try {
+          const entries = list.map((x: any) => ({
+            contentSig: x.contentSig, question: x.question, result: x.result,
+            source: srcNote.trim() || null, happenedAt: happenedAt || null,
+          }))
+          const r = await api('/history/entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries, source: srcNote.trim() || null }) })
+          if (r && r.error) { setHiMsg({ ok: false, text: r.error }) }
+          else {
+            setHiMsg({ ok: true, text: '已补录 ' + r.accepted + ' 题（批次 ' + String(r.batchId || '').slice(0, 12) + '）'
+              + (r.conflicts && r.conflicts.length ? ' · 冲突跳过 ' + r.conflicts.length + ' 题' : '')
+              + (r.rejected && r.rejected.length ? ' · 无效 ' + r.rejected.length + ' 题' : '')
+              + ' · 错题已进错题本（历史练习不计入今日新刷）' })
+            setHiPicks({}); setHiResults(null); setHikw(''); setHiSrc(''); setHiDate('')
+            loadBatches()
+          }
+        } catch (e: any) { setHiMsg({ ok: false, text: '补录失败: ' + ((e && e.message) || e) }) }
+        finally { setHiBusy(false) }
+      }
+
+      const undoBatch = async (id: string) => {
+        setHiBusy(true)
+        try {
+          const r = await api('/history/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: id }) })
+          setHiMsg(r && r.error ? { ok: false, text: r.error } : { ok: true, text: '已撤销批次：移除 ' + (r.removedHistory || 0) + ' 条历史 + ' + (r.removedWrong || 0) + ' 条错题' })
+          loadBatches()
+        } catch (e: any) { setHiMsg({ ok: false, text: '撤销失败: ' + ((e && e.message) || e) }) }
+        finally { setHiBusy(false) }
+      }
+
+      const pickList = Object.values(picks)
+      return (
+        <Card title="📥 纸质刷题补录（把纸上的对错记进系统）">
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+            {'① 输入题干关键词搜现有题库 → ② 核对候选（题干/选项/来源）→ ③ 标记 已做对/已做错/结果未知 → ④ 保存（错题自动进错题本，同批次可撤销）。原始日期未知可留空。'}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            <input
+              value={kw} onChange={(e: any) => setHikw(e.target.value)} onKeyDown={(e: any) => { if (e.key === 'Enter') doSearch() }}
+              placeholder="题干关键词，如「林产品出口」「模态命题」"
+              style={{ flex: '1 1 260px', padding: '7px 11px', borderRadius: 9, border: '1.5px solid rgba(148,163,184,.35)', fontSize: 12, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' }} />
+            <button style={{ ...KV_BTN, padding: '7px 14px' }} onClick={doSearch} disabled={busy}>{busy ? '…' : '🔍 搜索候选'}</button>
+          </div>
+          {/* ② 核对候选 */}
+          {results ? <div style={{ marginBottom: 8 }}>
+            {results.list && results.list.length
+              ? results.list.map((it: any) => {
+                  const picked = picks[it.contentSig]
+                  const stemPlain = String(it.stem || '').slice(0, 110)
+                  return (
+                    <div key={it.contentSig} style={{ border: '1.5px solid ' + (picked ? '#6366f1' : 'rgba(148,163,184,.25)'), borderRadius: 10, padding: '9px 11px', marginBottom: 6, background: picked ? 'rgba(99,102,241,.05)' : 'transparent' }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                        <span style={KV_TAG}>{it.module || ''}</span>
+                        {it.matchSource ? <span style={{ ...KV_TAG, fontSize: 9.5 }}>{it.matchSource === 'naoku' ? '深度题库' : '真题库'}</span> : null}
+                        {it.year ? <span style={{ ...KV_TAG, fontSize: 9.5 }}>{String(it.year)}</span> : null}
+                        {picked ? <span style={{ ...KV_TAG, background: 'rgba(99,102,241,.12)', color: '#4338ca', fontSize: 9.5 }}>{'已标记: ' + (picked.result === 'right' ? '做对' : picked.result === 'wrong' ? '做错' : '结果未知')}</span> : null}
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.6 }}>{stemPlain + (String(it.stem || '').length > 110 ? '…' : '')}</div>
+                      <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
+                        <button style={{ ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'right' ? { background: 'rgba(16,185,129,.14)', color: '#059669', borderColor: '#10b981' } : {}) }} onClick={() => pick(it, 'right')}>{'✓ 已做对'}</button>
+                        <button style={{ ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'wrong' ? { background: 'rgba(239,68,68,.14)', color: '#dc2626', borderColor: '#ef4444' } : {}) }} onClick={() => pick(it, 'wrong')}>{'✗ 已做错'}</button>
+                        <button style={{ ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'unknown' ? { background: 'rgba(245,158,11,.14)', color: '#b45309', borderColor: '#f59e0b' } : {}) }} onClick={() => pick(it, 'unknown')}>{'? 结果未知'}</button>
+                      </div>
+                    </div>
+                  )
+                })
+              : <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '10px 0' }}>{'未找到含该关键词的题目——换个更短的关键词试试'}</div>}
+          </div> : null}
+          {/* ③ 补录附加信息 + 提交 */}
+          {pickList.length ? <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '8px 10px', borderRadius: 10, background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.18)' }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#4338ca' }}>{'待补录 ' + pickList.length + ' 题'}</span>
+            <input value={srcNote} onChange={(e: any) => setHiSrc(e.target.value)} placeholder="纸质来源（书名·页码，可选）" style={{ flex: '1 1 180px', padding: '5px 9px', borderRadius: 8, border: '1px solid rgba(148,163,184,.3)', fontSize: 11, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' }} />
+            <input value={happenedAt} onChange={(e: any) => setHiDate(e.target.value)} placeholder="原始作答日期 YYYY-MM-DD（可选）" style={{ flex: '1 1 180px', padding: '5px 9px', borderRadius: 8, border: '1px solid rgba(148,163,184,.3)', fontSize: 11, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' }} />
+            <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, fontWeight: 700, padding: '6px 14px' }} onClick={submit} disabled={busy}>{busy ? '保存中…' : '💾 保存补录'}</button>
+          </div> : null}
+          {msg ? <div style={{ fontSize: 11.5, marginTop: 8, color: msg.ok ? '#059669' : '#dc2626' }}>{(msg.ok ? '✓ ' : '⚠ ') + msg.text}</div> : null}
+          {/* ④ 批次台账 + 撤销 */}
+          {batches && batches.importedTotal > 0
+            ? <div style={{ marginTop: 10, borderTop: '1px dashed rgba(148,163,184,.2)', paddingTop: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 5 }}>{'累计补录 ' + batches.importedTotal + ' 题 · 近 ' + (batches.batches || []).length + ' 批（可撤销窗口 30 批）'}</div>
+                {(batches.batches || []).slice(0, 5).map((b: any) => <div key={b.batchId} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10.5, color: 'var(--text-muted)', padding: '2px 0' }}>
+                  <span style={{ fontFamily: 'monospace' }}>{String(b.batchId).slice(0, 14)}</span>
+                  <span>{b.count + ' 题'}</span>
+                  {b.source ? <span>{'· ' + String(b.source).slice(0, 24)}</span> : null}
+                  <button style={{ ...KV_BTN, fontSize: 9.5, marginLeft: 'auto', color: '#dc2626', borderColor: 'rgba(239,68,68,.4)' }} onClick={() => undoBatch(b.batchId)} disabled={busy}>{'↩ 撤销此批'}</button>
+                </div>)}
+              </div>
+            : null}
+        </Card>
       )
     }
 
@@ -560,7 +795,7 @@ function KgMemBanner(props: KgMemBannerProps) {
         return (
           <Card title="🔷 图形推理专项">
             <div style={{ fontSize: 13, color: '#f59e0b' }}>{'⚠️ gk-tuxing 数据不可用（assets/data.js 缺失）'}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{'回落方案：用「🧠 深度题库 → 图形推理专项」或「✏️ 刷题」。'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{'回落方案：用「🗄 统一题库」按规律检索，或「✏️ 行测刷题」。'}</div>
           </Card>
         )
       }
@@ -686,415 +921,5 @@ function KgMemBanner(props: KgMemBannerProps) {
           </Card>
           {dims.length ? <div style={{ marginTop: 14 }}>{dims}</div> : null}
         </div>
-      )
-    }
-
-    /**
-     * 深度题库视图（GongkaoNaoku）：27506 题五维标注
-     * kadian(考什么) / reasoning(怎么推) / fastest(最快解法) / pitfalls(易错) / mother(母题)
-     */
-    interface NativeDeepBankViewProps {
-      api: any; initialModule?: any; initialCategory?: any
-      /** cycle-49：统一题库「练此知识点」深链——挂载即按考点抽题 */
-      initialKadian?: string
-    }
-    export function NativeDeepBankView({ api, initialModule = '', initialCategory = '', initialKadian = '' }: NativeDeepBankViewProps) {
-      const [status, setStatus] = React.useState(null)
-      const [module, setModule] = React.useState(initialModule || '')
-      const [q, setQ] = React.useState(null)
-      const [sel, setSel] = React.useState(null)
-      const [revealed, setRevealed] = React.useState(false)
-      const [kw, setKw] = React.useState('')
-      const [kadians, setKadians] = React.useState([])
-      const [busy, setBusy] = React.useState(false)
-      // T-023：图形推理专项（按规律类型细分，gk-tuxing 卷库的归类思路）
-      const [tuxing, setTuxing] = React.useState(null)
-      // cycle-15：深度题库记忆（module + 原题对象整存，恢复即回到原题；hook 数恒定，R9）
-      const { data: memData, loaded: memLoaded, save: memSave } = useKgMem(api, 'deep')
-      const [memOff, setMemOff] = React.useState(false)
-      /**
-       * cycle-62 收敛：深度题库视图不再消费 `/api/naoku/*`（已退役），
-       * 全部改走统一池端点 —— 数据层自 v9 起本就同源，此次是**端点层收敛**：
-       *   /naoku/kadian   → /pool/kadians?q=      （考点检索，响应含 kadian 字段）
-       *   /naoku/status   → /pool/status          （池状态本身就是深度题库的载体状态）
-       *   /naoku/questions→ /pool/by-kadian 或 /pool/questions（抽题原语已由池覆盖）
-       *   /naoku/practice → /pool/by-kadian?count=（按考点刷题）
-       */
-      const loadTuxing = () => {
-        if (tuxing) return
-        api('/pool/kadians?q=' + encodeURIComponent('图形推理') + '&limit=40')
-          .then((d: any) => {
-            const list = (d.list || []).filter((x: any) => String(x.kadian || x.k).includes('规律'))
-            setTuxing(list.slice(0, 12))
-          })
-          .catch(() => setTuxing([]))
-      }
-
-      React.useEffect(() => { api('/pool/status').then(setStatus).catch(() => setStatus({ ready: false })) }, [api])
-
-      const draw = React.useCallback(async (mod: any) => {
-        setBusy(true)
-        try {
-          // 深度题库口径 = 池内 source_id='naoku'；用池抽题并限定该源，
-          // 与原 /naoku/questions 语义等价（模块/分类过滤 + 随机一题）。
-          const qs = 'count=1&source=naoku'
-            + (mod ? '&module=' + encodeURIComponent(mod) : '')
-            + (initialCategory && !mod ? '&category=' + encodeURIComponent(initialCategory) : '')
-          const d = await api('/pool/questions?' + qs)
-          const dq = (d.questions || [])[0] || null
-          setQ(dq)
-          setSel(null)
-          setRevealed(false)
-          if (dq) memSave({ module: mod || module || '', question: dq })   // cycle-15：抽题即记忆
-        } finally { setBusy(false) }
-      }, [api, initialCategory, memSave])
-
-      // 从专题入口带 module/category 进来时自动抽题
-      const bootRef = React.useRef(false)
-      React.useEffect(() => {
-        if (bootRef.current) return
-        if (!initialModule && !initialCategory) return
-        bootRef.current = true
-        draw(initialModule)
-      }, [initialModule, initialCategory, draw])
-
-      const searchK = async () => {
-        if (!kw.trim()) return
-        const d = await api('/pool/kadians?q=' + encodeURIComponent(kw.trim()) + '&limit=20')
-        setKadians(d.list || [])
-      }
-
-      const drawByKadian = async (k: any) => {
-        const d = await api('/pool/by-kadian?kadian=' + encodeURIComponent(k) + '&count=1')
-        const dq = (d.questions || [])[0] || null
-        setQ(dq)
-        setSel(null)
-        setRevealed(false)
-        setKadians([])
-        if (dq) memSave({ module: module || '判断推理', question: dq })   // cycle-15：按考点抽题同样记忆
-      }
-
-      // cycle-49：统一题库「练此知识点」深链——挂载即抽该考点一题（key 含 params → 每次深链干净重挂载）
-      React.useEffect(() => {
-        if (!initialKadian) return
-        let cancelled = false
-        api('/pool/by-kadian?kadian=' + encodeURIComponent(initialKadian) + '&count=1')
-          .then((d: any) => { if (!cancelled) { const dq = (d.questions || [])[0] || null; setQ(dq); setSel(null); setRevealed(false) } })
-          .catch(() => {})
-        return () => { cancelled = true }
-      }, [api, initialKadian])
-
-      // ── 未就绪 ──
-      if (status && !status.ready) {
-        return (
-          <Card title="📚 深度题库">
-            <div style={{ fontSize: 13, color: '#f59e0b' }}>{'⚠️ ' + (status.hint || '深度题库不可用')}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-              {'需要 Node ≥ 22.19（内置 node:sqlite）且 GongkaoNaoku 分片存在。回落方案：用「✏️ 刷题」或「📚 真题卷」。'}
-            </div>
-          </Card>
-        )
-      }
-
-      const st = status && status.stats
-
-      const statsRow = st
-        ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 14 }}>
-            <Stat v={st.total} l="深度标注题" color="#6366f1" />
-            <Stat v={st.kadianCoverage + '%'} l="知识点覆盖" color="#10b981" />
-            <Stat v={st.fastestCoverage + '%'} l="速解覆盖" color="#f59e0b" />
-            <Stat v={st.withImage} l="含图题" color="#8b5cf6" />
-          </div>
-        : null
-
-      const kadiansBlock = kadians.length > 0
-        ? <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-            {kadians.map((k: any, i: any) => <div
-              key={i}
-              style={{ padding: '8px 10px', borderRadius: 9, marginBottom: 4, background: 'rgba(148,163,184,.06)', cursor: 'pointer', fontSize: 12.5 }}
-              onClick={() => drawByKadian(k.kadian)}
-            >
-              <div style={{ display: 'flex', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
-                <span style={KV_TAG}>{k.module || ''}</span>
-                {k.category ? <span style={{ ...KV_TAG, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' }}>{k.category}</span> : null}
-                <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{k.count + ' 题'}</span>
-              </div>
-              <div>{k.kadian}</div>
-            </div>)}
-          </div>
-        : null
-
-      // T-023 图形推理专项卡（懒加载规律分类）
-      const tuxingCard = <Card title="🔷 图形推理专项（按规律类型）">
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-          {'图形推理是行测最大失分模块。下面按「数量规律 / 位置规律 / 样式规律 / 属性规律」分类，点即刷该规律。'}
-        </div>
-        {!tuxing ? <button style={KV_BTN} onClick={loadTuxing}>{'展开规律分类'}</button> : null}
-        {tuxing && tuxing.length === 0 ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'暂无规律分类数据'}</div> : null}
-        {tuxing ? <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {tuxing.map((t2: any, i: number) => <button
-            key={i}
-            style={{ ...KV_BTN, fontSize: 11, textAlign: 'left', maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-            title={t2.kadian}
-            onClick={() => { setModule('判断推理'); drawByKadian(t2.kadian) }}
-          >{String(t2.kadian).replace('图形推理 / ', '') + '（' + t2.count + '）'}</button>)}
-        </div> : null}
-      </Card>
-
-      const searchCard = <Card title="🔍 知识点检索（考点 → 解题思路）">
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <input
-            value={kw}
-            onChange={e => setKw(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') searchK() }}
-            placeholder="输入考点关键词，如「图形推理」「模态命题」「增长率」"
-            style={{ flex: 1, padding: '8px 12px', borderRadius: 9, border: '1.5px solid rgba(148,163,184,.35)', fontSize: 12.5, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' }}
-          />
-          <button style={{ ...KV_BTN, padding: '8px 16px' }} onClick={searchK}>{'搜索'}</button>
-        </div>
-        {kadiansBlock}
-      </Card>
-
-      // 题目区（分块构造，避免深嵌套三元）
-      let questionCard: any = null
-      if (q) {
-        const headerTags: any[] = []
-        if (q.module) headerTags.push(<span key="m" style={KV_TAG}>{q.module}</span>)
-        if (q.type) headerTags.push(<span key="t" style={{ ...KV_TAG, background: 'rgba(139,92,246,.12)', color: '#8b5cf6' }}>{q.type}</span>)
-        if (q.year) headerTags.push(<span key="y" style={KV_TAG}>{q.year}</span>)
-        if (q.region) headerTags.push(<span key="r" style={KV_TAG}>{q.region}</span>)
-
-        const optRows = entries(q.options || {}).map(([L, txt]) => {
-          const isRight = revealed && L === q.correctAnswer
-          const isWrong = revealed && L === sel && L !== q.correctAnswer
-          const chosen = !revealed && L === sel
-          const border = isRight ? '#10b981' : isWrong ? '#ef4444' : chosen ? '#6366f1' : 'rgba(148,163,184,.3)'
-          const bg = isRight ? 'rgba(16,185,129,.09)' : isWrong ? 'rgba(239,68,68,.08)' : chosen ? 'rgba(99,102,241,.08)' : 'transparent'
-          const badge = isRight ? '#10b981' : isWrong ? '#ef4444' : chosen ? '#6366f1' : 'rgba(148,163,184,.15)'
-          const badgeColor = (isRight || isWrong || chosen) ? '#fff' : 'inherit'
-          return (
-            <div
-              key={L}
-              style={{ display: 'flex', gap: 10, padding: '10px 12px', border: '2px solid ' + border, background: bg, borderRadius: 10, marginTop: 8, cursor: revealed ? 'default' : 'pointer', fontSize: 13, lineHeight: 1.6 }}
-              onClick={() => { if (!revealed) setSel(L) }}
-            >
-              <div style={{ width: 24, height: 24, borderRadius: '50%', background: badge, color: badgeColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 }}>{L}</div>
-              {/* cycle-22：选项含图占位 → RichText 渲染出图（公式图/选项图不再剥掉） */}
-              {String(txt || '').includes('kgimg://') ? <div style={{ flex: 1, minWidth: 0 }}><RichText text={txt} fontSize={13} /></div> : <div style={{ flex: 1 }}>{txt}</div>}
-            </div>
-          )
-        })
-
-        const actionBtn = revealed
-          ? <button style={{ ...KV_BTN, padding: '7px 18px' }} onClick={() => draw(module)}>{'下一题 →'}</button>
-          : <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, padding: '7px 18px' }} disabled={!sel} onClick={() => setRevealed(true)}>{'查看答案与解题链'}</button>
-
-        // 五维标注
-        const dims: any[] = []
-        if (revealed) {
-          if (q.analysis) dims.push(<div key="an" style={{ marginBottom: 10, padding: 12, background: 'rgba(148,163,184,.07)', borderRadius: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5 }}>{'📖 解析'}</div><RichText text={q.analysis} /></div>)
-          if (q.kadian) dims.push(<div key="kd" style={{ marginBottom: 10, padding: 12, background: 'rgba(99,102,241,.07)', borderRadius: 10, borderLeft: '3px solid #6366f1' }}>
-            <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5, color: '#6366f1' }}>{'🎯 考点定位'}</div><RichText text={q.kadian} /></div>)
-          if (q.reasoning) dims.push(<div key="rs" style={{ marginBottom: 10, padding: 12, background: 'rgba(14,165,233,.07)', borderRadius: 10, borderLeft: '3px solid #0ea5e9' }}>
-            <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5, color: '#0ea5e9' }}>{'🧠 解题推理链'}</div><RichText text={q.reasoning} /></div>)
-          if (q.fastest) dims.push(<div key="fs" style={{ marginBottom: 10, padding: 12, background: 'rgba(245,158,11,.08)', borderRadius: 10, borderLeft: '3px solid #f59e0b' }}>
-            <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5, color: '#f59e0b' }}>{'⚡ 最快解法（考场用）'}</div><RichText text={q.fastest} /></div>)
-          if (q.pitfalls) dims.push(<div key="pf" style={{ marginBottom: 10, padding: 12, background: 'rgba(239,68,68,.07)', borderRadius: 10, borderLeft: '3px solid #ef4444' }}>
-            <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5, color: '#ef4444' }}>{'⚠️ 易错点'}</div><RichText text={q.pitfalls} /></div>)
-          if (q.mother) dims.push(<div key="mo" style={{ padding: 12, background: 'rgba(139,92,246,.07)', borderRadius: 10, borderLeft: '3px solid #8b5cf6' }}>
-            <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 5, color: '#8b5cf6' }}>{'🧩 母题思维'}</div><RichText text={q.mother} /></div>)
-        }
-
-        questionCard = (
-          <div>
-            {/* cycle-21：深度题库题也标出处（naoku + 卷名/年份/考点） */}
-            <SourceBadge {...({ source: q.source || 'naoku', exam: q.exam, year: q.year, region: q.region,
-              extra: q.kadian ? <span style={{ ...KV_TAG, background: 'rgba(99,102,241,.12)', color: '#6366f1' }}>{'🎯 ' + String(q.kadian).slice(0, 18)}</span> : null } as any)} />
-            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>{headerTags}</div>
-            {/* cycle-23 P0（用户二报）：深度题库材料块——资料分析统计图表/言语理解文段材料 */}
-            {/* 由服务端 material 字段单发（与 stem 字段分离），UI 在题干上方组装渲染。 */}
-            {q.material ? <div style={{ marginBottom: 10, padding: 12, background: 'rgba(148,163,184,.07)', borderRadius: 10, borderLeft: '3px solid rgba(148,163,184,.5)' }}>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-                <span style={{ ...KV_TAG, background: 'rgba(14,165,233,.12)', color: '#0ea5e9' }}>{'📄 材料'}</span>
-                {q.materialRef ? <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{String(q.materialRef).slice(0, 40)}</span> : null}
-              </div>
-              <RichText text={q.material} fontSize={12.5} maxHeight={'38vh' as any} /></div> : null}
-            <RichText text={q.stem} fontSize={13.5} maxHeight={'30vh' as any} />
-            {optRows}
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>{actionBtn}</div>
-            {revealed ? null : <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 6 }}>{'答完可查看「考点定位 / 推理链 / 最快解法 / 易错点 / 母题」五维标注'}</div>}
-            {dims.length > 0 ? <div style={{ marginTop: 14 }}>{dims}</div> : null}
-          </div>
-        )
-      }
-
-      const moduleBtns = ['判断推理', '言语理解与表达', '数量关系', '资料分析', '常识判断'].map(m2 =>
-        <button
-          key={m2}
-          style={{ ...KV_BTN, ...(module === m2 ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0 } : {}) }}
-          onClick={() => { setModule(m2); draw(m2) }}
-        >{m2}</button>)
-
-      return (
-        <div>
-          {statsRow}
-          {searchCard}
-          {tuxingCard}
-          {/* cycle-21 H5（issue #3）：纸质补录四步旅程（搜索→核对→补录→批次撤销） */}
-          <KgHistoryImport api={api} />
-          {/* cycle-15：记忆恢复横幅（未抽题时展示；恢复 = 直接回到上次的模块 + 原题） */}
-          {(!q && memLoaded && memData && memData.question && !memOff)
-            ? <KgMemBanner
-                {...{ key: 'kgmem-deep' }}
-                data={memData}
-                text={'上次练到「' + (memData.module || '未记录模块') + '」· ' + String((memData.question && memData.question.stem) || '').slice(0, 26) + '…'}
-                onResume={() => { setModule(memData.module || ''); setQ(memData.question); setSel(null); setRevealed(false) }}
-                onDismiss={() => setMemOff(true)}
-              />
-            : null}
-          <Card title="🎯 深度刷题（带解题思维链）">
-            <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>{moduleBtns}</div>
-            {busy ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'抽题中…'}</div> : null}
-            {questionCard}
-          </Card>
-        </div>
-      )
-    }
-
-    /**
-     * 纸质刷题记录补录（cycle-21 H5 · issue #3 第一阶段）
-     * 四步旅程：① 题干关键词搜候选 → ② 展示题干/选项/来源供核对 →
-     * ③ 补录 对/错/结果未知（可选书名页码/原始日期）→ ④ 批次撤销（环形 30）。
-     * 纪律：历史补录不进「今日新刷」（服务端统计隔离）；重复补录=冲突提示；可整批撤销。
-     */
-    interface KgHistoryImportProps { api: any }
-    function KgHistoryImport({ api }: KgHistoryImportProps) {
-      const [kw, setHikw] = React.useState('')
-      const [results, setHiResults] = React.useState(null)     // 搜索结果
-      const [picks, setHiPicks] = React.useState({})           // sig → {question, result}
-      const [srcNote, setHiSrc] = React.useState('')           // 书名/页码（可选）
-      const [happenedAt, setHiDate] = React.useState('')       // 原始作答日期（可选）
-      const [msg, setHiMsg] = React.useState(null)             // {ok, text}
-      const [batches, setHiBatches] = React.useState(null)
-      const [busy, setHiBusy] = React.useState(false)
-
-      const loadBatches = React.useCallback(() => {
-        api('/history/batches').then((d: any) => setHiBatches(d)).catch(() => setHiBatches(null))
-      }, [api])
-      React.useEffect(() => { loadBatches() }, [loadBatches])
-
-      const doSearch = async () => {
-        if (!kw.trim()) return
-        setHiBusy(true)
-        try {
-          const d = await api('/history/search?q=' + encodeURIComponent(kw.trim()) + '&limit=12')
-          setHiResults(d && d.list ? d : { list: [] })
-          setHiPicks({})
-        } catch (e: any) { setHiMsg({ ok: false, text: '搜索失败: ' + ((e && e.message) || e) }) }
-        finally { setHiBusy(false) }
-      }
-
-      const pick = (item: any, result: string) => {
-        setHiPicks((p: any) => {
-          const next = Object.assign({}, p)
-          if (result === 'none') delete next[item.contentSig]
-          else next[item.contentSig] = { question: item, result, contentSig: item.contentSig }
-          return next
-        })
-      }
-
-      const submit = async () => {
-        const list = Object.values(picks)
-        if (!list.length) { setHiMsg({ ok: false, text: '先在候选里标记对/错' }); return }
-        setHiBusy(true)
-        try {
-          const entries = list.map((x: any) => ({
-            contentSig: x.contentSig, question: x.question, result: x.result,
-            source: srcNote.trim() || null, happenedAt: happenedAt || null,
-          }))
-          const r = await api('/history/entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries, source: srcNote.trim() || null }) })
-          if (r && r.error) { setHiMsg({ ok: false, text: r.error }) }
-          else {
-            setHiMsg({ ok: true, text: '已补录 ' + r.accepted + ' 题（批次 ' + String(r.batchId || '').slice(0, 12) + '）'
-              + (r.conflicts && r.conflicts.length ? ' · 冲突跳过 ' + r.conflicts.length + ' 题' : '')
-              + (r.rejected && r.rejected.length ? ' · 无效 ' + r.rejected.length + ' 题' : '')
-              + ' · 错题已进错题本（历史练习不计入今日新刷）' })
-            setHiPicks({}); setHiResults(null); setHikw(''); setHiSrc(''); setHiDate('')
-            loadBatches()
-          }
-        } catch (e: any) { setHiMsg({ ok: false, text: '补录失败: ' + ((e && e.message) || e) }) }
-        finally { setHiBusy(false) }
-      }
-
-      const undoBatch = async (id: string) => {
-        setHiBusy(true)
-        try {
-          const r = await api('/history/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId: id }) })
-          setHiMsg(r && r.error ? { ok: false, text: r.error } : { ok: true, text: '已撤销批次：移除 ' + (r.removedHistory || 0) + ' 条历史 + ' + (r.removedWrong || 0) + ' 条错题' })
-          loadBatches()
-        } catch (e: any) { setHiMsg({ ok: false, text: '撤销失败: ' + ((e && e.message) || e) }) }
-        finally { setHiBusy(false) }
-      }
-
-      const pickList = Object.values(picks)
-      return (
-        <Card title="📥 纸质刷题补录（把纸上的对错记进系统）">
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-            {'① 输入题干关键词搜现有题库 → ② 核对候选（题干/选项/来源）→ ③ 标记 已做对/已做错/结果未知 → ④ 保存（错题自动进错题本，同批次可撤销）。原始日期未知可留空。'}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-            <input
-              value={kw} onChange={(e: any) => setHikw(e.target.value)} onKeyDown={(e: any) => { if (e.key === 'Enter') doSearch() }}
-              placeholder="题干关键词，如「林产品出口」「模态命题」"
-              style={{ flex: '1 1 260px', padding: '7px 11px', borderRadius: 9, border: '1.5px solid rgba(148,163,184,.35)', fontSize: 12, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' }} />
-            <button style={{ ...KV_BTN, padding: '7px 14px' }} onClick={doSearch} disabled={busy}>{busy ? '…' : '🔍 搜索候选'}</button>
-          </div>
-          {/* ② 核对候选 */}
-          {results ? <div style={{ marginBottom: 8 }}>
-            {results.list && results.list.length
-              ? results.list.map((it: any) => {
-                  const picked = picks[it.contentSig]
-                  const stemPlain = String(it.stem || '').slice(0, 110)
-                  return (
-                    <div key={it.contentSig} style={{ border: '1.5px solid ' + (picked ? '#6366f1' : 'rgba(148,163,184,.25)'), borderRadius: 10, padding: '9px 11px', marginBottom: 6, background: picked ? 'rgba(99,102,241,.05)' : 'transparent' }}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-                        <span style={KV_TAG}>{it.module || ''}</span>
-                        {it.matchSource ? <span style={{ ...KV_TAG, fontSize: 9.5 }}>{it.matchSource === 'naoku' ? '深度题库' : '真题库'}</span> : null}
-                        {it.year ? <span style={{ ...KV_TAG, fontSize: 9.5 }}>{String(it.year)}</span> : null}
-                        {picked ? <span style={{ ...KV_TAG, background: 'rgba(99,102,241,.12)', color: '#4338ca', fontSize: 9.5 }}>{'已标记: ' + (picked.result === 'right' ? '做对' : picked.result === 'wrong' ? '做错' : '结果未知')}</span> : null}
-                      </div>
-                      <div style={{ fontSize: 12, lineHeight: 1.6 }}>{stemPlain + (String(it.stem || '').length > 110 ? '…' : '')}</div>
-                      <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
-                        <button style={{ ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'right' ? { background: 'rgba(16,185,129,.14)', color: '#059669', borderColor: '#10b981' } : {}) }} onClick={() => pick(it, 'right')}>{'✓ 已做对'}</button>
-                        <button style={{ ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'wrong' ? { background: 'rgba(239,68,68,.14)', color: '#dc2626', borderColor: '#ef4444' } : {}) }} onClick={() => pick(it, 'wrong')}>{'✗ 已做错'}</button>
-                        <button style={{ ...KV_BTN, fontSize: 10.5, ...(picked && picked.result === 'unknown' ? { background: 'rgba(245,158,11,.14)', color: '#b45309', borderColor: '#f59e0b' } : {}) }} onClick={() => pick(it, 'unknown')}>{'? 结果未知'}</button>
-                      </div>
-                    </div>
-                  )
-                })
-              : <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '10px 0' }}>{'未找到含该关键词的题目——换个更短的关键词试试'}</div>}
-          </div> : null}
-          {/* ③ 补录附加信息 + 提交 */}
-          {pickList.length ? <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '8px 10px', borderRadius: 10, background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.18)' }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#4338ca' }}>{'待补录 ' + pickList.length + ' 题'}</span>
-            <input value={srcNote} onChange={(e: any) => setHiSrc(e.target.value)} placeholder="纸质来源（书名·页码，可选）" style={{ flex: '1 1 180px', padding: '5px 9px', borderRadius: 8, border: '1px solid rgba(148,163,184,.3)', fontSize: 11, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' }} />
-            <input value={happenedAt} onChange={(e: any) => setHiDate(e.target.value)} placeholder="原始作答日期 YYYY-MM-DD（可选）" style={{ flex: '1 1 180px', padding: '5px 9px', borderRadius: 8, border: '1px solid rgba(148,163,184,.3)', fontSize: 11, fontFamily: 'inherit', background: 'var(--surface-card,#fff)', color: 'var(--text-primary,#0f172a)' }} />
-            <button style={{ ...KV_BTN, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 0, fontWeight: 700, padding: '6px 14px' }} onClick={submit} disabled={busy}>{busy ? '保存中…' : '💾 保存补录'}</button>
-          </div> : null}
-          {msg ? <div style={{ fontSize: 11.5, marginTop: 8, color: msg.ok ? '#059669' : '#dc2626' }}>{(msg.ok ? '✓ ' : '⚠ ') + msg.text}</div> : null}
-          {/* ④ 批次台账 + 撤销 */}
-          {batches && batches.importedTotal > 0
-            ? <div style={{ marginTop: 10, borderTop: '1px dashed rgba(148,163,184,.2)', paddingTop: 8 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 5 }}>{'累计补录 ' + batches.importedTotal + ' 题 · 近 ' + (batches.batches || []).length + ' 批（可撤销窗口 30 批）'}</div>
-                {(batches.batches || []).slice(0, 5).map((b: any) => <div key={b.batchId} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10.5, color: 'var(--text-muted)', padding: '2px 0' }}>
-                  <span style={{ fontFamily: 'monospace' }}>{String(b.batchId).slice(0, 14)}</span>
-                  <span>{b.count + ' 题'}</span>
-                  {b.source ? <span>{'· ' + String(b.source).slice(0, 24)}</span> : null}
-                  <button style={{ ...KV_BTN, fontSize: 9.5, marginLeft: 'auto', color: '#dc2626', borderColor: 'rgba(239,68,68,.4)' }} onClick={() => undoBatch(b.batchId)} disabled={busy}>{'↩ 撤销此批'}</button>
-                </div>)}
-              </div>
-            : null}
-        </Card>
       )
     }
