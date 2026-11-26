@@ -158,3 +158,19 @@ test('SMOKE-N-02 对话窗口瘦身：QuickPractice 移除 + TabHome 精简体',
   expect(/h\(KaogongTabHome,/.test(cl)).toBe(true)
   expect(/h\(KaogongMainPanel, \{ wsKey, t, key: reloadKey/.test(cl)).toBe(false)
 })
+
+test('SEC-CORS-01 独立端口不得用通配 CORS（市场评审指出的真实缺陷）', () => {
+  /**
+   * 上游 awesome-dsh-plugin 条目曾被维护者追加一句：
+   * "Its HTTP routes have no DSH access check, so a web page open in your browser could call them."
+   * 根因 = 独立端口无条件 `Access-Control-Allow-Origin: *` →
+   * 用户浏览的**任意网页**都能 fetch 本机 8400 端口读库数据 / 写进度。
+   * 本守卫锁死：① 禁通配 ACAO；② 必须有 Origin 白名单（回环）；③ 变更类请求必须校验来源。
+   */
+  const http = readSrc('./src/server/http.ts')
+  expect(/Access-Control-Allow-Origin',\s*'\*'/.test(http), '独立端口仍在用通配 CORS（任何网页都能读本地 API）').toBe(false)
+  expect(http.includes('originOk'), '缺 Origin 白名单判定').toBe(true)
+  expect(/127\\\.0\\\.0\\\.1/.test(http), 'Origin 白名单未覆盖回环地址').toBe(true)
+  // 写请求必须被拦（CORS 管不住写副作用）
+  expect(/拒绝跨站写请求|403/.test(http), '变更类请求缺跨站拦截').toBe(true)
+})
