@@ -50,7 +50,7 @@ updated: 2026-11-20
 | [agents/](./agents/) | **agent 开发文档（事实基线层）** | 见下方清单 |
 | [design/](./design/) | 设计契约 | [unified-storage-architecture](./design/unified-storage-architecture.md) · [cycle-12-contract](./design/cycle-12-contract.md) |
 | [research/](./research/) | 研究文档（五段式：定义→代码落地→场景→价值→验证） | [README](./research/README.md)（31 篇） |
-| [release/](./release/) | 发行说明（GitHub Release notes 源） | [v1.34.0](./release/v1.34.0.md) · [v1.31.0](./release/v1.31.0.md) |
+| [release/](./release/) | 发行说明（GitHub Release notes 源） | [v1.34.1](./release/v1.34.1.md) · [v1.34.0](./release/v1.34.0.md) · [v1.31.0](./release/v1.31.0.md) |
 | [marketplace/](./marketplace/) | awesome-dsh-plugin 市场条目 | [xuanyuanchumo__dsh-kaogong.yml](./marketplace/xuanyuanchumo__dsh-kaogong.yml) |
 | [facts.json](./facts.json) | **文档事实源**（自动生成，勿手改） | 生成：`node scripts/docs/gen-facts.mjs` |
 | [DSH插件开发官方与生态.md](./DSH插件开发官方与生态.md) | DSH 官方插件开发规范与生态现状（宿主契约、市场规范） | 宿主能力/市场规则变更时 |
