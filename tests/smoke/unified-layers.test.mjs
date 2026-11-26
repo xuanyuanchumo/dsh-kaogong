@@ -26,9 +26,11 @@ test('C60-01 统一检索层：manifest 声明 + http 路由 + registry 从 mani
   expect(reg.includes("if (!decl) throw new Error")).toBe(true)
 })
 
-test('C60-02 统一信封兼容：五旧检索端点零删改 + 源特有字段进 meta', () => {
+test('C60-02 统一信封兼容：检索端点零删改 + 源特有字段进 meta', () => {
   const mf = readSrc('src/shared/manifest.ts')
-  for (const p of ['/api/search', '/api/pool/search', '/api/huasheng13/search', '/api/naoku/kadian', '/api/history/search']) {
+  // cycle-62 端点收敛：kadian 检索端点从 /api/naoku/kadian → /api/pool/kadians
+  // （退化端点已退役，但「五个检索入口」的对外契约不变）
+  for (const p of ['/api/search', '/api/pool/search', '/api/huasheng13/search', '/api/pool/kadians', '/api/history/search']) {
     expect(mf.includes(`path: '${p}'`), `${p} 被删改`).toBe(true)
   }
   const reg = readSrc('src/server/searchRegistry.ts')

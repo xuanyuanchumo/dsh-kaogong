@@ -120,13 +120,16 @@ export function createSearchRegistry(declaredEndpoints: Array<{ path: string; la
         }))
       },
     })
-    // ④ naoku 考点聚合（SQL LIKE 聚合；score=count 语义，不同源不可比 → 放 meta）
+    // ④ 考点聚合（SQL LIKE 聚合；score=count 语义，不同源不可比 → 放 meta）
+    // cycle-62：端点从 /api/naoku/kadian → /api/pool/kadians（naoku 六端点退役）。
+    // provider id 保留 'kadian'（对外检索源标识，改 id 会破坏既有消费/守卫对账）。
     register({
-      id: 'kadian', endpoint: '/api/naoku/kadian', domain: 'pool', requiresPool: true,
+      id: 'kadian', endpoint: '/api/pool/kadians', domain: 'pool', requiresPool: true,
       search: async (q, o) => {
-        const raw = await ctx.naokuApi.handle('/api/naoku/kadian', new URLSearchParams({ q, limit: String(o.limit || 20) }), null, 'GET', 'search-registry')
+        // ctx.pool 是 domains.poolApi（域工厂注入名见 createSearchRegistry 的类型声明）
+        const raw = await ctx.pool.handle('/api/pool/kadians', new URLSearchParams({ q, limit: String(o.limit || 20) }), null, 'GET', 'search-registry')
         return envelope(q, raw, (r: any) => ({
-          id: String(r.kadian || ''), source: 'naoku', title: r.kadian,
+          id: String(r.kadian || r.k || ''), source: 'naoku', title: String(r.kadian || r.k || ''),
           meta: { count: r.count, category: r.category, module: r.module },
         }), (x: any) => Array.isArray(x?.list) ? x.list.length : 0)
       },

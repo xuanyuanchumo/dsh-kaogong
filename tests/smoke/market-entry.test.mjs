@@ -69,7 +69,8 @@ test('MKT-05 category 取值合法（tools 等上游既定词表）', () => {
 
 test('MKT-06 描述数字与 manifest 事实源一致（统一题库池 86,454 题）', async () => {
   const { CAPABILITIES } = await import('../../dist/shared/manifest.js')
-  expect(CAPABILITIES.endpoints.length).toBe(82)
+  // cycle-62 端点收敛：/api/naoku/* 六端点退役 + 3 语义下沉到池 → 82 − 6 + 3 = 79
+  expect(CAPABILITIES.endpoints.length).toBe(79)
   expect(CAPABILITIES.tools.length).toBe(6)
   expect(CAPABILITIES.views.length).toBe(16)
   // 统一题库池规模（跨源内容级去重后）——描述里出现的数字必须与之相符

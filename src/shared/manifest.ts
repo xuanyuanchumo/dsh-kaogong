@@ -24,7 +24,7 @@ export const pageRank: typeof kernelPageRank = kernelPageRank
 
 // ── 能力清单（与 index.js / client.js / ui 实际注册保持同步）──
 export const CAPABILITIES = {
-  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.34.2', mode: 'offline-first' },
+  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.34.3', mode: 'offline-first' },
 
   // 宿主 UI 双入口（client 半注册；图谱与可观测面板消费此声明）
   entries: [
@@ -74,13 +74,14 @@ export const CAPABILITIES = {
     { path: '/api/paper/exam/start', label: '整卷模考开始', consumers: ['ui:exam'] },
     { path: '/api/paper/exam/submit', label: '整卷模考交卷', consumers: ['ui:exam'] },
     { path: '/api/paper/exam/history', label: '模考历史', consumers: ['ui:exam', 'ui:dashboard'] },
-    { path: '/api/naoku/status', label: '深度题库状态', consumers: ['ui:deepbank'] },
-    { path: '/api/naoku/questions', label: '深度标注抽题', consumers: ['ui:deepbank', 'ui:topics'] },
-    { path: '/api/naoku/kadian', label: '知识点检索', consumers: ['ui:deepbank'] },
-    { path: '/api/naoku/practice', label: '按知识点刷题', consumers: ['ui:deepbank'] },
+    // cycle-62 端点收敛：/api/naoku/* 六端点退役（数据层自 v9 起已是统一池，
+    // 双端点只是漂移面）。3 个「池没有等价能力」的语义下沉为池端点（见下 /api/pool/* 区）：
+    //   /api/naoku/kadian + /api/naoku/categories → /api/pool/kadians
+    //   /api/naoku/practice                        → /api/pool/by-kadian
+    //   /api/naoku/papers                          → /api/pool/papers-by-kadian
+    //   /api/naoku/questions + /api/naoku/status   → 已由 /api/pool/questions + /api/pool/status 覆盖
+    // 保留 naoku-img：图片是媒体引用（L3 不做 BLOB），不是题目事实直读。
     { path: '/api/naoku-img', label: '深度题库配图服务', consumers: ['ui:deepbank', 'ui:practice'] },
-    { path: '/api/naoku/papers', label: '考点→试卷反查', consumers: ['ui:papers', 'ui:topics'] },
-    { path: '/api/naoku/categories', label: '考点清单', consumers: ['ui:papers', 'ui:deepbank'] },
     // cycle-21 数据外置白盒端点（issue #2）：用户数据根位置 / 迁移状态 / 包内残留透出
     { path: '/api/data-location', label: '数据位置白盒', consumers: ['ui:repos', 'ui:observability'] },
     { path: '/api/tuxing/cats', label: '图形推理规律分类', consumers: ['ui:tuxing'] },
@@ -139,6 +140,10 @@ export const CAPABILITIES = {
     // cycle-58：知识检索页接入统一池检索（三源统一入口）——consumers 补 ui:search
     { method: 'GET', path: '/api/pool/search', label: '统一池跨源检索(去重聚合)', consumers: ['ui:pool', 'ui:search'], desc: '?q&limit → FTS5 trigram 命中 + 跨源去重聚合 + 源多样性轮转(rotation/sources)' },
     { method: 'GET', path: '/api/pool/question', label: '统一池单题聚合视图', consumers: ['ui:pool'], desc: '?id=<canonical_id> → 一题+N 出处+关系邻居+五维 dims' },
+    // cycle-62 收敛：原 /api/naoku/* 的 3 个「池没有等价能力」的语义下沉至此
+    { method: 'GET', path: '/api/pool/kadians', label: '统一池考点清单/检索', consumers: ['ui:deepbank', 'ui:papers'], desc: '?q=<关键词>&limit → 有 q=按词检索（{kadian,category,module,count}）；无 q=分类清单（k 与 kadian 双写兼容旧形状）' },
+    { method: 'GET', path: '/api/pool/by-kadian', label: '统一池按考点反查题目', consumers: ['ui:deepbank', 'ui:topics'], desc: '?kadian=<考点>&count → 按考点抽题（支持模糊匹配；原 /api/naoku/practice 语义）' },
+    { method: 'GET', path: '/api/pool/papers-by-kadian', label: '统一池考点→试卷反查', consumers: ['ui:papers', 'ui:topics'], desc: '?category=<考点分类>&limit → {papers[{paper,region,year,count}]}（原 /api/naoku/papers 语义）' },
   { method: 'GET', path: '/api/pool/analysis-versions', label: '解析多版本查询', consumers: ['ui:pool', 'tool:kaogong_launch'], desc: '研究 21 纪律③：?id=<canonical_id> → {versions[{sourceId,localKey,localKeys[],analysis,answer,at}], count, rawCount}——跨源不同来源的解析各存一行可查（展示层按 source+analysis 聚合，localKeys 汇总全部卷出处）' },
     { method: 'GET', path: '/api/pool/relations', label: '统一池关系查询', consumers: ['ui:pool'], desc: '?rel_type&limit → 按关系类型分页' },
     { method: 'GET', path: '/api/pool/graph', label: '统一池关系子图', consumers: ['ui:pool'], desc: '?node&depth&rel_type → BFS 邻域子图(节点+边)' },

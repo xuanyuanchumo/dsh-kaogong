@@ -1,4 +1,4 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.34.2
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.34.3
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
@@ -156,7 +156,7 @@ plugin_manager remove_bundle dsh-kaogong     # 仅移除插件
 git --version                     # 题库管理前置
 # 插件侧：确认版本与能力注册
 curl -s http://127.0.0.1:51093/kaogong/api/capabilities | head -c 300
-# 预期含 "version":"1.34.0"、6 个工具、82 个端点
+# 预期含 "version":"1.34.0"、6 个工具、79 个端点
 ```
 
 界面自检：左栏出现「📚 考公学习」图标 → 点击进入 → 「📦 题库管理」显示仓库清单（16 项）即正常。
@@ -382,7 +382,7 @@ ANIC 质量流程：`.cycles/`（intent → spec → plan → G0–G3 门禁 →
 | **GitHub** | [xuanyuanchumo/dsh-kaogong](https://github.com/xuanyuanchumo/dsh-kaogong)（topic `dsh-plugin`） | 源码安装 / issue 反馈 |
 | **市场卡片** | `icon-180.png`（GitHub 托管位图）+ `screenshots.json`（4 图） | 符合市场图标与截图规范 |
 
-**能力事实（维护者可对代码核对）**：**82** 个 HTTP 端点 · **6** 个宿主工具 · **16** 个视图 ·
+**能力事实（维护者可对代码核对）**：**79** 个 HTTP 端点 · **6** 个宿主工具 · **16** 个视图 ·
 **16** 个上游仓库（按需安装）· 统一题库池 **86,454** 题 / **229,732** 出处行 / **141,121** 解析版本 ·
 测试 **vitest 411 断言 × 50 分域文件**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
 与 `docs/facts.json`（文档事实源，`node scripts/docs/gen-facts.mjs` 自动生成）实测得出，不随文案改动。

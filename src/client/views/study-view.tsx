@@ -712,25 +712,35 @@ function KgMemBanner(props: KgMemBannerProps) {
       // cycle-15：深度题库记忆（module + 原题对象整存，恢复即回到原题；hook 数恒定，R9）
       const { data: memData, loaded: memLoaded, save: memSave } = useKgMem(api, 'deep')
       const [memOff, setMemOff] = React.useState(false)
+      /**
+       * cycle-62 收敛：深度题库视图不再消费 `/api/naoku/*`（已退役），
+       * 全部改走统一池端点 —— 数据层自 v9 起本就同源，此次是**端点层收敛**：
+       *   /naoku/kadian   → /pool/kadians?q=      （考点检索，响应含 kadian 字段）
+       *   /naoku/status   → /pool/status          （池状态本身就是深度题库的载体状态）
+       *   /naoku/questions→ /pool/by-kadian 或 /pool/questions（抽题原语已由池覆盖）
+       *   /naoku/practice → /pool/by-kadian?count=（按考点刷题）
+       */
       const loadTuxing = () => {
         if (tuxing) return
-        api('/naoku/kadian?q=' + encodeURIComponent('图形推理') + '&limit=40')
+        api('/pool/kadians?q=' + encodeURIComponent('图形推理') + '&limit=40')
           .then((d: any) => {
-            const list = (d.list || []).filter((x: any) => String(x.kadian).includes('规律'))
+            const list = (d.list || []).filter((x: any) => String(x.kadian || x.k).includes('规律'))
             setTuxing(list.slice(0, 12))
           })
           .catch(() => setTuxing([]))
       }
 
-      React.useEffect(() => { api('/naoku/status').then(setStatus).catch(() => setStatus({ ready: false })) }, [api])
+      React.useEffect(() => { api('/pool/status').then(setStatus).catch(() => setStatus({ ready: false })) }, [api])
 
       const draw = React.useCallback(async (mod: any) => {
         setBusy(true)
         try {
-          const qs = 'count=1'
+          // 深度题库口径 = 池内 source_id='naoku'；用池抽题并限定该源，
+          // 与原 /naoku/questions 语义等价（模块/分类过滤 + 随机一题）。
+          const qs = 'count=1&source=naoku'
             + (mod ? '&module=' + encodeURIComponent(mod) : '')
             + (initialCategory && !mod ? '&category=' + encodeURIComponent(initialCategory) : '')
-          const d = await api('/naoku/questions?' + qs)
+          const d = await api('/pool/questions?' + qs)
           const dq = (d.questions || [])[0] || null
           setQ(dq)
           setSel(null)
@@ -750,12 +760,12 @@ function KgMemBanner(props: KgMemBannerProps) {
 
       const searchK = async () => {
         if (!kw.trim()) return
-        const d = await api('/naoku/kadian?q=' + encodeURIComponent(kw.trim()) + '&limit=20')
+        const d = await api('/pool/kadians?q=' + encodeURIComponent(kw.trim()) + '&limit=20')
         setKadians(d.list || [])
       }
 
       const drawByKadian = async (k: any) => {
-        const d = await api('/naoku/practice?kadian=' + encodeURIComponent(k) + '&count=1')
+        const d = await api('/pool/by-kadian?kadian=' + encodeURIComponent(k) + '&count=1')
         const dq = (d.questions || [])[0] || null
         setQ(dq)
         setSel(null)
@@ -768,7 +778,7 @@ function KgMemBanner(props: KgMemBannerProps) {
       React.useEffect(() => {
         if (!initialKadian) return
         let cancelled = false
-        api('/naoku/practice?kadian=' + encodeURIComponent(initialKadian) + '&count=1')
+        api('/pool/by-kadian?kadian=' + encodeURIComponent(initialKadian) + '&count=1')
           .then((d: any) => { if (!cancelled) { const dq = (d.questions || [])[0] || null; setQ(dq); setSel(null); setRevealed(false) } })
           .catch(() => {})
         return () => { cancelled = true }

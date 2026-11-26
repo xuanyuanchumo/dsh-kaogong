@@ -198,12 +198,14 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
 
       React.useEffect(() => {
         if (mode !== 'topic' || cats.length) return
-        api('/naoku/categories?limit=30').then((d: any) => setCats(d.list || [])).catch(() => {})
+        // cycle-62 收敛：/naoku/categories → /pool/kadians（响应含 k + kadian + category 超集）
+        api('/pool/kadians?limit=30').then((d: any) => setCats(d.list || [])).catch(() => {})
       }, [mode, cats.length, api])
 
       React.useEffect(() => {
         if (!cat) { setCatPapers(null); return }
-        api('/naoku/papers?category=' + encodeURIComponent(cat))
+        // cycle-62 收敛：/naoku/papers → /pool/papers-by-kadian
+        api('/pool/papers-by-kadian?category=' + encodeURIComponent(cat))
           .then((d: any) => setCatPapers(d.papers || []))
           .catch(() => setCatPapers([]))
       }, [cat, api])
@@ -854,11 +856,13 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
 
       React.useEffect(() => {
         let cancelled = false
-        api('/naoku/questions?count=20&random=0')
+        // cycle-62 收敛：/naoku/questions?random=0 → /pool/questions?has=mother,pitfalls
+        // （`has` 在服务端做 LENGTH(col)>0 过滤，替代「取 20 题再客户端过滤」的浪费）
+        api('/pool/questions?count=20&source=naoku&has=mother,pitfalls')
           .then((d: any) => {
             if (cancelled) return
             const qs = (d && d.questions) || []
-            setPicks(qs.filter((x: any) => x && (x.mother || x.pitfalls)).slice(0, 6))
+            setPicks(qs.filter((x: any) => x && ((x.dims && (x.dims.mother || x.dims.pitfalls)) || x.mother || x.pitfalls)).slice(0, 6))
           })
           .catch(() => { if (!cancelled) setPicks([]) })
         return () => { cancelled = true }

@@ -43,6 +43,14 @@ export function poolRowToNaoku(r: any): any {
   return {
     id: 'naoku-' + String(r.id || ''),
     qid: r.qid || '',
+    /**
+     * 题号 + 材料（cycle-62 七段修复）：原映射缺 `no`/`number`/`groupMaterial`，
+     * 而渲染层读 `q.no`（题号）与 `q.groupMaterial`（材料）——
+     * 深度题库/按考点刷题的题目因此题号显示 `?`、材料整段丢失。
+     * `no` 与 `number` 同取卷内序号（`seq`），无则 0（渲染层按位置号兜底，不臆造）。
+     */
+    no: Number(r.seq || 0) || 0,
+    number: Number(r.seq || 0) || 0,
     module: r.module || '',
     category: r.category || '',
     kadian: r.kadian || '',
@@ -59,6 +67,8 @@ export function poolRowToNaoku(r: any): any {
     pitfalls: r.pitfalls || '',
     mother: r.mother || '',
     material: r.group_material || '',
+    groupMaterial: r.group_material || '',
+    groupMaterialNo: Number(r.group_material_no || 0),
     materialRef: r.material_ref || '',
     has_image: r.has_image || 0,
     imgRefs: images,

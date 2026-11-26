@@ -129,24 +129,29 @@ globalThis.fetch = async (url) => {
    * 答案/材料/选项/题号全空，而测试仍绿（mock 失真）。
    * 纪律：mock 字段必须照抄 toLegacyShape（与 /api/questions 的 mock 同源）。
    */
-  if (u.includes('/api/pool/questions')) return { json: async () => ({
-    count: 1, candidates: 500, strategy: '模块弱点（SRS 1/(rate+0.15)）× 多出处加成',
-    questions: [{
-      id: 'q:mock:pool#1', canonicalId: 'q:mock:pool#1',
-      no: 1, number: 1,
-      source: 'naoku', paperFile: '2024年国考《行测》', region: '国考', year: '2024',
-      type: 'single', module: '判断推理', qid: 'mock-1',
-      groupMaterial: '【材料】某市 2018-2023 年铁路旅客运输量变化情况如下表所示。',
-      groupMaterialNo: 1, materialRef: '材料 1',
-      stem: '抽到的统一池题目：下列推断正确的是（　）',
-      options: { A: '选项甲', B: '选项乙', C: '选项丙', D: '选项丁' },
-      correctAnswer: 'C',
-      analysis: '元素组成相同，考虑数量规律。',
-      dims: { kadian: '图形推理 / 数量规律', reasoning: '第1步：观察元素组成' },
-      sources: [{ source_id: 'naoku', paper: '2024年甘肃卷', region: '甘肃', year: '2024' }],
-      sourceCount: 1,
-    }],
-  }) }
+  if (u.includes('/api/pool/questions')) return { json: async () => {
+    // cycle-62：`?source=naoku` 即「深度题库」口径（原 /api/naoku/questions 平移到池端点）。
+    // 深度题库视图有自己的断言驱动题（C22-IMG 图片 / C23-MAT 材料），按 module 过滤。
+    if (/[?&]source=naoku/.test(u)) return deepbankPoolQuestions(u)
+    return {
+      count: 1, candidates: 500, strategy: '模块弱点（SRS 1/(rate+0.15)）× 多出处加成',
+      questions: [{
+        id: 'q:mock:pool#1', canonicalId: 'q:mock:pool#1',
+        no: 1, number: 1,
+        source: 'naoku', paperFile: '2024年国考《行测》', region: '国考', year: '2024',
+        type: 'single', module: '判断推理', qid: 'mock-1',
+        groupMaterial: '【材料】某市 2018-2023 年铁路旅客运输量变化情况如下表所示。',
+        groupMaterialNo: 1, materialRef: '材料 1',
+        stem: '抽到的统一池题目：下列推断正确的是（　）',
+        options: { A: '选项甲', B: '选项乙', C: '选项丙', D: '选项丁' },
+        correctAnswer: 'C',
+        analysis: '元素组成相同，考虑数量规律。',
+        dims: { kadian: '图形推理 / 数量规律', reasoning: '第1步：观察元素组成' },
+        sources: [{ source_id: 'naoku', paper: '2024年甘肃卷', region: '甘肃', year: '2024' }],
+        sourceCount: 1,
+      }],
+    }
+  } }
   if (u.includes('/api/pool/question')) return { json: async () => ({
     canonicalId: 'q:10204454', module: '判断推理', category: '图形推理', kadian: '图形推理 / 数量规律',
     stem: '从所给的四个选项中，选择最合适的一个填入问号处', analysis: '元素组成相同，考虑数量规律。',
@@ -316,23 +321,40 @@ globalThis.fetch = async (url) => {
   // cycle-15 图形推理/深度题库数据源 mock（让横幅与恢复路径可测；N-02 分区切换零降级）
   if (u.includes('/api/tuxing/cats')) return { json: async () => ({ ready: true, total: 354, cats: [{ cat: 'shuliang', name: '数量规律', count: 40 }] }) }
   if (u.includes('/api/tuxing/list')) return { json: async () => ({ total: 2, questions: [{ no: 1, catName: '数量规律', ans: 'A', imgUrl: '' }, { no: 2, catName: '数量规律', ans: 'B', imgUrl: '' }] }) }
-  if (u.includes('/api/naoku/status')) return { json: async () => ({ ready: true, stats: { total: 27506, kadianCoverage: 100, fastestCoverage: 90, withImage: 10647 } }) }
-  if (u.includes('/api/naoku/questions') || u.includes('/api/naoku/practice')) return { json: async () => {
-    // cycle-23 C23-MAT：mock 按 module 参数过滤——点「资料分析」抽题 → 返回带 material 的题
+  /**
+   * 深度题库视图的 mock（cycle-62 端点收敛）：视图不再消费 /api/naoku/*，
+   * 改走池端点 —— 此处把原 naoku mock 的**断言驱动能力**平移到池端点形状：
+   *   /api/naoku/status      → /api/pool/status（已在上方有完整 mock）
+   *   /api/naoku/questions   → /api/pool/questions?source=naoku（下面这条，含 module 过滤）
+   *   /api/naoku/practice    → /api/pool/by-kadian
+   *   /api/naoku/kadian      → /api/pool/kadians
+   */
+  if (u.includes('/api/pool/by-kadian')) return { json: async () => {
+    // 按考点抽题（原 /api/naoku/practice 语义）：返回一题，驱动「练此知识点」链路
+    return {
+      kadian: decodeURIComponent((u.match(/[?&]kadian=([^&]*)/) || [])[1] || ''),
+      count: 1, sourceTier: 'pool',
+      questions: [{ no: 1, number: 1, module: '判断推理', stem: '深度题库抽题', options: { A: 'a', B: '【图:kgimg://90-图片/题目图/mock-opt-b.png】', C: 'c', D: 'd' }, correctAnswer: 'A', kadian: '考点X', analysis: '解析含图：【图:kgimg://90-图片/公式图/formula-mock.png】请注意变化。', source: 'naoku' }],
+    }
+  } }
+  // 池抽题（source=naoku 限定即为「深度题库」口径）——沿用原 naoku mock 的两道驱动题
+  function deepbankPoolQuestions(u) {
+    // cycle-23 C23-MAT：mock 按 module 参数过滤——点「资料分析」抽题 → 返回带材料（groupMaterial）的题
     // 语法纪律：json 必须单层（曾因双层嵌套 r.json() 返回内层响应对象 → draw 拿 {} → 题卡消失）
     const qs = [
       // cycle-22 C22-IMG：选项/解析带 kgimg:// 占位——驱动 RichText 出图渲染与图片化选项行
-      { module: '判断推理', stem: '深度题库抽题', options: { A: 'a', B: '【图:kgimg://90-图片/题目图/mock-opt-b.png】', C: 'c', D: 'd' }, correctAnswer: 'A', kadian: '考点X', analysis: '解析含图：【图:kgimg://90-图片/公式图/formula-mock.png】请注意变化。' },
+      { no: 1, number: 1, source: 'naoku', module: '判断推理', stem: '深度题库抽题', options: { A: 'a', B: '【图:kgimg://90-图片/题目图/mock-opt-b.png】', C: 'c', D: 'd' }, correctAnswer: 'A', kadian: '考点X', analysis: '解析含图：【图:kgimg://90-图片/公式图/formula-mock.png】请注意变化。' },
       // cycle-23 C23-MAT：资料分析题带材料（统计图表占位）——驱动深度题库材料块渲染
-      { module: '资料分析', stem: '2022年彩票月销售额最大的月份是：', options: { A: '甲', B: '乙', C: '丙', D: '丁' }, correctAnswer: 'D', kadian: '比重',
-        material: '【图:kgimg://90-图片/题目图/mock-material.png】2022年全国彩票销售情况如下：', materialRef: '6425570 2018-2023年国家铁路旅客运输', analysis: '纯文字解析' },
+      // cycle-62：材料字段用 groupMaterial（池/卷出站口径）+ material 回落双写
+      { no: 2, number: 2, source: 'naoku', module: '资料分析', stem: '2022年彩票月销售额最大的月份是：', options: { A: '甲', B: '乙', C: '丙', D: '丁' }, correctAnswer: 'D', kadian: '比重',
+        groupMaterial: '【图:kgimg://90-图片/题目图/mock-material.png】2022年全国彩票销售情况如下：', material: '【图:kgimg://90-图片/题目图/mock-material.png】2022年全国彩票销售情况如下：', materialRef: '6425570 2018-2023年国家铁路旅客运输', analysis: '纯文字解析' },
     ]
     let want = ''
     try { want = decodeURIComponent((u.match(/[?&]module=([^&]*)/) || [])[1] || '') } catch { want = '' }
     const filtered = want ? qs.filter(q => q.module === want) : qs
     // 无命中模块（如 C15 记忆恢复后的「数量关系」）回退全量，保持 C22-IMG 抽到判断推理题
-    return { questions: filtered.length ? filtered : qs }
-  } }
+    return { questions: filtered.length ? filtered : qs, count: (filtered.length ? filtered : qs).length, sourceTier: 'pool' }
+  }
   // cycle-21 W2 学习画像：stats.mastery（模块正确率）mock——驱动「掌握度」着色模式与图例
   if (u.includes('/api/stats')) return { json: async () => ({
     days: [{ date: '2026-11-14', answered: 10, correct: 6, rate: 60 }], streak: 1, day: 1,

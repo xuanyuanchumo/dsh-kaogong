@@ -31,7 +31,9 @@ import { makeNaokuApi } from './naokuApi.js'
 import { makeTuxingApi } from './tuxingApi.js'
 import { resetTuxing } from '../adapters/tuxing.js'
 // cycle-60 R2 换源：深度题库统一读层 + 整库质量门（白盒提示用）
-import { makePoolNaokuReader, poolFresh } from './poolNaoku.js'
+// cycle-62：makePoolNaokuReader 不再在 http 层实例化（naoku 域 handler 已退役；
+// kadian 语义下沉到 poolApi，读层由 poolApi 内部实例化）。poolFresh 仍在用。
+import { poolFresh } from './poolNaoku.js'
 // cycle-60 T-038 图形推理无损换源：统一池读层
 import { makePoolTuxingReader } from './poolTuxing.js'
 // cycle-61 v9：统一数据门（按域就绪判定 + 按需摄入 single-flight）+ 域注册表
@@ -104,8 +106,10 @@ function buildDomains(root: string) {
     dataApi: makeDataApi({ repoRoot: root, planFile: PLAN_FILE, dataCtx }),
     // v9：真题卷唯一读路径 = 统一池（paper/paper_material/question 卷级列）
     paperApi: makePaperApi({ repoRoot: root, store, dataCtx }),
-    // v9：深度题库唯一读路径 = 统一池（source_id='naoku' 口径）；.naoku.db 只作摄入输入
-    naokuApi: makeNaokuApi({ repoRoot: root, poolNaoku: makePoolNaokuReader(), dataCtx }),
+    // cycle-62 收敛：/api/naoku/* 六端点已退役（语义下沉为 /api/pool/kadians、
+    // /api/pool/by-kadian、/api/pool/papers-by-kadian）。此处只保留 naokuApi 的
+    // **图片服务**（/api/naoku-img）——图片是媒体引用，不属于「题目事实直读」。
+    naokuApi: makeNaokuApi({ repoRoot: root }),
     // v9：图推唯一读路径 = 统一池（source_extras 无损保留上游字段）
     tuxingApi: makeTuxingApi({ repoRoot: root, poolTuxing: makePoolTuxingReader(), dataCtx }),
     // cycle-18 花生十三体系方法论域：语料走数据根（与其它题库统一由「题库管理」配置），
@@ -483,7 +487,7 @@ function registerApiDomains() {
     // 但语义上「统一池」先于各专项域命中）
     { name: 'pool', handle: (p, q, b, m, ws) => domains.poolApi.handle(p, q, b, m, ws) },
     { name: 'tuxing', handle: (p, q) => domains.tuxingApi.handle(p, q) },
-    { name: 'naoku', handle: (p, q, b, m, ws) => domains.naokuApi.handle(p, q, b, m, ws) },
+    // cycle-62：naoku 域 handler 已移除（6 端点退役，语义下沉到 pool 域）
     { name: 'paper', handle: (p, q, b, m, ws) => domains.paperApi.handle(p, q, b, m, ws) },
     { name: 'data', handle: (p, q, b, m) => domains.dataApi(p, q, b, m) },
   )

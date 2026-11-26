@@ -37,20 +37,31 @@ test('C60-FRESH-02 源码守卫：ready 三条件 AND + cf 判据 SQL', async ()
   expect(src.includes("kadian LIKE '%图形推理%'")).toBe(true)
 })
 
-test('C60-FRESH-03 naoku 域读层（v9）：唯一读路径 = 统一池 + 按需摄入门 + sourceTier 可观测', async () => {
+test('C60-FRESH-03 naoku 域收敛（cycle-62）：6 端点退役 → 只剩图片服务 + 3 语义下沉到池', async () => {
   const fs = await import('node:fs')
   const naoku = fs.readFileSync('src/server/naokuApi.ts', 'utf8')
+  const poolApiSrc = fs.readFileSync('src/server/poolApi.ts', 'utf8')
   const reader = fs.readFileSync('src/server/poolNaoku.ts', 'utf8')
   const http = fs.readFileSync('src/server/http.ts', 'utf8')
-  // v9：不再有 usePool() 门（那是「换源」形态）——现在只有一条读路径，未就绪走 dataGate
+  /**
+   * cycle-62 端点收敛后，naoku 域只剩图片服务（/api/naoku-img）。
+   * 原断言（ensureDomain 门 / sourceTier 计数 / 域工厂注入签名）随 handler 退役失去意义，
+   * 改为断言**收敛后的正确形态**：
+   */
   expect(/usePool\(\)/.test(naoku), '换源门形态复辟（v9 应只有单一读路径）').toBe(false)
-  expect(naoku.includes("ensureDomain('pool'"), '缺按需摄入门').toBe(true)
-  // 池读层提供 ready 判定（供「读到了但为空」区分于「未入库」）
+  expect(/handleNaokuApi/.test(naoku), 'naoku API handler 应已删除（cycle-62 端点收敛）').toBe(false)
+  expect(/sourceTier:/.test(naoku), 'naoku 域不应再有 sourceTier 判定（handler 已退役）').toBe(false)
+  // 图片服务保留（媒体引用不是题目事实直读）
+  expect(naoku.includes('function serveImage'), 'naoku-img 图片服务应保留').toBe(true)
+  // 池读层仍是唯一数据源，口径不漂移
   expect(reader.includes('function ready()') && reader.includes("source_id='naoku'")).toBe(true)
-  // 换源标记可观测（白盒/消费方一眼看出数据来自哪层）
-  expect((naoku.match(/sourceTier: 'pool'/g) || []).length).toBeGreaterThanOrEqual(5)
-  // 注入在域工厂（随换根重建），未知端点仍 undefined（对账不漂移）
-  expect(http.includes('naokuApi: makeNaokuApi({ repoRoot: root, poolNaoku: makePoolNaokuReader(), dataCtx })')).toBe(true)
+  // 3 个 kadian 语义端点确实下沉到池端点文件
+  for (const ep of ['/api/pool/kadians', '/api/pool/by-kadian', '/api/pool/papers-by-kadian']) {
+    expect(poolApiSrc.includes(ep), `缺下沉端点 ${ep}`).toBe(true)
+  }
+  // http 层不再注入 poolNaoku / 不再注册 naoku handler
+  expect(http.includes('naokuApi: makeNaokuApi({ repoRoot: root })'), 'naokuApi 注入应只剩 repoRoot（图片服务）').toBe(true)
+  expect(/name: 'naoku', handle:/.test(http), 'naoku 域 handler 注册应已移除').toBe(false)
 })
 
 test('C60-FRESH-04 补录搜索（v9）：唯一通道 = 统一池，外源直读通道已删除', async () => {

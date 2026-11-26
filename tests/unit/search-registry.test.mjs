@@ -11,7 +11,9 @@ const DECL = [
   { path: '/api/pool/search', label: '统一池跨源检索(去重聚合)' },
   { path: '/api/huasheng13/search', label: '方法论全文检索(BM25)' },
   { path: '/api/search', label: '知识检索' },
-  { path: '/api/naoku/kadian', label: '知识点检索' },
+  // cycle-62 端点收敛：kadian provider 的端点从 /api/naoku/kadian → /api/pool/kadians
+  // （naoku 六端点退役，考点检索语义下沉到池）
+  { path: '/api/pool/kadians', label: '统一池考点清单/检索' },
   { path: '/api/history/search', label: '题干关键词搜索(补录候选)' },
 ]
 
