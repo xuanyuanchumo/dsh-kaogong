@@ -1,0 +1,29 @@
+# scripts/ci/question-banks.txt — CI 题库清单（单一事实源）
+#
+# 格式：<目录名> <上游 URL>   （每行一条，# 开头为注释）
+#
+# 为什么单独成文件（cycle-62）：
+#   ① CI cache key 用**本文件的哈希** → 改 CI workflow（注释/步骤顺序）不会让
+#      1.9GB 题库缓存失效；只有**题库清单真的变了**才重新克隆；
+#   ② 题库清单是「声明」，本文件是它的单一事实源 → 脚本与 CI 共用同一份，
+#      不会出现「CI 克隆的仓与测试期待的仓不一致」。
+#
+# 选仓原则：覆盖断言真正需要的数据维度，同时把体积控制在 CI 可接受范围。
+#   huasheng13    336KB  方法论语料 25 篇（HS13 系列）
+#   kaogong-skill   3MB  技能包 10 主题（/api/methods）
+#   qiuzhao         4MB  697 题（主源多样性）
+#   civil-exam      1MB  87 题（主源多样性）
+#   gk-tuxing      19MB  图推 354 题（图形推理）
+#   xingce-app     92MB  22,298 题（主源多样性 + 判断推理分布）
+#   xingcezhenti  354MB  58,890 题（行测主力源）
+#   GongkaoNaoku  239MB  27,506 题五维 + kadian 边（深度题库）
+#   gwy-zhenti   1211MB  1,683 套真题卷（真题卷域全部断言）
+huasheng13 https://github.com/WangJunqing-coder/huasheng13-skill
+kaogong-skill https://github.com/KeWang0622/kaogong-skill
+qiuzhao-epi-bank https://github.com/Timothy-yqw19/qiuzhao-epi-bank
+civil-exam-agent https://github.com/tongnian0666-code/civil-exam-agent
+gk-tuxing https://github.com/Cha551/gk-tuxing
+xingce-app https://github.com/YMDHZBSJ/xingce-app
+xingcezhenti https://github.com/ERRRC/xingcezhenti
+GongkaoNaoku https://github.com/jangviktor-web/GongkaoNaoku
+gwy-zhenti https://github.com/ProfessorZhi/gwy-zhenti

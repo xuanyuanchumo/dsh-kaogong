@@ -40,7 +40,18 @@ let packNames = null   // npm pack dry-run 清单（beforeAll 拉一次，多断
 beforeAll(() => {
   try {
     const dry = String(execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: REPO, encoding: 'utf8' }))
-    packNames = (JSON.parse(dry.slice(dry.indexOf('[')))[0].files || []).map(f => f.path)
+    // npm 不同版本的 notice/警告前缀不同（Node 22 + npm 10 的输出格式与本机不同）——
+    // 原实现用 `indexOf('[')` 截断，若前缀里先出现方括号（如 `[npm warn] ...`）就会
+    // 截到错误位置 → JSON.parse 失败 → packNames=null → 断言假红。
+    // 修法：找**顶层数组起点**——`[` 之后紧跟 `{`（或换行 + `{`）才是 JSON 数组头。
+    let jsonStart = -1
+    for (let i = 0; i < dry.length; i++) {
+      if (dry[i] !== '[') continue
+      const rest = dry.slice(i + 1)
+      if (rest.startsWith('{') || /^\s*\{/.test(rest)) { jsonStart = i; break }
+    }
+    expect(jsonStart >= 0, 'npm pack 输出应含顶层 JSON 数组').toBe(true)
+    packNames = (JSON.parse(dry.slice(jsonStart))[0].files || []).map(f => f.path)
   } catch (e) { packNames = null }
 }, 120_000)
 
