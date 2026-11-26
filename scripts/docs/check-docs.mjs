@@ -56,11 +56,20 @@ function walk(dir, out = []) {
 /** 极简 frontmatter 解析（只支持本项目用到的形态） */
 function parseFrontmatter(text) {
   if (!text.startsWith('---')) return null
-  const end = text.indexOf('\n---', 3)
-  if (end < 0) return null
-  const block = text.slice(3, end)
+  // 结束标记与字段解析都必须兼容 CRLF（Windows 上 frontmatter 常是 '---\r\n'）：
+  // ① 用 '\n---' 定位结束位会命中 '\r\n---' 中的 '\n---'，切片把最后一行（updated）
+  //    留在 block 外 → 该行字段静默丢失 → 误报「已声明 frontmatter 但缺少必填字段」；
+  // ② 行尾 '\r' 会让 '^(key):\s*(.*)$' 的 '$' 匹配失败 → 同类误报。
+  // 统一按 /\r?\n/ 切行，消除 '\r' 后再解析。
+  const lines = text.split(/\r?\n/)
+  if (lines[0] !== '---') return null
+  let endIdx = -1
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] === '---') { endIdx = i; break }
+  }
+  if (endIdx < 0) return null
   const data = {}
-  for (const line of block.split(/\r?\n/)) {
+  for (const line of lines.slice(1, endIdx)) {
     const m = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
     if (m) data[m[1]] = m[2].trim().replace(/^["']|["']$/g, '')
   }
