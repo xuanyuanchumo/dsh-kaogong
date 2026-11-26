@@ -67,7 +67,7 @@
     "build": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs",
     "version:bump": "node scripts/bump-version.mjs",
     "typecheck": "tsc --noEmit",
-    "prepack": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs",
+    "prepack": "node scripts/clean-dist.mjs && tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs",
     "prepare": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs --fix && (node scripts/git-hooks/install.mjs || true)",
     "postbuild": "node scripts/assert-combo.mjs",
     "test": "tsc && node scripts/bundle-client.mjs && node scripts/assert-combo.mjs && node tests/e2e/loader.test.mjs && npx vitest run",
@@ -79,7 +79,8 @@
     "facts:check": "node scripts/docs/check-facts.mjs",
     "hooks:install": "node scripts/git-hooks/install.mjs",
     "hooks:check": "node scripts/git-hooks/install.mjs --check",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "clean:dist": "node scripts/clean-dist.mjs"
   },
   "keywords": [
     "dsh",

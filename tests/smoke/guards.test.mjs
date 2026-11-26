@@ -174,3 +174,45 @@ test('SEC-CORS-01 独立端口不得用通配 CORS（市场评审指出的真实
   // 写请求必须被拦（CORS 管不住写副作用）
   expect(/拒绝跨站写请求|403/.test(http), '变更类请求缺跨站拦截').toBe(true)
 })
+
+test('SEC-BRANCH-01 钩子的分支类型必须覆盖 CONTRIBUTING 的分支模型（同源）', () => {
+  /**
+   * cycle-68 事故：CONTRIBUTING §一 的 gitflow 写了 `release/*` 与 `hotfix/*`，
+   * 但 pre-push 钩子的类型表漏了这两个 → **按规范建的分支被钩子拒推**，
+   * 逼人用 SKIP_PREPUSH_CHECK=1 逃生门绕过检查（守卫形同失效）。
+   * 本守卫锁死：规范里出现的分支类型，钩子必须都认。
+   */
+  const hook = readSrc('./scripts/git-hooks/pre-push.mjs')
+  // 稳健提取：从 `const BRANCH_RE = ` 到该行末尾的 `/`（源文件里正则含转义斜杠，故按行切）
+  const line = hook.split(/\r?\n/).find(l => l.includes('const BRANCH_RE ='))
+  expect(!!line, '未找到 BRANCH_RE 定义').toBe(true)
+  const body = line.slice(line.indexOf('= /') + 3, line.lastIndexOf('/')).replace(/\\\\\//g, '/')
+  const re = new RegExp(body)
+  // 规范里明确存在的四种分支形态都必须能通过
+  for (const b of ['feat/pool-x', 'fix/ui-y', 'docs/marketplace-entry', 'release/v1.34.4', 'hotfix/v1.34.5']) {
+    expect(re.test(b), '分支名 ' + b + ' 被钩子拒（与 CONTRIBUTING 不同源）').toBe(true)
+  }
+  // 反向：非法名仍必须被拒（不能为了放行而放成通天规则）
+  for (const b of ['badname', 'release/', 'feat/']) {
+    expect(re.test(b), '非法分支名 ' + b + ' 竟通过').toBe(false)
+  }
+  // 长驻分支走白名单
+  expect(hook.includes("['main', 'develop', 'master', 'dev-history']"), '长驻分支白名单缺失').toBe(true)
+})
+
+test('SEC-DIST-01 发布前必须清空 dist（防止源已删的孤儿产物混入发布的包）', () => {
+  /**
+   * cycle-68 事故：删掉 src/server/topicTree.ts 后，tsc 只覆盖同名产物、不删旧文件，
+   * 于是 dist/server/topicTree.js 作为**孤儿**留在 dist 里，并随 v1.34.4 的 npm 包发出
+   * （实测 tarball 里有它）。包里带一个源码里已不存在的模块，属于长期潜伏的脏数据。
+   * 守则：产出脚本的前置必须清空 dist。
+   */
+  const pkg = JSON.parse(readSrc('./package.json'))
+  expect(!!pkg.scripts['clean:dist'], '缺 clean:dist 脚本').toBe(true)
+  // 决定**包内容**的是 prepack（npm publish 前跑）——它必须清空；
+  // prepare 也在 `npm install` 时跑，清空会拖慢安装，故不强制（包内容不由它决定）。
+  expect(String(pkg.scripts.prepack || '').includes('clean-dist'), 'prepack 未清空 dist（孤儿产物会进包）').toBe(true)
+  const clean = readSrc('./scripts/clean-dist.mjs')
+  // 安全闸：只允许删 <仓库根>/dist
+  expect(clean.includes("resolve(repoRoot, '..', 'dist')"), 'clean-dist 缺目标路径安全闸').toBe(true)
+})
