@@ -242,19 +242,56 @@ export const kgStorage = {
       xingcezhenti: { label: '题库·真题', color: '#6366f1' },
       naoku: { label: '深度题库', color: '#8b5cf6' },
       'gk-tuxing': { label: '图形推理专项', color: '#0ea5e9' },
-      gwy_zhenti: { label: '真题卷', color: '#14b8a6' },
+      /**
+       * ⚠️ cycle-64：key 必须是**连字符** `gwy-zhenti`——这是池内 `source_id` 的真实取值
+       * （实测 48,880 题）。原写成下划线 `gwy_zhenti` → 查表恒 miss → 这个**题量最大的源**
+       * 在徽章上一直落到灰底显示原始 id。
+       */
+      'gwy-zhenti': { label: '真题卷', color: '#14b8a6' },
+      gwy_zhenti: { label: '真题卷', color: '#14b8a6' },   // 兼容旧数据/旧快照的写法
       // cycle-35 新源（统一池接入；徽章色板与 pool-view 关系词表同风格）
       'xingce-app': { label: '刷题 App 题库', color: '#22c55e' },
       'qiuzhao-epi-bank': { label: '秋招 EPI', color: '#f59e0b' },
       'civil-exam-agent': { label: '督导题库', color: '#ef4444' },
       pool: { label: '统一题库', color: '#3b82f6' },
     }
-    export function SourceBadge({ source, exam, year, region, paperFile, extra }: any) {
-      const meta = (KG_SOURCE_META as Record<string, any>)[source]
+    /**
+     * 题库出处徽章（cycle-21 用户要求「每道题标明出处」；cycle-64 扩多源）。
+     *
+     * 统一映射外源库 → 中文标签；exam/year/paperFile 存在时拼接「卷名 · 年份」。
+     * 无出处信息（旧错题等）整行不渲染（**不臆造来源**）。
+     *
+     * ── cycle-64（用户报「来源要细到具体外源题库，不是统一题库」）──
+     * 新增 `sources` 入参：统一池的题可能一道题有 N 处出处（跨源聚合），
+     * 此时**逐个列出外源库**（如「深度题库」「刷题 App 题库」），而不是笼统显示
+     * 一个「统一题库」。`source` 单值仍兼容（老调用面）。
+     * 兜底：`source === 'pool'`（池泛值，意味着服务端没给出具体源）→ 用 sources[] 的
+     * 具体源替换，避免徽章只说「统一题库」这种信息量为零的话。
+     */
+    export function SourceBadge({ source, sources, exam, year, region, paperFile, extra }: any) {
+      // 归一：外源库 id 列表（去重 + 去空 + 剥掉 'pool' 泛值）
+      const ids: string[] = []
+      const pushId = (v: any) => {
+        const s = String(v || '').trim()
+        if (s && s !== 'pool' && !ids.includes(s)) ids.push(s)
+      }
+      for (const x of (Array.isArray(sources) ? sources : [])) pushId(x && (x.sourceId || x.source_id || x.source))
+      pushId(source)
       const vol = [exam || paperFile, year, region].filter(Boolean)
-      if (!meta && !vol.length && !extra) return null
+      if (!ids.length && !vol.length && !extra) return null
       return h('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, fontSize: 10.5 } },
-        meta ? h('span', { style: { ...KV_TAG, background: meta.color + '14', color: meta.color } }, '📌 ' + meta.label) : null,
+        // 逐个列出**具体外源题库**（多源同题 = 多枚徽章，title 悬停给卷名/年份）
+        ...ids.map(id => {
+          const m = (KG_SOURCE_META as Record<string, any>)[id]
+          const hit = (Array.isArray(sources) ? sources : []).find((x: any) => (x && (x.sourceId || x.source_id || x.source)) === id)
+          const tip = hit ? [hit.paper, hit.year, hit.region].filter(Boolean).join(' · ') : ''
+          return h('span', {
+            key: 'src-' + id,
+            title: tip || (m ? m.label : id),
+            style: { ...KV_TAG, background: (m ? m.color : '#64748b') + '14', color: m ? m.color : '#64748b' },
+          }, '📌 ' + (m ? m.label : id))
+        }),
+        ids.length > 1 ? h('span', { style: { ...KV_TAG, background: 'rgba(148,163,184,.14)', color: '#64748b' }, title: '同一道题在多个外源题库中出现' }, '×' + ids.length + ' 源') : null,
         vol.length ? h('span', { style: KV_TAG, title: vol[0] }, vol.join(' · ')) : null,
         extra || null)
     }

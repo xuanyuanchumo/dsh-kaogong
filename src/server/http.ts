@@ -887,10 +887,37 @@ function buildHttpServer(port: any) {
       const params = url.searchParams
       const wsRaw = params.get('ws') || undefined
 
-      res.setHeader('Access-Control-Allow-Origin', '*')
+      /**
+       * ── CORS 加固（cycle-68 · 市场评审指出的真实安全缺陷）──
+       *
+       * 原实现无条件 `Access-Control-Allow-Origin: *`，配合「只绑 127.0.0.1」看似安全，
+       * 实际**本机任何网页**（用户浏览的任意站点）都能用 `fetch('http://127.0.0.1:8400/api/…')`
+       * 读到本地库数据、甚至 POST /api/check 写进度 —— 上游 awesome-dsh-plugin 的条目里
+       * 维护者就明确写了这一点（"Its HTTP routes have no DSH access check, so a web page
+       * open in your browser could call them."）。
+       *
+       * 正解 = **回环来源才放行**（与「只绑 127.0.0.1」口径一致）：
+       *   · 同源请求（浏览器导航/同源 fetch）不带 Origin 或带本机回环 Origin → 放行
+       *   · 跨站 web 页面（Origin 是 https://evil.com）→ 不返回 CORS 头 → 浏览器读不到响应
+       * 注意：CORS 只防「读响应」，防不住「写副作用」（POST 仍会到达服务端）。
+       * 故同时对**变更类方法**做 Origin 校验：非法来源直接 403，不执行任何写操作。
+       */
+      const origin = String(req.headers.origin || '')
+      const originOk = !origin || /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(origin)
+      if (originOk) {
+        // 回显具体来源而非 `*`：`*` 会让任何站点都能读；回显回环来源则只对同源生效
+        res.setHeader('Access-Control-Allow-Origin', origin || 'null')
+        res.setHeader('Vary', 'Origin')
+      }
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
       res.setHeader('Cache-Control', 'no-store')
+      // 变更类请求的跨站拦截（CORS 管不住写副作用，必须服务端拒绝）
+      if (!originOk && req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ error: '拒绝跨站写请求（来源不被信任）', origin }))
+        return
+      }
       const finish = (status: any, type: any, body: any) => {
         res.writeHead(status, { 'Content-Type': type })
         res.end(body)

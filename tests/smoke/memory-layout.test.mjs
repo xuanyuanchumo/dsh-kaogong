@@ -50,9 +50,13 @@ test('SMOKE-MEM-05 非法 kind/缺 data/超 8KB 均受控拒绝', async () => {
   expect(!!(m4a && m4a.error) && !!(m4b && m4b.error) && !!(m4c && m4c.error)).toBe(true)
 })
 
-test('SMOKE-MEM-06 manifest 声明 /api/memory 且消费者=三专项视图', () => {
+test('SMOKE-MEM-06 manifest 声明 /api/memory 且消费者=两专项视图（cycle-65 深度题库已退役）', () => {
   const manifestSrc = readSrc('src/shared/manifest.ts')
-  expect(manifestSrc.includes("path: '/api/memory'") && manifestSrc.includes("consumers: ['ui:practice', 'ui:tuxing', 'ui:deepbank']")).toBe(true)
+  // cycle-65：深度题库视图删除后，记忆功能只剩 practice / tuxing 两个消费方；
+  // 消费者声明必须与真实消费面一致（否则能力对账出现「消费者不存在」的错误）
+  expect(manifestSrc.includes("path: '/api/memory'") && manifestSrc.includes("consumers: ['ui:practice', 'ui:tuxing']")).toBe(true)
+  // 反向锁死：不得再声明已删除的 ui:deepbank
+  expect(manifestSrc.includes('ui:deepbank'), 'manifest 仍残留 ui:deepbank 消费者声明').toBe(false)
 })
 
 test('SMOKE-GR15-01 环形布局（语义层序圆周 + 引擎分支 + 三态轮换序列）', () => {

@@ -30,10 +30,25 @@ export function poolBuildTopicTree(): any {
   const naokuTotal = Number((q1("SELECT COUNT(*) c FROM question WHERE source_id='naoku'") || {}).c || 0)
   const kadianCoverage = naokuTotal ? Number((q1("SELECT COUNT(*) c FROM question WHERE source_id='naoku' AND LENGTH(kadian)>0") || {}).c || 0) / naokuTotal : 0
   const modCounts = new Map(q('SELECT module m, COUNT(*) c FROM question WHERE source_id=? AND LENGTH(module)>0 GROUP BY module', 'naoku').map(r => [String(r.m), Number(r.c)]))
-  const catCounts = new Map(q('SELECT category k, COUNT(*) c FROM question WHERE source_id=? AND LENGTH(category)>0 GROUP BY category', 'naoku').map(r => [String(r.k), Number(r.c)]))
+  /**
+   * 题型题量口径（cycle-65 修复）：**`category` ∪ `qtype`**。
+   *
+   * 数据事实（实测 87,434 题）：题型信息分散两列——
+   * `category`（27,497 有值 / 59,937 空）与 `qtype`（single/综合/数学运算/片段阅读…）。
+   * 旧实现只数 `source_id='naoku'` 的 category → ① 只覆盖深度题库一源
+   * ② 漏掉 qtype 里的题型 → 频道显示题量远小于真实题量，用户以为库缺失。
+   */
+  const catCounts = new Map(
+    q(`SELECT k, COUNT(*) c FROM (
+         SELECT category k FROM question WHERE LENGTH(category)>0
+         UNION ALL SELECT qtype k FROM question WHERE LENGTH(qtype)>0
+       ) GROUP BY k`).map(r => [String(r.k), Number(r.c)]),
+  )
   const xcTopics = MODULES.map(m => ({
     id: 'xc:module:' + m, channel: '行测', kind: 'module', title: m,
-    desc: modCounts.has(m) ? `深度题库 ${modCounts.get(m)} 题（含解题链标注）` : '考纲六大模块之一',
+    // cycle-65：文案去「深度题库」口径（该视图已退役，数据都在统一池；沿用旧文案
+    // 会让用户按图索骥找不到入口 —— ㉘「陈旧文案是用户可见缺陷」同族）
+    desc: modCounts.has(m) ? `统一池 ${modCounts.get(m)} 题（跨源去重 · 五维标注）` : '考纲六大模块之一',
     questionCount: modCounts.has(m) ? modCounts.get(m)! : null,
     papers: xingcePapers || null,
     entry: { view: 'practice', params: { module: m } },
@@ -42,8 +57,17 @@ export function poolBuildTopicTree(): any {
     if (!catCounts.has(c)) continue
     xcTopics.push({
       id: 'xc:cat:' + c, channel: '行测', kind: 'category', title: c,
-      desc: `深度标注 ${catCounts.get(c)} 题`, questionCount: catCounts.get(c),
-      entry: c === '图形推理' ? { view: 'tuxing', params: {} } : { view: 'deepbank', params: { category: c } },
+      // cycle-65：desc 从「深度标注」改为「统一池」口径（深度题库视图已退役，
+      // 这些题型数据现在都在统一池里，文案不能还提已删的能力）
+      desc: `统一池 ${catCounts.get(c)} 题（跨源去重 · 五维标注 · 可反查出处）`, questionCount: catCounts.get(c),
+      /**
+       * cycle-67 修复（用户报「点细分题型没有跳转到刷题页面」）：
+       * 上一版落点是 `pool`（统一题库的**检索/查看**页）——那不是刷题页，
+       * 用户点「片段阅读」期望的是**刷片段阅读的题**，结果被丢进一个数据浏览器。
+       * 正解 = 落到 `practice`（刷题页）并带 `category`，挂载即开一张该题型的卷。
+       * 图形推理仍走 tuxing 专项（它有专门的图形渲染器，比通用刷题页更贴合）。
+       */
+      entry: c === '图形推理' ? { view: 'tuxing', params: {} } : { view: 'practice', params: { category: c } },
     } as any)
   }
   const slTopics = ESSAY_TYPES.map(t => ({
@@ -61,8 +85,11 @@ export function poolBuildTopicTree(): any {
         desc: naokuTotal ? `深度题库 ${naokuTotal} 题 + 真题卷 ${xingcePapers} 套` : `真题卷 ${xingcePapers} 套`,
         topics: xcTopics,
         entries: [
-          { label: '刷题（SRS）', view: 'practice', params: {} }, { label: '深度题库', view: 'deepbank', params: {} },
-          { label: '图形推理专项', view: 'tuxing', params: {} }, { label: '整卷模考', view: 'exam', params: {} },
+          { label: '刷题（SRS）', view: 'practice', params: {} },
+          // cycle-65：原「深度题库」入口已随视图退役 → 改指统一题库（数据层本就同源）
+          { label: '统一题库（按考点/来源检索）', view: 'pool', params: {} },
+          { label: '图形推理专项', view: 'tuxing', params: {} },
+          { label: '整卷模考', view: 'exam', params: {} },
           { label: '真题卷库', view: 'papers', params: { subject: '行测' } },
         ] },
       { id: 'shenlun', name: '申论', icon: '✍️',

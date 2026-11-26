@@ -30,6 +30,17 @@ function upsertWrong(progress: any, q: any) {
     // 不可复现作答语境（回炉重做时「根据材料作答」无从谈起）；字段可选，旧快照缺失降级不报错
     item = { sig, module: q.module || '未知', type: q.type || '', stem: q.stem, options: q.options, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongCount: 0, box: 1, consecutive: 0, mastered: false, lastAt: Date.now(),
       source: q.source || null, exam: q.exam || null, year: q.year || null, paperFile: q.paperFile || null,
+      /**
+       * cycle-64 架构收敛：快照记 **canonicalId + 出处链 + 卷内序号**，
+       * 让回炉时能**回池补全**成与抽题完全相同的出站形状（而不是靠快照手抄一份）。
+       * 旧快照无这些字段 → 回炉时降级用快照自有字段（不报错、不臆造）。
+       */
+      canonicalId: q.canonicalId || q.id || null,
+      sources: Array.isArray(q.sources) ? q.sources : null,
+      sourceCount: Number(q.sourceCount || 0) || null,
+      seq: Number(q.no || q.number || 0) || null,
+      kadian: q.kadian || null,
+      materialRef: q.materialRef || '',
       groupMaterial: q.groupMaterial || '', groupMaterialNo: q.groupMaterialNo || 0 }
     progress.wrongBook.push(item)
   }
@@ -103,11 +114,39 @@ export function makeSrsApi({ repoRoot, store, pool, dataCtx }: any) {
       .sort((a: any, b: any) => a.lastAt - b.lastAt).slice(0, count)
     if (due.length) {
       return { file: '(错题回炉)', count: due.length, srs: true, mode: 'retry',
-        questions: due.map((w: any) => ({ id: 'wrong-' + w.sig, number: 0, type: w.type, module: w.module, stem: w.stem, options: w.options, correctAnswer: w.correctAnswer, analysis: w.analysis, fromWrongBook: true, sig: w.sig, box: w.box, wrongCount: w.wrongCount,
+        /**
+         * cycle-64 架构收敛（用户指出「两者应该是同一个数据层，只是取题算法不同」）：
+         * 错题回炉**不再手写题目对象**——凡快照记了 canonicalId 的，回池取同一条映射
+         * （`pool.detailBatch`），从而与抽题路径共享**完全相同的出站形状**
+         * （题号/出处链/材料/五维全一致）。只有「选哪些题」（SRS 到期队列）是回炉特有的。
+         * 旧快照无 canonicalId → 降级用快照字段（补齐 no/number/sources，仍不臆造）。
+         */
+        questions: (() => {
+          const ids = due.map((w: any) => String(w.canonicalId || '')).filter(Boolean)
+          const hydrated: any = new Map()
+          try {
+            for (const row of (pool && typeof pool.detailBatch === 'function' ? pool.detailBatch(ids) : [])) {
+              hydrated.set(String(row.canonicalId || row.id || ''), row)
+            }
+          } catch { /* 池不可用 → 全部走快照降级 */ }
+          return due.map((w: any) => {
+            const live = w.canonicalId ? hydrated.get(String(w.canonicalId)) : null
+            // 回炉专属字段（判分/升箱状态）必须叠加在出站形状之上
+            const srsExtra = { id: 'wrong-' + w.sig, fromWrongBook: true, sig: w.sig, box: w.box, wrongCount: w.wrongCount }
+            if (live) return { ...live, ...srsExtra }
+            return { ...srsExtra, number: Number(w.seq || 0) || 0,
+              no: Number(w.seq || 0) || 0, type: w.type, module: w.module, stem: w.stem, options: w.options, correctAnswer: w.correctAnswer, analysis: w.analysis,
           // cycle-21 出处标注：错题回炉继承入库时的题库出处（旧数据无 source 时按 module 推断显示）
-          source: w.source || null, exam: w.exam || null, year: w.year || null, paperFile: w.paperFile || null,
-          // cycle-43 材料保真：回炉透出快照材料（旧快照无此字段 → 空串，QwQuestionCard 有则渲染跳段）
-          groupMaterial: w.groupMaterial || '', groupMaterialNo: w.groupMaterialNo || 0 })) }
+              source: w.source || null, exam: w.exam || null, year: w.year || null, paperFile: w.paperFile || null,
+              // 出处链：快照记了多源就透出（徽章逐个列外源库）；旧快照 → 空数组，单值 source 兜底
+              sources: Array.isArray(w.sources) ? w.sources : [],
+              sourceCount: Array.isArray(w.sources) ? w.sources.length : (w.source ? 1 : 0),
+              kadian: w.kadian || '',
+              // cycle-43 材料保真：回炉透出快照材料（旧快照无此字段 → 空串，QwQuestionCard 有则渲染跳段）
+              groupMaterial: w.groupMaterial || '', groupMaterialNo: w.groupMaterialNo || 0,
+              materialRef: w.materialRef || '' }
+          })
+        })() }
     }
     let mod = moduleName
     if (!mod || mod === 'all') {

@@ -50,6 +50,98 @@ function weightedPick<T>(items: T[], weights: number[], n: number): T[] {
   return idx.map(i => items[i]).filter(x => x !== undefined)
 }
 
+/**
+ * 出处链归一（cycle-64 · 用户要求「来源要细到具体外源题库」）。
+ *
+ * 池的 `question_source` 是「一题 × N 处出处」的明细表：同一外源库可能在多套卷里
+ * 出现（实测某 gwy-zhenti 题有 8 处出处、某言语题达 16 处）。直接逐条透出会让
+ * 来源徽章刷屏，且前端只关心「**来自哪几个外源题库**」。
+ *
+ * 归一规则：**按 `sourceId` 合并**，`papers[]` 保留该源的全部卷出处（供悬停看明细），
+ * `paper/region/year/seq` 取首条（兼容旧消费面只读标量字段的形状）。
+ */
+function mergeSources(rows: any): any[] {
+  const out: any[] = []
+  const idx = new Map<string, number>()
+  for (const x of (Array.isArray(rows) ? rows : [])) {
+    const id = String((x && (x.source_id || x.source)) || '').trim()
+    if (!id) continue
+    const paper = String(x.paper || '')
+    const at = idx.get(id)
+    if (at === undefined) {
+      idx.set(id, out.length)
+      out.push({
+        sourceId: id,
+        paper, region: String(x.region || ''), year: String(x.year || ''), seq: Number(x.seq || 0),
+        papers: paper ? [paper] : [],
+        count: 1,
+      })
+    } else {
+      const o = out[at]
+      o.count += 1
+      if (paper && !o.papers.includes(paper)) o.papers.push(paper)
+    }
+  }
+  return out
+}
+
+/**
+ * 池题（detail 形状）→ 练习链路题目对象（**唯一出站映射**）。
+ *
+ * ── cycle-64 架构收敛（用户指出：两个入口应共用同一数据层与同一形状）──
+ * 此前同一条出站形状有**三份手写实现**：
+ *   ① sampleQuestions 主路径（本函数前身）
+ *   ② 带图补足路径（逐字段抄一遍）
+ *   ③ srs.ts 错题回炉路径（自己构造 `number: 0`，连 sources 都没有）
+ * → 三份必然漂移：cycle-62 修题号只改了 ①②、cycle-64 修来源又只改了 ①②，
+ * 错题回炉卡片因此长期缺题号/缺出处链（用户感知「随机刷题单题渲染有问题」）。
+ * 正解 = **本函数是唯一映射**，所有「取到池题 → 发给前端」的路径都调它；
+ * 差异只允许存在于「选哪些题」（取题算法），不允许存在于「题目长什么样」。
+ *
+ * 归一铁律：可空字段不臆造（缺失即空串，不填占位）；`source` 必须是真实外源库 id。
+ */
+function questionToLegacyRow(d: any): any {
+  const s0 = (d.sources && d.sources[0]) || {}
+  const seq = Number(s0.seq || 0) || Number(d.seq || 0) || 0
+  return {
+    // 旧形状兼容字段（/api/check 与 question-kit 消费面）
+    id: d.canonicalId,
+    /**
+     * 卷内题号（cycle-62 修复：用户报「题号显示 ?」）：`no` 与 `number` 双写同取卷内序号。
+     * seq=0 或缺出处时回落 0（question-kit 对 0/空按「无编号」处理，不臆造）。
+     */
+    no: seq,
+    number: seq,
+    type: d.qtype || d.category || '',
+    module: d.module,
+    kadian: d.kadian || '',
+    exam: s0.paper || '',
+    region: d.region || '',
+    year: d.year || '',
+    /**
+     * ⚠️ cycle-64 来源字段修复（用户报「来源要细到具体外源题库」）：
+     * 原实现读 `d.sources[0].source`，而 `poolQuestionDetail` 的出处行用 **`source_id`**
+     * ——读错字段 → 恒落 `'pool'` 兜底 → 徽章只说「统一题库」，看不出真实外源库。
+     */
+    source: (s0 && (s0.source_id || s0.source)) || d.source_id || '',
+    /** 出处链：按 sourceId 去重合并（一题可能在多套卷/多源出现，逐条列会刷屏） */
+    sources: mergeSources(d.sources),
+    sourceCount: (d.sources || []).length,
+    paperFile: d.paper || '',
+    qid: d.qid || '',
+    stem: d.stem || '',
+    options: d.options || {},
+    correctAnswer: String(d.answer || '').trim().toUpperCase(),
+    analysis: d.analysis || '',
+    dims: d.dims,
+    groupMaterial: d.groupMaterial || '',
+    groupMaterialNo: d.groupMaterialNo || 0,
+    materialRef: d.materialRef || '',
+    // 池富字段保留：canonicalId 供 study_event 双写
+    canonicalId: d.canonicalId,
+  }
+}
+
 export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
   /**
    * v9：数据变更广播（唯一失效触发点）。
@@ -139,6 +231,17 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
       const moduleName = params.get('module') || ''
       const kadian = params.get('kadian') || ''
       /**
+       * `category` 精确过滤（cycle-65 修复：用户报「细分题型有问题」）。
+       *
+       * 行测频道的细分题型（逻辑判断/定义判断/片段阅读…）此前用 `pool/search?q=题型名`
+       * ——那是**全文检索**，不是按题型字段过滤：实测「定义判断」命中 5 条里只有 1 条
+       * 真属该题型（其余是解析里恰好提到这几个字）。用户点题型看到的是杂题。
+       *
+       * 正解 = 按 `question.category` **精确等值**过滤（该列有 2478/3319 等真实题量）。
+       * 与 `kadian`（考点，支持模糊）区分：category 是题型分类，等值即可。
+       */
+      const category = String(params.get('category') || '').trim()
+      /**
        * `has` 过滤（cycle-62 收敛）：原 `/api/naoku/questions` 被 papers-view 的
        * 「母题思维 / 易错点精选」用于 `random=0` 顺序取 20 题再按 mother/pitfalls 过滤。
        * 池端点无此维度 → 补 `?has=mother|pitfalls|reasoning|fastest|analysis`
@@ -154,6 +257,16 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
       const where: string[] = []
       const args: any[] = []
       if (moduleName) { where.push('module = ?'); args.push(moduleName) }
+      /**
+       * category 过滤（cycle-65）：**`category` 或 `qtype` 任一等于该题型**。
+       *
+       * 数据事实（实测 87,434 题）：题型信息分散在两个列——
+       *   · `category`：片段阅读/逻辑判断/数学运算…（27,497 题有值，**59,937 题为空**）
+       *   · `qtype`   ：single/综合/数学运算/片段阅读…（覆盖面更广，含 gwy-zhenti 那批）
+       * 只查 `category` 会把 category 为空的 48k 题（gwy-zhenti 主力）整批排除，
+       * 用户点「逻辑判断」看到的题量远少于真实题量。故两列取并集。
+       */
+      if (category) { where.push('(category = ? OR qtype = ?)'); args.push(category, category) }
       if (kadian) { where.push('(kadian = ? OR kadian LIKE ?)'); args.push(kadian, '%' + kadian + '%') }
       if (source && source !== 'all') { where.push('source_id = ?'); args.push(source) }
       if (hasRaw) {
@@ -175,14 +288,22 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
         try {
           // cycle-43（评审修复）：补 source_id/kadian——原只缓存 module，导致带图补足
           // 忽略 source/kadian 过滤（实测 source=qiuzhao 10 条里 5 条主源是 xingce-app）。
-          return db.prepare('SELECT canonical_id, module, source_id, kadian FROM question WHERE has_image = 1').all() as any[]
+          // cycle-65：补 category/qtype——带图补足曾无视题型过滤，导致「点逻辑判断」
+          // 返回的 10 题里有一半是别题型（补足插队进来的）。
+          return db.prepare('SELECT canonical_id, module, source_id, kadian, category, qtype FROM question WHERE has_image = 1').all() as any[]
         } catch { return [] as any[] }
       }).data
-      // 过滤谓词（SSOT）：module/source/kadian 三者都 honour —— 候选补足与结果层补足共用
+      /**
+       * 过滤谓词（SSOT）：module / source / kadian / **category** 四者都 honour
+       * ——候选层补足与结果层补足共用同一判据（cycle-65 补 category：
+       * 带图补足若不认题型，会把不匹配的题插进结果里，用户看到「点题型出杂题」）。
+       * category 的判据与主查询一致：`category` 或 `qtype` 任一等于该题型。
+       */
       const imgPoolFilter = (r: any): boolean =>
         (!moduleName || String(r.module) === moduleName) &&
         (!source || source === 'all' || String(r.source_id) === source) &&
-        (!kadian || String(r.kadian) === kadian)
+        (!kadian || String(r.kadian) === kadian) &&
+        (!category || String(r.category) === category || String(r.qtype) === category)
       let cand: any[]
       if (where.length === 0) {
         const span = db.prepare('SELECT COUNT(*) c, MIN(id) mn, MAX(id) mx FROM question').get() as any
@@ -271,42 +392,7 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
       //（kadian=0 空考点 60/60）——字段清单必须对照消费面逐个核对，不能凭印象裁剪。
       const questions = ids.map((id) => {
         const d = poolQuestionDetail(db, id)
-        if (!d) return null
-        const s0 = (d.sources && d.sources[0]) || {}
-        return {
-          // 旧形状兼容字段（/api/check 与 question-kit 消费面）
-          id: d.canonicalId,
-          /**
-           * 卷内题号（cycle-62 修复：用户报「题号显示 ?」）。
-           * 原实现硬编码 `number: 0`，而 `QwNumberBadge` 读的是 `q.no` —— 两个字段
-           * 一个恒 0、一个不存在 → 卡片左上角永远显示 `?`（七段里的「编号」整段失效）。
-           * 正解 = 双向兼容：`no` 与 `number` 同取**卷内序号** `sources[0].seq`
-           * （question_source 表有 seq，是「该题在本卷中的第几题」的真实来源）。
-           * seq=0 或缺出处时回落 0（question-kit 侧对 0/空按「无编号」处理，不臆造）。
-           */
-          no: Number(s0.seq || 0) || Number(d.seq || 0) || 0,
-          number: Number(s0.seq || 0) || Number(d.seq || 0) || 0,
-          type: d.qtype || d.category || '',
-          module: d.module,
-          kadian: d.kadian || '',
-          exam: s0.paper || '',
-          region: d.region || '',
-          year: d.year || '',
-          source: (d.sources && d.sources[0] && d.sources[0].source) || 'pool',
-          paperFile: d.paper || '',
-          qid: d.qid || '',
-          stem: d.stem || '',
-          options: d.options || {},
-          correctAnswer: String(d.answer || '').trim().toUpperCase(),
-          analysis: d.analysis || '',
-          dims: d.dims,
-          groupMaterial: d.groupMaterial || '',
-          groupMaterialNo: d.groupMaterialNo || 0,
-          // 池富字段保留（sources 供白盒/溯源；canonicalId 供 study_event 双写）
-          canonicalId: d.canonicalId,
-          sources: d.sources,
-          sourceCount: d.sourceCount,
-        }
+        return d ? questionToLegacyRow(d) : null
       }).filter(Boolean)
       // cycle-42 结果层确定性配额（IMG-04 根治第二步）：加权池稀释使带图行实际命中
       // 不可控（补捞 10 行进 510 池期望命中 0.2）——**结果层补足**：带图题不足 ⌈count/2⌉
@@ -330,21 +416,9 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
               if (have.has(cid)) continue
               const d = poolQuestionDetail(db, cid)
               // cycle-46：补足题也过同族映射（原生形状混入 = correctAnswer 缺失 → /check 报错）
+              // cycle-64：改调**唯一映射函数**（原为逐字段手抄第二份 → 与主路径必然漂移）
               if (d && String(d.stem || '').includes('kgimg://')) {
-                const s0 = (d.sources && d.sources[0]) || {}
-                const seqNo = Number(s0.seq || 0) || Number(d.seq || 0) || 0
-                questions.unshift({
-                  id: d.canonicalId, no: seqNo, number: seqNo, type: d.qtype || d.category || '', module: d.module,
-                  kadian: d.kadian || '',
-                  exam: s0.paper || '', region: d.region || '', year: d.year || '',
-                  source: (d.sources && d.sources[0] && d.sources[0].source) || 'pool',
-                  paperFile: d.paper || '', qid: d.qid || '',
-                  stem: d.stem || '', options: d.options || {},
-                  correctAnswer: String(d.answer || '').trim().toUpperCase(),
-                  analysis: d.analysis || '', dims: d.dims,
-                  groupMaterial: d.groupMaterial || '', groupMaterialNo: d.groupMaterialNo || 0,
-                  canonicalId: d.canonicalId, sources: d.sources, sourceCount: d.sourceCount,
-                } as any)
+                questions.unshift(questionToLegacyRow(d) as any)
                 have.add(cid); imgNeed--
               }
             }
@@ -1118,7 +1192,31 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
     return { file, count: picked.length, questions: picked, quota: { total: n, plan, layers: ['material', 'image', 'dims', 'fallback'] } }
   }
 
-  return { handle: handlePoolApi, sampleQuestions }
+  return {
+    handle: handlePoolApi,
+    sampleQuestions,
+    /**
+     * 按 canonicalId 批量取「练习链路出站形状」（cycle-64 架构收敛）。
+     *
+     * 用途：**错题回炉（srs.ts）** 不该自己手写题目对象——它和抽题只是「选哪些题」
+     * 的算法不同，题目长什么样必须同源。错题快照里存了 canonicalId 的条目，
+     * 回炉时经本方法回池补全（题号/出处链/材料/dims 全部按同一映射给出）。
+     *
+     * 找不到的 id 直接跳过（该题可能在池重建后不存在）——调用方按需降级到快照字段。
+     */
+    detailBatch(ids: string[]): any[] {
+      const db = poolDb()
+      if (!db) return []
+      const out: any[] = []
+      for (const id of (Array.isArray(ids) ? ids : [])) {
+        const key = String(id || '').trim()
+        if (!key) continue
+        const d = poolQuestionDetail(db, key)
+        if (d) out.push(questionToLegacyRow(d))
+      }
+      return out
+    },
+  }
 }
 
 /**
