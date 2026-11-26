@@ -19,7 +19,12 @@ import { fileURLToPath } from 'node:url'
 const REPO = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const IDX = path.join(REPO, 'data', '.paper-index.json')
 const BAK = path.join(REPO, 'data', '.paper-index.json.w3-bak')
-const REPO_ROOT = path.resolve(REPO, '..')
+// 题库根：优先 KG_REPOS_DIR（CI/高级用户）→ 开发态上级目录。
+// 纪律（与 huasheng13.test.mjs 的 corpusRoot() 一致）：题库位置是**运行期事实**，
+// 由数据根解析决定，不该硬编码「仓库上级目录」——CI 上真题卷在 KG_REPOS_DIR。
+const REPO_ROOT = process.env.KG_REPOS_DIR
+  ? path.resolve(process.env.KG_REPOS_DIR)
+  : path.resolve(REPO, '..')
 
 let idx1 = null, idx2 = null, dt1 = -1, dt2 = -1, err1 = null
 const had = fs.existsSync(IDX)
