@@ -12,7 +12,7 @@
  * 行为：校验语义化版本 → 三处原子替换（tmp+rename）→ 打印 diff 摘要；
  *   任一锚点找不到模式 = 响亮失败（exit 1，绝不静默跳过——静默即漂移）。
  */
-import { readFileSync, writeFileSync, renameSync } from 'node:fs'
+import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -63,4 +63,21 @@ for (const a of ANCHORS) {
 }
 console.log('[bump-version] v' + ver + ' 三锚点已原子同步：')
 for (const r of results) console.log('  ✅ ' + r)
+
+// ④ 重生成 docs/facts.json（自动生成物，含 version 字段）
+//
+// 为什么必须自动做（cycle-62 CI 实证）：facts.json 是**文档事实源**（勿手改），
+// 其 `version` 字段来自 package.json。bump 后若不重生成 → CI 的「Facts freshness gate」
+// 报「docs/facts.json 已过期」→ **发布线 CI 变红**（v1.34.1 实测踩到）。
+// 教训：凡「自动生成物」含被 bump 的字段，bump 流程必须包含「重生成」这一步。
+try {
+  const gen = join(root, 'scripts', 'docs', 'gen-facts.mjs')
+  if (existsSync(gen)) {
+    const { execFileSync } = await import('node:child_process')
+    execFileSync(process.execPath, [gen], { stdio: 'ignore' })
+    console.log('  ✅ docs/facts.json 已重生成（version → ' + ver + '）')
+  }
+} catch (e) {
+  console.warn('  ⚠️ facts.json 重生成失败（请手动跑 node scripts/docs/gen-facts.mjs）：' + String((e && e.message) || e))
+}
 console.log('（提醒：改完 .ts 必须 npm run build；smoke 版本三锚点守卫会核验一致）')
