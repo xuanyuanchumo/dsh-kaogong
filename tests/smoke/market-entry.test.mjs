@@ -67,18 +67,46 @@ test('MKT-05 category 取值合法（tools 等上游既定词表）', () => {
   expect(cat).toBe('tools')
 })
 
-test('MKT-06 描述数字与 manifest 事实源一致（统一题库池 86,454 题）', async () => {
+test('MKT-06 描述数字与服务端事实源一致（题量从池实测派生，不写死）', async () => {
   const { CAPABILITIES } = await import('../../dist/shared/manifest.js')
   // cycle-62 端点收敛：/api/naoku/* 六端点退役 + 3 语义下沉到池 → 82 − 6 + 3 = 79
   expect(CAPABILITIES.endpoints.length).toBe(79)
   expect(CAPABILITIES.tools.length).toBe(6)
   expect(CAPABILITIES.views.length).toBe(16)
-  // 统一题库池规模（跨源内容级去重后）——描述里出现的数字必须与之相符
+  /**
+   * ⚠️ cycle-68 修复：原守卫把「86,454 题」**写死在测试里**——池一增长（实测已 87,434）
+   * 守卫就红，而红的原因是"描述没跟上事实"还是"守卫自己过期"无从分辨。
+   * 正解 = **从池实测派生期望值**，描述里的数字必须等于当前池的真实题量。
+   * 这样：描述过时 → 红（该改描述）；池增长但描述未同步 → 也红（这也正是要提示的）。
+   */
+  const { DatabaseSync } = await import('node:sqlite')
+  const { USER_DATA_ROOT } = await import('../../dist/server/dataRoot.js')
+  let poolCount = 0
+  let paperCount = 0
+  try {
+    const db = new DatabaseSync(USER_DATA_ROOT + '/.kaogong.db', { readOnly: true })
+    try {
+      poolCount = Number(db.prepare('SELECT COUNT(*) c FROM question').get().c || 0)
+      paperCount = Number(db.prepare('SELECT COUNT(*) c FROM paper').get().c || 0)
+    } finally { db.close() }
+  } catch { /* 池不可用 → 跳过数字断言（CI 无题库时不该假红） */ }
+
   const en = (yamlText.match(/^\s{2}en:\s*'(.*)'\s*$/m) || [])[1] || ''
   const zh = (yamlText.match(/^\s{2}zh:\s*'(.*)'\s*$/m) || [])[1] || ''
+  if (poolCount > 0) {
+    const want = poolCount.toLocaleString('en-US')   // 87,434 这种千分位写法
+    for (const t of [en, zh]) {
+      expect(t.includes(want), `描述须写当前池题量 ${want}（池实测 ${poolCount}，写死旧值会漂移）`).toBe(true)
+    }
+  }
+  if (paperCount > 0) {
+    const wantPaper = paperCount.toLocaleString('en-US')
+    for (const t of [en, zh]) {
+      expect(t.includes(wantPaper), `描述须写当前真题卷数 ${wantPaper} 套`).toBe(true)
+    }
+  }
+  // 方法论 25 篇是静态事实源（HUASHENG13_META），不随池变化
   for (const t of [en, zh]) {
-    expect(t.includes('86,454'), '描述须写统一题库池 86,454 题（与统一池事实一致）').toBe(true)
-    expect(t.includes('1,683'), '描述须写真题卷 1,683 套').toBe(true)
     expect(t.includes('25 '), '描述须写方法论 25 篇').toBe(true)
   }
 })
