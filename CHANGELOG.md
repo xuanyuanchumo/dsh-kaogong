@@ -2,6 +2,57 @@
 
 本文件记录 dsh-kaogong 的版本级变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.34.2] - 2026-11-26
+
+**题目七段渲染字段错配根治（用户报「来源/题型/题号/材料/题干/选项/答案/解析 组件化显示有问题」）**
+
+### 修复（三处字段名错配 · 同时静默生效）
+
+服务端 `/api/questions`、`/api/pool/questions` 出站用的是**池原生字段名**，
+而渲染层读的是另一套名字 —— 三处读错同时生效，每一处都让整段内容消失：
+
+- **题号恒 `?`**：`QwNumberBadge`/`QwQuestionCard` 读 `q.no`，服务端出站发 `number`
+  （且硬编码为 0）。修法 = 服务端出站 `no` 与 `number` **同取卷内序号**（`seq`，
+  76,240 题有值）；**专题/模考/整卷一律用答题卡位置号 `current + 1`**（用户确认口径：
+  以答题卡显示列表为准，避免与答题卡格子序号自相矛盾）；组件侧 0/空不臆造编号。
+- **答案永不显示**：`QwAnswerDims` 读 `q.answer`，服务端发 `correctAnswer`。
+  修法 = `correctAnswer` 优先 + `answer` 回落（兼容真题卷/旧快照），
+  且 `hasPlain` 与答案行**同源判据**（`answerText` 收敛），避免「答案在但守卫说没有」。
+- **材料永不显示**：`QwQuestionCard` 读 `q.material`，服务端发 `groupMaterial`。
+  修法 = `groupMaterial` 优先 + `material` 回落。
+
+### 修复（真题卷单卷七段）
+
+- `QwPaperMode` 题目卡**只透传 `answer`** → 卷内答题（专题/模考同源路径）答案行不显示。
+  修法 = `answer` 与 `correctAnswer` 双写透传。
+- 真题卷单卷页原只给 `QwQuestionCard` 传 4 个字段（no/score/stem/requirement）
+  → 选项/答案/解析/材料全不渲染；修法 = 传七段全集。
+- 「你的作答」申论文本域原先**对行测选择题也显示**（误导用户「这题要写作文」）→
+  新增 `hasEssayForm` 判据（有作答要求 或 无 A–D 选项才是主观题）。
+
+### 修复（服务端字段完整性）
+
+- `poolQuestionDetail`：SELECT 补 `seq`；`dims` 补 `analysis` 槽位（五维「解析」卡片
+  与其它五维样式同构，不再走裸回落分支）。
+- `sampleQuestions` 的 `SELECT_COLS` 补 `seq` 与 `material_ref`（题号/材料副标题的前置物）。
+- 三条出站投影路径（toLegacyShape / 带图补足 / poolQuestionDetail 映射）全部发 `no + number`。
+
+### 新增守卫（均经变异测试验证「回退修复必红」）
+
+- `tests/smoke/question-render-fields.test.mjs`（8 断言）：服务端出站字段完整性、
+  禁硬编码 `number: 0`、`SELECT_COLS` 必取 seq、`QwQuestion` 类型覆盖七段全字段、
+  组件禁读未声明字段、答案/材料双写法兜底。**`QwQuestion` 类型补齐**是本次根治关键——
+  类型没声明的字段，`strict` 编译期发现不了「读不存在的字段」。
+- `tests/render/qw-seven-segments.test.mjs`（7 断言）：专题练习七段逐段断言（含防偷看图语义）。
+- `tests/render/paper-single-question.test.mjs`（3 断言）：真题卷选卷 → 翻第 2 题 →
+  编号/题型/题干/选项/答案/解析齐全。
+- render harness 的 `/api/questions` 与 `/api/pool/questions` mock **升级为服务端出站同形**
+  （七段全集）——原 mock 字段名恰好与组件读的一致，导致这类缺陷测试全绿。
+
+### 测试
+
+- **54 文件 / 435 断言全绿**（新增 3 守卫文件 / 18 断言）。
+
 ## [1.34.1] - 2026-11-26
 
 **CI 长期红根治 + 2 个生产缺陷修复（BL-TEST-05）**：CI 自 2026-11-21 起持续红（25 个文件 /

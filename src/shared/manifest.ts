@@ -24,7 +24,7 @@ export const pageRank: typeof kernelPageRank = kernelPageRank
 
 // ── 能力清单（与 index.js / client.js / ui 实际注册保持同步）──
 export const CAPABILITIES = {
-  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.34.1', mode: 'offline-first' },
+  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.34.2', mode: 'offline-first' },
 
   // 宿主 UI 双入口（client 半注册；图谱与可观测面板消费此声明）
   entries: [
