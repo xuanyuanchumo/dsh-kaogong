@@ -75,18 +75,11 @@ jobs:
           done
           du -sh "$REPOS_ROOT" || true
 
-      - name: Build unified pool (once — all tests share it)
-        run: |
-          set -euo pipefail
-          mkdir -p "${{ runner.temp }}/kaogong-data"
-          node scripts/ci/build-pool.mjs \
-            --repo-root "${{ runner.temp }}/kg-repos" \
-            --data-dir  "${{ runner.temp }}/kaogong-data"
-
       - name: Expose repos + data to tests
         run: |
           echo "KG_REPOS_DIR=${{ runner.temp }}/kg-repos" >> "$GITHUB_ENV"
           echo "KG_DATA_DIR=${{ runner.temp }}/kaogong-data" >> "$GITHUB_ENV"
+          mkdir -p "${{ runner.temp }}/kaogong-data"
 
       # ── 门禁 1：提交信息格式（BL-PROC-02）────────────────────────
       # 只在 PR 上校验新增提交，避免历史提交一次性阻断。
@@ -118,6 +111,15 @@ jobs:
       # ── 门禁 3：构建门（含 combo 产物形态硬守卫）──────────────────
       - name: Build
         run: npm run build
+
+      # ── 建池（**须在 Build 之后**：dist/ 由 build 产出，且 dist 不入库）──
+      # 一次性把全量题库摄入统一池 → 所有测试看到**同一份完整数据**，断言可比。
+      - name: Build unified pool (once — all tests share it)
+        run: |
+          set -euo pipefail
+          node scripts/ci/build-pool.mjs \
+            --repo-root "${{ runner.temp }}/kg-repos" \
+            --data-dir  "${{ runner.temp }}/kaogong-data"
 
       # ── 门禁 4：文档门禁（BL-DOC-02）────────────────────────────
       - name: Docs gate
