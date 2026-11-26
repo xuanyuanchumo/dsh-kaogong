@@ -251,7 +251,16 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
         return {
           // 旧形状兼容字段（/api/check 与 question-kit 消费面）
           id: d.canonicalId,
-          number: 0,
+          /**
+           * 卷内题号（cycle-62 修复：用户报「题号显示 ?」）。
+           * 原实现硬编码 `number: 0`，而 `QwNumberBadge` 读的是 `q.no` —— 两个字段
+           * 一个恒 0、一个不存在 → 卡片左上角永远显示 `?`（七段里的「编号」整段失效）。
+           * 正解 = 双向兼容：`no` 与 `number` 同取**卷内序号** `sources[0].seq`
+           * （question_source 表有 seq，是「该题在本卷中的第几题」的真实来源）。
+           * seq=0 或缺出处时回落 0（question-kit 侧对 0/空按「无编号」处理，不臆造）。
+           */
+          no: Number(s0.seq || 0) || Number(d.seq || 0) || 0,
+          number: Number(s0.seq || 0) || Number(d.seq || 0) || 0,
           type: d.qtype || d.category || '',
           module: d.module,
           kadian: d.kadian || '',
@@ -298,8 +307,9 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
               // cycle-46：补足题也过同族映射（原生形状混入 = correctAnswer 缺失 → /check 报错）
               if (d && String(d.stem || '').includes('kgimg://')) {
                 const s0 = (d.sources && d.sources[0]) || {}
+                const seqNo = Number(s0.seq || 0) || Number(d.seq || 0) || 0
                 questions.unshift({
-                  id: d.canonicalId, number: 0, type: d.qtype || d.category || '', module: d.module,
+                  id: d.canonicalId, no: seqNo, number: seqNo, type: d.qtype || d.category || '', module: d.module,
                   kadian: d.kadian || '',
                   exam: s0.paper || '', region: d.region || '', year: d.year || '',
                   source: (d.sources && d.sources[0] && d.sources[0].source) || 'pool',
@@ -865,8 +875,8 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
     // 可预期（带图必有），随机性保留在层内。
     const SELECT_COLS = `canonical_id, qid, source_id, local_key, module, category, kadian, qtype,
       stem, options, answer, analysis, reasoning, fastest, pitfalls, mother, doubt, ask_model,
-      group_material, group_material_no,
-      images, has_image, paper, region, year, freq`
+      group_material, group_material_no, material_ref,
+      images, has_image, paper, region, year, freq, seq`
     const picked: any[] = []
     const seen = new Set<string>()
     // ── cycle-43 性能优化：L0 材料组索引快照（架构优化·用户要求「时刻注意性能」）──
@@ -1060,9 +1070,21 @@ export function poolRowToQuestion(r: any): any {
   // 源名回填：池内 source_id 是上游仓库名（naoku/xingcezhenti/gk-tuxing…）
   const srcId = String(r.source_id || '').trim()
   const source = srcId && srcId !== 'pool' ? srcId : 'xingcezhenti'
+  /**
+   * 卷内题号（cycle-62 修复：用户报「题号显示 ?」）——**这是 /api/questions 的主投影路径**
+   * （sampleQuestions → toLegacyShape），原实现硬编码 `number: 0` 且不发 `no`，
+   * 而 `QwNumberBadge` 读 `q.no` / `QwQuestionCard` 读 `q.no` → 练习/专题链路的题号整段失效。
+   *
+   * 数据来源优先级：
+   *   ① `r.seq`：question 表卷内序号（摄入时由源写入，76,240 题有值）
+   *   ② 无则 0 —— 前端对 0/空显示 `?`（**不臆造编号**，宁缺毋滥）
+   * `no` 与 `number` 同值双写：`no` 是真题卷/模考的既有字段名，`number` 是池原生名。
+   */
+  const seqNo = Number(r.seq || 0) || 0
   return {
     id: String(r.canonical_id || ''),
-    number: 0,
+    no: seqNo,
+    number: seqNo,
     type: String(r.qtype || ''),
     module: String(r.module || ''),
     exam: '',
@@ -1078,6 +1100,8 @@ export function poolRowToQuestion(r: any): any {
     dims: Object.keys(dims).length ? dims : undefined,
     groupMaterial: String(r.group_material || ''),
     groupMaterialNo: Number(r.group_material_no || 0),
+    materialRef: String(r.material_ref || ''),
+    canonicalId: String(r.canonical_id || ''),
   }
 }
 
@@ -1090,7 +1114,7 @@ export function poolQuestionDetail(db: any, canonicalId: string): any {
     const q = db.prepare(
       `SELECT canonical_id, qid, fp, source_id, local_key, module, category, kadian, qtype, ask_model,
         stem, options, answer, analysis, reasoning, fastest, pitfalls, mother, doubt, related,
-        group_material, group_material_no, material_ref, images, has_image, freq, paper, region, year
+        group_material, group_material_no, material_ref, images, has_image, freq, paper, region, year, seq
        FROM question WHERE canonical_id = ?`,
     ).get(canonicalId)
     if (!q) return null
@@ -1108,10 +1132,18 @@ export function poolQuestionDetail(db: any, canonicalId: string): any {
       canonicalId: q.canonical_id, qid: q.qid, fp: q.fp,
       module: q.module, category: q.category, kadian: q.kadian, qtype: q.qtype,
       stem: q.stem, options, answer: q.answer, analysis: q.analysis,
-      dims: { reasoning: q.reasoning, fastest: q.fastest, pitfalls: q.pitfalls, mother: q.mother, doubt: q.doubt, askModel: q.ask_model },
+      /**
+       * 五维标注（cycle-62 修复）：原 dims 缺 `analysis` 槽位 —— 消费方
+       * `QwAnswerDims` 先读 `d.analysis`，缺了才回落到平铺 `q.analysis`。
+       * 语义上空槽 + 回落能出内容，但**五维面板的「解析」卡片样式与其它五维不一致**
+       * （回落分支用的是裸「📖 解析」块，不是 DimBlock 色板）。补齐后六维同构。
+       */
+      dims: { analysis: q.analysis, reasoning: q.reasoning, fastest: q.fastest, pitfalls: q.pitfalls, mother: q.mother, doubt: q.doubt, askModel: q.ask_model },
       related: q.related, groupMaterial: q.group_material, groupMaterialNo: q.group_material_no,
       materialRef: q.material_ref, images, hasImage: Number(q.has_image || 0),
       freq: q.freq, paper: q.paper, region: q.region, year: q.year,
+      /** 卷内序号（question.seq；出处侧 seq 更权威，见出站映射的 no/number） */
+      seq: Number(q.seq || 0),
       sources, sourceCount: sources.length,
       relations,
     }

@@ -1027,6 +1027,20 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
         for (const m of String(txt || '').matchAll(/材料\s*(\d+)/g)) out.push(+m[1])
         return out
       }
+      /**
+       * 是否为主观题（申论/大作文）——决定是否显示「你的作答」文本域。
+       *
+       * 判据（cycle-62）：有作答要求 requirement（申论「不超过 800 字」这类），
+       * 或**没有任何 A–D 选项**（主观题靠文字作答）。
+       * 反例（行测选择题）：有四选项 → 不显示 textarea（选项交互在 QwQuestionCard 里）。
+       */
+      const hasEssayForm = (q: any): boolean => {
+        if (!q) return false
+        if (String(q.requirement || '').trim()) return true
+        const opts = (q && q.options) || {}
+        const letters = Object.keys(opts)
+        return !letters.some(k => /^[A-Da-d]$/.test(k))
+      }
 
       const load = React.useCallback((t: any) => {
         setType(t); setList(null); setCur(null); setResult(null)
@@ -1099,11 +1113,32 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
               {cur.score ? <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{cur.score + ' 分'}</span> : null}
             </div>
             <Card title={'第 ' + cur.no + ' 题'}>
-              {/* cycle-25：题干/作答要求接入统一组件域（QwQuestionCard browse 只读） */}
+              {/* cycle-25：题干/作答要求接入统一组件域（QwQuestionCard browse 只读）
+                  cycle-62 七段修复（用户报「题目七段组件化显示有问题」）：
+                  原实现只传 `{ no, score, stem, requirement }` 四个字段 →
+                  **选项 / 答案 / 解析 / 材料全部不渲染**，行测选择题在这个页面
+                  既不能作答也看不到答案（只剩下方申论 textarea）。
+                  正解 = 照抄服务端字段传**七段全集**（browse 态 QwOptions 可点记录自选、
+                  QwAnswerDims 完整显示解析与参考答案——cycle-30/31 的 browse 语义）。 */}
               <QwQuestionCard
                 mode="browse"
-                q={{ no: cur.no, score: cur.score, stem: cur.stem, requirement: cur.requirement }}
+                q={{
+                  no: cur.no, score: cur.score,
+                  // 1 来源 / 2 题型（本卷上下文已知，题目对象可能缺）
+                  source: cur.source, exam: cur.exam, year: cur.year, region: cur.region,
+                  paperFile: cur.paperFile, type: cur.type, module: cur.module,
+                  // 3 材料：本题若绑定材料号，用材料正文补齐（无则整段隐藏）
+                  groupMaterial: cur.groupMaterial || cur.material,
+                  groupMaterialNo: cur.groupMaterialNo, materialRef: cur.materialRef,
+                  // 4 题干 / 5 选项
+                  stem: cur.stem, requirement: cur.requirement, options: cur.options,
+                  // 6 答案 / 7 解析（双写法兼容：correctAnswer 与 answer 都透传）
+                  correctAnswer: cur.correctAnswer, answer: cur.answer,
+                  analysis: cur.analysis, dims: cur.dims, reference: cur.reference,
+                } as any}
               />
+              {/* 行测选择题的选项交互交由 QwQuestionCard（browse 态可点记录自选 + 对照判色）；
+                  下方申论评分作答区仅对**主观题**显示（有 requirement 或无限选项形态）。 */}
               {cur.relatedMaterials ? <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                 <span>{'关联材料：'}</span>
                 {parseMatNos(cur.relatedMaterials).length
@@ -1167,7 +1202,11 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                 )
               })}
             </Card>
-            <Card title="✍️ 你的作答（离线评分，无需模型）">
+            {/* 申论/主观题作答区（cycle-62：仅主观题显示）——
+                行测选择题在 QwQuestionCard 里点选项即可（browse 态记录自选 + 对照判色），
+                再给一个空 textarea 既无语义也误导用户「这题要写作文」。
+                判据：无限选项（无 A-D）或带 requirement（申论作答要求）→ 主观题。 */}
+            {(hasEssayForm(cur)) ? <Card title="✍️ 你的作答（离线评分，无需模型）">
               <textarea
                 value={answer} onChange={e => { setAnswer(e.target.value); writeDraft(cur, e.target.value) }}
                 placeholder="在此作答…建议分条（一、二、三 或 1. 2. 3.），要点覆盖权重最高（50%）"
@@ -1178,7 +1217,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                 <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{answer.replace(/\s/g, '').length + ' 字'}</span>
                 <span style={{ fontSize: 10.5, color: 'var(--text-faint)' }} title="作答内容已自动暂存在本机浏览器，误关页面或切换题目不会丢失">{'💾 草稿已本地暂存，误关不丢'}</span>
               </div>
-            </Card>
+            </Card> : null}
           </div>
         )
       }

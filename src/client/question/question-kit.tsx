@@ -49,14 +49,41 @@ export function QwZoomHost({ children }: QwZoomHostProps) {
 interface QwDims { analysis?: string; kadian?: string; reasoning?: string; fastest?: string; pitfalls?: string; mother?: string }
 
 /** 七段题目（各视图把既有对象 map 成此形态接入；字段有则渲染，不臆造空段） */
+/**
+ * QwQuestion — 七段渲染的题目形状（cycle-62 补齐，**字段零遗漏的类型底线**）
+ *
+ * ── 为什么要有这个类型（教训）──
+ * 原接口只声明了 `no/answer/material` 等 12 个字段，而服务端 `/api/questions` 的
+ * 实际出站形状是 **`number` / `correctAnswer` / `groupMaterial` / `groupMaterialNo`**
+ * —— 类型没声明的字段，`strict` 编译期发现不了「读了不存在的字段」，
+ * 于是三处读错字段（`q.no` / `q.answer` / `q.material`）同时静默生效：
+ *   ① 题号恒 `?`（读 q.no，实际发 number）；
+ *   ② 答案永不显示（读 q.answer，实际发 correctAnswer）；
+ *   ③ 材料永不显示（读 q.material，实际发 groupMaterial）。
+ * ⇒ 纪律：**凡渲染层消费的字段，必须在类型里出现**；服务端新增投影字段时同步补类型，
+ *    否则「字段存在性」只能靠人肉核对（本次就是漏了三处）。
+ *
+ * 双写法（both）是**兼容层**：统一池出站用右列名，真题卷/旧错题快照用左列名。
+ */
 interface QwQuestion {
-  no?: any; score?: number; flagged?: boolean          // 0 编号/分值/标记旗
-  source?: string; exam?: string; year?: any; region?: string; paperFile?: string  // 1 来源
-  type?: string; module?: string                        // 2 类型
-  material?: string; materialRef?: string               // 3 材料
-  stem?: string; requirement?: string                   // 4 题干（requirement 为申论作答要求）
-  options?: Record<string, string>                      // 5 选项
-  answer?: string; analysis?: string; dims?: QwDims; reference?: string  // 6 答案/解析/五维/参考答案
+  /* 0 编号 —— no（真题卷/模考）与 number（统一池出站）双写 */
+  no?: any; number?: any; score?: number; flagged?: boolean
+  /* 1 来源 */
+  source?: string; exam?: string; year?: any; region?: string; paperFile?: string
+  /* 2 类型 */
+  type?: string; module?: string; kadian?: string
+  /* 3 材料 —— groupMaterial（统一池原生）/ material（真题卷与旧快照）双写 */
+  material?: string; groupMaterial?: string; groupMaterialNo?: number; materialRef?: string
+  /* 4 题干（requirement 为申论作答要求） */
+  stem?: string; requirement?: string; images?: any[]
+  /* 5 选项（值可为含 kgimg:// 占位或 markdown 图的文本） */
+  options?: Record<string, string>
+  /* 6 答案 —— correctAnswer（统一池出站）/ answer（真题卷）双写 */
+  answer?: string; correctAnswer?: string
+  /* 7 解析与五维 */
+  analysis?: string; dims?: QwDims; reference?: string
+  /* 溯源（白盒/双写用，不直接渲染） */
+  id?: string; canonicalId?: string; qid?: string; sources?: any[]; sourceCount?: number
 }
 
 /** 渲染模式：single=单题浏览 practice=练习判分 exam=整卷做题 browse=整卷只读 */
@@ -66,9 +93,17 @@ type QwMode = 'single' | 'practice' | 'exam' | 'browse'
 /** QwNumberBadge props：no 编号；score 分值可选；flagged 标记旗可选；onToggleFlag 可选 */
 interface QwNumberBadgeProps { no: any; score?: number; flagged?: boolean; onToggleFlag?: () => void }
 export function QwNumberBadge({ no, score, flagged, onToggleFlag }: QwNumberBadgeProps) {
+  /**
+   * cycle-62 题号字段修复（用户报「题号显示 ?」）：本组件收的是 `no`，而调用方
+   * `QwQuestionCard` 传 `q.no` —— 统一池出站形状历史上只有 `number`（且恒 0）、
+   * 真题卷形态才用 `no` → 练习/专题链路的题号整段显示 `?`。
+   * 正解 = 组件内双字段兼容（number 优先，与出站映射的语义一致），
+   * 两者都无/为 0 时才显示 `?`（不臆造编号）。
+   */
+  const n = (no != null && no !== '' && no !== 0) ? no : null
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-      <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13.5, flexShrink: 0 }}>{String(no == null ? '?' : no)}</span>
+      <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13.5, flexShrink: 0 }}>{String(n == null ? '?' : n)}</span>
       {typeof score === 'number' && score > 0 ? <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#10b981' }}>{score + ' 分'}</span> : null}
       {typeof onToggleFlag === 'function'
         ? <span
@@ -204,7 +239,21 @@ interface QwAnswerDimsProps { q: QwQuestion; revealed?: boolean; answerOf?: stri
 export function QwAnswerDims({ q, revealed, answerOf, hideBeforeAnswer }: QwAnswerDimsProps) {
   const d = q.dims || ({} as QwDims)
   const hasDims = !!(d.analysis || d.kadian || d.reasoning || d.fastest || d.pitfalls || d.mother)
-  const hasPlain = !!q.analysis || !!q.reference || typeof q.answer === 'string'
+  /**
+   * ⚠️ cycle-62 答案字段修复（用户报「答案没显示」）：本组件原统一读 `q.answer`，
+   * 但 `/api/questions` 与 `/api/pool/questions` 的**出站映射发的是 `correctAnswer`**
+   * （池原生字段名，见 server/poolApi.ts L266/308）——`q.answer` 恒 undefined
+   * → 「✅ 答案：X」整行永不渲染，只剩解析（用户可感知「有解析但没答案」）。
+   *
+   * 正解 = `correctAnswer` 优先 + `answer` 回落，两者都收成一个本地 answerText：
+   *   · correctAnswer：统一池出站形状（练习/专题/模考主链路）
+   *   · answer：真题卷 parseQuestion 形态（部分卷直出 answer）+ 旧错题快照
+   * 判据同源：hasPlain 与答案行渲染都用同一个 answerText，避免「答案在但守卫说没有」。
+   */
+  const answerText = (typeof q.correctAnswer === 'string' && q.correctAnswer)
+    || (typeof q.answer === 'string' && q.answer)
+    || ''
+  const hasPlain = !!q.analysis || !!q.reference || !!answerText
   if (!revealed && !hasDims && !hasPlain) return null
   // cycle-32b（用户报「学习模式的解析要答题之后才能显示」）：占位语义按 mode 分流——
   // practice/learn 是「作答后判分」场景（hideBeforeAnswer=true）：未揭示时解析/答案/参考答案
@@ -216,10 +265,10 @@ export function QwAnswerDims({ q, revealed, answerOf, hideBeforeAnswer }: QwAnsw
   }
   return (
     <div style={{ marginTop: 10 }}>
-      {/* 答案行：practice 揭示后 / single 浏览态 */}
-      {(typeof q.answer === 'string' && q.answer) || answerOf ? (
+      {/* 答案行：practice 揭示后 / single 浏览态（answerOf 为宿主显式覆盖值，优先） */}
+      {answerOf || answerText ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.14)', color: '#059669' }}>{'✅ 答案：' + (answerOf || String(q.answer))}</span>
+          <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.14)', color: '#059669' }}>{'✅ 答案：' + (answerOf || answerText)}</span>
         </div>
       ) : null}
       {/* 五维标注（统一走 DimBlock 语义色板） */}
@@ -260,7 +309,21 @@ interface QwExamNavigatorProps {
   onJump: (i: number) => void
 }
 export function QwExamNavigator({ questions, answers, flags, current, onJump }: QwExamNavigatorProps) {
-  const answeredCount = questions.filter(q => answers[q.no] != null).length
+  /**
+   * 序号口径（cycle-62 · 用户确认）：**答题卡一律用位置号 `i + 1`**。
+   *
+   * 原实现用题目自带的 `q.no` 作格子文案与状态键，但统一池出站形状的 `no`
+   * 依赖卷内序号 `seq`：naoku 等源**没有卷内序号**（seq=0）→ 格子显示 `0`/空，
+   * 且 `answers[q.no]` 全部撞成同一个 key（`0`）→ 已答态互相污染。
+   *
+   * 位置号是答题卡唯一自洽的口径：第 i 格 = 第 i+1 题，与「当前题 current」
+   * 和题目卡头的编号同源。答案/标记的状态键也随之收敛到位置号（DOM 内一致）。
+   */
+  const noOf = (q: any, i: number) => {
+    const n = Number(q && (q.no != null ? q.no : q.number))
+    return Number.isFinite(n) && n > 0 ? n : i + 1
+  }
+  const answeredCount = questions.filter((q, i) => answers[noOf(q, i)] != null).length
   const total = questions.length
   const pct = total ? Math.round(answeredCount / total * 100) : 0
   return (
@@ -275,13 +338,14 @@ export function QwExamNavigator({ questions, answers, flags, current, onJump }: 
       {/* 网格：每题一格，四态着色（确定性遍历：题目顺序即网格顺序） */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(38px, 1fr))', gap: 6 }}>
         {questions.map((q, i) => {
-          const answered = answers[q.no] != null
-          const flagged = !!(flags && flags.has(q.no))
+          const no = noOf(q, i)
+          const answered = answers[no] != null
+          const flagged = !!(flags && flags.has(no))
           const isCur = i === current
           return (
             <div
-              key={String(q.no) + '-' + i}
-              title={'第 ' + q.no + ' 题' + (q.type ? ' · ' + q.type : '') + (answered ? ' · 已答 ' + answers[q.no] : ' · 未答') + (flagged ? ' · 已标记' : '')}
+              key={no + '-' + i}
+              title={'第 ' + no + ' 题' + (q.type ? ' · ' + q.type : '') + (answered ? ' · 已答 ' + answers[no] : ' · 未答') + (flagged ? ' · 已标记' : '')}
               onClick={() => onJump(i)}
               style={{
                 height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -290,7 +354,7 @@ export function QwExamNavigator({ questions, answers, flags, current, onJump }: 
                 color: isCur ? '#fff' : answered ? '#4338ca' : '#64748b',
                 border: isCur ? '2px solid #4f46e5' : flagged ? '2px solid #f59e0b' : '1px solid rgba(148,163,184,.18)',
               }}
-            >{String(q.no)}</div>
+            >{String(no)}</div>
           )
         })}
       </div>
@@ -318,18 +382,28 @@ interface QwQuestionCardProps {
 }
 export function QwQuestionCard({ q, mode = 'single', interactive, selected, right, revealed, disabled, onSelect, matCollapsed, matOnToggle, onToggleFlag }: QwQuestionCardProps) {
   const isBrowse = mode === 'browse'
+  /**
+   * 题号双字段兼容（cycle-62）：统一池出站形状是 `number`，真题卷/模考是 `no`——
+   * 原实现只传 `q.no` → 池链路（练习/专题/深度题库）题号恒 `?`。
+   */
+  const qNo = (q.no != null && q.no !== '') ? q.no : (q.number != null && q.number !== '' ? q.number : null)
   return (
     <div style={{ padding: '14px 16px', background: 'var(--surface-card,#fff)', borderRadius: 14, border: '1px solid rgba(148,163,184,.15)', boxShadow: '0 1px 3px rgba(0,0,0,.07)', marginBottom: 12 }}>
       {/* 头部：0 编号 + 1 来源 + 2 类型（一行三段，browse 模式来源行由页面头承担） */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <QwNumberBadge no={q.no} score={q.score} flagged={q.flagged} onToggleFlag={onToggleFlag} />
+        <QwNumberBadge no={qNo} score={q.score} flagged={q.flagged} onToggleFlag={onToggleFlag} />
         <div style={{ flex: 1, minWidth: 120 }}>
           <QwSourceMeta q={q} hideInBrowse={isBrowse} />
           <QwTypeTag q={q} />
         </div>
       </div>
-      {/* 3 材料（受控折叠；matRef 为材料副标题——ref 是 React 保留 prop，禁用作 prop 名） */}
-      <QwMaterial text={q.material || ''} matRef={q.materialRef || ''} collapsed={matCollapsed} onToggle={matOnToggle} />
+      {/* 3 材料（受控折叠；matRef 为材料副标题——ref 是 React 保留 prop，禁用作 prop 名）
+          ⚠️ cycle-62 字段修复（用户报「材料没显示」）：本卡片原读 `q.material`，
+          但服务端 `/api/questions` 投影只发 **`groupMaterial`**（池原生字段，见
+          server/poolApi.ts 出站映射）——`q.material` 恒为 undefined → **单题卡材料永不渲染**。
+          题干/来源/选项/解析/答案均正常，唯独材料整段丢失（用户可感知「题目没有对应的材料」）。
+          正解 = `groupMaterial` 优先 + `material` 回落（兼容真题卷/旧错题快照的 material 形态）。 */}
+      <QwMaterial text={q.groupMaterial || q.material || ''} matRef={q.materialRef || ''} collapsed={matCollapsed} onToggle={matOnToggle} />
       {/* 4 题干 */}
       <QwStem q={q} />
       {/* 5 选项 */}
@@ -444,27 +518,41 @@ export function QwPaperMode({ questions, current, onJump, mode = 'exam', paperMe
           <QwQuestionCard
             mode={mode}
             interactive={isExam || isPractice || isBrowse}
+            /**
+             * 题号口径（cycle-62 · 用户确认）：**专题/模考/整卷一律用答题卡位置号**
+             * （`current + 1`），不依赖题目自带 `no`/`seq`。
+             * 理由：专题刷题队列是按卷抽出的题组，题面自带的 seq 可能为 0（naoku 等源
+             * 无卷内序号）→ 显示 `?` 与答题卡格里显示的序号**自相矛盾**。
+             * 答题卡（QwExamNavigator）本来就是「第 i+1 题」，两处口径必须同源。
+             */
             q={{
-              no: q.no, score: q.score, type: q.type, groupMaterialNo: q.groupMaterialNo || 0,
+              no: current + 1, score: q.score, type: q.type, groupMaterialNo: q.groupMaterialNo || 0,
               exam: isExam || isPractice ? (paperMeta && paperMeta.subject) || q.exam : q.exam,
               year: isExam || isPractice ? (paperMeta && paperMeta.year) || q.year : q.year,
               module: q.module,
               source: q.source, region: q.region, paperFile: q.paperFile,
               stem: q.stem, options: q.options,
-              flagged: flags && flags.has ? flags.has(q.no) : false,
+              // 标记旗与答题卡同键（位置号）——原实现用 q.no，专题下 seq=0 会全部撞键
+              flagged: flags && flags.has ? flags.has(current + 1) : false,
               requirement: q.requirement, reference: q.reference,
-              answer: q.answer, analysis: q.analysis,
+              // 答案双写法透传（cycle-62：原实现只传 answer，池出站是 correctAnswer
+              // → 专题/模考路径的「✅ 答案」整行永远不渲染）
+              answer: q.answer, correctAnswer: q.correctAnswer,
+              analysis: q.analysis,
               dims: q.dims,
+              // 材料：整卷路径的材料在「区 1 材料区」渲染，题目卡不再重复（避免双事实源）；
+              // 但 materialRef 仍传，供卡片头部的材料副标题显示（若有）
+              materialRef: q.materialRef,
             } as any}
-            // exam 态：answers[q.no]；practice 态：宿主 selected/right/revealed（判分揭示三态）
+            // exam 态：answers[位置号]（与答题卡同键）；practice 态：宿主 selected/right/revealed 三态
             // cycle-30：browse 态自答对照——selected/revealed/onSelect 与 practice 同构转发
             // （interactive=true 使选项可点；揭示只在宿主主动对照后发生，不自动判分）
-            selected={isExam ? (answers && answers[q.no]) : selected}
+            selected={isExam ? (answers && answers[current + 1]) : selected}
             right={right}
             revealed={isExam ? false : revealed}
             disabled={isPractice ? disabled : undefined}
             onSelect={isExam || isPractice || isBrowse ? onSelect : undefined}
-            onToggleFlag={onToggleFlag ? () => onToggleFlag(q.no) : undefined}
+            onToggleFlag={onToggleFlag ? () => onToggleFlag(current + 1) : undefined}
           />
         </div>
       </div>

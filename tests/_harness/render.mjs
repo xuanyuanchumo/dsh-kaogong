@@ -52,7 +52,40 @@ globalThis.fetch = async (url) => {
   globalThis.__kgFetchLog.push(u)
   if (u.includes('/api/stats')) return { json: async () => ({ rate: 60, answered: 10, day: 1, streak: 2, importedTotal: 0, wrong: { open: 1, mastered: 0 }, mastery: { '判断推理': { rate: 55, confidence: 0.5, mastery: 28, answered: 10 }, '资料分析': { rate: 85, confidence: 0.9, mastery: 77, answered: 20 } } }) }
   if (u.includes('/api/status')) return { json: async () => ({ app: 'dsh-kaogong', port: 8400, repos: { ready: 15, total: 15 }, uptimeSec: 5 }) }
-  if (u.includes('/api/questions')) return { json: async () => ({ questions: [{ module: '判断推理', type: '逻辑', stem: '测试题干', options: { A: 'a', B: 'b' }, correctAnswer: 'A' }] }) }
+  /**
+   * 「抽题」mock —— **必须与服务端真实出站形状一致**（cycle-62 七段字段修复）。
+   *
+   * 事故背景：原 mock 只有 `{ module, type, stem, options, correctAnswer }`，
+   * 但真实 `/api/questions`（poolApi.toLegacyShape）发的是
+   * `{ no, number, source, paperFile, region, year, type, module,
+   *    groupMaterial, groupMaterialNo, materialRef, stem, options,
+   *    correctAnswer, analysis, dims }`。
+   * 组件事后读的是 `q.no` / `q.answer` / `q.material` 三个**不存在的名字** →
+   * 题号恒 `?`、答案与材料整段不渲染 —— 而 render 测试当年全绿（mock 字段名恰好
+   * 与组件读的一致，「mock 形状即契约」的纪律在 mock 失真时**反向失效**）。
+   *
+   * 纪律：mock 只允许**照抄服务端出站字段**（含图片占位 kgimg://），
+   * 否则测试测的是 mock 而不是产品。
+   */
+  if (u.includes('/api/questions')) return { json: async () => ({
+    source: 'pool',
+    count: 1,
+    questions: [{
+      id: 'q:mock:render#7',
+      no: 7, number: 7,                                  // 0 编号（双写法）
+      source: 'naoku', paperFile: '2024年国考《行测》',    // 1 来源
+      region: '国考', year: '2024',
+      type: 'single', module: '判断推理',                  // 2 题型
+      groupMaterial: '【材料】某市 2018-2023 年铁路旅客运输量变化情况如下表所示。',  // 3 材料
+      groupMaterialNo: 1,
+      materialRef: '材料 1',
+      stem: '测试题干（含图）【图:kgimg://90-图片/题目图/mock-stem.png】',          // 4 题干 + 图
+      options: { A: 'a', B: 'b', C: 'c', D: 'd' },                                 // 5 选项
+      correctAnswer: 'A',                                                          // 6 答案
+      analysis: '测试解析【图:kgimg://90-图片/题目图/mock-analysis.png】',          // 7 解析 + 图
+      dims: { kadian: '测试考点', reasoning: '测试推理链' },
+    }],
+  }) }
   if (u.includes('/api/check')) return { json: async () => ({ isCorrect: true }) }
   // cycle-34 统一题库：mock 必须给**真实形状**（含 health/quality/registry/relTypes），
   // 否则字段级降级分支测不到（教训：mock 形状即契约——R12 同款纪律）。
@@ -88,9 +121,31 @@ globalThis.fetch = async (url) => {
       { canonicalId: 'q:10204455', module: '判断推理', category: '图形推理', kadian: '图形推理 / 位置规律', stem: '下列图形的变化规律是', sources: [{ source: 'naoku', paper: '2023年某卷', region: '江苏', year: '2023' }] },
     ],
   }) }
+  /**
+   * 池抽题 —— 练习/专题/深度题库的**主供数路径**（study-view 走 /api/pool/questions）。
+   * cycle-62：原 mock 只有 5 个字段（canonicalId/module/stem/answer/sourceCount），
+   * 真实 `poolApi.sampleQuestions` 出站是 toLegacyShape 的**七段全集**——
+   * mock 缺 `correctAnswer`/`groupMaterial`/`options`/`no` → 卡片只能显示题干，
+   * 答案/材料/选项/题号全空，而测试仍绿（mock 失真）。
+   * 纪律：mock 字段必须照抄 toLegacyShape（与 /api/questions 的 mock 同源）。
+   */
   if (u.includes('/api/pool/questions')) return { json: async () => ({
     count: 1, candidates: 500, strategy: '模块弱点（SRS 1/(rate+0.15)）× 多出处加成',
-    questions: [{ canonicalId: 'q:10204454', module: '判断推理', stem: '抽到的统一池题目', answer: 'C', sourceCount: 8 }],
+    questions: [{
+      id: 'q:mock:pool#1', canonicalId: 'q:mock:pool#1',
+      no: 1, number: 1,
+      source: 'naoku', paperFile: '2024年国考《行测》', region: '国考', year: '2024',
+      type: 'single', module: '判断推理', qid: 'mock-1',
+      groupMaterial: '【材料】某市 2018-2023 年铁路旅客运输量变化情况如下表所示。',
+      groupMaterialNo: 1, materialRef: '材料 1',
+      stem: '抽到的统一池题目：下列推断正确的是（　）',
+      options: { A: '选项甲', B: '选项乙', C: '选项丙', D: '选项丁' },
+      correctAnswer: 'C',
+      analysis: '元素组成相同，考虑数量规律。',
+      dims: { kadian: '图形推理 / 数量规律', reasoning: '第1步：观察元素组成' },
+      sources: [{ source_id: 'naoku', paper: '2024年甘肃卷', region: '甘肃', year: '2024' }],
+      sourceCount: 1,
+    }],
   }) }
   if (u.includes('/api/pool/question')) return { json: async () => ({
     canonicalId: 'q:10204454', module: '判断推理', category: '图形推理', kadian: '图形推理 / 数量规律',
@@ -409,8 +464,25 @@ globalThis.fetch = async (url) => {
 }
 
 // cycle-15 专项刷题记忆：全局记忆仓库（三专项视图挂载时 GET；翻题 POST 由视图静默回写）
+// cycle-62：practice 记忆题升级为**七段全集**（与 /api/pool/questions 出站同形），
+// 使「继续上次」这条已确认可用的旅程能验证七段渲染（编号/来源/题型/材料/题干/选项/答案/解析 + 图片）。
 globalThis.__kgMemStore = {
-  practice: { module: '判断推理', at: Date.now() - 60e3, question: { module: '判断推理', type: '逻辑', stem: '上次的题干（记忆恢复）', options: { A: 'a1', B: 'b1', C: 'c1', D: 'd1' }, correctAnswer: 'B', analysis: '解析文本' } },
+  practice: {
+    module: '判断推理', at: Date.now() - 60e3,
+    question: {
+      id: 'q:mock:mem#1', canonicalId: 'q:mock:mem#1',
+      no: 1, number: 1,                                       // 0 编号
+      source: 'naoku', paperFile: '2024年国考《行测》', region: '国考', year: '2024',  // 1 来源
+      type: '逻辑', module: '判断推理',                        // 2 题型
+      groupMaterial: '【材料】某市 2018-2023 年铁路旅客运输量变化情况如下表所示。',      // 3 材料
+      groupMaterialNo: 1, materialRef: '材料 1',
+      stem: '上次的题干（记忆恢复）',                           // 4 题干
+      options: { A: 'a1', B: 'b1', C: 'c1', D: 'd1' },        // 5 选项
+      correctAnswer: 'B',                                      // 6 答案（池原生字段名）
+      analysis: '解析文本',                                    // 7 解析
+      dims: { kadian: '判断推理 / 逻辑', reasoning: '推理链文本' },
+    },
+  },
   tuxing: { cat: 'shuliang', catName: '数量规律', no: 2, idx: 1, at: Date.now() - 120e3 },
   deep: { module: '数量关系', at: Date.now() - 180e3, question: { module: '数量关系', stem: '深度题库上次的题', options: { A: 'x', B: 'y' }, correctAnswer: 'A', kadian: '母题思维' } },
 }
