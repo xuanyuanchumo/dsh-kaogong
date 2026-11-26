@@ -19,7 +19,7 @@
  *   源实现**只允许**认识上游格式（适配层职责）；
  *   存储层与内核层不认识任何具体上游。
  */
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, statSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { ingestNaokuSource, ingestXingceSource, ingestGwyZhentiSource } from './poolSourceImpls.js'
 import { ingestXingceAppSource, ingestTuxingSource, ingestQiuzhaoSource, ingestCeaSource } from './poolSourceJson.js'
@@ -131,7 +131,24 @@ export const SOURCE_REGISTRY: SourceSpec[] = [
     tier: 'required',
     label: '深度题库（GongkaoNaoku）',
     upstream: 'https://github.com/Hongyy177/GongkaoNaoku',
-    available: (ctx) => existsSync(join(ctx.dataDir, '.naoku.db')),
+    /**
+     * 可用判定（cycle-62）：投影库 `.naoku.db` **或**上游分片任一存在即算可用。
+     *
+     * 为什么不能只判投影库：投影库只由 `ensureNaokuDb` 合并分片产生，而合并在
+     * **ingest 阶段**才触发——若 available 只看投影库，则「从未访问过深度题库端点」
+     * 的用户/CI 会在探测阶段判定源不可用 → 压根走不到 ingest → 永远合不出来
+     * （自锁）。CI 上更是恒现：无人先访问端点 → 池少 27,506 题五维 + kadian 边。
+     */
+    available: (ctx) => {
+      if (existsSync(join(ctx.dataDir, '.naoku.db'))) return true
+      // 上游分片（或已合并单文件）存在 → ingest 会自行合并（ensureNaokuDb）
+      try {
+        const srcDir = join(ctx.repoRoot, 'GongkaoNaoku')
+        if (!existsSync(srcDir)) return false
+        const names = readdirSync(srcDir) as string[]
+        return names.some(n => /^kaogong\.db\.part-\d+$/.test(n)) || names.includes('kaogong.db')
+      } catch { return false }
+    },
     ingest: (ctx) => ingestNaokuSource(ctx),
   },
   {

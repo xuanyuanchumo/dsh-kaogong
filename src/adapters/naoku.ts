@@ -16,6 +16,39 @@ let db: any = null
 let dbFailed = false
 let dbPath: any = null
 
+/**
+ * 合并分片（源仓 GongkaoNaoku/kaogong.db.part-*）到本地 data/.naoku.db
+ *
+ * 导出理由（cycle-62 CI 修复）：统一池摄入（`ingestNaokuSource`）需要上游投影库存在，
+ * 但投影库**只由本模块的 ensureDb 合并产生**——若用户从未访问过深度题库端点，
+ * 池摄入会静默跳过 naoku（少 27,506 题五维标注 + kadian 边）。CI 上更是恒现
+ * （无人先访问端点）→ 断言「kadian 边 ≥ naoku 题数×0.99」必红。
+ * 解法 = 合并函数对外可见，摄入路径自己保证前置物存在。
+ */
+export function ensureNaokuDb(repoRoot: any, dataDir: any): any {
+  const target = join(dataDir, '.naoku.db')
+  if (existsSync(target)) { dbPath = target; return target }
+  const srcDir = join(repoRoot, 'GongkaoNaoku')
+  if (!existsSync(srcDir)) return null
+  let parts
+  try {
+    parts = readdirSync(srcDir).filter(f => /^kaogong\.db\.part-\d+$/.test(f)).sort()
+  } catch { return null }
+  // 也支持已合并的单文件
+  if (!parts.length) {
+    const single = join(srcDir, 'kaogong.db')
+    if (existsSync(single)) { dbPath = single; return single }
+    return null
+  }
+  try {
+    mkdirSync(dataDir, { recursive: true })
+    const bufs = parts.map(p => readFileSync(join(srcDir, p)))
+    writeFileSync(target, Buffer.concat(bufs))
+    dbPath = target
+    return target
+  } catch { return null }
+}
+
 /** 合并分片（源仓 GongkaoNaoku/kaogong.db.part-*）到本地 data/.naoku.db */
 function ensureDb(repoRoot: any, dataDir: any) {
   const target = join(dataDir, '.naoku.db')

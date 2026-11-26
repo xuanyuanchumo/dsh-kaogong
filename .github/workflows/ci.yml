@@ -21,6 +21,73 @@ jobs:
       - name: Install (no runtime deps — registry-free)
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
+      # ── 门禁 0：题库 fixture + 建池（cycle-62 CI 修复）────────────
+      # 为什么需要：有一批 smoke 断言**天然依赖真实题库数据**（统一池的五维标注 /
+      # 关系边 / 带图题 / 真题卷索引 / 方法论语料）。这些数据由用户「📦 题库管理」
+      # 按需克隆——CI runner 上恒不存在 → 断言必然红（CI 自 2026-11-21 起持续红，
+      # 25 个文件 / 54 个断言）。
+      #
+      # 为什么是「装全量」而不是「加降级守卫」：
+      #   守卫方案要改 12 个测试文件、每处人工判断「这条断言需不需要数据」，
+      #   漏一处 CI 就红，且本地覆盖被悄悄削弱；装全量则**测试代码零改动**，
+      #   断言即真值（更简单 = 更少出错面）。
+      #
+      # 镜像代理？**不用**——CI runner 在 GitHub 机房，直连 GitHub 最快最稳；
+      #   第三方代理是给国内用户机器用的（插件内置 mirror 功能正是为此），
+      #   且走代理 = CI 验证的是「代理给的代码」而非官方源（供应链风险）。
+      #
+      # 缓存：actions/cache 缓存题库克隆与建好的池 → 首次约 3-5 分钟，之后秒级。
+      - name: Cache question-bank repos
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/kg-repos
+          key: kg-repos-v1-${{ hashFiles('.github/workflows/ci.yml') }}
+
+      - name: Cache built pool
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/kaogong-data
+          key: kg-pool-v1-${{ hashFiles('.github/workflows/ci.yml') }}
+
+      - name: Fetch question-bank repos
+        run: |
+          set -euo pipefail
+          REPOS_ROOT="${{ runner.temp }}/kg-repos"
+          mkdir -p "$REPOS_ROOT"
+          for spec in \
+            "https://github.com/WangJunqing-coder/huasheng13-skill huasheng13" \
+            "https://github.com/Cha551/gk-tuxing gk-tuxing" \
+            "https://github.com/KeWang0622/kaogong-skill kaogong-skill" \
+            "https://github.com/ERRRC/xingcezhenti xingcezhenti" \
+            "https://github.com/YMDHZBSJ/xingce-app xingce-app" \
+            "https://github.com/jangviktor-web/GongkaoNaoku GongkaoNaoku" \
+            "https://github.com/ProfessorZhi/gwy-zhenti gwy-zhenti" \
+            "https://github.com/Timothy-yqw19/qiuzhao-epi-bank qiuzhao-epi-bank" \
+            "https://github.com/tongnian0666-code/civil-exam-agent civil-exam-agent" \
+          ; do
+            url="${spec% *}"; dir="${spec##* }"
+            if [ -d "$REPOS_ROOT/$dir" ]; then
+              echo "跳过 $dir（缓存命中）"
+              continue
+            fi
+            echo "克隆 $dir …"
+            git clone --depth 1 --quiet "$url" "$REPOS_ROOT/$dir"
+          done
+          du -sh "$REPOS_ROOT" || true
+
+      - name: Build unified pool (once — all tests share it)
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ runner.temp }}/kaogong-data"
+          node scripts/ci/build-pool.mjs \
+            --repo-root "${{ runner.temp }}/kg-repos" \
+            --data-dir  "${{ runner.temp }}/kaogong-data"
+
+      - name: Expose repos + data to tests
+        run: |
+          echo "KG_REPOS_DIR=${{ runner.temp }}/kg-repos" >> "$GITHUB_ENV"
+          echo "KG_DATA_DIR=${{ runner.temp }}/kaogong-data" >> "$GITHUB_ENV"
+
       # ── 门禁 1：提交信息格式（BL-PROC-02）────────────────────────
       # 只在 PR 上校验新增提交，避免历史提交一次性阻断。
       - name: Commit message gate

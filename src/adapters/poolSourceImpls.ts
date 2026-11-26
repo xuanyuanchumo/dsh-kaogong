@@ -71,7 +71,17 @@ function normalizeOptions(raw: any): string {
  */
 export async function ingestNaokuSource(ctx: any): Promise<any> {
   const { db, repoRoot, dataDir } = ctx
-  const src = join(dataDir, '.naoku.db')
+  let src = join(dataDir, '.naoku.db')
+  if (!existsSync(src)) {
+    // 投影库缺失 → 先合并分片（cycle-62：用户/CI 从未访问深度题库端点时，
+    // 池摄入会静默跳过 naoku —— 少 27,506 题五维 + kadian 边）。
+    // 合并只写本地 data/（**绝不写上游仓**——载体隔离守卫 SMOKE-KGDB-05）。
+    try {
+      const naokuMod = await import('./naoku.js')
+      const merged = naokuMod.ensureNaokuDb(repoRoot, dataDir)
+      if (merged) src = merged
+    } catch { /* 合并失败 → 下面的 skipped 分支如实上报 */ }
+  }
   if (!existsSync(src)) return { source: 'naoku', skipped: true, reason: '上游投影库不存在（.naoku.db）' }
   let upstream: any = null
   try {
