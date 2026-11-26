@@ -2,6 +2,58 @@
 
 本文件记录 dsh-kaogong 的版本级变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.34.3] - 2026-11-26
+
+**深度题库收敛进统一池（端点 82 → 79）** —— 消除「同一能力两套端点」的漂移面。
+
+### 背景（为什么退役）
+
+深度题库视图原消费 `/api/naoku/*` 六个端点。v9 统一数据层改造后，这些端点的
+**数据层已经完全是统一池**（`poolNaoku` 读层，源码级「只有一条读路径，绝不直读 `.naoku.db`」），
+于是形成双端点冗余：能力对账要维护两份声明、消费方无从判断该走哪一套、
+白盒面板出现两套同源指标的假漂移风险。
+
+### 新增（3 个池端点 · 补齐池原本缺失的语义）
+
+- **`GET /api/pool/kadians`**：考点清单 / 关键词检索
+  （`?q=` 按词检索 → `{kadian,category,module,count}`；无 q → 分类清单，`k` 与 `kadian` 双写兼容旧形状）
+- **`GET /api/pool/by-kadian`**：按考点反查题目（`?kadian=&count=`，支持模糊匹配）
+- **`GET /api/pool/papers-by-kadian`**：考点→试卷反查（`?category=&limit=`）
+- **`GET /api/pool/questions` 新增 `?has=` 过滤**：`mother|pitfalls|reasoning|fastest|analysis|kadian`
+  逗号分隔表示「任一非空」（`LENGTH(col)>0`），列名走白名单防注入。
+  替代原「取 20 题再客户端过滤」的浪费路径。
+
+### 退役（6 个 `/api/naoku/*` 端点）
+
+`status` / `questions` / `kadian` / `practice` / `papers` / `categories` 全部移除——
+抽题与状态原语本就由 `/api/pool/questions`、`/api/pool/status` 覆盖，不重复造。
+
+**保留 `/api/naoku-img`**：图片是**媒体引用**（L3 不做 BLOB 的既定决策，按 `rel_path` 取流），
+不属于「题目事实直读」，与 I-DB-1（题目事实只走池）不冲突。
+
+### 修复（顺带）
+
+- **`poolRowToNaoku` 缺题号与材料字段**：原映射无 `no`/`number`/`groupMaterial`——
+  深度题库/按考点刷题的题因此题号显示 `?`、材料整段丢失（与 cycle-62 七段修复同源）。
+  补 `no`/`number`（取卷内 `seq`）、`groupMaterial`/`groupMaterialNo`。
+- **`searchRegistry` 的 kadian provider** 端点改指 `/api/pool/kadians`
+  （provider id 保留 `kadian`——对外检索源标识，改 id 会破坏既有消费与对账）。
+
+### 消费面改动（客户端 8 处）
+
+`study-view`（5 处）与 `papers-view`（3 处）全部改走池端点；UI 零功能变化
+（`k`/`kadian` 双写 + `has` 过滤使改动对渲染层透明）。
+
+### 守卫同步（7 处）
+
+端点计数（82→79）、`C60-FRESH-03` 重写为「收敛后形态」（断言 handler 已删、
+3 个下沉端点存在、图片服务保留）、`C60-02`/`C60-RT-01`/`SEARCH-04` 端点清单对齐、
+`R-N-01` 改池端点口径、render harness mock（naoku mock 平移为 `pool?source=naoku` + `by-kadian`）。
+
+### 测试
+
+- **54 文件 / 435 断言全绿**；`facts:check` + `docs:check` 绿。
+
 ## [1.34.2] - 2026-11-26
 
 **题目七段渲染字段错配根治（用户报「来源/题型/题号/材料/题干/选项/答案/解析 组件化显示有问题」）**

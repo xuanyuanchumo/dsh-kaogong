@@ -41,8 +41,13 @@ test('R-N-01 /api/methods 活体（HTTP 200 + 10 主题目录）', async () => {
   expect(Array.isArray(meW3.topics) && meW3.topics.length).toBe(10)
 })
 
-test('R-N-01 /api/naoku/questions 结构化（就绪=题目数组 / 未就绪=空数组+fallback，非 5xx）', async () => {
-  const nkR = await fetch(`${h.base}/api/naoku/questions?count=20&random=0&ws=PROJ_VTEST_PROV`)
+test('R-N-01 池抽题结构化降级（就绪=题目数组 / 未就绪=空数组+fallback，非 5xx）', async () => {
+  /**
+   * cycle-62 端点收敛：原 /api/naoku/questions 退役，等价能力由 /api/pool/questions 承担
+   * （原语义：取 20 题后按 mother/pitfalls 过滤 → 现由 `?has=mother,pitfalls` 服务端过滤）。
+   * 断言口径不变：**结构化降级**——就绪给题目数组，未就绪给空数组 + fallback，绝不 5xx。
+   */
+  const nkR = await fetch(`${h.base}/api/pool/questions?count=20&source=naoku&has=mother,pitfalls&ws=PROJ_VTEST_PROV`)
   const nkW3 = await nkR.json()
   expect(nkR.status).toBe(200)
   expect(nkW3 && typeof nkW3 === 'object' &&

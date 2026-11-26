@@ -20,7 +20,7 @@ test('C60-RT-01 provider 清单运行时可达且与 manifest 检索端点同源
   const r = await h.J('/api/search/providers?ws=PROJ_USEARCH_C60')
   expect(Array.isArray(r.providers)).toBe(true)
   expect(r.providers).toEqual(['docs', 'history', 'huasheng13', 'kadian', 'pool'])
-  const expectEndpoints = ['/api/search', '/api/history/search', '/api/huasheng13/search', '/api/naoku/kadian', '/api/pool/search']
+  const expectEndpoints = ['/api/search', '/api/history/search', '/api/huasheng13/search', '/api/pool/kadians', '/api/pool/search']
   expect(expectEndpoints.every(p => declared.has(p))).toBe(true)
 })
 

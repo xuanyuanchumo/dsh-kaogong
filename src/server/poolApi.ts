@@ -26,6 +26,12 @@ import { quotaPlan, weightedPickIndex, moduleWeakness, weaknessWeight } from '..
 // v9-b：重建改由 worker 线程执行（主线程零阻塞）——本文件不再直接调用 rebuildPool/incrementalRebuild
 import { registrySnapshot } from '../adapters/poolIngest.js'
 import { poolHealth, ingestDiagnostics, REL_TYPE_META } from './poolObservability.js'
+/**
+ * 深度题库读层（cycle-62 收敛）：`/api/naoku/*` 退役后，其 3 个「池没有等价能力」
+ * 的语义（考点清单 / 按考点反查 / 考点→试卷反查）在 poolApi 内直接复用本读层。
+ * 读层是**无状态池查询**（每次调用现查 poolDb），实例化成本可忽略。
+ */
+import { makePoolNaokuReader } from './poolNaoku.js'
 
 
 /**
@@ -55,6 +61,9 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
     try { if (typeof onDataChanged === 'function') onDataChanged(entity, reason) } catch { /* 失效失败降级为下次重算 */ }
   }
   const { loadProgress } = store
+
+  /** 深度题库读层实例（3 个 kadian 语义端点用；无状态，见顶部 import 注释） */
+  const poolNaokuReader = makePoolNaokuReader()
 
   // ── T-032 重建作业状态（repoManager 同构：进行中单槽 + 归档环形 10）──
   // 教训㊸：作业表只存「进行中」，完成态必须另存归档——「上次重建是什么结果」
@@ -129,12 +138,28 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
       const source = params.get('source') || 'all'
       const moduleName = params.get('module') || ''
       const kadian = params.get('kadian') || ''
+      /**
+       * `has` 过滤（cycle-62 收敛）：原 `/api/naoku/questions` 被 papers-view 的
+       * 「母题思维 / 易错点精选」用于 `random=0` 顺序取 20 题再按 mother/pitfalls 过滤。
+       * 池端点无此维度 → 补 `?has=mother|pitfalls|reasoning|fastest|analysis`
+       * （逗号分隔表示「任一非空」），语义 = `LENGTH(col) > 0`。
+       * ⚠️ SQL 列名白名单（防注入）：只认下表映射，未知值忽略。
+       */
+      const HAS_COLS: Record<string, string> = {
+        mother: 'mother', pitfalls: 'pitfalls', reasoning: 'reasoning',
+        fastest: 'fastest', analysis: 'analysis', kadian: 'kadian',
+      }
+      const hasRaw = String(params.get('has') || '').trim()
       const count = Math.min(50, Math.max(1, parseInt(params.get('count') || params.get('limit') || '10')))
       const where: string[] = []
       const args: any[] = []
       if (moduleName) { where.push('module = ?'); args.push(moduleName) }
-      if (kadian) { where.push('kadian = ?'); args.push(kadian) }
+      if (kadian) { where.push('(kadian = ? OR kadian LIKE ?)'); args.push(kadian, '%' + kadian + '%') }
       if (source && source !== 'all') { where.push('source_id = ?'); args.push(source) }
+      if (hasRaw) {
+        const cols = hasRaw.split(',').map(s => HAS_COLS[s.trim()]).filter(Boolean)
+        if (cols.length) where.push('(' + cols.map(c => `LENGTH(${c}) > 0`).join(' OR ') + ')')
+      }
       const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
       // 候选集上限：分层抽题不需要全表扫（性能守卫——研究 13 §4.4「检索响应 < 50ms」）。
       //
@@ -501,6 +526,80 @@ export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
       } catch (e: any) {
         return { error: '查询失败: ' + (e && e.message) }
       }
+    }
+
+    /* ══════════ 深度题库语义（cycle-62 收敛：原 /api/naoku/* 下沉到池）══════════
+     *
+     * 背景：深度题库视图原先消费 `/api/naoku/*` 六个端点。v9 改造后这些端点的
+     * **数据层已完全是统一池**（poolNaoku 读层，绝不直读 `.naoku.db`），
+     * 于是形成「同一能力两套端点」的漂移面：能力对账要维护两份声明，
+     * 消费方也无从判断该走哪一套。
+     *
+     * 收敛方案（用户确认）：**把 3 个池没有等价能力的语义直接暴露为池端点**，
+     * 深度题库视图改消费这些端点，`/api/naoku/*` 整套退役（82 → 79 端点）。
+     *
+     * 只下沉 3 个「池确实缺」的：
+     *   · kadians    考点清单/检索（原 /api/naoku/kadian + /api/naoku/categories）
+     *   · by-kadian  按考点反查题目（原 /api/naoku/practice）
+     *   · papers-by-kadian 考点→试卷反查（原 /api/naoku/papers）
+     * 抽题/状态原语已由 /api/pool/questions + /api/pool/status 覆盖，不重复造。
+     *
+     * 数据口径：深度题库在池内 = `source_id='naoku'`（poolNaoku 读层按此过滤）。
+     * 响应保留 `sourceTier:'pool'` 兼容字段（既有消费方按它做白盒展示）。
+     */
+
+    /* ── GET /api/pool/kadians（考点清单 / 关键词检索）──
+     * ?q=<关键词>  关键词过滤（空=分类清单，对齐原 /api/naoku/categories）
+     * ?limit=N     默认 40，上限 200
+     * 返回 { keyword, list:[{kadian,category,module,count}], total, sourceTier }
+     *
+     * ⚠️ 字段双写：分类清单原形状是 `{k, count}`（papers-view 消费），
+     * 关键词检索原形状是 `{kadian,category,module,count}`（study-view 消费）。
+     * 两种消费方同时存在 → 统一输出**同时含 `k` 与 `kadian`**（值相同），
+     * 让两个旧消费点在改端点后零改动。 */
+    if (path === '/api/pool/kadians') {
+      const db = requireDb()
+      if (!db) return { keyword: '', list: [], total: 0, sourceTier: 'pool', fallback: true }
+      const q = String(params.get('q') || '').trim()
+      const limit = Math.min(200, Math.max(1, parseInt(params.get('limit') || '40')))
+      const raw = q ? poolNaokuReader.kadian(q, limit) : poolNaokuReader.categories(limit)
+      // 归一：两类形状合并为超集（k/kadian 同值；无 category/module 时给空串）
+      const list = raw.map((r: any) => {
+        const kad = String(r.kadian || r.k || r.category || '')
+        return {
+          k: kad, kadian: kad,
+          category: String(r.category || ''),
+          module: String(r.module || ''),
+          count: Number(r.count || 0),
+        }
+      })
+      return { keyword: q, list, total: list.length, sourceTier: 'pool' }
+    }
+
+    /* ── GET /api/pool/by-kadian（按考点反查题目）──
+     * ?kadian=<考点> 必填（支持模糊匹配） ?count=N 默认 5，上限 50
+     * 返回 { kadian, questions:[...], count, sourceTier } */
+    if (path === '/api/pool/by-kadian') {
+      const db = requireDb()
+      if (!db) return { kadian: '', questions: [], count: 0, sourceTier: 'pool', fallback: true }
+      const kadian = String(params.get('kadian') || '').trim()
+      if (!kadian) return { error: '缺少考点（?kadian=考点名）' }
+      const count = Math.min(50, Math.max(1, parseInt(params.get('count') || '5')))
+      const questions = poolNaokuReader.questions({ kadian, count })
+      return { kadian, questions, count: questions.length, sourceTier: 'pool' }
+    }
+
+    /* ── GET /api/pool/papers-by-kadian（考点→试卷反查）──
+     * ?category=<考点分类> 必填 ?limit=N 默认 40，上限 100
+     * 返回 { category, papers:[{paper,region,year,count}], count, sourceTier } */
+    if (path === '/api/pool/papers-by-kadian') {
+      const db = requireDb()
+      if (!db) return { category: '', papers: [], count: 0, sourceTier: 'pool', fallback: true }
+      const category = String(params.get('category') || '').trim()
+      if (!category) return { error: '缺少考点分类（?category=分类名）' }
+      const limit = Math.min(100, Math.max(1, parseInt(params.get('limit') || '40')))
+      const papers = poolNaokuReader.papers(category, limit)
+      return { category, papers, count: papers.length, sourceTier: 'pool' }
     }
 
     /* ── GET /api/pool/question（单题聚合视图）──

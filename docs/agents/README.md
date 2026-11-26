@@ -7,7 +7,7 @@ updated: 2026-11-26
 
 > 本目录是 **面向 AI agent 与本项目开发者** 的事实基线，与代码同源、随迭代更新。
 > 目的：让任何接手者（人或 agent）在不读完全部代码的前提下，能正确修改本插件而不引入回归。
-> 当前基线：v1.34.0 / cycle-46（16 仓库 · **82 端点** · 6 工具（全部接入 presentCall/presentResult 展示契约）· **16 视图**；vitest **411 断言 × 50 分域文件** + Loader e2e **17 断言**；**统一题目池 `.kaogong.db` 落地**（27506 题 / 222894 关系边 / 59093 出处 · 9 个 `/api/pool/*` 端点 · 跨源检索 19–38ms · **重建跑 worker 线程不冻结宿主**）；内核边界六不变量已机器化为 `SMOKE-KERNEL-01..06b`）。
+> 当前基线：v1.34.0 / cycle-46（16 仓库 · **79 端点** · 6 工具（全部接入 presentCall/presentResult 展示契约）· **16 视图**；vitest **411 断言 × 50 分域文件** + Loader e2e **17 断言**；**统一题目池 `.kaogong.db` 落地**（27506 题 / 222894 关系边 / 59093 出处 · 9 个 `/api/pool/*` 端点 · 跨源检索 19–38ms · **重建跑 worker 线程不冻结宿主**）；内核边界六不变量已机器化为 `SMOKE-KERNEL-01..06b`）。
 
 ## 阅读路径（按任务选）
 
@@ -31,7 +31,7 @@ updated: 2026-11-26
 |---|---|---|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 双半结构、combo 工厂、域工厂重建与数据根四级解析、方法论域装配与边界 | 新增分层/入口/域时 |
 | [**STORAGE-LAYER.md**](./STORAGE-LAYER.md) | **统一题目池 `.kaogong.db`：四层依赖 + 六不变量 + schema + 源注册表（可扩展）+ 白盒健康快照（可观测）+ 兼容硬约束 + 坑速查** | **改存储层/关系层/新增源时必读** |
-| [API-REFERENCE.md](./API-REFERENCE.md) | **82 个端点** + 6 个工具 + 16 个视图的契约（含 `/api/pool/*` 九端点与 6 个 `/api/huasheng13/*`） | 改端点时（必须同步） |
+| [API-REFERENCE.md](./API-REFERENCE.md) | **79 个端点** + 6 个工具 + 16 个视图的契约（含 `/api/pool/*` 九端点与 6 个 `/api/huasheng13/*`） | 改端点时（必须同步） |
 | [**METHODOLOGY.md**](./METHODOLOGY.md) | 花生十三体系适配库：数据来源/授权、25 篇清单、单一事实源四步法、BM25+bigram、覆盖矩阵口径、74 题练习、降级语义 | **新增/修改方法论语料或检索时必读** |
 | [CONVENTIONS.md](./CONVENTIONS.md) | 编码规范、技术选型理由、纪律条款（含 `hs13/Hs13` 前缀与导航收敛） | 引入新约定时 |
 | [DSH-HOST-CAPABILITIES.md](./DSH-HOST-CAPABILITIES.md) | 宿主能力盘点：已用/可用未用/市场合规 | 发现新宿主能力时 |
