@@ -1,7 +1,7 @@
 ---
 title: BACKLOG · dsh-kaogong 唯一未完成清单
 status: current
-updated: 2026-11-20
+updated: 2026-11-26
 ---
 
 # BACKLOG · dsh-kaogong 唯一未完成清单
@@ -106,6 +106,7 @@ BL-<域>-<两位序号>
 | **BL-REL-01** | release workflow 自动化 | 无 tag 触发 workflow；notes 手工操作 | npm 发布建议保持手动（凭据安全） | 可选：tag 触发 GitHub Release workflow；npm 保持 vault_run | ⬜ |
 | **BL-PROC-09** | hotfix 流程演练 | `CONTRIBUTING.md:13` 有规定，git 历史无 hotfix 痕迹 | 无真实紧急场景 | 桌面演练记录（双 PR 顺序、bump 时机） | ⬜ |
 | **BL-SEC-01** | 验证环境隔离（沙箱/真机是否污染目录） | 实测发现：数据根 `~/.dsh/kaogong` 按用户而非按 profile 隔离，未设 `KG_DATA_DIR` 的探针 adopt 到主力 8400 实例并读到主力进度；端口 8400 硬编码导致假阳性 | — | `docs/agents/ISOLATION.md` 三层隔离；`KG_PORT` 可配置；`loader.test.mjs` 断言 pid/port/数据根隔离；负向验证可观察污染 | ✅ |
+| **BL-REL-02** | v1.34.0 发布收口（文档事实校准 + GitHub/npm 发布 + 市场条目更新） | 文档端点数/断言数/题库口径三处漂移（78 端点 → 实为 82；276 断言 × 35 文件 → 实为 411 × 50；统一池仍写 v1.30 的 27,506 题 → 实为 86,454）；发布线 `main` 落后 `origin/main` 5 个提交；`.dsh/` overlay 70 个文件曾被 git 跟踪 | — | ① `npm run facts:check` 全绿；② `npm run test:all` 全绿（50 文件 / 411 断言 + Loader 17/17）；③ `.dsh/` 出库且 gitignore 覆盖；④ `develop` → `main` 合并 + tag `v1.34.0` + GitHub Release；⑤ npm `dsh-kaogong@1.34.0` 认证通道复验；⑥ 上游市场条目描述数字与 manifest 核对一致 | 🟡 |
 
 ---
 
