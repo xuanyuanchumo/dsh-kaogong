@@ -27,16 +27,32 @@ import { makeWsStore } from './ws.js'
 import { makeSrsApi, srsHooks } from './srs.js'
 import { makeDataApi, makeStudyPlan } from './dataApi.js'
 import { makePaperApi } from './paperApi.js'
-import { makeNaokuApi, initNaoku, resetNaoku } from './naokuApi.js'
+import { makeNaokuApi } from './naokuApi.js'
 import { makeTuxingApi } from './tuxingApi.js'
-import { makeMethodologyApi } from './methodologyApi.js'
+import { resetTuxing } from '../adapters/tuxing.js'
+// cycle-60 R2 换源：深度题库统一读层 + 整库质量门（白盒提示用）
+import { makePoolNaokuReader, poolFresh } from './poolNaoku.js'
+// cycle-60 T-038 图形推理无损换源：统一池读层
+import { makePoolTuxingReader } from './poolTuxing.js'
+// cycle-61 v9：统一数据门（按域就绪判定 + 按需摄入 single-flight）+ 域注册表
+import { allDomainStatus, resetGateState, ensureDomain } from './dataGate.js'
+import { auditDomains } from '../shared/domains.js'
+import { makeMethodologyApi, resetMethodologyIndex } from './methodologyApi.js'
 import { resolveReposRoot, USER_DATA_ROOT, PROGRESS_DIR_USER, migratePkgData, dataLocationReport } from './dataRoot.js'
 import { makeRepoManager } from './repoManager.js'
 import { makeHistoryApi } from './historyApi.js'
 import { makePoolApi } from './poolApi.js'
 import { createTelemetry, isDeclaredEndpoint, recordRequest, telemetrySnapshot, UNMATCHED_BUCKET } from './telemetry.js'
-import { initPoolDb, resetPoolDb, putStudyEvent, poolDb } from '../adapters/poolDb.js'
+import { initPoolDb, resetPoolDb, putStudyEvent, poolDb, invalidateStatsCache, putSearchEvent, searchEventStats, enqueueUserWrite } from '../adapters/poolDb.js'
 import { schedulePlan } from './planSchedule.js'
+// cycle-60 统一缓存层：域|wsKey|rootFp|参数 四维度单一事实源（消除散落 TTL/LRU 与跨租户污染）
+import { createCache } from './cache.js'
+// cycle-61 v9：数据写入事件总线（缓存失效的唯一触发点）
+import { bindCache, emitDataChanged, subscribeDataEvents, dataEventSubscribers } from './dataEvents.js'
+// v9：统一错题/补录层（库侧单条 upsert——判分后错题本立即可见，不依赖整本镜像）
+import { upsertWrongEntry } from './reviewStore.js'
+// cycle-60 统一检索层：SearchProvider 运行时注册表（provider id/label 从 manifest 端点声明派生）
+import { createSearchRegistry } from './searchRegistry.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
@@ -62,31 +78,54 @@ const MIGRATION = migratePkgData()
 // > 开发态上级目录（含任一登记仓库）> 托管默认 data/repos/。
 // 数据根变更（换根/安装/删除）→ rebuildDomains()：域工厂重建 + 缓存失效，各域文件零改动。
 let domains: any = null
+/** 统一缓存实例（进程内；换根时按域失效，不跨 fiber 共享可变状态——R7） */
+const kgCache = createCache()
 function buildDomains(root: string) {
   const store = makeWsStore(PROGRESS_DIR)
   // cycle-34 阶段 1：统一题目池域（`.kaogong.db` 存储层）
   // ⚠️ 装配顺序：**必须先于 srsApi**——SRS 抽题走存储层优先（I5/KERNEL-05），
   // 需要引用 poolApi.sampleQuestions（换根时随域一起重建，cycle-16 教训⑬）。
-  const poolApi = makePoolApi({ repoRoot: root, dataDir: DATA_DIR, store })
+  const poolApi = makePoolApi({
+    repoRoot: root, dataDir: DATA_DIR, store,
+    // v9：重建/校验写入 → 统一变更广播（级联清派生缓存；适配层不 import server，经钩子反转依赖）
+    onDataChanged: (entity: string, reason: string) => { emitDataChanged(entity as any, reason) },
+  })
+  /**
+   * cycle-61 v9：统一数据门上下文（repoRoot + dataDir）。
+   * 各域用它做「未就绪 → 按域摄入 → 重读」——**唯一**允许触及源文件的入口（摄入期）。
+   */
+  const dataCtx = { repoRoot: root, dataDir: DATA_DIR }
   const d = {
     root,
     store,
+    dataCtx,
     srsApi: makeSrsApi({ repoRoot: root, store, pool: poolApi }),
-    dataApi: makeDataApi({ repoRoot: root, planFile: PLAN_FILE }),
-    paperApi: makePaperApi({ repoRoot: root, store }),
-    naokuApi: makeNaokuApi({ repoRoot: root, dataDir: DATA_DIR, store }),
-    tuxingApi: makeTuxingApi({ repoRoot: root }),
+    // cycle-60 R9：方法论参考走 knowledge 表（v9 起无 md 回落——域未就绪时按需摄入）
+    dataApi: makeDataApi({ repoRoot: root, planFile: PLAN_FILE, dataCtx }),
+    // v9：真题卷唯一读路径 = 统一池（paper/paper_material/question 卷级列）
+    paperApi: makePaperApi({ repoRoot: root, store, dataCtx }),
+    // v9：深度题库唯一读路径 = 统一池（source_id='naoku' 口径）；.naoku.db 只作摄入输入
+    naokuApi: makeNaokuApi({ repoRoot: root, poolNaoku: makePoolNaokuReader(), dataCtx }),
+    // v9：图推唯一读路径 = 统一池（source_extras 无损保留上游字段）
+    tuxingApi: makeTuxingApi({ repoRoot: root, poolTuxing: makePoolTuxingReader(), dataCtx }),
     // cycle-18 花生十三体系方法论域：语料走数据根（与其它题库统一由「题库管理」配置），
     // 因此这里必须注入 repoRoot —— 数据根热切换时由 rebuildDomains 重建本域。
     // store 用于 trace 计数器按 wsKey 分槽隔离（cycle-17 ㉙ 跨项目污染教训）。
-    methodologyApi: makeMethodologyApi({ pkgRoot: PKG_ROOT, repoRoot: root, dataDir: DATA_DIR, store }),
+    methodologyApi: makeMethodologyApi({ pkgRoot: PKG_ROOT, repoRoot: root, dataDir: DATA_DIR, store, dataCtx }),
     // cycle-21 纸质补录域（issue #3）：搜索/补录/撤销，指纹与错题本同源
-    historyApi: makeHistoryApi({ store, repoRoot: root }),
+    // v9：搜索通道收敛为「池检索」唯一通道（naoku 直读与真题卷目录扫描已删除）
+    historyApi: makeHistoryApi({ store, repoRoot: root, dataCtx }),
     poolApi,
     studyPlan: makeStudyPlan(PLAN_FILE),
   }
-  initNaoku(root, DATA_DIR).catch(() => {})
-  // cycle-34 阶段 1：统一库惰性打开（失败只降级——域内诚实报「未就绪」，绝不崩宿主）
+  // cycle-60 统一检索层：注册表随域工厂重建（换根无跨代状态残留——R7）；
+  // provider id/label 从 manifest 端点声明派生（单一事实源），五 provider 全委托既有域函数零算法复制。
+  const searchRegistry = createSearchRegistry(CAPABILITIES.endpoints as any, d as any)
+  searchRegistry.registerBuiltins()
+  ;(d as any).searchRegistry = searchRegistry
+  // cycle-61 v9：**不再预先打开 .naoku.db**（运行期零外源直读）。
+  // 它只在 ingestNaokuSource（适配层）内部按需以只读方式打开。
+  // 统一库惰性打开（失败只降级——域内诚实报「未就绪」，绝不崩宿主）
   initPoolDb(DATA_DIR).catch(() => {})
   return d
 }
@@ -101,24 +140,111 @@ function rebuildDomains() {
   domains = buildDomains(next)
   if (changed) {
     resetPaperIndex()
-    resetNaoku()
     resetPoolDb()
-    graphCache.clear()
+    // cycle-61 v9：数据门状态（单飞/冷却）随换根清空——否则旧根的「源不可用」冷却会阻塞新根摄入
+    resetGateState()    // cycle-60 统一缓存失效：graph 走 kgCache 域；tuxing 旧全局缓存纳入失效链（补 cycle-16 ⑬ 缺口）
+    // v9：换根 = 全部内容型缓存的前提都变了（root 进键，但快照/派生域仍需显式清）
+    kgCache.invalidate({ domain: 'graph' })
+    kgCache.invalidate({ domain: 'tuxing' })
+    kgCache.invalidate({ domain: 'stats' })
+    kgCache.invalidate({ domain: 'search' })
+    kgCache.invalidate({ domain: 'domains' })
+    kgCache.invalidate({ domain: 'paperIndex' })
+    resetTuxing()
   }
   return { root: next, changed }
 }
 const repoManager = makeRepoManager({ getRoot: getRepoRoot, onRootChanged: rebuildDomains })
 getRepoRoot()   // 模块加载即解析一次（后续只读复用）
 
+/**
+ * v9：缓存门面绑定 + 本地快照清理器注册（模块装配期一次）。
+ *
+ * 为什么订阅者是「本地快照」而不是缓存门面自己：
+ *   有些快照藏在模块内部（methodologyApi 的 idxSlot / dataApi 的模块分布 / poolDb 的
+ *   statsCache），它们不是门面持有时序的对象，只能由宿主模块自己清。
+ *   统一事件总线让「谁缓存谁负责清」成为契约，而不是靠人记住每个写入点补一行。
+ */
+bindCache(kgCache)
+/**
+ * v9-b：本地快照清理器**必须按实体过滤**。
+ *
+ * 事故（重建压测实测）：`methodology.idxSlot` 的 clear 不看实体——重建广播 'question'
+ * 时也把方法论索引（25 篇正文解析，秒级成本）清空 → 重建后的首次检索要现场重建索引，
+ * 统一检索因此稳定出现一档 ~5s 尖峰。
+ * 正解：订阅者声明「我关心哪些实体」，只在这些实体变化时清自己。
+ * 这也是「谁缓存谁负责清」契约的完整形态（漏了实体维度就等于过度失效）。
+ */
+subscribeDataEvents({
+  name: 'poolDb.statsCache',
+  // 任何实体变化都会影响统计聚合（题/卷/知识/关系/源/用户态）
+  clear: () => { invalidateStatsCache('data-event') },
+})
+subscribeDataEvents({
+  name: 'methodology.idxSlot',
+  // 只有知识层变化才需要重建方法论索引（question/paper/user 变化与它无关）
+  clear: (entity: any) => { if (entity === 'knowledge') resetMethodologyIndex() },
+})
+subscribeDataEvents({
+  name: 'dataApi.moduleCounts',
+  // 模块分布来自 question 表
+  clear: (entity: any) => { if (entity === 'question') kgCache.invalidate({ domain: 'stats' }) },
+})
+
 // ══ 生命周期事件日志（环形 300 行）══
-function logLifecycle(event: any, data = {}) {
+/**
+ * 生命周期事件记录（cycle-61 v9-b：改为**内存环形 + 延迟刷盘**）。
+ *
+ * ── 旧实现的两处同步 I/O（重建压测实测）──
+ *   每个事件都做 `appendFileSync` + `readFileSync(整文件)` + 可能的 `writeFileSync(重写)`。
+ *   在重建期（WAL checkpoint 繁忙 + 磁盘 IO 饱和）这些同步调用会把主线程卡住数百毫秒
+ *   （实测 `/api/status` 峰值 2316ms → 就是它）。
+ *
+ * ── 新语义 ──
+ *   · 事件先进**内存环形**（有界，最多 300 + 缓冲），对外读取（`/api/lifecycle`、
+ *     白盒面板）先读内存——**读路径不再碰文件**；
+ *   · 刷盘节流：最多每 2 秒追加一次（一次性 append 本批事件）；
+ *   · 裁剪按「每 100 次追加」执行，且只读一次文件；
+ *   · 进程退出/热重载前 flush（`flushLifecycle`），保证审计链不丢。
+ *   语义等价性：内存环形 == 文件尾部 300 条（字段与顺序不变）。
+ */
+const LIFECYCLE_RING_MAX = 300
+const lifecycleMem: any[] = []
+let lifecycleDirty = 0
+let lifecycleLastFlush = 0
+const LIFECYCLE_FLUSH_MS = 2000
+let lifecycleAppendsSinceTrim = 0
+
+function flushLifecycle(force = false): void {
   try {
+    const now = Date.now()
+    if (!lifecycleDirty) return
+    if (!force && now - lifecycleLastFlush < LIFECYCLE_FLUSH_MS) return
     mkdirSync(DATA_DIR, { recursive: true })
-    appendFileSync(LIFECYCLE_FILE, JSON.stringify({ ts: new Date().toISOString(), event, ...data }) + '\n')
-    const all = safeReadFile(LIFECYCLE_FILE, 900000)?.split('\n').filter(Boolean) || []
-    if (all.length > 300) writeFileSync(LIFECYCLE_FILE, all.slice(-300).join('\n') + '\n')
+    const batch = lifecycleMem.slice(-Math.min(lifecycleDirty, lifecycleMem.length))
+    appendFileSync(LIFECYCLE_FILE, batch.map(e => JSON.stringify(e)).join('\n') + '\n')
+    lifecycleDirty = 0
+    lifecycleLastFlush = now
+    lifecycleAppendsSinceTrim++
+    // 裁剪节流：每 100 次追加做一次（读文件也只在这里发生）
+    if (lifecycleAppendsSinceTrim >= 100) {
+      lifecycleAppendsSinceTrim = 0
+      const all = safeReadFile(LIFECYCLE_FILE, 900000)?.split('\n').filter(Boolean) || []
+      if (all.length > LIFECYCLE_RING_MAX) writeFileSync(LIFECYCLE_FILE, all.slice(-LIFECYCLE_RING_MAX).join('\n') + '\n')
+    }
   } catch { /* 日志失败不影响业务 */ }
 }
+
+function logLifecycle(event: any, data = {}) {
+  try {
+    lifecycleMem.push({ ts: new Date().toISOString(), event, ...data })
+    if (lifecycleMem.length > LIFECYCLE_RING_MAX * 2) lifecycleMem.splice(0, lifecycleMem.length - LIFECYCLE_RING_MAX * 2)
+    lifecycleDirty++
+    flushLifecycle(false)
+  } catch { /* 日志失败不影响业务 */ }
+}
+
+
 
 // ══ cycle-21（issue #1）：xingcezhenti 题库配图服务 ══
 // 练习链路（/api/questions）的题干图片在 parseQuestions 时被剥成中立占位 `kgimg://相对路径`，
@@ -172,11 +298,18 @@ const DECLARED_ENDPOINT_SET = new Set(CAPABILITIES.endpoints.map((e: any) => e.p
  */
 function readLifecycleEvents(limit = 50) {
   try {
+    // v9-b：内存优先（读路径零文件 IO）；内存为空（冷启动首读）才回落文件
+    if (lifecycleMem.length) return lifecycleMem.slice(-limit)
     const raw = safeReadFile(LIFECYCLE_FILE, 900000) || ''
     const list: any[] = []
     for (const line of raw.split('\n')) {
       if (!line.trim()) continue
       try { list.push(JSON.parse(line)) } catch { /* 单行损坏：跳过 */ }
+    }
+    // 回读时把文件内容灌入内存环形，后续读就不再碰文件
+    if (list.length) {
+      lifecycleMem.push(...list.slice(-LIFECYCLE_RING_MAX))
+      if (lifecycleMem.length > LIFECYCLE_RING_MAX) lifecycleMem.splice(0, lifecycleMem.length - LIFECYCLE_RING_MAX)
     }
     return list.slice(-limit)
   } catch { return [] }
@@ -253,12 +386,11 @@ function lifecycleSnapshot() {
 // ══ 图谱快照（5s TTL 缓存；节点/边/指标/健康度）══
 // cycle-17 隔离修复：快照内嵌 progress（ws 相关字段），缓存必须按 wsKey 分槽——
 // 否则工作区 A 先访问后，B 在 TTL 内命中同一份缓存，读到 A 的进度（跨项目污染）。
-const graphCache = new Map<string, any>()
+// cycle-60 统一缓存层：graphCache → kgCache（domain=graph，键含 ws|root，TTL/LRU 由门面统一持有）。
 function graphSnapshot(wsRaw: any) {
-  const ck = domains.store.wsKey(wsRaw)
-  const hit = graphCache.get(ck)
-  const now = Date.now()
-  if (hit && hit.data && now - hit.ts < 5000) return hit.data
+  const cacheDims = { domain: 'graph', ws: domains.store.wsKey(wsRaw), root: domains.root }
+  const hit = kgCache.get<any>(cacheDims)
+  if (hit) return hit
   const banks = {
     banks: Object.fromEntries(entries(REPOS).map(([k, v]) => [k, { desc: v, exists: exists(join(domains.root, k)) }])),
     ...repoStats(domains.root),
@@ -297,11 +429,7 @@ function graphSnapshot(wsRaw: any) {
     analytics,
     layout: layeredLayout(ge.nodes, ge.edges),
   }
-  graphCache.set(ck, { ts: now, data })
-  if (graphCache.size > 24) { // 防无界增长：按时间戳清最旧槽（LRU 近似）
-    const oldest = [...graphCache.entries()].sort((a, b) => a[1].ts - b[1].ts).slice(0, graphCache.size - 24)
-    for (const [k] of oldest) graphCache.delete(k)
-  }
+  kgCache.set(cacheDims, data)
   return data
 }
 
@@ -330,33 +458,76 @@ function renderUI() {
   return out
 }
 
-// ══ 核心路由（域链分发：repoManager(异步) ?? srs ?? paper ?? data ?? core）══
+// ══ 核心路由（域链：显式顺序 + 逐域 await）══
+/**
+ * 域链分发。
+ *
+ * ⚠️ v9 重构要点：旧实现是 `a() ?? b() ?? c()` 的短路表达式（同步语义）。
+ * v9 起多个域需要「未就绪 → 按需摄入 → 重读」的**异步**能力，而 `??` 无法 await
+ * （对 Promise 对象只判断 truthy，会直接返回未解析的 Promise）。曾用 `?? await x()`
+ * 补丁，但那只对单个域有效、且与同步域混排时求值顺序不可读。
+ * 正解 = 显式循环：**顺序即优先级**，每个域独立 await，`undefined` 表示「不归我管」。
+ *
+ * 顺序纪律：
+ *   repoManager（git 作业控制面）→ methodology（/api/huasheng13/*）
+ *   → srs → history → pool（统一池）→ tuxing → naoku → paper → data → core
+ */
+const API_DOMAINS: Array<{ name: string, handle: (p: any, q: any, b: any, m: any, ws: any) => any }> = []
+function registerApiDomains() {
+  API_DOMAINS.length = 0
+  API_DOMAINS.push(
+    { name: 'methodology', handle: (p, q, b, m, ws) => domains.methodologyApi.handleAsync(p, q, b, m, ws) },
+    { name: 'srs', handle: (p, q, b, m, ws) => domains.srsApi(p, q, b, m, ws) },
+    { name: 'history', handle: (p, q, b, m, ws) => domains.historyApi.handle(p, q, b, m, ws) },
+    // 统一池域插在 history 之后、tuxing 之前（研究 15 §2.3：`/api/pool/*` 前缀独立无冲突，
+    // 但语义上「统一池」先于各专项域命中）
+    { name: 'pool', handle: (p, q, b, m, ws) => domains.poolApi.handle(p, q, b, m, ws) },
+    { name: 'tuxing', handle: (p, q) => domains.tuxingApi.handle(p, q) },
+    { name: 'naoku', handle: (p, q, b, m, ws) => domains.naokuApi.handle(p, q, b, m, ws) },
+    { name: 'paper', handle: (p, q, b, m, ws) => domains.paperApi.handle(p, q, b, m, ws) },
+    { name: 'data', handle: (p, q, b, m) => domains.dataApi(p, q, b, m) },
+  )
+}
+
 async function handleApi(path: any, params: any, post: any, method: any, wsRaw: any, port: any) {
-  // cycle-16 题库管理域（异步：git 作业控制面）——前置于同步域链，仅接管 /api/repos*
+  // cycle-16 题库管理域（异步：git 作业控制面）——前置于域链，仅接管 /api/repos*
   if (path.startsWith('/api/repos')) {
     const r = await repoManager.handle(path, params, post, method)
     if (r !== undefined) return r
   }
-  return domains.methodologyApi.handle(path, params, post, method, wsRaw)
-    ?? domains.srsApi(path, params, post, method, wsRaw)
-    ?? domains.historyApi.handle(path, params, post, method, wsRaw)
-    // cycle-34 阶段 1：统一题目池域——插在 historyApi 之后、tuxingApi 之前
-    // （研究 15 §2.3：`/api/pool/*` 前缀独立无冲突，但语义上「统一池」先于各专项域命中）
-    // ⚠️ 异步域：handle 返回 Promise → 必须 await（cycle-16 教训⑯：异步路由改造要同步改全部调用点）
-    ?? await domains.poolApi.handle(path, params, post, method, wsRaw)
-    ?? domains.tuxingApi.handle(path, params)
-    ?? domains.naokuApi.handle(path, params, post, method, wsRaw)
-    ?? domains.paperApi.handle(path, params, post, method, wsRaw)
-    ?? domains.dataApi(path, params, post, method)
-    ?? coreApi(path, params, post, method, wsRaw, port)
+  if (!API_DOMAINS.length) registerApiDomains()
+  for (const d of API_DOMAINS) {
+    // 逐域 await：异步域（dataGate 按需摄入）必须被解析后再判 undefined
+    const r = await d.handle(path, params, post, method, wsRaw)
+    if (r !== undefined) return r
+  }
+  return await coreApi(path, params, post, method, wsRaw, port)
 }
 
-function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, port: any) {
+/**
+ * 核心端点（信标 / 抽题 / 判分 / 进度 / 图 / 能力 / 白盒）。
+ *
+ * v9：改为 async —— 抽题（/api/questions）与能力对账需要在池未就绪时
+ * **按需摄入一次**（dataGate）。路由层统一 await，域链语义不受影响
+ * （判断 undefined 前已解析，见 handleApi）。
+ */
+async function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, port: any) {
   if (path === '/api/status') {
     const rs = repoStats(domains.root)
     const p = domains.store.loadProgress(wsRaw || undefined)
+    /**
+     * v9 修正：`version` 必须透出（`StatusResponse` 类型声明它是必填，而实现此前没返回
+     * → 类型与实现漂移，外部探针读到 undefined 只能当成「版本未知」）。
+     * 版本号从 `CAPABILITIES.plugin.version` 取（版本三锚点守卫只认这一处事实源）。
+     * `port`：同源路由下请求不带端口语义 → 传 0 表示「本次不是独立端口通道」，
+     * 由独立端口的调用点传入真实端口（客户端只用 `app` 做通道识别，不依赖 port 判真伪）。
+     */
     return {
-      app: APP_NAME, port, pid: process.pid, uptimeSec: Math.round((Date.now() - BOOT_TS) / 1000),
+      app: APP_NAME,
+      version: CAPABILITIES.plugin.version,
+      port: Number(port) || 0,
+      pid: process.pid,
+      uptimeSec: Math.round((Date.now() - BOOT_TS) / 1000),
       repos: rs,
       repoRoot: domains.root,
       db: exists(join(domains.root, 'GongkaoNaoku', 'kaogong.db')),
@@ -365,15 +536,18 @@ function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, por
     }
   }
   if (path === '/api/questions' && method === 'GET') {
-    // cycle-34 阶段 1（I5/KERNEL-05）：存储层优先供数——统一池就绪时不再直读第三方 md；
-    // 池未就绪时回落目录解析（受控降级，唯一可用数据源）。
+    // v9：唯一取题入口（统一池）。池未就绪时**按需摄入一次**再重试——
+    // 这是「装上题库即可用」的关键：用户不需要先手动点「重建」。
     // ⚠️ 兼容硬约束：响应形状零变化（options/correctAnswer/stem 的 kgimg:// 占位全保留）。
-    return getRandomQuestions(
-      domains.root,
-      params.get('module') || '判断推理',
-      parseInt(params.get('count') || params.get('limit') || '1'),
-      domains.poolApi,
-    )
+    const mod = params.get('module') || '判断推理'
+    const cnt = parseInt(params.get('count') || params.get('limit') || '1')
+    let out = getRandomQuestions(domains.root, mod, cnt, domains.poolApi)
+    if (out && out.error) {
+      const g = await ensureDomain('question', domains.dataCtx)
+      if (g.ready) out = getRandomQuestions(domains.root, mod, cnt, domains.poolApi)
+      if (out && out.error) return { ...out, questions: [], ingesting: !!g.ingesting, hint: g.hint || out.error }
+    }
+    return out
   }
   if (path === '/api/check' && method === 'POST') {
     const q = post.question
@@ -399,11 +573,48 @@ function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, por
       if (item) wrongEvent = { type: item.mastered ? 'mastered' : 'promoted', sig: item.sig, box: item.box, consecutive: item.consecutive }
     }
     domains.store.saveProgress(wsRaw, progress)
+    /**
+     * v9：错题本**库侧同步写**（单条 upsert）。
+     *
+     * 为什么必须在这里写：v9 起 `/api/wrong` 读路径**库优先**——若判分只改 JSON，
+     * 用户答错后进错题本会看到「刚才那道错题不见了」（库里有旧行/无此行），
+     * 这是比「读慢」严重得多的一致性问题。单条 upsert 而非整本替换，
+     * 避免并发判分互相覆盖（SRS 真相是每题一行）。
+     */
+    try {
+      const wsKey = domains.store.wsKey(wsRaw)
+      if (wrongEvent && (wrongEvent.type === 'collected' || wrongEvent.type === 'promoted' || wrongEvent.type === 'mastered')) {
+        const entry = (progress.wrongBook || []).find((w: any) => w.sig === wrongEvent.sig)
+        if (entry) {
+          /**
+           * v9-b：改为**入队异步写**（不阻塞请求栈）。
+           * 理由：重建时 worker 持写锁，同步 upsert 会让判分请求在 busy_timeout 里排队
+           * （实测整条链被拖到秒级）。错题 upsert 是可重放的镜像写入，放后台安全。
+           * ⚠️ 顺序保证：紧随其后的 saveProgress 镜像也在**同一队列**里，
+           * 因此不会出现「进度镜像先跑、错题 upsert 后跑」导致的行覆盖颠倒。
+           */
+          enqueueUserWrite(() => {
+            try {
+              upsertWrongEntry(wsKey, {
+                ...entry,
+                canonicalId: String((q as any).id || '').startsWith('q:') ? String((q as any).id) : (entry.canonicalId || ''),
+                kadian: (q as any).dims && (q as any).dims.kadian,
+                dims: (q as any).dims,
+                lastResult: isCorrect ? 'right' : 'wrong',
+                srsDueAt: Number(entry.lastAt || Date.now()),
+                firstAt: entry.firstAt || Number(entry.lastAt || Date.now()),
+                lapses: isCorrect ? entry.lapses || 0 : Number(entry.lapses || 0) + 1,
+              })
+            } catch { /* 单次镜像失败静默 */ }
+          })
+        }
+      }
+    } catch { /* 库写失败不影响判分返回（JSON 仍是兼容写回） */ }
     // cycle-38 阶段 2（研究 15 C7）：学习事件**双写**——progress json 仍是统计/错题本
     // 的权威事实源（读路径零改动），study_event 只沉淀事件流水（阶段 3 按 kadian
     // 诊断的原料）。写失败静默（流水丢失不影响判分主链路）。
     try {
-      putStudyEvent(poolDb(), {
+      const ev = {
         ws: domains.store.wsKey(wsRaw),
         qid: String((q as any).qid || ''),
         canonicalId: String((q as any).id || '').startsWith('q:') ? String((q as any).id) : '',
@@ -415,7 +626,9 @@ function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, por
         isCorrect,
         box: wrongEvent && wrongEvent.box != null ? Number(wrongEvent.box) : null,
         consecutive: wrongEvent && wrongEvent.consecutive != null ? Number(wrongEvent.consecutive) : null,
-      })
+      }
+      // v9-b：流水走写队列（判分是核心路径，不该为一条统计 INSERT 在写锁上排队）
+      enqueueUserWrite(() => { try { putStudyEvent(poolDb(), ev) } catch { /* 单条静默 */ } })
     } catch { /* 流水写失败不影响判分返回 */ }
     return { isCorrect, correctAnswer: q.correctAnswer, analysis: q.analysis, wrongEvent, progress: { answered: progress.answered, correct: progress.correct, wrong: progress.wrong, rate: Math.round(progress.correct / progress.answered * 100) } }
   }
@@ -431,6 +644,52 @@ function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, por
     domains.store.saveProgress(wsRaw, p)
     return { ...p, ws: domains.store.wsKey(wsRaw), rate: p.answered ? Math.round(p.correct / p.answered * 100) : 0 }
   }
+  // cycle-60 统一检索层：单一入口 + 统一信封；provider 从 manifest 声明派生，旧五端点零删改
+  // v9：① 支持 providers=a,b,c 聚合检索（交替合并，保留各组原序，不跨源比分数）；
+  //     ② 走统一缓存层（domain=search，键含 ws/root/query/provider/limit）；
+  //     ③ 每次调用记检索流水（search_event 表）——「哪个 provider 常空/慢」是可观测事实。
+  if (path === '/api/search/unified' && method === 'GET') {
+    const rawIds = params.get('providers') || params.get('provider') || 'pool'
+    const ids = String(rawIds).split(',').map(s => s.trim()).filter(Boolean)
+    const q = params.get('q') || ''
+    const limit = parseInt(params.get('limit') || '20', 10)
+    const wsKey = domains.store.wsKey(wsRaw)
+    const cacheDims = { domain: 'search', ws: wsKey, root: domains.root, params: { ids: ids.join(','), q, limit, repo: params.get('repo') || '', module: params.get('module') || '' } }
+    const hit = kgCache.get<any>(cacheDims)
+    if (hit) return { ...hit, cached: true }
+    const t0 = Date.now()
+    const out = ids.length > 1
+      ? await domains.searchRegistry.searchMany(ids, q, { limit, ws: wsKey, repo: params.get('repo') || undefined, module: params.get('module') || undefined })
+      : await domains.searchRegistry.search(ids[0] || 'pool', q, { limit, ws: wsKey, repo: params.get('repo') || undefined, module: params.get('module') || undefined })
+    const tookMs = Date.now() - t0
+    // 检索流水：按 provider 逐一记（聚合检索时每组都记一条，白盒才能按 provider 归因）
+    try {
+      for (const id of ids) {
+        const grp = (out as any).groups && (out as any).groups.find((g: any) => g.provider === id)
+        const rec = { ws: wsKey, provider: id, query: q, total: grp ? grp.total : (out as any).total, tookMs: grp && grp.took != null ? grp.took : tookMs }
+        // v9-b：流水走写队列（检索是高频读路径，不应为一条统计 INSERT 阻塞）
+        enqueueUserWrite(() => { try { putSearchEvent(poolDb(), rec) } catch { /* 单条静默 */ } })
+      }
+    } catch { /* 流水写失败不影响检索返回 */ }
+    /**
+     * ⚠️ v9 纪律：**空结果不缓存**。
+     * 空结果有两种成因：① 确实没有命中；② 该域数据尚未入库（首次访问，正在按需摄入）。
+     * 若把 ② 也缓存，用户装好题库后 30s 内仍然搜不到东西——「缓存了一个错误的前提」。
+     * 正解：只缓存非空信封；空信封每次都实查（成本低：FTS 空表查询 <1ms）。
+     */
+    if ((out as any).total > 0) kgCache.set(cacheDims, out)
+    return out
+  }
+  // cycle-60 检索注册表白盒：ids 必须与 manifest 声明检索端点同源（对账口径）
+  // v9：+ 域归属 + 依赖池标记（前端选择器与「先装哪个题库」引导用）
+  //     + 检索流水聚合（provider 维度调用数/空命中率/平均耗时）
+  if (path === '/api/search/providers' && method === 'GET') {
+    return {
+      providers: domains.searchRegistry.ids(),
+      list: domains.searchRegistry.list(),
+      stats: (() => { try { return searchEventStats(poolDb()) } catch { return [] } })(),
+    }
+  }
   if (path === '/api/graph') return graphSnapshot(wsRaw)
   // cycle-30（T-027 清偿）：学习计划智能排程——计划结构 + 作答画像 + 错题积压 →
   // 每日侧重标注 + 题量分配（纯函数；错误收敛 {error} 200，不冒泡）
@@ -445,6 +704,16 @@ function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, por
   }
   if (path === '/api/lifecycle') return lifecycleSnapshot()
   if (path === '/api/telemetry') return telemetrySnapshot(telemetry, CAPABILITIES.endpoints.length, BOOT_TS)
+  /**
+   * cycle-61 v9：统一缓存白盒——「缓存到底有没有用」的机器证据。
+   * 透出每域命中率（未访问域为 null，不臆造 0%）、快照清单（含构建时刻）、
+   * 失效级联图（改什么会连带清什么，架构事实可观测）与策略（TTL/槽位上限）。
+   */
+  if (path === '/api/cache') {
+    // 订阅者清单也透出（「哪些模块有自己的本地快照」是架构事实，便于排查陈旧数据）
+    const st = kgCache.stats()
+    return { ...st, subscribers: dataEventSubscribers() }
+  }
   if (path === '/api/capabilities') {
     const tel = telemetrySnapshot(telemetry, CAPABILITIES.endpoints.length, BOOT_TS)
     // cycle-19 旅程修正：对账消费集排除 UI 壳路径与聚合桶——「/」「/index.html」是页面壳
@@ -472,6 +741,28 @@ function coreApi(path: any, params: any, post: any, method: any, wsRaw: any, por
   if (path === '/api/workspaces') return { workspaces: domains.store.listWorkspaces() }
   // cycle-21（issue #2）：数据位置白盒——位置/来源/迁移状态/包内残留一次透出
   if (path === '/api/data-location') return { ...dataLocationReport(), migration: MIGRATION }
+  /**
+   * cycle-61 v9：统一数据层白盒——**域就绪矩阵**是「数据在哪、哪个域没入库」的唯一事实源。
+   * 每个域透出：就绪谓词实测值（表/条件/行数）+ 缺哪个源 + 归属视图 + 可操作提示。
+   * 纪律：只读、不触发摄入（白盒查询不得有副作用——否则打开面板会偷偷重建库）。
+   */
+  if (path === '/api/data-domains') {
+    const list = allDomainStatus()
+    const problems = auditDomains()
+    // 整库质量门（与域就绪分工不同：前者判「数据质量达基线」，后者判「数据在不在」）
+    const quality = (() => { try { return poolFresh() } catch { return false } })()
+    const pending = list.filter(d => !d.ready)
+    return {
+      domains: list,
+      contracts: { problems, consistent: problems.length === 0 },
+      quality: { fresh: quality, hint: quality ? null : '统一池数据为旧版本（cf 污染/低 schema/图推覆盖不足）——建议在「🗄️ 统一题库」重建' },
+      // 未就绪域的可操作汇总：分「正在入库」与「缺源待装」两类（前端据此决定轮询还是引导）
+      pending: pending.filter(d => !d.ingesting).map(d => ({ id: d.id, label: d.label, sources: d.sources })),
+      ingesting: pending.filter(d => d.ingesting).map(d => ({ id: d.id, label: d.label, sources: d.sources })),
+      ready: list.filter(d => d.ready).length,
+      total: list.length,
+    }
+  }
   return { error: `Unknown API: ${path}` }
 }
 

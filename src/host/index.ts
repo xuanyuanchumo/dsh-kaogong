@@ -36,7 +36,13 @@ const runtime: any = { port: null, server: null, adopted: false, boot: 'pending'
 // 「数据来自哪代服务、是否降级、哪个命名空间」——陈旧显示治理（㉑纪律）的呈现层加固。
 const textOutput = {
   schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
-  render(_args: any, value: any) { return [{ type: 'text', text: value.text }] },
+  // dsh-plugin-dev-kb tools.md：output.render 是必需的纯投影（可被 live streaming +
+  // session-log replay 反复调用）。防御式读取——value 非预期形状时降级为空文本块，
+  // 绝不抛错击穿宿主渲染（与 presentCall/presentResult 的 total 纪律同源）。
+  render(_args: any, value: any) {
+    const text = value && typeof value === 'object' ? String((value as any).text ?? '') : ''
+    return [{ type: 'text', text }]
+  },
 }
 // ── cycle-29 P0：工具调用 UI 展示契约（presentCall/presentResult）──
 // 【根因】此前 6 个工具均未声明这两个可选方法，宿主 GUI 回退 generic 兜底卡片

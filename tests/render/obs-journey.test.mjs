@@ -127,3 +127,28 @@ test('RENDER-O-15: obs 全字段缺失降级不抛错（卡片级降级，无 ro
     globalThis.fetch = fullFetch
   }
 })
+
+/* ══ cycle-61 v9：数据域矩阵 + 缓存白盒两卡（真实 React 渲染） ══ */
+
+test('RENDER-O-16: 数据域就绪矩阵卡渲染（六域 + 就绪徽标）', async () => {
+  // 回到可观测（前序用例可能已切换视图）；重复进入用 tick 重挂载
+  const obsBtn = tr.root.findAllByType('button').find(b => String(b.props.children).includes('可观测'))
+  if (obsBtn) {
+    await act(async () => { obsBtn.props.onClick() })
+    await act(async () => { await new Promise(r => setTimeout(r, 120)) })
+  }
+  const txt = JSON.stringify(tr.toJSON())
+  expect(txt.includes('数据域就绪矩阵'), '数据域卡片未渲染').toBe(true)
+  // 六域标签至少出现其一二（harness mock 提供完整六域）
+  expect(/练习题|真题卷|图形推理|方法论|统一题库/.test(txt), '域标签缺失').toBe(true)
+  // 就绪/未入库/入库中 三态词表之一（状态机而非布尔）
+  expect(/就绪|未入库|入库中/.test(txt), '域状态词缺失').toBe(true)
+})
+
+test('RENDER-O-17: 统一缓存卡渲染（域命中率/失效图/订阅者）+ 不出现 role=alert', async () => {
+  const txt = JSON.stringify(tr.toJSON())
+  expect(txt.includes('统一缓存'), '缓存卡片未渲染').toBe(true)
+  // 失效图与订阅者是可解释字段（架构事实可观测）
+  expect(txt.includes('失效图') || txt.includes('订阅者'), '缓存白盒缺可解释字段').toBe(true)
+  expect(tr.root.findAll(n => n.props && n.props.role === 'alert').length, '缓存卡渲染降级').toBe(0)
+})

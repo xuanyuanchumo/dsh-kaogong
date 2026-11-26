@@ -9,6 +9,10 @@
  */
 import { createHash } from 'node:crypto'
 import { XINGCE_MODULES, getRandomQuestions } from '../adapters/repoData.js'
+// cycle-50 内核收敛：弱点权重公式走 shared/kernel 单一事实源
+import { moduleWeakness, weightedPickIndex } from '../shared/kernel.js'
+// v9：统一错题/补录层（库为权威读源，JSON 为兼容镜像）
+import { readWrongBook, wrongSummary, wrongDiagnostics, removeWrongEntry } from './reviewStore.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
@@ -52,8 +56,14 @@ function resolveRetry(progress: any, q: any) {
 }
 
 /** 路由：/api/memory(专项刷题记忆,cycle-15) /api/questions(sort=srs) /api/wrong /api/wrong/remove /api/stats；未命中返回 undefined */
-export function makeSrsApi({ repoRoot, store, pool }: any) {
+export function makeSrsApi({ repoRoot, store, pool, dataCtx }: any) {
   const { loadProgress, saveProgress } = store
+  /** v9：数据门上下文（抽题前确保该域已入库） */
+  const ctx = (): { repoRoot: string, dataDir: string } => dataCtx || { repoRoot, dataDir: '' }
+  /** v9：租户键（错题/补录的库侧主键第一维；与 progress 文件命名同源） */
+  const wsKeyOf = (raw: any): string => {
+    try { return String(store.wsKey(raw)) } catch { return String(raw || 'default') }
+  }
 
   /* ── cycle-15 专项刷题记忆（progress.memory 域）──
      数据模型：progress.memory[kind] = { …业务字段, at: 时间戳 }
@@ -102,15 +112,15 @@ export function makeSrsApi({ repoRoot, store, pool }: any) {
     let mod = moduleName
     if (!mod || mod === 'all') {
       const mods = Object.keys(XINGCE_MODULES)
-      const weights = mods.map(m => {
-        const s = (p.byModule || {})[m]
-        const rate = s && s.answered ? s.correct / s.answered : 0.5
-        return 1 / (rate + 0.15)
-      })
-      const total = weights.reduce((a, b) => a + b, 0)
-      let r = Math.random() * total
-      mod = mods[0]
-      for (let i = 0; i < mods.length; i++) { r -= weights[i]; if (r <= 0) { mod = mods[i]; break } }
+      /**
+       * v9：弱点加权抽样走内核（`moduleWeakness` + `weightedPickIndex`）。
+       * 收敛前这里是手写的「累减随机转盘」，与池抽题的加权选层各写一份——
+       * 同一种数学结构（按权重无放回抽样）两处实现，改权重口径必漏一处。
+       * 现在只声明业务先验（错题回炉用 0.5 中性，不偏爱新模块），算法在内核。
+       */
+      const weights = moduleWeakness(mods, p.byModule || {}, 0.5)
+      const [idx] = weightedPickIndex(weights, 1)
+      mod = idx >= 0 ? mods[idx] : mods[0]
     }
     // cycle-34 阶段 1（I5/KERNEL-05）：存储层优先供数（统一池就绪时不直读第三方 md）
     const picked: any = getRandomQuestions(repoRoot, mod, count, pool)
@@ -154,25 +164,50 @@ export function makeSrsApi({ repoRoot, store, pool }: any) {
       return memoryApi(post, method, wsRaw)
     }
     if (path === '/api/questions' && method === 'GET' && params.get('sort') === 'srs') {
-      return srsQuestions(wsRaw, params.get('module') || 'all', parseInt(params.get('count') || params.get('limit') || '1'))
+      // v9：SRS 回炉优先（零外源）；无错题时按弱点加权抽题——抽题仍走统一池
+      const r = srsQuestions(wsRaw, params.get('module') || 'all', parseInt(params.get('count') || params.get('limit') || '1'))
+      // 池为空且无错题回炉 → 返回结构化未就绪（调用方可经 dataGate 摄入，见 handleSrsApiAsync）
+      return r
     }
     if (path === '/api/wrong' && method === 'GET') {
       const p = loadProgress(wsRaw)
-      const wb = [...(p.wrongBook || [])].sort((a, b) => (a.mastered - b.mastered) || (a.lastAt - b.lastAt))
+      /**
+       * v9：错题本读路径**库优先**（库是权威，JSON 是兼容镜像）。
+       * 收敛前只读 progress.wrongBook → 白盒看到的库行数可能滞后于真实错题本，
+       * 「谁是真相」不可判定。现在：库有行 → 用库（带 canonicalId/kadian/lapses 等增强字段）；
+       * 库空（从未镜像/新用户）→ 退回 JSON（老数据不丢），并用 tier 标记来源。
+       */
+      const read = readWrongBook(wsKeyOf(wsRaw), p.wrongBook)
       const mod = params.get('module')
-      return { wrong: (mod && mod !== 'all' ? wb.filter(w => w.module === mod) : wb), summary: { open: wb.filter(w => !w.mastered).length, mastered: wb.filter(w => w.mastered).length } }
+      const filtered = (mod && mod !== 'all' ? read.list.filter((w: any) => w.module === mod) : read.list)
+        .slice().sort((a: any, b: any) => (Number(!!a.mastered) - Number(!!b.mastered)) || (a.lastAt - b.lastAt))
+      return {
+        wrong: filtered,
+        summary: wrongSummary(read.list),
+        // 来源与诊断可观测（前端/白盒能看出数据来自库还是 JSON 降级）
+        tier: read.tier, dbRows: read.dbRows,
+        diagnostics: wrongDiagnostics(wsKeyOf(wsRaw)),
+      }
     }
     if (path === '/api/wrong/remove' && method === 'POST') {
       const p = loadProgress(wsRaw)
       const before = (p.wrongBook || []).length
       p.wrongBook = (p.wrongBook || []).filter((w: any) => w.sig !== post.sig)
       saveProgress(wsRaw, p)
-      return { removed: before - p.wrongBook.length, remaining: p.wrongBook.length }
+      // v9：库侧同步删除（否则读路径库优先会「删了又回来」——经典双写不一致）
+      const removedDb = removeWrongEntry(wsKeyOf(wsRaw), String(post && post.sig || ''))
+      return { removed: before - p.wrongBook.length, remaining: p.wrongBook.length, dbSynced: removedDb }
     }
     if (path === '/api/stats') return statsSnapshot(wsRaw)
     return undefined
   }
   // 判分链路的错题收集/回炉钩子（http.js check 路由消费）
+  //
+  // v9 说明：`/api/questions?sort=srs` 的「无错题 → 弱点加权抽题」分支在池为空时
+  // 会返回 {error, ready:false}。路由层不在此处做摄入（ingest 是异步且可能耗时数十秒，
+  // 塞进判分/抽题同步域会阻塞事件循环）；**按需摄入由 http.ts 的 /api/questions
+  // 与 /api/pool/* 入口统一负责**（它们本就 async）。
+  void ctx
 }
 
 /** 判分钩子：答错收集 / 错题回炉升箱（http.js 与 srs 域的唯一耦合点） */

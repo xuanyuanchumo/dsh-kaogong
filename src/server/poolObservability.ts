@@ -46,6 +46,43 @@ function q1(db: any, sql: string, ...args: any[]): any {
 }
 
 /**
+ * 数据新鲜度门（cycle-60）：换源前置的机器可判定信号。
+ * 外提为独立函数，供 poolHealth（白盒）与请求期 Gate（poolNaoku/history）共用——
+ * 单一事实源：判定口径只在这里写一次，杜绝「面板说 fresh、Gate 说 stale」的漂移。
+ *
+ * 背景：cycle-57 修复 contentFingerprint 的 img 区分因子后，隔离实测 图形推理 925→1895、
+ * 误并 981→9；但旧生产库仍是 schema v5 / cf 污染 80 行 / kadian 925。在未 rebuild 的库上
+ * 把 /api/naoku/* 与补录搜索迁到池会丢 970 个不同考点题——故换源前必须先看这道门。
+ * 口径：三个可解释指标 + ready 判定；不可探测用 null（不臆造）。
+ */
+export function computeFreshness(db: any): any {
+  if (!db) return { available: false, ready: false, hint: '统一池未就绪' }
+  const schemaV = q1(db, "SELECT v FROM meta WHERE k = 'schema_version'")
+  const cfPollution = Number((q1(db, "SELECT COUNT(*) c FROM question WHERE content_fp LIKE '20%-%T%'") || {}).c ?? 0)
+  const tuxingKadian = Number((q1(db, "SELECT COUNT(*) c FROM question WHERE kadian LIKE '%图形推理%'") || {}).c ?? 0)
+  const schemaNum = schemaV && schemaV.v ? Number(schemaV.v) : null
+  const okTuxing = tuxingKadian >= 1895 * 0.99
+  const okSchema = (schemaNum ?? 0) >= 6
+  const okCf = cfPollution === 0
+  return {
+    schemaVersion: schemaNum,
+    cfPollutionRows: cfPollution,
+    tuxingKadianQuestions: tuxingKadian,
+    // 期望基线（cycle-57 隔离 rebuild 实测）——对照常量只此一处
+    expectedTuxingKadian: 1895,
+    expectedMinSchema: 6,
+    ready: okCf && okSchema && okTuxing,
+    hint: okCf && okSchema && okTuxing ? null
+      : '统一池数据为旧版本（cf 污染/低 schema/图推覆盖不足）——换源前请先重建统一池',
+    sources: {
+      schema: "meta[k='schema_version']",
+      cf: "COUNT(*) WHERE content_fp LIKE '20%-%T%'",
+      tuxing: "COUNT(*) WHERE kadian LIKE '%图形推理%'",
+    },
+  }
+}
+
+/**
  * 存储层健康快照（白盒面板「统一池」区块的数据源）。
  *
  * @returns 结构化健康报告；库不可用时返回 `{ available: false, ... }`（诚实降级）
@@ -139,8 +176,12 @@ export function poolHealth(db: any, extra: { bytes?: number, path?: string, buil
   // ⑥ 慢查询观察（关系表最大边数的目标节点=top 知识点）
   const topKadian = q(db, 'SELECT dst_id d, COUNT(*) c FROM relation WHERE rel_type = ? GROUP BY dst_id ORDER BY c DESC LIMIT 10', 'BELONGS_TO')
 
+  // ⑦ cycle-60 数据新鲜度门（外提到 computeFreshness，白盒与请求期 Gate 共用同一事实源）
+  const freshness = computeFreshness(db)
+
   return {
     available: true,
+    freshness,
     tables,
     relTypes,
     modules,

@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url'
 
 const REPO = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const readSrc = (p) => fs.readFileSync(path.join(REPO, p), 'utf8')
+// cycle-61 v9：视图注册表（导航/元数据单一事实源）
+import { auditViewMeta, viewIds, buildNavGroups, VIEW_META } from '../../dist/client/view-registry.js'
 
 test('版本三锚点一致（package.json = manifest = README）', () => {
   const pkg = JSON.parse(readSrc('package.json'))
@@ -44,7 +46,8 @@ test('cycle-14 材料逐份折叠：双视图状态 + 总开关 + 字数提示 +
 test('cycle-14 申论草稿：localStorage 暂存三态 + 装载/清除 + UI 提示', () => {
   const papersView = readSrc('src/client/views/papers-view.tsx')
   expect(papersView.includes("'kg-essay-draft:'") && /const readDraft = /.test(papersView) && /const writeDraft = /.test(papersView)).toBe(true)
-  expect(/setAnswer\(readDraft\(q\)\)/.test(papersView) && /localStorage\.removeItem\(essayDraftKey\(cur\)\)/.test(papersView) && papersView.includes('草稿已本地暂存')).toBe(true)
+  // cycle-52 状态管理收敛：草稿读取/清除改走 kgStorage 门面（旧 localStorage.removeItem 直读形态已退役）
+  expect(/setAnswer\(readDraft\(q\)\)/.test(papersView) && /kgStorage\.remove\(essayDraftKey\(cur\)\)/.test(papersView) && papersView.includes('草稿已本地暂存')).toBe(true)
 })
 
 test('cycle-14 索引预热：分块构建不阻塞 + 启动接线可关 + harness 显式关闭', () => {
@@ -72,7 +75,11 @@ test('C24-01..06 组件规范：注册表路由/目录分层/tsx 全覆盖/jsx c
   const root = fs.readdirSync(path.join(REPO, 'src', 'client'), { withFileTypes: true })
   // cycle-48：hooks/ 目录加入白名单（自定义 hooks 基建——非视图级，与 ui-kit 同层；
   // 一 hook 一文件 + index barrel，禁止单文件膨胀）
-  expect(root.filter(f => f.isFile()).every(f => ['client.tsx', 'ui-kit.tsx'].includes(f.name))).toBe(true)
+  // cycle-61 v9：view-registry.ts 加入白名单——它是**纯数据 + 纯函数**（零 JSX、零 hook、
+  // 零 React 引用），承载「视图元数据单一事实源」。它不是视图级组件（.tsx），
+  // 放在 client/ 根与 ui-kit 同层正合适（视图层 views/ 只放组件）。
+  const CLIENT_ROOT_ALLOW = ['client.tsx', 'ui-kit.tsx', 'view-registry.ts']
+  expect(root.filter(f => f.isFile()).every(f => CLIENT_ROOT_ALLOW.includes(f.name))).toBe(true)
   expect(root.filter(f => f.isDirectory()).map(f => f.name)).toContain('hooks');
   // cycle-48：hooks barrel 形态守卫——禁 export-from 带源形态（bundler 剥皮不认，
   // 残留孤立 from 行且函数体不进依赖图 → 组件 undefined）
@@ -120,4 +127,52 @@ test('C44-01..03 三态/chips 基建组件：ui-kit 单一事实源 + 视图零�
   expect(residual, '手写 kg-load 残留').toEqual([])
   const consumers44 = viewFiles44.filter(f => /KgLoad|KgErr|KgEmpty|KgChips/.test(readSrc(f)))
   expect(consumers44.length).toBeGreaterThanOrEqual(4)
+})
+
+/* ══ cycle-61 v9：前端视图注册表单一事实源 ══ */
+
+test('C61-VIEW-01 视图注册表自检通过（id 唯一/分组已声明/组内 order 不重复）', () => {
+  expect(auditViewMeta()).toEqual([])
+})
+
+test('C61-VIEW-02 路由表与注册表双向对账（不得有未登记的路由，也不得有只有元数据无组件的视图）', () => {
+  const cl = fs.readFileSync(new URL('../../src/client/client.tsx', import.meta.url), 'utf-8')
+  // 从 VIEW_ROUTES 抽取已登记的视图 key（形如 `  dashboard: { comp:`）
+  const routeBlock = cl.slice(cl.indexOf('const VIEW_ROUTES'), cl.indexOf('const route = VIEW_ROUTES'))
+  const routeIds = [...routeBlock.matchAll(/^\s{8}([a-zA-Z][\w-]*):\s*\{ comp:/gm)].map(m => m[1])
+  const metaIds = viewIds()
+  // ① 元数据里的每个视图都必须在路由表登记（否则点击导航 = 空白）
+  const missingRoute = metaIds.filter(id => !routeIds.includes(id))
+  expect(missingRoute, '注册表有视图但路由未登记').toEqual([])
+  // ② 路由表里的每个视图都必须在元数据登记（否则导航不可达/白盒看不见）
+  const missingMeta = routeIds.filter(id => !metaIds.includes(id))
+  expect(missingMeta, '路由登记了未声明元数据的视图').toEqual([])
+})
+
+test('C61-VIEW-03 导航由注册表派生（client 不得再手写 NAV_GROUPS 数组）', () => {
+  const cl = fs.readFileSync(new URL('../../src/client/client.tsx', import.meta.url), 'utf-8')
+  expect(cl.includes('buildNavGroups()'), '导航未从注册表派生').toBe(true)
+  // 负向：旧的手写分组数组不得复辟（{ id: 'learn', label: '学习', items: [['dashboard'...）
+  expect(/\{ id: 'learn', label: '学习', items: \[\[/.test(cl), '手写 NAV_GROUPS 复辟').toBe(false)
+})
+
+test('C61-VIEW-04 四组导航项与注册表一致（学习3/题库3/复盘3/查阅3）', () => {
+  const groups = buildNavGroups()
+  expect(groups.map(g => g.id)).toEqual(['learn', 'bank', 'review', 'ref'])
+  const counts = Object.fromEntries(groups.map(g => [g.id, g.items.length]))
+  expect(counts).toEqual({ learn: 3, bank: 3, review: 3, ref: 3 })
+  // 枢纽内视图（practice/tuxing/deepbank/essay/huasheng13）不得出现在一级导航（纪律㉛）
+  const navIds = groups.flatMap(g => g.items.map(i => i[0]))
+  for (const hub of ['practice', 'tuxing', 'deepbank', 'essay', 'huasheng13']) {
+    expect(navIds, hub + ' 不应在一级导航（应经专题枢纽进入）').not.toContain(hub)
+  }
+})
+
+test('C61-VIEW-05 视图元数据字段齐备（label/icon/desc/domain 全有）', () => {
+  for (const v of VIEW_META) {
+    expect(v.label, v.id + ' 缺 label').toBeTruthy()
+    expect(v.icon, v.id + ' 缺 icon').toBeTruthy()
+    expect(v.desc && v.desc.length > 6, v.id + ' 缺 desc').toBe(true)
+    expect(['question', 'paper', 'tuxing', 'method', 'knowledge', 'pool'], v.id + ' domain 非法').toContain(v.domain)
+  }
 })

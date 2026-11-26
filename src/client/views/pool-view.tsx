@@ -23,6 +23,8 @@ import { h, React, Stat, Card, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
 interface NativePoolViewProps {
   api: (p: string, opts?: any) => Promise<any>
   initialModule?: string
+  /** cycle-49：统一跳转出口——未就绪引导去题库管理、单题详情一键开练 */
+  onGo?: (v: string, params?: any) => void
 }
 
 /** 关系类型标签（服务端 REL_TYPE_META 的**降级副本**——服务端缺失时用它兜底；
@@ -73,7 +75,7 @@ function PoolMetric({ label, value, total, ok, desc }: any) {
 }
 
 /** 库状态卡（观测性核心：状态 + 健康指标 + 源注册表） */
-function PoolStatusCard({ st, onRebuild, busy }: any) {
+function PoolStatusCard({ st, onRebuild, busy, onGo }: any) {
   if (!st) return null
   const health = st.health || null
   const stats = st.stats || null
@@ -83,8 +85,10 @@ function PoolStatusCard({ st, onRebuild, busy }: any) {
       {!st.ready ? (
         <div style={{ fontSize: 11, color: '#b45309', lineHeight: 1.7 }}>
           {st.hint || '统一池未就绪'}
-          <div style={{ marginTop: 6 }}>
+          <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <button style={KV_BTN} disabled={busy} onClick={onRebuild}>{busy ? '⏳ 重建中…' : '🔨 立即重建'}</button>
+            {/* cycle-49：数据链打通——库空的根因常是「仓库未安装」，一键去题库管理而非让用户猜 */}
+            {onGo ? <button style={KV_BTN} onClick={() => onGo('repos')}>📦 去题库管理安装数据 ›</button> : null}
           </div>
         </div>
       ) : (
@@ -172,7 +176,7 @@ function PoolSearchRow({ r, onPick }: any) {
 }
 
 /** 单题聚合详情（一份题干 + N 处出处 + 关系邻居 + 五维标注） */
-function PoolDetail({ d, onClose }: any) {
+function PoolDetail({ d, onClose, onGo }: any) {
   if (!d) return null
   const dims = d.dims || {}
   const dimRows: any[] = [
@@ -181,7 +185,12 @@ function PoolDetail({ d, onClose }: any) {
   ].filter((x: any) => x[1])
   return (
     <Card title="🔎 单题聚合视图">
-      <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6 }}><button style={KV_BTN} onClick={onClose}>关闭</button></div>
+      <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+        {/* cycle-49：单题聚合视图不再是死胡同——按知识点/模块一键开练 */}
+        {onGo && d.kadian ? <button style={KV_BTN} onClick={() => onGo('deepbank', { kadian: d.kadian })}>✏️ 练此知识点 ›</button> : null}
+        {onGo && d.module ? <button style={KV_BTN} onClick={() => onGo('practice', { module: d.module })}>🎯 练此模块 ›</button> : null}
+        <button style={KV_BTN} onClick={onClose}>关闭</button>
+      </div>
       <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 4 }}>
         {d.module || '未分类'} · {d.category || '—'} · {d.qtype || '—'} · {d.sourceCount} 处出处
       </div>
@@ -237,7 +246,7 @@ function PoolDetail({ d, onClose }: any) {
  * ⚠️ 早退守卫用 `st === null`（未加载）而不是 `!st`（未就绪）——未就绪是**合法状态**，
  *    必须在视图内降级展示（卡片级），不能提前 return 把整个视图清空。
  */
-export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
+export function NativePoolView({ api, initialModule, onGo }: NativePoolViewProps) {
   /* ── hooks 顶部恒定 ── */
   const [st, setSt] = React.useState(null)          // /api/pool/status
   const [q, setQ] = React.useState('')                // 检索词
@@ -343,7 +352,7 @@ export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
       {/* 错误条：字段级降级，绝不 role="alert"（避免误报为致命） */}
       {err ? <div style={{ fontSize: 11, color: '#b45309', background: 'rgba(245,158,11,.1)', borderRadius: 8, padding: '7px 10px' }}>⚠ {err}</div> : null}
 
-      <PoolStatusCard st={st} onRebuild={doRebuild} busy={busy} />
+      <PoolStatusCard st={st} onRebuild={doRebuild} busy={busy} onGo={onGo} />
 
       {/* 检索区 */}
       <Card title="🔍 跨源统一检索">
@@ -399,7 +408,7 @@ export function NativePoolView({ api, initialModule }: NativePoolViewProps) {
         </Card>
       ) : null}
 
-      {detail ? <PoolDetail d={detail} onClose={() => setDetail(null)} /> : null}
+      {detail ? <PoolDetail d={detail} onClose={() => setDetail(null)} onGo={onGo} /> : null}
 
       <div style={{ fontSize: 9.5, color: 'var(--text-faint,#94a3b8)', lineHeight: 1.7 }}>
         统一题库是**派生层**：全部内容可从上游重建（上游仓库只读，永不修改）。

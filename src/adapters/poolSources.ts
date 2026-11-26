@@ -19,7 +19,7 @@
  *   源实现**只允许**认识上游格式（适配层职责）；
  *   存储层与内核层不认识任何具体上游。
  */
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ingestNaokuSource, ingestXingceSource, ingestGwyZhentiSource } from './poolSourceImpls.js'
 import { ingestXingceAppSource, ingestTuxingSource, ingestQiuzhaoSource, ingestCeaSource } from './poolSourceJson.js'
@@ -68,10 +68,53 @@ export interface SourceSpec {
    *   永不与其它源撞库；跨源等价走 SAME_AS 边（合并靠认亲，不靠重名）。
    */
   qidNamespace?: string
+  /**
+   * cycle-61 v9-b：**源指纹**（增量重建的判据）。
+   *
+   * 语义：同一次内容对应同一个字符串；内容变了指纹必变。默认实现 = 源根目录的
+   * mtimeMs（目录项变更会刷新目录 mtime；子文件内容编辑不一定刷新——对本题库集合
+   * 足够，因为上游仓库更新以「新增/替换文件」为主）。需要更精确的源可自行覆盖
+   * （如 naoku 用 `.naoku.db` 文件 mtime）。
+   *
+   * 为什么放在注册表而不是编排器：增量判据与「这个源长什么样」强相关，
+   * 属于源自己的知识；编排器只负责比对（可扩展性枢纽纪律）。
+   */
+  fingerprint?(ctx: SourceContext): string
   /** 是否可用（探针；返回 false 时主流程记 skipped 并继续——**不中断整轮**） */
   available(ctx: SourceContext): boolean
   /** 执行摄入（可同步或异步——naoku 需 await import('node:sqlite')） */
   ingest(ctx: SourceContext): SourceCounts | Promise<SourceCounts>
+}
+
+/** 源指纹计算（纯读；失败返回 '' = 不可判定，调用方按「需重建」保守处理） */
+export function fingerprintOf(spec: SourceSpec, ctx: SourceContext): string {
+  try {
+    if (typeof spec.fingerprint === 'function') return String(spec.fingerprint(ctx) || '')
+  } catch { return '' }
+  // 默认：源根目录 mtime（目录项增删会刷新；子文件内容编辑不一定——见 SourceSpec.fingerprint 注释）
+  try { return String(statSync(join(ctx.repoRoot, spec.id)).mtimeMs) } catch { return '' }
+}
+
+/** 全部源的指纹快照（增量重建判据；不可用源不计入） */
+export function sourceFingerprints(ctx: SourceContext): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const spec of SOURCE_REGISTRY) {
+    try {
+      if (!spec.available(ctx)) continue
+      out[spec.id] = fingerprintOf(spec, ctx)
+    } catch { /* 单个源探测失败不影响其它 */ }
+  }
+  return out
+}
+
+/** 进度事件（重建可观测性：worker → 主线程 → /api/pool/rebuild/status） */
+export interface IngestProgress {
+  phase: 'ingest'
+  source: string
+  index: number
+  total: number
+  state: 'start' | 'skip' | 'done' | 'error'
+  questions?: number
 }
 
 /**
@@ -177,30 +220,67 @@ export function findSource(id: string): SourceSpec | null {
 }
 
 /**
- * 摄入全部已注册源（主流程）。
+ * 源结果分类（cycle-61 v9-b·关键设计）：
+ * 「这个源没数据」有两种语义，**绝不能混为一谈**：
+ *   · `unavailable` —— 用户没装这个源（available=false）：跳过是正常语义，该源数据本就不该存在；
+ *   · `failed`      —— 源实现抛错（bug/上游格式变了/权限/IO）：这是**故障**，
+ *     全量重建时若继续提交，就会把该源原有数据删掉且不恢复（真实事故：
+ *     故障注入后重建仍 ok=true，question 从 11649 掉到 11295 = gk-tuxing 354 题被删）。
  *
- * 纪律：
- * · **单源失败不中断整轮**（记 lastError + 继续）——一个上游格式变了不能拖垮整库；
- * · 每源独立事务（失败回滚该源，不留半成品源——设计 §9c.5）；
- * · 源清单来自注册表，不在此处硬编码（可扩展性）。
+ * 因此 `ingestAll` 除了计数，还返回 `failures[]`；由编排器按模式决定处置：
+ *   全量重建（清空过）= 有 failed 必须整体回滚（要么完整成功、要么完全不动）；
+ *   增量重建（未清空）= 失败源跳过即可（其原有数据仍在，安全）。
  */
-export async function ingestAll(ctx: SourceContext): Promise<any> {
+export interface IngestFailure {
+  source: string
+  kind: 'exception' | 'unavailable'
+  reason: string
+}
+
+export async function ingestAll(
+  ctx: SourceContext,
+  only?: string[],
+  opts: { skip?: Set<string>, onProgress?: (p: IngestProgress) => void, failures?: IngestFailure[] } = {},
+): Promise<any> {
   const out: Record<string, any> = {}
-  for (const spec of SOURCE_REGISTRY) {
+  const wanted = only && only.length ? new Set(only) : null
+  const list = SOURCE_REGISTRY.filter(spec => !wanted || wanted.has(spec.id))
+  const total = list.length
+  let index = 0
+  for (const spec of list) {
+    index++
+    const report = (state: IngestProgress['state'], extra: any = {}) => {
+      try { opts.onProgress && opts.onProgress({ phase: 'ingest', source: spec.id, index, total, state, ...extra }) } catch { /* 进度回调失败不影响摄入 */ }
+    }
+    // 增量跳过：指纹未变的源不重跑（真增量——旧实现名为增量、实为全量重灌）
+    if (opts.skip && opts.skip.has(spec.id)) {
+      out[spec.id] = { source: spec.id, questions: 0, relations: 0, skipped: true, reason: '指纹未变（增量跳过）' }
+      report('skip')
+      continue
+    }
     try {
       if (!spec.available(ctx)) {
         out[spec.id] = { source: spec.id, questions: 0, relations: 0, skipped: true, reason: '源不可用（数据缺失）' }
+        try { opts.failures && opts.failures.push({ source: spec.id, kind: 'unavailable', reason: '数据缺失（未安装）' }) } catch { /* ignore */ }
+        report('skip')
         continue
       }
+      report('start')
       // ⚠️ 必须 await：源实现可能是同步也可能是异步（naoku 需 await import('node:sqlite')）。
       //   若漏 await，展开 Promise 对象只会得到 `{source:'naoku'}` —— 计数全丢、**静默少摄入**。
       //   （cycle-34 实测踩坑：症状是「摄入完成但题数为 0」。）
-      out[spec.id] = { source: spec.id, ...(await spec.ingest(ctx)) }
-    } catch (e: any) {
-      out[spec.id] = {
-        source: spec.id, questions: 0, relations: 0, skipped: true,
-        reason: '摄入异常: ' + (e && e.message ? e.message : String(e)),
+      const r = await spec.ingest(ctx)
+      out[spec.id] = { source: spec.id, ...r }
+      // 源自己报告跳过（如 huasheng13 未安装）也不算异常
+      if (r && r.skipped && r.lastError) {
+        try { opts.failures && opts.failures.push({ source: spec.id, kind: 'unavailable', reason: String(r.lastError).slice(0, 200) }) } catch { /* ignore */ }
       }
+      report('done', { questions: Number((r && r.questions) || 0) })
+    } catch (e: any) {
+      const reason = '摄入异常: ' + (e && e.message ? e.message : String(e))
+      out[spec.id] = { source: spec.id, questions: 0, relations: 0, skipped: true, reason }
+      try { opts.failures && opts.failures.push({ source: spec.id, kind: 'exception', reason: reason.slice(0, 200) }) } catch { /* ignore */ }
+      report('error')
     }
   }
   return out

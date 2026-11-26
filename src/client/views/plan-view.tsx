@@ -116,8 +116,16 @@ export function NativePlanView({ api }: PlanViewProps) {
 
 interface SearchViewProps { api: (p: string, opts?: any) => Promise<any> }
 
+/**
+ * 检索语料源（cycle-49 md 三库 / 花生十三 BM25；cycle-58 加统一池 FTS5 跨源检索）。
+ * 三源统一映射为 {file, snippet} 行渲染——不统一打分算法（各源语义不同，见 SearchHit 契约）。
+ */
+type SearchSource = 'md' | 'hs13' | 'pool'
+
 export function NativeSearchView({ api }: SearchViewProps) {
   const [q, setQ] = React.useState('')
+  // React 经 combo 为 any 形态，泛型调用会触发 TS2347——用类型断言代替 useState<T>
+  const [source, setSource] = React.useState('md' as SearchSource)
   const [results, setResults] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   const [err, setErr] = React.useState('')
@@ -127,18 +135,50 @@ export function NativeSearchView({ api }: SearchViewProps) {
     if (!k) return
     setBusy(true); setErr('')
     try {
-      const r = await api('/search?q=' + encodeURIComponent(k))
-      setResults(Array.isArray(r.results) ? r.results : [])
+      if (source === 'hs13') {
+        // cycle-49：落地 manifest 声明的 ui:search 消费 /api/huasheng13/search
+        //（此前仅 /api/search 三库全文，方法论语料检索页查不到 → 声明漂移）。
+        const r = await api('/huasheng13/search?q=' + encodeURIComponent(k) + '&limit=15')
+        const rows = Array.isArray(r.results) ? r.results.map((x: any) => ({
+          file: x.file || x.moduleId || '方法论语料',
+          snippet: Array.isArray(x.snippets) && x.snippets.length ? x.snippets.join('\n---\n') : String(x.highlight || x.title || ''),
+        })) : []
+        setResults(rows)
+      } else if (source === 'pool') {
+        // cycle-58：统一池 FTS5 trigram 跨源检索（跨源去重 + 源多样性轮转）——
+        // 知识检索页成为「三源统一入口」，落地 manifest ui:search 消费 /api/pool/search。
+        const r = await api('/pool/search?q=' + encodeURIComponent(k) + '&limit=20')
+        const rows = Array.isArray(r.results) ? r.results.map((x: any) => ({
+          file: [x.module, x.kadian].filter(Boolean).join(' · ') || '统一题库',
+          snippet: String(x.stem || '').slice(0, 300) + (Array.isArray(x.sources) && x.sources.length ? '\n〔出处 ' + x.sources.length + ' 处〕' : ''),
+        })) : []
+        setResults(rows)
+      } else {
+        const r = await api('/search?q=' + encodeURIComponent(k))
+        setResults(Array.isArray(r.results) ? r.results : [])
+      }
     } catch (e: any) {
       setErr(String((e && e.message) || e)); setResults([])
     } finally { setBusy(false) }
-  }, [api])
+  }, [api, source])
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 800, fontSize: 15 }}>🔎 知识检索</span>
-        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>sakib / kaogong-skill / developer2gwy 三库全文（DFS 限深 3 · 命中上限 15）</span>
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+          {source === 'md' ? 'sakib / kaogong-skill / developer2gwy 三库全文（DFS 限深 3 · 命中上限 15）'
+            : source === 'hs13' ? '花生十三体系 25 篇语料全文（BM25 · 只裁尾留首）'
+            : '统一题库 .kaogong.db 跨源检索（FTS5 trigram · 去重聚合 + 源轮转）'}
+        </span>
+        {/* cycle-49：语料源切换——同一入口覆盖 md 三库与方法论语料（落地 manifest ui:search 双消费声明） */}
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }} role="group" aria-label="检索语料源">
+          {([['md', '三库全文'], ['hs13', '方法论语料'], ['pool', '统一题库']] as Array<[SearchSource, string]>).map(([s, label]) => (
+            <button key={s} className="kg-navbtn" aria-pressed={source === s}
+              style={{ fontSize: 11, padding: '4px 10px', ...(source === s ? { background: 'rgba(99,102,241,.14)', borderColor: '#6366f1', color: '#4338ca', fontWeight: 700 } : {}) }}
+              onClick={() => { if (source !== s) { setSource(s); setResults(null) } }}>{label}</button>
+          ))}
+        </span>
       </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         <input
@@ -164,7 +204,7 @@ export function NativeSearchView({ api }: SearchViewProps) {
                 </Card>
               </div>
             ))}</div>
-          : <KgEmpty text={'「' + q + '」无命中 —— 换个关键词试试（仅匹配 md/txt 文件内容）'} pad={30} />
+          : <KgEmpty text={'「' + q + '」无命中 —— 换个关键词试试（' + (source === 'md' ? '仅匹配 md/txt 文件内容' : source === 'hs13' ? '检索方法论语料，未安装时请先到题库管理下载' : '统一池未就绪时先到题库管理重建') + '）'} pad={30} />
       ) : null}
       {!busy && results === null && !err ? <KgEmpty text="输入关键词后回车或点「检索」" pad={30} /> : null}
     </div>
@@ -173,9 +213,15 @@ export function NativeSearchView({ api }: SearchViewProps) {
 
 /* ══════════════ NativeMethodView · 方法参考 ══════════════ */
 
-interface MethodViewProps { api: (p: string, opts?: any) => Promise<any> }
+interface MethodViewProps {
+  api: (p: string, opts?: any) => Promise<any>
+  /** cycle-49：图谱 method 节点深链（topic = methodTopics 之一，如 行测/申论） */
+  initialTopic?: string
+  /** cycle-49：统一跳转出口——去专题枢纽方法论主区（花生十三体系） */
+  onGo?: (v: string, params?: any) => void
+}
 
-export function NativeMethodView({ api }: MethodViewProps) {
+export function NativeMethodView({ api, initialTopic, onGo }: MethodViewProps) {
   const [topics, setTopics] = React.useState(null)
   const [cur, setCur] = React.useState(null)
   const [err, setErr] = React.useState('')
@@ -185,11 +231,22 @@ export function NativeMethodView({ api }: MethodViewProps) {
     let cancelled = false
     api('/methods').then((r: any) => {
       if (cancelled) return
-      setTopics(Array.isArray(r.topics) ? r.topics.filter((t: any) => t && t.exists) : [])
+      const list = Array.isArray(r.topics) ? r.topics.filter((t: any) => t && t.exists) : []
+      setTopics(list)
+      // cycle-49：深链自动展开对应主题（图谱「读方法论」直达正文，不再停在空态）
+      const seed = String(initialTopic || '')
+      if (seed) {
+        const hit = list.find((t: any) => String(t.id) === seed || String(t.label) === seed)
+        if (hit) {
+          api('/method?topic=' + encodeURIComponent(hit.id)).then((doc: any) => {
+            if (!cancelled && doc && !doc.error) setCur(doc)
+          }).catch(() => { /* 深链取文失败 → 保留主题列表，不 killing 视图 */ })
+        }
+      }
       setLoading(false)
     }).catch((e: any) => { if (!cancelled) { setErr(String((e && e.message) || e)); setLoading(false) } })
     return () => { cancelled = true }
-  }, [api])
+  }, [api, initialTopic])
 
   const open = React.useCallback(async (t: any) => {
     setErr('')
@@ -208,6 +265,9 @@ export function NativeMethodView({ api }: MethodViewProps) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 800, fontSize: 15 }}>📖 方法参考</span>
         <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>kaogong-skill 十主题参考文档（行测/申论/职测/公基…）</span>
+        {/* cycle-49：两套方法论视图连通——去专题枢纽的花生十三体系主区（不删本页，避免移除已交付能力） */}
+        {onGo ? <button className="kg-navbtn" style={{ marginLeft: 'auto', fontSize: 11, padding: '4px 10px' }}
+          onClick={() => onGo('topics', { tab: 'method' })}>🎯 去专题·方法论主区 ›</button> : null}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
         {(topics || []).map((t: any) => (

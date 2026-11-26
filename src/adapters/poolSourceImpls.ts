@@ -373,7 +373,11 @@ export function ingestXingceSource(ctx: any): any {
             String(q.groupMaterial || ''), Number(q.groupMaterialNo || 0), '',
             JSON.stringify(imgs), imgs.length ? 1 : 0,
             0, String(q.paperFile || ''), String(q.region || ''), String(q.year || ''),
-            Number(q.number || 0), 0, cfp, new Date().toISOString(),
+            // cycle-55 修复：参数顺序须与 QUESTION_COLS 严格一致——
+            // 末两列是 updated_at, content_fp（原写成 cfp, 时间戳 → xingcezhenti 全量
+            // content_fp=时间戳、cf 去重失效、跨源归并/富字段回填打偏，实测 kadian
+            // 图形推理 naoku.db 1895 → pool 925 的根因之一）。
+            Number(q.number || 0), 0, new Date().toISOString(), cfp,
           )
           putAnalysis(db, finalCanon, 'xingcezhenti', f + '#' + q.number, String(q.analysis || ''), String(q.correctAnswer || ''))
           stats.questions++
@@ -433,18 +437,82 @@ export async function ingestGwyZhentiSource(ctx: any): Promise<any> {
   if (!papers.length) return { source: 'gwy-zhenti', skipped: true, reason: '卷索引为空（数据根无 gwy-zhenti）', questions: 0, relations: 0 }
 
   const maxPapers = opts.maxPapers && opts.maxPapers > 0 ? opts.maxPapers : papers.length
-  const stats = { questions: 0, relations: 0, papers: 0, skipped: false, files: 0, lastError: '' }
+  const stats = { questions: 0, relations: 0, papers: 0, materials: 0, questionExtras: 0, skipped: false, files: 0, lastError: '' }
   const insQ = prepareQuestionUpsert(db)
   const ev = JSON.stringify({ src: 'gwy-zhenti', rule: 'loadPaper' })
+
+  // cycle-60 R6：卷级元数据写入原语（transaction 外 prepare，单源一个事务纪律）
+  // 新列用**独立 UPDATE** 写，绝不扩 QUESTION_COLS（那是 7 源共用的位置参数，扩列必错位——cycle-40b/55 事故）。
+  const insPaper = db.prepare(
+    `INSERT INTO paper(paper_id, exam, region, province, year, subject, paper_type,
+       question_count, parsed_question_count, image_count, verified, source, nature, rel_path, material_count, built_at)
+     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(paper_id) DO UPDATE SET
+       exam=excluded.exam, region=excluded.region, province=excluded.province, year=excluded.year,
+       subject=excluded.subject, paper_type=excluded.paper_type,
+       question_count=excluded.question_count, parsed_question_count=excluded.parsed_question_count,
+       image_count=excluded.image_count, verified=excluded.verified, source=excluded.source,
+       nature=CASE WHEN LENGTH(paper.nature)>0 THEN paper.nature ELSE excluded.nature END,
+       rel_path=excluded.rel_path, material_count=excluded.material_count, built_at=excluded.built_at`,
+  )
+  const insMaterial = db.prepare(
+    `INSERT INTO paper_material(mid, paper_id, kind, no, title, body, path, at)
+     VALUES(?,?,?,?,?,?,?,?)
+     ON CONFLICT(mid) DO UPDATE SET body=excluded.body, title=excluded.title`,
+  )
+  // 只填空位：跨源命中同一 canonical 时不洗掉先到源的数据（STORAGE-LAYER §8 合并语义）
+  const updQExtra = db.prepare(
+    `UPDATE question SET
+       score = CASE WHEN score IS NOT NULL THEN score ELSE ? END,
+       requirement = CASE WHEN LENGTH(requirement)>0 THEN requirement ELSE ? END,
+       reference = CASE WHEN LENGTH(reference)>0 THEN reference ELSE ? END,
+       related_materials = CASE WHEN LENGTH(related_materials)>0 THEN related_materials ELSE ? END,
+       paper_id = CASE WHEN LENGTH(paper_id)>0 THEN paper_id ELSE ? END,
+       q_no = CASE WHEN q_no IS NOT NULL AND q_no>0 THEN q_no ELSE ? END,
+       material_mid = CASE WHEN LENGTH(material_mid)>0 THEN material_mid ELSE ? END
+     WHERE canonical_id = ?`,
+  )
 
   withTx(db, () => {
     putSource(db, 'gwy-zhenti', 'recommended', 'gwy-zhenti（真题卷 md）', join(repoRoot, 'gwy-zhenti'))
     // 逐卷：loadPaper → 题目映射 → UPSERT（单源一个事务）
     for (const meta of papers.slice(0, maxPapers)) {
       try {
+        // 唯一的整卷解析点（paper-audit D：严禁二次 loadPaper/parsePaperText）
         const paper = loadPaper(repoRoot, meta.id)
         if (!paper || paper.error || !Array.isArray(paper.questions)) continue
         stats.papers++
+        const builtAt = new Date().toISOString()
+
+        // ── 卷级标量：索引记录 meta 为准（含 province/relPath 与路径回退），nature 从详情补 ──
+        let materialCount = 0
+        const writeMaterial = (kind: string, no: number, title: string, body: string, path: string) => {
+          if (!body || typeof body !== 'string') return
+          const mid = 'pm:' + meta.id + ':' + kind + ':' + no
+          try { insMaterial.run(mid, meta.id, kind, no, title, body.slice(0, 20000), path, builtAt); materialCount++ } catch { /* 单行脏数据跳过 */ }
+        }
+        // 申论材料（paper.materials 来自 parseMaterials：{no,text}）
+        for (const m of (Array.isArray(paper.materials) ? paper.materials : [])) {
+          writeMaterial('s', Number(m.no || 0), '材料 ' + (m.no || ''), String(m.text || ''), meta.id)
+        }
+        // 行测组材料（题块 groupMaterial/groupMaterialNo：同组 4-6 题共享 → mid 去重由 UNIQUE 保证）
+        const seenG = new Set<number>()
+        for (const q of (paper.questions || [])) {
+          const gno = Number(q.groupMaterialNo || 0)
+          if (gno > 0 && q.groupMaterial && !seenG.has(gno)) {
+            seenG.add(gno)
+            writeMaterial('g', gno, '材料 ' + gno, String(q.groupMaterial), meta.id)
+          }
+        }
+        insPaper.run(
+          String(meta.id), String(meta.exam || ''), String(meta.region || ''), String(meta.province || ''),
+          meta.year == null ? null : Number(meta.year), String(meta.subject || ''), String(meta.paperType || ''),
+          meta.questionCount == null ? null : Number(meta.questionCount), Number(paper.questions.length),
+          meta.imageCount == null ? null : Number(meta.imageCount), meta.verified ? 1 : 0,
+          String(meta.source || ''), String(paper.nature || ''), String(meta.relPath || ''), materialCount, builtAt,
+        )
+        stats.materials += materialCount
+
         for (const q of paper.questions) {
           const no = Number(q.no || 0)
           const qid = 'gwy:' + meta.id + '#' + no   // 源内唯一键（卷+题号）
@@ -473,6 +541,17 @@ export async function ingestGwyZhentiSource(ctx: any): Promise<any> {
             seq: no,
           }, { evidence: ev, relations }, { db, localKey: meta.id + '#' + no, paper: meta.id, region: String(paper.region || ''), year: String(paper.year || ''), seq: no })
           if (r.ok) stats.questions++
+          // cycle-60 R6：卷级题字段独立 UPDATE（merge 分支写 r.mergedInto，防写空行/洗先到源数据）
+          const targetCanon = String(r.mergedInto || canon)
+          const gno = Number(q.groupMaterialNo || 0)
+          const matMid = gno > 0 ? 'pm:' + meta.id + ':g:' + gno : ''
+          try {
+            updQExtra.run(
+              q.score == null ? null : Number(q.score), String(q.requirement || ''), String(q.reference || ''),
+              String(q.relatedMaterials || ''), String(meta.id), no, matMid, targetCanon,
+            )
+            stats.questionExtras++
+          } catch { /* 单行 UPDATE 失败不阻塞摄入 */ }
           putAnalysis(db, canon, 'gwy-zhenti', meta.id + '#' + no, String(q.analysis || ''), String(q.correctAnswer || '').toUpperCase())
           stats.relations += relations.length
         }

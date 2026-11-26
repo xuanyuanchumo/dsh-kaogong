@@ -125,6 +125,35 @@ globalThis.fetch = async (url) => {
     current: 'serve',
   }) }
   if (u.includes('/api/workspaces')) return { json: async () => ({ workspaces: [{ ns: 'default-abc12345', day: 1, answered: 10, correct: 6, rate: 60 }, { ns: 'PROJ_X-deadbeef', day: 3, answered: 4, correct: 1, rate: 25 }] }) }
+  // cycle-61 v9：数据域就绪矩阵（六域 + 三态 + 缺源 + 质量门）
+  if (u.includes('/api/data-domains')) return { json: async () => ({
+    domains: [
+      { id: 'question', label: '练习题', desc: '模块化练习题', ready: true, ingesting: false, ingestMode: 'sync', sources: ['xingcezhenti'], views: ['practice'], available: true, details: [{ table: 'question', where: '', min: 1, rows: 86534, ok: true }] },
+      { id: 'paper', label: '真题卷', desc: '1683 套真题卷', ready: false, ingesting: true, ingestMode: 'background', sources: ['gwy-zhenti'], views: ['papers'], available: true, details: [{ table: 'paper', where: '', min: 1, rows: 0, ok: false }] },
+      { id: 'tuxing', label: '图形推理', desc: '354 题图形推理专项', ready: true, ingesting: false, ingestMode: 'sync', sources: ['gk-tuxing'], views: ['tuxing'], available: true, details: [{ table: 'question', where: "source_id = 'gk-tuxing'", min: 1, rows: 354, ok: true }] },
+      { id: 'method', label: '方法论', desc: '花生十三六模块体系', ready: true, ingesting: false, ingestMode: 'sync', sources: ['huasheng13'], views: ['huasheng13'], available: true, details: [{ table: 'knowledge', where: '', min: 1, rows: 36, ok: true }] },
+      { id: 'knowledge', label: '考点知识', desc: '考点节点', ready: true, ingesting: false, ingestMode: 'sync', sources: ['kadian'], views: [], available: true, details: [{ table: 'knowledge', where: "kind='kadian'", min: 1, rows: 9685, ok: true }] },
+      { id: 'pool', label: '统一题库', desc: '跨源统一池', ready: true, ingesting: false, ingestMode: 'background', sources: ['naoku'], views: ['pool'], available: true, details: [{ table: 'question', where: '', min: 1, rows: 86534, ok: true }] },
+    ],
+    contracts: { problems: [], consistent: true },
+    quality: { fresh: false, hint: '统一池数据为旧版本（cf 污染/低 schema/图推覆盖不足）——建议在「🗄️ 统一题库」重建' },
+    pending: [{ id: 'paper', label: '真题卷', sources: ['gwy-zhenti'] }],
+    ingesting: [{ id: 'paper', label: '真题卷', sources: ['gwy-zhenti'] }],
+    ready: 5, total: 6,
+  }) }
+  // cycle-61 v9：统一缓存白盒（命中率 + 快照 + 失效图 + 订阅者）
+  if (u.includes('/api/cache')) return { json: async () => ({
+    domains: [
+      { domain: 'graph', hits: 12, misses: 3, sets: 3, hitRate: 80, entries: 2, snapshot: null },
+      { domain: 'search', hits: 5, misses: 5, sets: 5, hitRate: 50, entries: 3, snapshot: null },
+      { domain: 'stats', hits: 9, misses: 1, sets: 1, hitRate: 90, entries: 1, snapshot: { builtAt: Date.now(), key: 'fp-abc' } },
+    ],
+    slots: 6,
+    snapshots: 1,
+    invalidationGraph: { question: ['graph', 'stats', 'search', 'domains', 'tuxing'], paper: ['stats', 'search', 'domains', 'paperIndex'] },
+    policy: { graph: { ttlMs: 5000, maxEntries: 24 }, search: { ttlMs: 30000, maxEntries: 48 } },
+    subscribers: ['poolDb.statsCache', 'methodology.idxSlot', 'dataApi.moduleCounts'],
+  }) }
   if (u.includes('/api/telemetry')) return { json: async () => ({
     uptimeSec: 100, totalRequests: 50, qpsWindow: 0.5, coverage: 0.9, activeEndpoints: 10, declaredEndpoints: 17,
     endpoints: {

@@ -101,3 +101,42 @@ test('R-GRAPH-01 搜索回车循环定位（keepQuery + 循环提示）', () => 
   const gv = readSrc('src/client/views/graph-view.tsx')
   expect(gv.includes('keepQuery') || /循环|已到末尾|回到第一个/.test(gv)).toBe(true)
 })
+
+test('RDOC-ARCH-01 架构收敛基线记录 naoku 换源取证（防凭直觉迁移丢数据）', () => {
+  const baseline = readSrc('docs/agents/ARCH-CONVERGENCE-BASELINE.md')
+  expect(baseline.includes('naoku 换源取证'), '基线缺 naoku 换源取证章节').toBe(true)
+  // cycle-55 修正后的关键实测数字锚点：kadian 题数 1895→925 是换源不等价的直接证据
+  expect(baseline.includes('27506') && baseline.includes('26590'), '两库题数锚点缺失').toBe(true)
+  expect(baseline.includes('1895') && baseline.includes('925'), 'kadian 等价性取证数字缺失').toBe(true)
+  // 诚实留档：初判错误结论（916）与其被推翻的过程必须保留——防后续轮次重犯同一误判
+  expect(baseline.includes('916') && baseline.includes('该结论错误'), '错误结论修正留档缺失').toBe(true)
+  // cycle-56 最终根因：图推同 stem 不同考点被 cf 过度合并（决定性证据 545 唯一题干 / 1350 冗余行）
+  expect(baseline.includes('545') && baseline.includes('1350') && baseline.includes('cf 过度合并'), 'cf 过度合并取证缺失').toBe(true)
+})
+
+/* ══ cycle-61 v9：统一架构研究文档（研究 26/27） ══ */
+
+test('RDOC-26/27 v9 研究文档存在 + 索引登记 + 引用真实代码符号', () => {
+  const rd = path.join(REPO, 'docs', 'research')
+  const docs = ['26-统一架构数学模型v9.md', '27-数据层库表设计v9.md']
+  for (const f of docs) expect(fs.existsSync(path.join(rd, f)), '缺研究文档 ' + f).toBe(true)
+  const idx = fs.readFileSync(path.join(rd, 'README.md'), 'utf-8')
+  for (const f of docs) expect(idx.includes(f), 'README 索引未登记 ' + f).toBe(true)
+  // 「只写有落地的」硬门槛：文档必须引用真实存在的代码文件（R14 事实基座）
+  const d26 = fs.readFileSync(path.join(rd, docs[0]), 'utf-8')
+  const referenced = [
+    'src/shared/domains.ts', 'src/server/dataGate.ts', 'src/server/cache.ts',
+    'src/server/dataEvents.ts', 'src/shared/kernel.ts', 'src/server/reviewStore.ts',
+    'src/client/view-registry.ts',
+  ]
+  for (const p of referenced) {
+    expect(d26.includes(p.split('/').pop()) || d26.includes(p), '研究 26 未引用 ' + p).toBe(true)
+    expect(fs.existsSync(path.join(REPO, p)), '研究 26 引用的文件不存在: ' + p).toBe(true)
+  }
+  // 研究 27 必须说明三分组与迁移纪律（这两条是数据层的核心契约）
+  const d27 = fs.readFileSync(path.join(rd, docs[1]), 'utf-8')
+  expect(d27.includes('POOL_TABLES') && d27.includes('USER_TABLES') && d27.includes('META_TABLES')).toBe(true)
+  expect(d27.includes('新列索引') && d27.includes('SCHEMA_SQL'), '缺 M1 迁移纪律').toBe(true)
+  // 不变量编号必须在两份文档与代码里同源
+  expect(d26.includes('I-DB-1')).toBe(true)
+})

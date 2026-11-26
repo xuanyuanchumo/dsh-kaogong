@@ -27,6 +27,27 @@ declare const QwZoomCtx: any
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 export const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
+/**
+ * cycle-52 状态管理收敛：localStorage 唯一门面。
+ *
+ * 收敛前实测 6 处直读散落 2 文件（client.tsx 视图偏好 3 处 / papers-view.tsx 申论草稿 3 处），
+ * 其中 client.tsx:95 初始化**无 try/catch**——隐私模式/禁用存储时会抛错击穿渲染。
+ * 统一到此门面：所有读写静默降级（失败返回兜底值），调用方零分支。
+ * 注意：仅收敛「UI 偏好/草稿」这类轻量本地态；用户学习数据仍走 progress（ws 命名空间隔离，
+ * 见 CLAUDE.md cycle-15 决策），不要把 progress 也塞进 localStorage。
+ */
+export const kgStorage = {
+  get(key: string, fallback: string = ''): string {
+    try { return localStorage.getItem(key) || fallback } catch { return fallback }
+  },
+  set(key: string, value: string): void {
+    try { localStorage.setItem(key, value) } catch { /* 隐私模式/配额满：静默降级，不影响主流程 */ }
+  },
+  remove(key: string): void {
+    try { localStorage.removeItem(key) } catch { /* 同上 */ }
+  },
+}
+
     export const MOUNT_PATH = '/kaogong'
     export const PORTS = [8400, 8401, 8402, 8403, 8404]
     export const APP_NAME = 'dsh-kaogong'

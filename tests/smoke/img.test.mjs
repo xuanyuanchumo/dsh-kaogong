@@ -118,13 +118,15 @@ test('SMOKE-IMG-04 存储层供数带图能力：池抽题带图 ≥ 配额下�
   expect(poolImgHit >= 5, `池抽 10 题含图 ${poolImgHit} 题（配额下限 5）`).toBe(true)
 })
 
-test('SMOKE-IMG-04b 目录解析路径带图能力（回落路径保留，随机抽题不假红）+ IMG-05 占位服务可达', async () => {
-  // 跨 5 模块各抽 6 题（图形推理/资料分析含图率高，单模块随机会漏）——qTotal>0 即回落路径存活
+test('SMOKE-IMG-04b 练习链路带图能力（v9：唯一供数路径 = 统一池）+ IMG-05 占位服务可达', async () => {
+  // 跨 5 模块各抽 6 题（图形推理/资料分析含图率高，单模块随机会漏）——qTotal>0 即供数链路存活
   let withImgTotal = 0, qTotal = 0
   for (const mod of ['判断推理', '资料分析', '数量关系', '言语理解与表达', '常识判断']) {
     const qs = await h.J(`/api/questions?module=${encodeURIComponent(mod)}&count=6&ws=${CX}`)
     qTotal += (qs.questions || []).length
     withImgTotal += (qs.questions || []).filter(q => String(q.stem || '').includes('kgimg://')).length
+    // v9：供数必须来自池（`source:'pool'`），不得再声称来自目录解析
+    if ((qs.questions || []).length) expect(qs.source).toBe('pool')
   }
   expect(qTotal > 0, `抽 ${qTotal} 题（含图 ${withImgTotal} 题随源分布）`).toBe(true)
   // IMG-05：占位路径经 /api/kg-img 服务真实可达（旧文件 withImgTotal 条件分支语义）

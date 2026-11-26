@@ -59,7 +59,11 @@ test('RENDER-G-13/G-17/C29-01: 小地图 + 直达业务 + 子图按需加载（�
   const combo3 = fs3.readFileSync(new URL('../../dist/client/client.js', import.meta.url), 'utf8')
   expect(combo3.includes('小地图：点击/拖拽平移视口') && combo3.includes('graphBindMiniMap') && combo3.includes('function drawMini')).toBe(true)
   expect(combo3.includes('打开该视图') && combo3.includes('去刷该模块') && combo3.includes('读方法论')).toBe(true)
-  expect(combo3.includes('onGo: (v, params) => setView(v, params || {})')).toBe(true)
+  // cycle-49：onGo 统一出口形态变更——旧断言锚定内联箭头，现为共享 go 闭包
+  //（教训④：形态守卫必须跟架构改动同波次更新）。新断言同时验证「全视图出口」落地。
+  // 注意：产物是 tsc 擦除类型后的形态（无 ": any" 注解），断言按产物实际文本锚定
+  expect(combo3.includes('const go = (v, params) => setView(v, params || {})')).toBe(true)
+  expect(combo3.includes('统一跳转契约') && combo3.includes('消灭「只有入口没有出口」的死胡同视图')).toBe(true)
   expect(combo3.includes('masteryMap')).toBe(true)
   expect(combo3.includes('1跳邻域') && combo3.includes('2跳邻域') && combo3.includes('影响面')).toBe(true)
   expect(combo3.includes('子图模式') && combo3.includes('返回全图') && combo3.includes('仍按全图口径')).toBe(true)

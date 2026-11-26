@@ -71,8 +71,10 @@ jobs:
       # 不是测试真实结果；测试全绿本身就是唯一可信的质量信号。
       # Loader 真实入口测试依赖开发期 Cordis Loader（_dshcli/node_modules），CI keyless 环境没有，
       # 故不在 CI 跑；它在本地 `npm run test:all` 中随 dev 依赖执行（见 loader.test.mjs 注释）。
-      - name: Smoke
-        run: node smoke.test.mjs
-
-      - name: Render
-        run: node render.test.mjs
+      #
+      # cycle-47 测试分域重构后，根目录 smoke.test.mjs / render.test.mjs 已退役为
+      # legacy-*.bak；全部断言迁入 tests/** 分域文件，统一由 vitest 聚合执行。
+      # 原两步 `node smoke.test.mjs` / `node render.test.mjs` 指向已不存在的文件，
+      # CI 必然以 MODULE_NOT_FOUND 失败——合并为单一的 test:vitest 门禁。
+      - name: Tests (smoke + render + unit domains)
+        run: npm run test:vitest

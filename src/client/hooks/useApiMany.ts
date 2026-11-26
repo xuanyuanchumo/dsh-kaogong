@@ -26,6 +26,14 @@ export function useApiMany(fetcher: (p: string, opts?: any) => Promise<any>,
   const [data, setData] = React.useState(null)
   const [loading, setLoading] = React.useState(paths.some(p => p.path))
   const [err, setErr] = React.useState('')
+  /**
+   * cycle-54 修复（状态管理基建正确性）：原 effect 依赖仅 [deps]，paths 内容变化时
+   * 不重取——调用方内联构造 paths（每次渲染新数组）时若 path 含动态参数（wsKey/刷新令牌/
+   * 筛选条件），会得到 stale data（「永久 spinner」家族：依赖未覆盖全部取数输入）。
+   * 对 paths 做**纯内容序列化**（只读 key/path/fallbackNull，忽略函数/引用差异）作为稳定依赖，
+   * 既覆盖内容变化，又不会因内联新数组每次渲染触发无限重取（引用比较的陷阱）。
+   */
+  const pathsKey = JSON.stringify((paths || []).map(p => [p && p.key, p && p.path, !!(p && p.fallbackNull)]))
   React.useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -51,6 +59,6 @@ export function useApiMany(fetcher: (p: string, opts?: any) => Promise<any>,
       }
     })()
     return () => { cancelled = true }
-  }, deps)
+  }, [...deps, pathsKey])
   return { data, loading, err }
 }

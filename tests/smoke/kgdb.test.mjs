@@ -92,3 +92,55 @@ test('SMOKE-KGDB-09 复杂度预算：关键大文件分支+函数 ≤ 180（防
   const overBudget = bigFiles.map(f => ({ f, ...approxComplexity(f) })).filter(x => x.score > BUDGET)
   expect(overBudget.map(x => `${x.f}(${x.branches}+${x.functions}=${x.score})`), '超预算文件').toEqual([])
 })
+
+// ── cycle-55 数据完整性：content_fp 参数顺序 + 家族富字段回填 ──
+test('SMOKE-KGDB-10 updated_at/content_fp 参数顺序正确（xingcezhenti 时间戳错位根治）', () => {
+  // QUESTION_COLS 末两列是 updated_at, content_fp——两处直接 insQ.run 必须时间戳在前、cfp 在后
+  expect(implSrc.includes('Number(q.number || 0), 0, new Date().toISOString(), cfp,'), 'xingcezhenti 末两列错位（时间戳写进 content_fp）').toBe(true)
+  expect(implSrc.includes('Number(r.n_paper || 0), new Date().toISOString(), cfOwn,'), 'naoku 末两列错位').toBe(true)
+  // 负向：旧错位形态不得回归
+  expect(implSrc.includes(', cfp, new Date().toISOString()'), 'cfp/时间戳错位回归').toBe(false)
+})
+
+test('SMOKE-KGDB-11 content_fp 家族富字段回填接入 rebuild 且幂等计数', () => {
+  const upsert = readSrc('src/adapters/poolUpsert.ts')
+  expect(upsert.includes('export function backfillContentFpFamilies'), '家族回填 helper 缺失').toBe(true)
+  // 幂等计数：只在确有空位时才 UPDATE（否则 changes 数不幂等）
+  expect(upsert.includes('if (!need) continue'), '幂等计数守卫缺失').toBe(true)
+  // 接入 rebuild 且在 FTS 重建之前（回填改 kadian → FTS 需基于最终文本）
+  expect(pingSrc.includes('backfillContentFpFamilies(db)')).toBe(true)
+  const callAt = pingSrc.indexOf('backfillContentFpFamilies(db)')
+  const ftsAt = pingSrc.indexOf('rebuildFts(db)')
+  expect(callAt > 0 && ftsAt > callAt, '回填须在 FTS 重建之前').toBe(true)
+})
+
+// ── cycle-57 cf 过度合并根治：图推 img 区分因子 ──
+test('SMOKE-KGDB-12 contentFingerprint 保留 img 区分因子（不同图不误并、同图跨源仍合）', () => {
+  const pdb = readSrc('src/adapters/poolDb.ts')
+  expect(pdb.includes('const imgRefs'), 'img 区分因子提取缺失').toBe(true)
+  expect(pdb.includes("<img\\b[^>]*\\bsrc"), 'img src 正则缺失').toBe(true)
+  expect(pdb.includes("'|img:' + imgRefs(stem)"), 'img 因子未附入指纹').toBe(true)
+  // 去扩展名（规避 DB .webp / 磁盘 .png 差异破坏跨源合并）
+  expect(pdb.includes("replace(/\\.[a-z0-9]+$/i, '')"), '未去扩展名').toBe(true)
+  // 负向：不得退回「剥 img 整标签」的旧 norm 形态
+  expect(pdb.includes('.replace(/【图:kgimg:\\/\\/[^】]*】/g'), '旧剥图占位形态复辟').toBe(false)
+})
+
+test('SMOKE-KGDB-13 cf 修复实测数字留档（1895 零丢失 + merge 981→9）', () => {
+  const baseline = fs.readFileSync(new URL('../../docs/agents/ARCH-CONVERGENCE-BASELINE.md', import.meta.url), 'utf8')
+  expect(baseline.includes('1895') && baseline.includes('925') && baseline.includes('merge（误并次数） | 981 | **9**'), '实测数字留档缺失').toBe(true)
+  expect(baseline.includes('cf 过度合并'), '根因表述缺失').toBe(true)
+})
+
+// ── cycle-59 学习事件统计口径：NULL 判定不得拉低正确率 ──
+test('SMOKE-KGDB-14 studyEventStats 正确率分母只算有判定行（NULL 口径修正）', () => {
+  const pdb = readSrc('src/adapters/poolDb.ts')
+  // 分母 COUNT(is_correct) 与分子 SUM(is_correct) 口径一致（旧 COUNT(*) 含 NULL 行 → 低估）
+  expect(pdb.includes('COUNT(is_correct) judged, COUNT(*) c, SUM(is_correct) ok'), '判定口径未修正').toBe(true)
+  expect(pdb.includes('rate: Number(r.judged) ? Math.round(Number(r.ok || 0) / Number(r.judged) * 100) : null'), '正确率分母仍用总数').toBe(true)
+  // 白盒降级字段齐备 + count 兼容别名
+  expect(pdb.includes('skipped: Math.max(0, Number(r.c) - Number(r.judged || 0))'), 'skipped 观测缺失').toBe(true)
+  expect(pdb.includes('count: Number(r.c),   // 兼容别名'), 'count 兼容别名缺失').toBe(true)
+  // 负向：旧口径不得回归
+  expect(pdb.includes('rate: Number(r.c) ? Math.round(Number(r.ok || 0) / Number(r.c) * 100)'), '旧低估口径复辟').toBe(false)
+})

@@ -1,5 +1,5 @@
 /**
- * server/paperApi.js — 真题卷 / 专题 / 申论评改 域（v1.6）
+ * server/paperApi.ts — 真题卷 / 专题 / 申论评改 域（v1.6 · v9 统一数据层）
  *
  * 端点：
  *   GET  /api/papers?subject=&exam=&year=&province=&q=  试卷列表（含聚合维度；
@@ -9,11 +9,23 @@
  *   GET  /api/topics                           专题（科目级 + 申论题型）
  *   POST /api/essay/grade  {questionId|question, answer}  申论离线评分
  *   GET  /api/essay/list?type=                 申论题目列表（跨卷聚合，供专题练习）
+ *
+ * ── v9 改造（消除外源直读）──
+ *   旧实现：`isPoolFresh() ∧ paper 表有数据` 才读池，否则**回落 md 逐卷扫盘**。
+ *   v9：唯一读路径 = 统一池（paper / paper_material / question 卷级列）；
+ *   域未就绪时经 dataGate 按需摄入 gwy-zhenti 后重读，仍不可用则返回结构化未就绪。
+ *   md 只在适配层（ingestGwyZhentiSource）被读取——运行期零 md IO（I-DB-1）。
+ *
+ *   ⚠️ 图片端点 `/api/paper-img` 仍按 rel_path 从素材目录取流：
+ *   「媒体按内容寻址引用、不复制进库」是既定架构决策（L3 不做 BLOB），
+ *   它是媒体取流而非题目事实直读，与 I-DB-1 不冲突。
  */
-import { buildPaperIndex, loadPaper, buildTopics, listPapers, gradeEssay, gradeEssayArticle } from '../adapters/paperData.js'
-import { buildTopicTree } from './topicTree.js'
+import { gradeEssay, gradeEssayArticle } from '../adapters/paperData.js'
 import { createReadStream, existsSync, statSync } from 'node:fs'
 import { resolve, extname, dirname, sep } from 'node:path'
+import { poolListPapers, poolLoadPaper } from './poolPaper.js'
+import { poolBuildTopicTree, poolEssayList, buildTopicsFromPool } from './poolTopics.js'
+import { ensureDomain } from './dataGate.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
@@ -67,8 +79,34 @@ function rewriteImages(text: any, paperId: any, mountPath: any) {
   })
 }
 
-export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }: any) {
+/**
+ * v9：唯一读路径 = 统一池。
+ * @param dataCtx { repoRoot, dataDir } —— 供 dataGate 按需摄入（不再用于读 md）
+ *
+ * 兼容性硬约束（STORAGE-LAYER §8）：响应字段零删改。`sourceTier` 恒为 'pool'，
+ * 未就绪时额外给 `ready:false / fallback:true / hint`（旧客户端读 fallback 走降级渲染）。
+ */
+export function makePaperApi({ repoRoot, store, mountPath = '/kaogong', dataCtx }: any) {
   const { loadProgress, saveProgress } = store
+  /** 单卷读取（唯一路径：池） */
+  const loadPaperSafe = (id: any): any => poolLoadPaper(id)
+
+  /** 确保 paper 域就绪（按需摄入 gwy-zhenti）；返回未就绪信息（undefined = 就绪） */
+  async function ensurePaper(): Promise<{ hint?: string, ingesting?: boolean } | undefined> {
+    const ctx = dataCtx || { repoRoot, dataDir: '' }
+    const r = await ensureDomain('paper', ctx)
+    if (r.ready) return undefined
+    return {
+      ingesting: !!r.ingesting,
+      hint: r.hint || '真题卷数据尚未入库——请到「📦 题库管理」安装 gwy-zhenti 后在「🗄️ 统一题库」重建',
+    }
+  }
+  /** 未就绪响应（统一形状：ready/fallback/ingesting/hint） */
+  const notReady = (g: { hint?: string, ingesting?: boolean } | undefined, extra: any = {}) => ({
+    ...extra, ready: false, fallback: true,
+    ingesting: !!(g && g.ingesting),
+    hint: (g && g.hint) || '真题卷数据尚未入库',
+  })
 
   /** 图片端点（二进制，由 HTTP 层在 JSON 链路之前分流调用） */
   function serveImage(params: any, res: any) {
@@ -80,74 +118,68 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }: any) {
     servePaperImage(repoRoot, id, p, res)
   }
 
-  function handlePaperApi(path: any, params: any, post: any, method: any, wsRaw: any) {
+  async function handlePaperApi(path: any, params: any, post: any, method: any, wsRaw: any) {
     // 试卷列表（cycle-13：新增 province 省份过滤；响应透出 provinces facet 与 subjects 并列）
     if (path === '/api/papers' && method === 'GET') {
-      const list = listPapers(repoRoot, {
+      const filters = {
         subject: params.get('subject') || undefined,
         exam: params.get('exam') || undefined,
         year: params.get('year') || undefined,
         province: params.get('province') || undefined,
         q: params.get('q') || undefined,
-      })
-      const idx = buildPaperIndex(repoRoot)
-      // provinces facet 由索引 v2（schemaVersion: 2）内置；旧快照重建期间兜底空数组
-      return { ...list, subjects: idx.subjects, provinces: idx.provinces || [], builtAt: idx.builtAt }
+      }
+      let out = poolListPapers(filters)
+      if (!out.total) {
+        const g = await ensurePaper()
+        out = poolListPapers(filters)
+        if (!out.total) return notReady(g, out)
+      }
+      return out
     }
 
     // 单卷详情
     if (path === '/api/paper' && method === 'GET') {
       const id = params.get('id') || ''
       if (!id) return { error: '缺少 id 参数' }
-      const paper = loadPaper(repoRoot, id)
-      if (!paper.error) {
-        // 图片引用改写为可直接访问的 URL（T-018）
-        for (const m of paper.materials || []) m.text = rewriteImages(m.text, id, mountPath)
-        for (const q of paper.questions || []) {
-          q.stem = rewriteImages(q.stem, id, mountPath)
-          q.reference = rewriteImages(q.reference, id, mountPath)
-          // cycle-26 D-1：行测题组共享材料（资料分析 `## 材料 N` 形态）同样改写图片引用
-          if (q.groupMaterial) q.groupMaterial = rewriteImages(q.groupMaterial, id, mountPath)
-        }
+      let paper = loadPaperSafe(id)
+      if (paper.error) {
+        const g = await ensurePaper()
+        paper = loadPaperSafe(id)
+        if (paper.error) return notReady(g, paper)
+      }
+      // 图片引用改写为可直接访问的 URL（T-018）
+      for (const m of paper.materials || []) m.text = rewriteImages(m.text, id, mountPath)
+      for (const q of paper.questions || []) {
+        q.stem = rewriteImages(q.stem, id, mountPath)
+        q.reference = rewriteImages(q.reference, id, mountPath)
+        // cycle-26 D-1：行测题组共享材料（资料分析 `## 材料 N` 形态）同样改写图片引用
+        if (q.groupMaterial) q.groupMaterial = rewriteImages(q.groupMaterial, id, mountPath)
       }
       return paper
     }
 
     // 专题（v1.7.1：行测/申论分频道 + 每专题带练习入口）
     if (path === '/api/topics' && method === 'GET') {
-      const tree = buildTopicTree(repoRoot)
-      return { ...tree, ...buildTopics(repoRoot) }  // 兼容旧字段 topics/subjects
+      let tree = poolBuildTopicTree()
+      if (!(tree.channels || []).length) {
+        const g = await ensurePaper()
+        tree = poolBuildTopicTree()
+        if (!(tree.channels || []).length) return notReady(g, tree)
+      }
+      return { ...tree, subjects: buildTopicsFromPool() }  // 兼容旧字段 topics/subjects
     }
 
     // 申论题目聚合列表（按题型筛选，供专题练习）
     if (path === '/api/essay/list' && method === 'GET') {
       const wantType = params.get('type') || ''
       const limit = Math.min(60, parseInt(params.get('limit') || '20'))
-      const idx = buildPaperIndex(repoRoot)
-      const essays = idx.papers.filter((p: any) => p.subject === '申论').sort((a: any, b: any) => (b.year || 0) - (a.year || 0))
-      const typeKw = {
-        '概括': /概括|概述|归纳|梳理/,
-        '分析': /分析|评析|谈谈|理解|解释/,
-        '对策': /对策|建议|措施|怎么办|提出/,
-        '应用文': /公开信|倡议书|讲话稿|汇报|短评|建议书|宣传/,
-        '大作文': /文章|议论文|自拟标题|联系实际/,
+      let out = poolEssayList(wantType, limit)
+      if (!out.total) {
+        const g = await ensurePaper()
+        out = poolEssayList(wantType, limit)
+        if (!out.total) return notReady(g, out)
       }
-      const out: any[] = []
-      for (const paper of essays) {
-        if (out.length >= limit) break
-        const detail = loadPaper(repoRoot, paper.id)
-        if (detail.error) continue
-        for (const q of detail.questions || []) {
-          if (out.length >= limit) break
-          if (wantType && (typeKw as Record<string, any>)[wantType] && !(typeKw as Record<string, any>)[wantType].test(q.stem + q.requirement)) continue
-          out.push({
-            paperId: paper.id, exam: paper.exam, year: paper.year, paperType: paper.paperType,
-            no: q.no, stem: q.stem, score: q.score, requirement: q.requirement,
-            relatedMaterials: q.relatedMaterials, hasReference: !!q.reference,
-          })
-        }
-      }
-      return { total: out.length, questions: out, type: wantType || 'all' }
+      return out
     }
 
     // 申论离线评分
@@ -155,8 +187,8 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }: any) {
       let question = post.question
       // 也支持只传 paperId + no 由服务端取题（防客户端伪造参考答案）
       if (!question && post.paperId) {
-        const paper = loadPaper(repoRoot, post.paperId)
-        if (paper.error) return paper
+        const paper = loadPaperSafe(post.paperId)
+        if (paper.error) return notReady(await ensurePaper(), paper)
         question = (paper.questions || []).find((q: any) => q.no === +post.no)
       }
       if (!question) return { error: '缺少题目（question 或 paperId+no）' }
@@ -193,8 +225,8 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }: any) {
     if (path === '/api/essay/article' && method === 'POST') {
       let question = post.question
       if (!question && post.paperId) {
-        const paper = loadPaper(repoRoot, post.paperId)
-        if (paper.error) return paper
+        const paper = loadPaperSafe(post.paperId)
+        if (paper.error) return notReady(await ensurePaper(), paper)
         question = (paper.questions || []).find((q: any) => q.no === +post.no)
       }
       const answer = String(post.answer || '')
@@ -216,8 +248,12 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }: any) {
     // 开始模考：返回整卷题目（剥离参考答案，防作弊）+ 计时预算
     if (path === '/api/paper/exam/start' && method === 'GET') {
       const id = params.get('id') || ''
-      const paper = loadPaper(repoRoot, id)
-      if (paper.error) return paper
+      let paper = loadPaperSafe(id)
+      if (paper.error) {
+        const g = await ensurePaper()
+        paper = loadPaperSafe(id)
+        if (paper.error) return notReady(g, paper)
+      }
       const qs = (paper.questions || []).map((q: any) => ({
         no: q.no, stem: rewriteImages(q.stem, id, mountPath), score: q.score,
         options: q.options || {},
@@ -244,8 +280,12 @@ export function makePaperApi({ repoRoot, store, mountPath = '/kaogong' }: any) {
       const id = post.id || ''
       const answers = post.answers || {}    // { no: 'A' }
       const elapsedSec = Math.max(0, parseInt(post.elapsedSec || '0'))
-      const paper = loadPaper(repoRoot, id)
-      if (paper.error) return paper
+      let paper = loadPaperSafe(id)
+      if (paper.error) {
+        const g = await ensurePaper()
+        paper = loadPaperSafe(id)
+        if (paper.error) return notReady(g, paper)
+      }
 
       const byType: any = {}
       let correct = 0, answered = 0, scored = 0, totalScore = 0

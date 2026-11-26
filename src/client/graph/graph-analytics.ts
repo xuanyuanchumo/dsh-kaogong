@@ -75,30 +75,21 @@
       return 999
     }
 
-    /** 本地 PageRank（幂迭代 d=0.85）：服务端 rank 只有 top12，着色/抽屉需要任意节点值
-     *  （W2b 起导出：着色模型 pagerank 模式的全量分数来源） */
+    /**
+     * 本地 PageRank（幂迭代 d=0.85）：服务端 rank 只有 top12，着色/抽屉需要任意节点值
+     *  （W2b 起导出：着色模型 pagerank 模式的全量分数来源）。
+     *
+     * cycle-49 内核收敛：迭代数从 24 对齐到 kernel 事实源 KG_PAGERANK_ITER=40
+     *（原客户端 24 / 服务端 manifest.ts:424 为 40，同一图两侧中心性不同 = 真实漂移）。
+     * cycle-60 R5：bundler 已支持跨目录值导入（白名单 shared/kernel）——本函数直接调用
+     * kernel.pageRank，彻底消灭「镜像常量 + 镜像算法体」漂移（不再有两份实现）。
+     */
+    import { pageRank, KG_PAGERANK_ITER } from '../../shared/kernel.js'
+
+    export const KG_LOCAL_PAGERANK_ITER = KG_PAGERANK_ITER
     export function graphLocalPageRank(nodes: any[], edges: any[]): any {
-      const out: any = {}
-      try {
-        const n = nodes.length
-        if (!n) return out
-        const D = 0.85
-        const pr: any = {}, adj: any = {}
-        for (const x of nodes) { pr[x.id] = 1 / n; adj[x.id] = [] }
-        for (const e of edges) { if (adj[e.source] && pr[e.target] !== undefined) adj[e.source].push(e.target) }
-        for (let it = 0; it < 24; it++) {
-          let dangling = 0
-          for (const x of nodes) if (!adj[x.id].length) dangling += pr[x.id]
-          const next: any = {}
-          for (const x of nodes) next[x.id] = (1 - D) / n + D * (dangling / n)
-          for (const x of nodes) {
-            const share = pr[x.id] / (adj[x.id].length || 1)
-            for (const t of adj[x.id]) if (next[t] !== undefined) next[t] += D * share
-          }
-          for (const x of nodes) pr[x.id] = next[x.id]
-        }
-        return pr
-      } catch { return out }
+      try { return pageRank(nodes, edges, { iter: KG_PAGERANK_ITER }) }
+      catch { return {} }
     }
 
     /**

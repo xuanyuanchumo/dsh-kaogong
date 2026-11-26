@@ -174,3 +174,37 @@ test('RENDER-PP-32: 三模式切换 + 学习模式单题判分旅程 + 答题模
   expect(String(nextLearn.props.children) === '已是最后一题' && nextLearn.props.disabled === true).toBe(true)
   expect(JSON.stringify(tr.toJSON()).includes('学习进度 2/2'), '学习进度未停留在末题').toBe(true)
 })
+
+test('RENDER-PP-59: exam 别名路由——点「⏱ 模考」入口选卷直入 answer 模式（倒计时/交卷/报告行为等价）', async () => {
+  // 点击左栏 nav「⏱ 模考」→ exam 别名路由（papers + initialMode:'answer'），非旧 NativeExamView
+  const examNav = tr.root.findAllByType('button').find(b => String(b.props.children).includes('模考'))
+  expect(!!examNav, '未找到「⏱ 模考」导航入口').toBe(true)
+  await act(async () => { examNav.props.onClick() })
+  await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+  // 无 paperId 深链时落到卷列表——仍能选卷（行为等价第一环）
+  const listRows = tr.root.findAll(n => n.type === 'div' && typeof n.props.onClick === 'function')
+  const paperItem = listRows.filter(r => flatText(r, 0).includes('副省级'))
+  expect(paperItem.length > 0, '模考入口未落到可选卷列表').toBe(true)
+  await act(async () => { paperItem[0].props.onClick() })
+  await act(async () => { await new Promise(r => setTimeout(r, 120)) })
+  // 行为等价硬断言：选卷后直接进入 answer 模式（引导卡 + data-kg-paper-mode="answer" 激活态）
+  const tAnswer = JSON.stringify(tr.toJSON())
+  expect(tAnswer.includes('答题模式（未开始）'), '点模考选卷后未直入 answer 模式（深链 armed 未生效）').toBe(true)
+  const ansBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-paper-mode'] === 'answer')
+  expect(!!ansBtn, 'answer 模式切换按钮缺失').toBe(true)
+  const ansBg = (ansBtn.props.style && ansBtn.props.style.background) || ''
+  expect(String(ansBg).includes('gradient'), 'answer 模式按钮未呈激活态（paperMode 未切到 answer）').toBe(true)
+  // 倒计时 + 交卷（旧 exam 视图核心行为，C30 教训：守卫必须验行为非形态）
+  const startBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-answer-start'] === '1')
+  expect(!!startBtn, '开始作答按钮缺失').toBe(true)
+  await act(async () => { startBtn.props.onClick() })
+  await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+  const tExam = JSON.stringify(tr.toJSON())
+  expect(tExam.includes('⏱') && tExam.includes('交卷'), '模考考试中视图（倒计时/交卷）未渲染').toBe(true)
+  // 交卷 → 看报告（行为等价闭环）
+  const submitBtn = tr.root.findAllByType('button').find(b => b.props['data-kg-answer-submit'] === '1')
+  expect(!!submitBtn, '交卷按钮缺失').toBe(true)
+  await act(async () => { submitBtn.props.onClick() })
+  await act(async () => { await new Promise(r => setTimeout(r, 80)) })
+  expect(JSON.stringify(tr.toJSON()).includes('答题报告'), '交卷后报告未渲染').toBe(true)
+})

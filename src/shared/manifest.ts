@@ -1,6 +1,12 @@
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
+// cycle-49 内核收敛：PageRank 幂迭代收口到 shared/kernel.ts。
+// 服务端（本文件）iter=40 与客户端 graph-analytics.ts iter=24 的漂移根治——
+// 两侧统一走同一实现，默认迭代数由 kernel 的 KG_PAGERANK_ITER 单一事实源决定。
+import { pageRank as kernelPageRank } from './kernel.js'
+export const pageRank: typeof kernelPageRank = kernelPageRank
+
 /**
  * manifest.js — 能力注册清单（单一事实源）+ 图算法
  *
@@ -18,7 +24,7 @@ const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 // ── 能力清单（与 index.js / client.js / ui 实际注册保持同步）──
 export const CAPABILITIES = {
-  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.32.0', mode: 'offline-first' },
+  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.34.0', mode: 'offline-first' },
 
   // 宿主 UI 双入口（client 半注册；图谱与可观测面板消费此声明）
   entries: [
@@ -86,6 +92,9 @@ export const CAPABILITIES = {
     // 加权重排 30 天日历的任务侧重；纯函数（输入 progress + plan 结构，输出排序建议）
     { path: '/api/plan/schedule', label: '学习计划·智能排程', consumers: ['ui:plan', 'tool:kaogong_ai_plan'] },
     { path: '/api/search', label: '知识检索', consumers: ['ui:search', 'tool:kaogong_ai_tutor'] },
+    // cycle-60 统一检索层：provider 注册表单一入口（统一信封，旧五端点零删改）+ 白盒
+    { path: '/api/search/unified', label: '统一检索(provider注册表)', consumers: ['ui:search'], desc: '?provider=pool|huasheng13|docs|kadian|history&q=&limit= → {query,results,total,took?,confidence?}；旧端点保留兼容' },
+    { path: '/api/search/providers', label: '检索provider白盒', consumers: ['ui:observability'], desc: '运行时 provider id 清单（与 manifest 检索端点声明对账）' },
     // cycle-13：专题枢纽方法论分区消费（ui:topics）——声明口径与实际消费方一致
     { path: '/api/method', label: '方法论', consumers: ['ui:method', 'ui:topics', 'tool:kaogong_ai_tutor', 'tool:kaogong_ai_shenlun'] },
     { path: '/api/methods', label: '方法论目录', consumers: ['ui:method', 'ui:topics'] },
@@ -124,8 +133,11 @@ export const CAPABILITIES = {
     // 端点四步纪律：manifest → server → UI → smoke（manifest 是唯一事实源，对账只认声明）
     { method: 'GET', path: '/api/pool/status', label: '统一池状态(库/构建/覆盖)', consumers: ['ui:pool', 'tool:kaogong_launch'], desc: '库就绪/构建时间/表结构/统计/健康/逐源诊断' },
     { method: 'GET', path: '/api/pool/health', label: '统一池健康快照(白盒)', consumers: ['ui:pool', 'ui:observability'], desc: '关系类型分布/自环/孤儿/考点质量等白盒指标' },
-    { method: 'GET', path: '/api/pool/questions', label: '统一池多源分层抽题', consumers: ['ui:pool'], desc: '?module&kadian&source&count → 弱点加权×多出处加成 + 带图确定性配额；返回单题聚合(sources[])' },
-    { method: 'GET', path: '/api/pool/search', label: '统一池跨源检索(去重聚合)', consumers: ['ui:pool'], desc: '?q&limit → FTS5 trigram 命中 + 跨源去重聚合 + 源多样性轮转(rotation/sources)' },
+    // cycle-49 消费声明对齐运行态：practice 抽题已切纯池端点（study-view.tsx:205-207），
+    // consumers 补 ui:practice——「声明 vs 运行态」对账只认 manifest，漏登记会误判孤儿端点。
+    { method: 'GET', path: '/api/pool/questions', label: '统一池多源分层抽题', consumers: ['ui:pool', 'ui:practice'], desc: '?module&kadian&source&count → 弱点加权×多出处加成 + 带图确定性配额；返回单题聚合(sources[])' },
+    // cycle-58：知识检索页接入统一池检索（三源统一入口）——consumers 补 ui:search
+    { method: 'GET', path: '/api/pool/search', label: '统一池跨源检索(去重聚合)', consumers: ['ui:pool', 'ui:search'], desc: '?q&limit → FTS5 trigram 命中 + 跨源去重聚合 + 源多样性轮转(rotation/sources)' },
     { method: 'GET', path: '/api/pool/question', label: '统一池单题聚合视图', consumers: ['ui:pool'], desc: '?id=<canonical_id> → 一题+N 出处+关系邻居+五维 dims' },
   { method: 'GET', path: '/api/pool/analysis-versions', label: '解析多版本查询', consumers: ['ui:pool', 'tool:kaogong_launch'], desc: '研究 21 纪律③：?id=<canonical_id> → {versions[{sourceId,localKey,localKeys[],analysis,answer,at}], count, rawCount}——跨源不同来源的解析各存一行可查（展示层按 source+analysis 聚合，localKeys 汇总全部卷出处）' },
     { method: 'GET', path: '/api/pool/relations', label: '统一池关系查询', consumers: ['ui:pool'], desc: '?rel_type&limit → 按关系类型分页' },
@@ -140,6 +152,8 @@ export const CAPABILITIES = {
     { path: '/api/graph/impact', label: '图谱·影响面', consumers: ['ui:graph'] },
     { path: '/api/lifecycle', label: '生命周期状态机', consumers: ['ui:observability'] },
     { path: '/api/telemetry', label: '遥测', consumers: ['ui:observability'] },
+    { path: '/api/cache', label: '统一缓存白盒(命中率/快照/失效图)', consumers: ['ui:observability'], desc: '每域命中率 + 快照清单 + 失效级联图 + 策略（TTL/槽位）' },
+    { path: '/api/data-domains', label: '数据域就绪矩阵(单一 .kaogong.db)', consumers: ['ui:observability', 'ui:repos'], desc: '六域就绪谓词实测值 + 缺源 + 归属视图 + 整库质量门；前端据此轮询「入库中」' },
     { path: '/api/capabilities', label: '能力矩阵', consumers: ['ui:observability'] },
     { path: '/api/workspaces', label: '命名空间清单', consumers: ['ui:observability'] },
   ],
@@ -418,29 +432,7 @@ export function buildGraph({ banks, modules, telemetry, plan }: any = {}) {
   return { nodes, edges }
 }
 
-// ── PageRank 幂迭代 ──
-export function pageRank(nodes: any, edges: any, { d = 0.85, iter = 40 } = {}) {
-  const n = nodes.length
-  if (!n) return {}
-  const out: any = {}
-  const adj: any = {}
-  for (const x of nodes) { out[x.id] = 1 / n; adj[x.id] = [] }
-  for (const e of edges) {
-    if (adj[e.source] && out[e.target] !== undefined) adj[e.source].push(e.target)
-  }
-  for (let it = 0; it < iter; it++) {
-    let dangling = 0
-    for (const x of nodes) if (adj[x.id].length === 0) dangling += out[x.id]
-    const next: any = {}
-    for (const x of nodes) next[x.id] = (1 - d) / n + d * (dangling / n)
-    for (const x of nodes) {
-      const share = out[x.id] / (adj[x.id].length || 1)
-      for (const t of adj[x.id]) next[t] += d * share
-    }
-    for (const x of nodes) out[x.id] = next[x.id]
-  }
-  return out
-}
+// ── PageRank 幂迭代：已收敛到 shared/kernel.ts（顶部 re-export）──
 
 // ── Union-Find 弱连通分量 ──
 export function components(nodes: any, edges: any) {

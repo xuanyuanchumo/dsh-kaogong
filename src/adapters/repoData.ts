@@ -4,7 +4,7 @@
  * 架构约束：宿主/服务端只消费本适配器的导出，不直接触碰 REPO_ROOT 路径细节。
  * 全部只读；15 个开源仓库 = 唯一外部数据源。零依赖。
  */
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
@@ -175,91 +175,45 @@ export function parseQuestions(filePath: any, maxQ = 20) {
 }
 
 /**
- * 抽题：随机文件 + 无放回下标采样（Set 去重，O(count)）
+ * 抽题门面（**唯一**取题入口；v9 起池是唯一数据源）。
  *
- * ── cycle-34 阶段 1（I5/KERNEL-05 违规收敛）──
- * 现状：每次抽题都 `readFileSync` + 重新解析 md —— 请求路径直读第三方文件，
- * 且题目**未进存储层**（无法跨源聚合）。研究 15 §4.1 C6 判定为「两跳退化」。
+ * ── v9 改造（消除外源直读）──
+ *   v8 及以前：池就绪 → 池供数；池未就绪 → **回落目录解析**（readFileSync + 重解析 md）。
+ *   那条回落分支让「运行期直读第三方文件」长期存活，也让「题不在库里」被静默掩盖。
+ *   v9：只走池。池未就绪时返回结构化错误（调用方经 dataGate 触发按需摄入后重试）——
+ *   **请求路径零文件读**从「就绪时的性质」升级为「恒真的不变量」（I-DB-1）。
  *
- * 修法：**存储层优先**——统一池（`.kaogong.db`）就绪时由它供数（不再碰文件）；
- * 池未就绪（未重建 / node:sqlite 不可用）时**回落**到既有目录解析路径。
- * 回落到目录解析是**受控降级**而非违规：它是唯一可用的数据源，
- * 且守卫 SMOKE-KERNEL-05 断言「池就绪时请求路径不 readFileSync」。
+ * 兼容性硬约束：返回形状零变化（file/count/questions/error）。
  */
 export function getRandomQuestions(repoRoot: any, moduleName: any, count = 1, pool?: any) {
-  // ① 存储层优先（统一池供数；跨源可聚合，请求路径零文件读）
   if (pool && typeof pool.sampleQuestions === 'function') {
     const r = pool.sampleQuestions({ module: moduleName, count })
     if (r && !r.error && Array.isArray(r.questions) && r.questions.length) {
       return { file: r.file || '', count: r.questions.length, questions: r.questions, source: 'pool' }
     }
-    if (r && r.error) return { error: r.error }
+    if (r && r.error) return { error: r.error, ready: false }
   }
-  // ② 回落：目录解析（池未就绪时的唯一数据源）
-  const dirName = (XINGCE_MODULES as Record<string, any>)[moduleName]
-  if (!dirName) return { error: `未知模块。可用: ${Object.keys(XINGCE_MODULES).join(', ')}` }
-  const modulePath = join(repoRoot, 'xingcezhenti', dirName)
-  // cycle-29（flaky 根治）：排除非题库文件——六个模块目录各有一个 README.md（6/2962=0.2%），
-  // 解析恒为 0 题 → 抽中即返回 error，消费方 `.questions[0]` 裸崩（smoke 并行预热窗口实测崩一次）。
-  // 判据：文件名含 README/说明/目录 → 直接跳过；保留全部试卷文件。
-  const files = safeReadDir(modulePath).filter(f => f.endsWith('.md') && !/README|说明|目录/i.test(f))
-  if (files.length === 0) return { error: `模块 ${moduleName} 无题文件` }
-  const randomFile = files[Math.floor(Math.random() * files.length)]
-  const questions = parseQuestions(join(modulePath, randomFile), 30)
-  if (questions.length === 0) return { error: `文件中未解析到题目: ${randomFile}` }
-  const selected: any[] = []
-  const used = new Set()
-  for (let i = 0; i < count && i < questions.length; i++) {
-    let idx
-    do { idx = Math.floor(Math.random() * questions.length) } while (used.has(idx) && used.size < questions.length)
-    used.add(idx)
-    selected.push(questions[idx])
+  return {
+    error: '统一题库未就绪——请到「📦 题库管理」安装题库后在「🗄️ 统一题库」重建',
+    ready: false,
   }
-  return { file: randomFile, count: selected.length, questions: selected }
 }
+// 保留 repoRoot 形参（调用面兼容）；v9 起抽题不再使用它（零文件读）。
+void 0
 
-/** 全文检索：DFS 限深(3) + 命中上限(15) 早停 */
-export function searchKnowledge(repoRoot: any, query: any, repoKey: any) {
-  const searchRepos = repoKey ? [repoKey] : ['sakib', 'kaogong-skill', 'developer2gwy']
-  const results: any[] = []
-  const qLower = (query || '').toLowerCase()
-  if (!qLower) return results
-  for (const key of searchRepos) {
-    if (!exists(join(repoRoot, key))) continue
-    function walk(dir: any, depth: any) {
-      if (depth > 3 || results.length >= 15) return
-      for (const item of safeReadDir(dir)) {
-        if (item.startsWith('.git') || item === 'node_modules') continue
-        const full = join(dir, item)
-        try {
-          const st = statSync(full)
-          if (st.isDirectory()) { walk(full, depth + 1); continue }
-          if (!item.endsWith('.md') && !item.endsWith('.txt')) continue
-          const c = safeReadFile(full, 5000)
-          if (c && c.toLowerCase().includes(qLower)) {
-            const lines = c.split('\n')
-            const snippets: any[] = []
-            for (let i = 0; i < lines.length; i++) {
-              if (lines[i].toLowerCase().includes(qLower)) snippets.push(lines.slice(Math.max(0, i - 1), i + 2).join('\n'))
-            }
-            results.push({ file: full.replace(repoRoot + '\\', '').replace(repoRoot + '/', ''), snippet: snippets.slice(0, 2).join('\n---\n') })
-            if (results.length >= 15) return
-          }
-        } catch {}
-      }
-    }
-    walk(join(repoRoot, key), 0)
-  }
-  return results
-}
-
-export function getMethodRef(repoRoot: any, topic: any) {
-  const fileName = (METHOD_MAP as Record<string, any>)[topic] || (METHOD_MAP as Record<string, any>)[(topic || '').slice(0, 2)]
-  if (!fileName) return { error: `未知主题。可用: ${Object.keys(METHOD_MAP).join(', ')}` }
-  const content = safeReadFile(join(repoRoot, 'kaogong-skill', 'skills', 'kaogong', 'references', fileName), 20000)
-  return { topic, file: fileName, content: content || '参考文件未找到' }
-}
-
+/**
+ * v9：知识全文检索与「方法论参考」的**运行期文件扫描实现已删除**。
+ *
+ * 为什么删除而不是保留：
+ *   它们曾是 `/api/search`（DFS 扫三仓 md）与 `/api/method`（读 kaogong-skill md）的
+ *   唯一实现——两条都是运行期外源直读。v9 把正文摄入进 `knowledge` 表后，读路径改为
+ *   `knowledge_fts`(FTS5 trigram) / `knowledge` 表（见 server/dataApi.ts）。
+ *   保留「已无调用方的直读函数」等于给下一个人留了一条复活旧路径的捷径，
+ *   故**物理删除**（守 SMOKE-DOMAIN-04 断言这三处实现不存在）。
+ *
+ * 若将来确实需要「扫描目录」能力（例如摄入期统计），应当写成
+ * adapters/poolSourceKnowledge 的摄入辅助函数，而不是放在运行期数据门面里。
+ */
 /** 学习计划结构化：4阶段/30天/每日任务（正则状态机单遍 O(n)） */
 export function parsePlanStructure(content: any) {
   const lines = content.split('\n')

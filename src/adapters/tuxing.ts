@@ -51,6 +51,16 @@ export interface TuxingQuestion {
 let cache: TuxingQuestion[] | null = null
 let cacheFailed = false
 
+/**
+ * cycle-60 换根缓存失效：旧实现 cache/cacheFailed 是模块级全局，换数据根后仍命中旧根题目
+ *（cycle-16 ⑬ 失效链曾漏本域）。rebuildDomains 换根时调用，下次 loadAll 按新根重解析。
+ * 注意：这是「显式失效」而非跨 fiber 共享状态写业务数据，不违反 R7。
+ */
+export function resetTuxing(): void {
+  cache = null
+  cacheFailed = false
+}
+
 /** 解析 data.js 里的 QDATA 数组（失败返回空数组，不抛错） */
 function loadAll(repoRoot: string): TuxingQuestion[] {
   if (cache) return cache

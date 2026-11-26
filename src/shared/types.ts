@@ -324,3 +324,47 @@ export type ApiHandler = (
   method: string,
   wsRaw?: string,
 ) => unknown
+
+// ── 统一检索层契约（cycle-49 · 只统一信封/hit 外壳，不统一打分算法）──
+
+/**
+ * 归一化检索命中外壳。
+ * 设计纪律（ARCH-CONVERGENCE-BASELINE §2）：五套检索的打分语义各异（FTS5 bm25 /
+ * huasheng13 BM25 字段加权 / 无打分子串匹配 / SQL LIKE 聚合），强行合并算法会丢信息；
+ * 故只约定「消费方稳定依赖的最小字段」，各源把专有字段放 meta。
+ */
+export interface SearchHit {
+  /** 稳定标识（canonical_id / file / qid 等，各源自行定义） */
+  id: string
+  /** 来源标识（source id，如 naoku/gwy-zhenti/huasheng13） */
+  source?: string
+  /** 展示标题（文件名 / 题干摘要 / 考点名） */
+  title?: string
+  /** 命中片段（可含高亮标记，由消费方决定如何渲染） */
+  snippet?: string
+  /** 相关性分数（无打分的源省略）——不同源之间不可直接比较 */
+  score?: number
+  /** 各源专有字段（模块/年份/置信度/出处数组等） */
+  meta?: Record<string, unknown>
+}
+
+/** 统一检索响应信封（五端点输出形状收敛目标） */
+export interface SearchEnvelope {
+  query: string
+  results: SearchHit[]
+  total: number
+  /** 耗时（ms）——各源可缺省 */
+  took?: number
+  /** 相关性置信度（仅 BM25 类源有；低置信度不丢弃，见教训㉜） */
+  confidence?: 'high' | 'medium' | 'low'
+}
+
+/**
+ * 检索 provider 抽象（镜像 poolSources.ts 的 SourceSpec 注册表演进方向）。
+ * 本轮只落类型契约，运行时注册表留待 cycle-51（避免大爆炸式改动）。
+ */
+export interface SearchProvider {
+  id: string
+  label: string
+  search(query: string, opts?: Record<string, unknown>): SearchEnvelope | Promise<SearchEnvelope>
+}

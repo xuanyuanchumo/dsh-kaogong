@@ -55,7 +55,9 @@ test('C30-01..05 browse 自答对照：交互分支 + 宿主态 + 对照条 + �
 })
 
 test('C30b-01..04 排程纪律：SRS 同源弱度模型 + 纯函数确定性 + 四步纪律 + 崩溃安全', () => {
-  expect(schedSrc30.includes('1 / (r + 0.15)') && schedSrc30.includes('(1 + (openTotal') && schedSrc30.includes('弱点×积压加权')).toBe(true)
+  // cycle-50 内核收敛：弱点公式从内联 `1/(r+0.15)` 外提到 shared/kernel.weaknessWeight
+  //（教训④：形态守卫跟架构同波次；公式事实源现为 kernel，排程侧只保留调用 + 业务先验 rate=0）。
+  expect(schedSrc30.includes('weaknessWeight') && schedSrc30.includes('(1 + (openTotal') && schedSrc30.includes('弱点×积压加权')).toBe(true)
   expect(!schedSrc30.includes('Math.random') && !schedSrc30.includes('Date.now')).toBe(true)
   const manifestSrc30 = readSrc('src/shared/manifest.ts')
   const httpSrc30 = readSrc('src/server/http.ts')
@@ -79,8 +81,10 @@ test('C32-01..04 三模式：切换条 + exam 域复用 + 学习揭示 + 换卷�
 })
 
 test('C33-01..04 补录真题卷通道 + 溯源元数据 + 错题本工作台', () => {
-  expect(histSrc33.includes("matchSource: 'papers'") && histSrc33.includes('buildPaperIndex')).toBe(true)
-  expect(histSrc33.includes('paperId: pp.id') && histSrc33.includes('paperFile: pp.id.split')).toBe(true)
+  // v9：补录搜索唯一通道 = 统一池（带出处溯源）；真题卷目录扫描通道已删除
+  expect(histSrc33.includes("matchSource: 'pool'"), '未标注池来源').toBe(true)
+  expect(/buildPaperIndex/.test(histSrc33.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')), '真题卷目录扫描通道复辟').toBe(false)
+  expect(histSrc33.includes('SELECT canonical_id, paper, region, year, seq, path FROM question_source'), '缺出处溯源').toBe(true)
   expect(svSrc33.includes('setModFilter') && svSrc33.includes("stateFilter === 'open'") && svSrc33.includes('当前筛选无条目')).toBe(true)
   expect(svSrc33.includes('<KgHistoryImport api={api} />') && svSrc33.includes('data-kg-wb-srs') && svSrc33.includes('data-kg-wb-import')).toBe(true)
   expect(svSrc33.includes('setExpanded') && svSrc33.includes('📥 纸质补录')).toBe(true)

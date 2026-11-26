@@ -11,6 +11,8 @@ import { createGraphEngine } from '../graph/graph-engine.js'
 import { graphKeyCommand } from '../graph/graph-transition.js'
 import { graphFetchSubgraph, graphNormalizeNeighborhood, graphDeriveImpact } from '../graph/graph-subgraph.js'
 import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetLayout, graphReadLayers, GRAPH_NODE_META, GRAPH_EDGE_META, graphPaintModel, graphLocalBetweenness, graphDegreeHistogram, GRAPH_COLOR_MODES, GRAPH_SEQ_STOPS, graphSeqColor } from '../graph/graph-analytics.js'
+// cycle-60 R13：四个只读查询原语外提（复杂度治理，cycle-13 固定拆法）
+import { graphDegreeOf, graphPrOf, graphCommunityOf, graphNeighborRows, graphSearchKeyPlan, graphLegendFmt, graphColorModeLabel } from '../graph/graph-lookup.js'
 
     /* ── cycle-15：布局三态序列 + 文案（工具条按钮与键盘 l 键共用同一序列，单一事实源）──
        force=FR 力导向 · layered=Kahn 拓扑分层 · circular=语义环形（NODE_META.layer 层序圆周）。 */
@@ -361,21 +363,16 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         locate(id)
       }
       function onSearchKey(ev: any) {
-        const k = ev && ev.key
-        if (k === 'Enter') {
-          if (ev.preventDefault) ev.preventDefault()
-          if (!searchMatches.length) return
-          // 回车循环：首回定位第 1 命中，后续回车按序循环（keepQuery 保留下拉与上下文）
-          const nextIdx = searchHit < searchMatches.length - 1 ? searchHit + 1 : 0
-          setSearchHit(nextIdx)
-          pickSearchResult(searchMatches[nextIdx].id, true)
-        } else if (k === 'ArrowDown') {
-          if (ev.preventDefault) ev.preventDefault()
-          setSearchHit((i: any) => Math.min(searchMatches.length - 1, i + 1))
-        } else if (k === 'ArrowUp') {
-          if (ev.preventDefault) ev.preventDefault()
-          setSearchHit((i: any) => Math.max(0, i - 1))
-        } else if (k === 'Escape') {
+        // cycle-60 R13：决策外提到 graphSearchKeyPlan（纯函数），此处只执行副作用。
+        const plan = graphSearchKeyPlan(ev && ev.key, searchHit, searchMatches.length)
+        if (plan.kind === 'none') return
+        if (ev && ev.preventDefault) ev.preventDefault()
+        if (plan.kind === 'locate') {
+          setSearchHit(plan.nextIdx)
+          pickSearchResult(searchMatches[plan.nextIdx!].id, true)
+        } else if (plan.kind === 'down' || plan.kind === 'up') {
+          setSearchHit(plan.nextIdx)
+        } else if (plan.kind === 'clear') {
           setSearchQ('')
           setSearchHit(0)
         }
@@ -432,9 +429,9 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
       function renderColorLegend() {
         const lg = paint && paint.legend
         if (!lg) return null
-        const fmt = (v: any) => (typeof v === 'number' ? (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : String(v))
+        const fmt = graphLegendFmt
         if (lg.kind === 'seq') {
-          const modeLabel = (GRAPH_COLOR_MODES.find((m: any) => m.id === colorMode) || {}).label || ''
+          const modeLabel = graphColorModeLabel(GRAPH_COLOR_MODES as any[], colorMode)
           return h('div', { key: 'g-legend-seq', style: { marginTop: 8, fontSize: 10, color: 'var(--text-muted)' } },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
               h('span', { style: { fontVariantNumeric: 'tabular-nums' } }, fmt(lg.min)),
@@ -469,63 +466,12 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         }
         return null
       }
-      function degreeOf(id: any) {
-        try {
-          const an = raw.analytics
-          const d = an && an.degree && an.degree[id]
-          if (d && typeof d.in === 'number') return { in: d.in, out: d.out, total: typeof d.total === 'number' ? d.total : d.in + d.out }
-          return local.degree[id] || { in: 0, out: 0, total: 0 }
-        } catch { return { in: 0, out: 0, total: 0 } }
-      }
-      function prOf(id: any) {
-        try {
-          const an = raw.analytics
-          const fromAn = an && an.pagerank && an.pagerank[id]
-          if (typeof fromAn === 'number') return fromAn.toFixed(4)
-          const rk = Array.isArray(raw.rank) ? raw.rank.find((r: any) => r && r.id === id) : null
-          if (rk && typeof rk.pr === 'number') return rk.pr.toFixed(4)
-          const lv = local.pagerank[id]
-          return typeof lv === 'number' ? lv.toFixed(4) : '—'
-        } catch { return '—' }
-      }
-      function communityOf(id: any) {
-        try {
-          const an = raw.analytics
-          const list = (an && Array.isArray(an.communities)) ? an.communities : local.communities
-          for (let i = 0; i < list.length; i++) {
-            const c = list[i] || {}
-            if (Array.isArray(c.members) && c.members.indexOf(id) >= 0) return '#' + (i + 1) + '（' + (c.size || c.members.length) + ' 节点）'
-          }
-          return '—'
-        } catch { return '—' }
-      }
-      function neighborRows(id: any) {
-        const rows: any[] = []
-        try {
-          const seen: any = {}
-          for (const e of edges) {
-            if (!e) continue
-            let other: any = null, dir = ''
-            if (String(e.source) === String(id)) { other = e.target; dir = '→出' }
-            else if (String(e.target) === String(id)) { other = e.source; dir = '←入' }
-            if (other == null) continue
-            const key = String(other) + '|' + String(e.rel || '')
-            if (seen[key]) continue
-            seen[key] = true
-            const om = nodeIndex[String(other)]
-            rows.push({
-              key,
-              other: String(other),
-              label: om ? String(om.label == null ? om.id : om.label) : String(other),
-              rel: String(e.rel || ''),
-              relLabel: (edgeMeta[e.rel] && edgeMeta[e.rel].label) || (GRAPH_EDGE_META[e.rel] && GRAPH_EDGE_META[e.rel].label) || String(e.rel || ''),
-              dir,
-            })
-            if (rows.length >= 16) break
-          }
-        } catch {}
-        return rows
-      }
+      // cycle-60 R13：四个只读查询原语外提到 graph-lookup.ts（复杂度 208→预算内）；
+      // 闭包值按同义形参传入，读取语义逐字等价（cycle-13 固定拆法）。
+      function degreeOf(id: any) { return graphDegreeOf(id, raw, local) }
+      function prOf(id: any) { return graphPrOf(id, raw, local) }
+      function communityOf(id: any) { return graphCommunityOf(id, raw, local) }
+      function neighborRows(id: any) { return graphNeighborRows(id, edges, nodeIndex, edgeMeta) }
 
       // 考点掌握（既有 T-020 卡片，移到图谱下方；逻辑保持不变）
       const mastery: any = (stats && stats.mastery) || {}
@@ -579,7 +525,12 @@ import { graphEngineStub, graphFuzzyIndex, graphLocalAnalytics, graphReadPresetL
         if (typeof (props && props.onGo) === 'function') {
           if (nType === 'view' && nKey) goItems.push({ label: '🖥 打开该视图', v: nKey, p: {} })
           else if (nType === 'module' && nKey) goItems.push({ label: '✏️ 去刷该模块', v: 'practice', p: { module: nKey } })
-          else if (nType === 'method' && nKey) goItems.push({ label: '📖 读方法论', v: 'huasheng13', p: { section: nKey } })
+          // cycle-49 修复（B3 死链）：method 节点的 key 来自 CAPABILITIES.methodTopics
+          // （行测/申论/职测… 见 manifest.ts:396），语义对应 /api/method?topic=<key>，
+          // 而不是 huasheng13 的 section（overview/catalog/search/practice/trace）。
+          // 旧实现把 topic 当 section 传给 huasheng13 → sec 落在不存在的分区 → 全部
+          // display:none → 空白页（用户可见缺陷）。改跳 method 视图并带 initialTopic。
+          else if (nType === 'method' && nKey) goItems.push({ label: '📖 读方法论', v: 'method', p: { topic: nKey } })
         }
         return h('div', {
           key: 'g-drawer',

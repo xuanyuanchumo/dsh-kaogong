@@ -22,10 +22,12 @@
  * 宿主加载器契约（单文件 combo、无行首 export、factory 返回 {inject, apply}）不变。
  */
 
-import { h, React, MOUNT_PATH, PORTS, APP_NAME, KaogongErrorBoundary } from './ui-kit.js'
+// cycle-52：localStorage 收敛到 kgStorage 门面（含隐私模式防御，修复视图偏好初始化无 try/catch 崩溃点）
+import { h, React, MOUNT_PATH, PORTS, APP_NAME, KaogongErrorBoundary, kgStorage } from './ui-kit.js'
 // cycle-13 对话窗口瘦身：会话练题控件已删除（会话输入区 slot 随之下线）
 import { NativeDashboardView, NativePracticeView, NativeWrongbookView, NativeTuxingView, NativeDeepBankView } from './views/study-view.js'
-import { NativeExamView, NativePapersView, NativeTopicsView, NativeEssayView } from './views/papers-view.js'
+import { NativePapersView, NativeTopicsView, NativeEssayView } from './views/papers-view.js'
+// cycle-深链融合：NativeExamView 组件本体保留在 papers-view（别名兼容导出），exam 路由收敛为深链。
 import { NativeGraphView } from './views/graph-view.js'
 import { NativeObsView } from './views/obs-view.js'
 import { NativeReposView } from './views/repos-view.js'
@@ -34,6 +36,8 @@ import { NativePoolView } from './views/pool-view.js'
 // cycle-18 花生十三体系方法论（消费 /api/huasheng13/*，自管数据视图）
 import { NativeHuasheng13View } from './views/huasheng13-view.js'
 import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan-view.js'
+// cycle-61 v9：视图元数据注册表（导航/图标/分组/归属域的唯一事实源）
+import { buildNavGroups, viewMeta } from './view-registry.js'
 
 ;(window as any).__ModuleLoader__.load({
   id: 'dsh-kaogong',
@@ -42,7 +46,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
     const TAB_KIND = 'kaogong'
     let lastWsKey = 'default'
     const DICTS = {
-      zh: { title: '考公学习', guideDesc: '离线题库 · 30天计划 · SRS错题本 · 知识图谱 · 可观测仪表盘（15个开源仓库）', loading: '正在连接学习服务…', down: '本地学习服务未运行', downHint: 'Host 插件加载时自动启动；若刚崩溃请执行热重载', openExternal: '↗ 浏览器标签', retry: '↻', probe: '项目', native: '宿主原生', fallback: 'iframe 兜底' },
+      zh: { title: '考公学习', guideDesc: '离线题库 · 30天计划 · SRS错题本 · 知识图谱 · 可观测仪表盘（多源离线题库）', loading: '正在连接学习服务…', down: '本地学习服务未运行', downHint: 'Host 插件加载时自动启动；若刚崩溃请执行热重载', openExternal: '↗ 浏览器标签', retry: '↻', probe: '项目', native: '宿主原生', fallback: 'iframe 兜底' },
       en: { title: 'Exam Study', guideDesc: 'Offline bank · 30-day plan · SRS wrong-book · knowledge graph · observability', loading: 'Connecting to study service…', down: 'Local study service not running', downHint: 'It starts when the Host plugin loads; hot-reload if it crashed', openExternal: '↗ Browser tab', retry: '↻', probe: 'project', native: 'native', fallback: 'iframe fallback' },
     }
     function KaogongMainBounded(props: any) { return h(KaogongErrorBoundary, null, h(KaogongMainPanel, props)) }
@@ -92,7 +96,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
     /** 宿主原生面板：同源 fetch + React 渲染（左栏 main 席位，全屏沉浸） */
     function KaogongMainPanel({ wsKey, t }: any) {
       const channel = useChannel()
-      const [view, setViewRaw] = React.useState(() => localStorage.getItem('kg-native-view') || 'dashboard')
+      const [view, setViewRaw] = React.useState(() => kgStorage.get('kg-native-view', 'dashboard'))
       const [viewParams, setViewParams] = React.useState({})   // v1.7.1：专题 entry 传参（模块/题型/科目）
       const [tick, setTick] = React.useState(0)
 
@@ -102,7 +106,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
        * cycle-24 P0-1：父层不再拉取/下发 data —— 全部视图自治 fetch（窄 props），err 下沉到各视图。
        */
       const setView = React.useCallback((v: any, params?: any) => {
-        localStorage.setItem('kg-native-view', v)
+        kgStorage.set('kg-native-view', v)
         setViewParams(params || {})
         setViewRaw((prev: any) => {
           if (prev === v) setTick((t: any) => t + 1)   // 同一视图重入 → 强制重挂载重取
@@ -126,31 +130,43 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
        * 每项：组件（稳定函数引用，模块/壳作用域声明）+ 挂载 key + 窄 props 工厂。
        * 新增视图 = 一行登记（替代原 17 行三元分发链 + 重复布尔排除串两处）。
        */
+      /**
+       * cycle-49 统一跳转契约：onGo(view, params?) → setView。
+       * 全部视图注入同一出口，消灭「只有入口没有出口」的死胡同视图
+       * （调研实证：dashboard/tuxing/deepbank/plan/search/method/pool/repos/exam/essay
+       * 此前零跨视图出口）。params 形状约定 { module?, kadian?, srs?, topic?, paperId?, section?, tab? }。
+       */
+      const go = (v: any, params?: any) => setView(v, params || {})
       const VIEW_ROUTES: Record<string, { comp: any; key: (t: number) => string; props: () => any }> = {
-        dashboard: { comp: NativeDashboardView, key: t => 'd' + t, props: () => ({ api }) },
-        wrongbook: { comp: NativeWrongbookView, key: t => 'w' + t, props: () => ({ api, onGoPractice: () => setView('practice', { srs: 1 }) }) },
-        graph: { comp: NativeGraphView, key: t => 'g' + t, props: () => ({ api, wsKey, statsApi: api, onGo: (v: any, params?: any) => setView(v, params || {}) }) },
+        dashboard: { comp: NativeDashboardView, key: t => 'd' + t, props: () => ({ api, onGo: go }) },
+        wrongbook: { comp: NativeWrongbookView, key: t => 'w' + t, props: () => ({ api, onGo: go, onGoPractice: () => setView('practice', { srs: 1 }) }) },
+        graph: { comp: NativeGraphView, key: t => 'g' + t, props: () => ({ api, wsKey, statsApi: api, onGo: go }) },
         // cycle-46（用户确认项①·路由对齐）：manifest 声明 id 是 observability，路由键曾用 obs
         //（三方对账假漂移第三形态：同名异键）——统一为 manifest 口径；旧 'obs' 键保留一行
         // 别名分发（localStorage kg-native-view 可能存着旧键，读到了也能渲染）。
-        observability: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onReload: () => setTick((t: any) => t + 1) }) },
-        papers: { comp: NativePapersView, key: t => 'pp' + t, props: () => ({ api, initialSubject: viewParams.subject || '' }) },
-        exam: { comp: NativeExamView, key: t => 'ex' + t, props: () => ({ api }) },
-        practice: { comp: NativePracticeView, key: t => 'pr' + t + JSON.stringify(viewParams), props: () => ({ api, initialModule: viewParams.module || '', onGoWrongbook: () => setView('wrongbook') }) },
-        deepbank: { comp: NativeDeepBankView, key: t => 'dp' + t, props: () => ({ api, initialModule: viewParams.module || '', initialCategory: viewParams.category || '' }) },
-        tuxing: { comp: NativeTuxingView, key: t => 'tx' + t, props: () => ({ api }) },
-        repos: { comp: NativeReposView, key: t => 'rp' + t, props: () => ({ api }) },
+        observability: { comp: NativeObsView, key: t => 'o' + t, props: () => ({ api, onGo: go, onReload: () => setTick((t: any) => t + 1) }) },
+        papers: { comp: NativePapersView, key: t => 'pp' + t, props: () => ({ api, onGo: go, initialSubject: viewParams.subject || '' }) },
+        // cycle-深链融合：exam 改为 papers + mode 深链的别名路由（消灭重复实现）。
+        // 保留 exam 键兼容 localStorage 旧键、导航入口、onGo 出口；无 paperId 时进入卷列表，
+        // 点卷即直入 answer 模式（组件内 initialMode 驱动）；带 paperId 深链命中卷即自动开考。
+        exam: { comp: NativePapersView, key: t => 'ex' + t, props: () => ({ api, onGo: go, initialMode: 'answer', initialPaperId: viewParams.paperId || '' }) },
+        // cycle-49：initialSrs 消费错题本 {srs:1} 深链（修复死参——回炉跳转真正生效）
+        practice: { comp: NativePracticeView, key: t => 'pr' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialSrs: viewParams.srs === undefined ? undefined : !!viewParams.srs, onGoWrongbook: () => setView('wrongbook') }) },
+        deepbank: { comp: NativeDeepBankView, key: t => 'dp' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialCategory: viewParams.category || '', initialKadian: viewParams.kadian || '' }) },
+        tuxing: { comp: NativeTuxingView, key: t => 'tx' + t, props: () => ({ api, onGo: go }) },
+        repos: { comp: NativeReposView, key: t => 'rp' + t, props: () => ({ api, onGo: go }) },
         // cycle-34 阶段 1：统一题库（不进一级导航——收敛进「题库」组，与 discipline㉛ 一致）
-        pool: { comp: NativePoolView, key: t => 'pl' + t, props: () => ({ api, initialModule: viewParams.module || '' }) },
-        huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t, props: () => ({ api, initialSection: viewParams.section || '', onGo: (v: any, params?: any) => setView(v, params || {}) }) },
-        topics: { comp: NativeTopicsView, key: t => 'tp' + t, props: () => ({ api, onGo: (v: any, params?: any) => setView(v, params || {}), initialModule: viewParams.module || '' }) },
-        essay: { comp: NativeEssayView, key: t => 'es' + t + JSON.stringify(viewParams), props: () => ({ api, initialType: viewParams.type || '' }) },
+        pool: { comp: NativePoolView, key: t => 'pl' + t, props: () => ({ api, onGo: go, initialModule: viewParams.module || '' }) },
+        huasheng13: { comp: NativeHuasheng13View, key: t => 'hs13' + t, props: () => ({ api, initialSection: viewParams.section || '', onGo: go }) },
+        topics: { comp: NativeTopicsView, key: t => 'tp' + t, props: () => ({ api, onGo: go, initialModule: viewParams.module || '', initialTab: viewParams.tab || '' }) },
+        essay: { comp: NativeEssayView, key: t => 'es' + t + JSON.stringify(viewParams), props: () => ({ api, onGo: go, initialType: viewParams.type || '' }) },
         // cycle-46（用户确认项①·幽灵视图补齐）：plan/search/method 在 manifest 声明、
         // 服务端端点全部存活，但无路由无页面（声明漂移第四形态）。补齐为真页面，
         // 视图组件在 views/plan-view.tsx（懒 import 经 bundler 静态编译）。
-        plan: { comp: NativePlanView, key: t => 'pn' + t, props: () => ({ api }) },
-        search: { comp: NativeSearchView, key: t => 'se' + t, props: () => ({ api }) },
-        method: { comp: NativeMethodView, key: t => 'me' + t, props: () => ({ api }) },
+        plan: { comp: NativePlanView, key: t => 'pn' + t, props: () => ({ api, onGo: go }) },
+        search: { comp: NativeSearchView, key: t => 'se' + t, props: () => ({ api, onGo: go }) },
+        // cycle-49：initialTopic 深链——图谱 method 节点「读方法论」直达对应主题正文
+        method: { comp: NativeMethodView, key: t => 'me' + t + String(viewParams.topic || ''), props: () => ({ api, onGo: go, initialTopic: viewParams.topic || '' }) },
       }
       const route = VIEW_ROUTES[view] || VIEW_ROUTES[(view === 'obs' ? 'observability' : view)]
       const routeEl = route ? h(route.comp, { key: route.key(tick), ...route.props() }) : null
@@ -168,17 +184,22 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
       // cycle-18：花生十三体系同理不外挂一级入口（用户明确要求「不要单独弄导航入口，
       // 放在专题下的方法论下即可」）——它的入口在专题枢纽「📖 方法论」分区内；
       // view==='huasheng13' 的分发保留，用于深链与枢纽内跳转。
-      const NAV_GROUPS: Array<{ id: string; label: string; items: Array<[string, string]> }> = [
-        { id: 'learn', label: '学习', items: [['dashboard', '📊 仪表盘'], ['plan', '🗓 计划'], ['exam', '⏱ 模考']] },
-        // cycle-34 阶段 1：统一题库收敛进「题库」组（纪律㉛：新增业务视图不新增一级导航）
-        { id: 'bank', label: '题库', items: [['papers', '📚 真题卷'], ['topics', '🎯 专题'], ['pool', '🗄️ 统一题库']] },
-        { id: 'review', label: '复盘', items: [['wrongbook', '📕 错题本'], ['graph', '🕸️ 图谱'], ['observability', '📡 可观测']] },
-        // cycle-46：搜索/方法参考补齐为真页面（幽灵视图根治）——工具属性 → 归「查阅」组
-        { id: 'ref', label: '查阅', items: [['search', '🔎 检索'], ['method', '📖 方法参考'], ['repos', '📦 题库管理']] },
-      ]
+      //
+      // cycle-61 v9：导航分组来自 **view-registry.ts 单一事实源**（buildNavGroups 派生），
+      // 不再在组件内手写 NAV_GROUPS 数组——此前「图标/标签/分组」在这里、能力声明在
+      // manifest、组件映射在 VIEW_ROUTES 三处各一份，新增视图必漏一处（声明漂移）。
+      // 现在：新增视图 = view-registry 一条 + VIEW_ROUTES 一行。
+      const NAV_GROUPS = buildNavGroups()
       return h('div', { className: 'kg-page', role: 'main', 'aria-label': t('title') },
         h('div', { className: 'kg-page-head' },
           h('span', { className: 'kg-page-title' }, '📚 ' + t('title')),
+          // v9：当前视图的职责文案来自 view-registry（单一事实源）——用户一眼知道「这页负责什么」，
+          // 也让「视图元数据」有真实消费面（否则它只是一份无人读的清单）。
+          (() => {
+            const vm = viewMeta(view)
+            return vm ? h('span', { className: 'kg-view-desc', 'data-kg-view': vm.id, title: vm.desc },
+              vm.icon + ' ' + vm.label) : null
+          })(),
           h('span', { style: { fontSize: 11, color: '#64748b' } },
             `${channel.kind === 'same-origin' ? '🏠 ' + t('native') : '🔌 ' + t('fallback')} · ${String(wsKey).split(/[\\/]/).pop() || 'default'}`),
           h('nav', { style: { marginLeft: 'auto', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }, role: 'tablist' },
@@ -232,7 +253,7 @@ import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan
       }, [channel, wsKey, reloadKey])
       // 快捷入口：写入视图偏好（左栏面板挂载时读取同一 localStorage 键）+ 提示语
       const go = (view: string, label: string) => {
-        try { localStorage.setItem('kg-native-view', view) } catch { /* 隐私模式等场景静默 */ }
+        kgStorage.set('kg-native-view', view)
         setGoHint('已定位「' + label + '」— 打开左栏「考公学习」面板即可直达')
       }
       const wrongOpen = stats && stats.wrong && typeof stats.wrong.open === 'number' ? stats.wrong.open : null

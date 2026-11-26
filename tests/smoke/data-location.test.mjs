@@ -110,3 +110,10 @@ test('SMOKE-SCHED-05..06 画像可解释 + 全 30 天守恒', async () => {
   expect(allSum.filter(x => x !== 30), '非 30 的天数').toEqual([])
   expect((sched.schedule || []).length).toBe(30)
 })
+
+test('DATA-LOC 随包模板迁移只复制不删源（cycle-60 R12：study-plan.md 曾被误删）', () => {
+  const src = readSrc('src/server/dataRoot.ts')
+  expect(/TEMPLATE_ENTRIES = new Set\(\[['"]study-plan\.md['"]\]\)/.test(src), '模板集合缺失').toBe(true)
+  expect(src.includes('if (TEMPLATE_ENTRIES.has(name))'), '模板复制分支缺失').toBe(true)
+  expect(src.includes('else if (TEMPLATE_ENTRIES.has(name)) { /* 模板：保留包内副本，绝不删源 */ }'), 'dst 已存在分支未豁免模板').toBe(true)
+})

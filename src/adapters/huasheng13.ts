@@ -253,7 +253,22 @@ export function parseDoc(absPath: string): ParsedDoc {
   if (typeof absPath !== 'string' || !absPath) {
     throw new TypeError('parseDoc(absPath): absPath 必须是非空字符串')
   }
-  const text = normalizeNewlines(readFileSync(absPath, 'utf-8'))
+  return parseDocText(readFileSync(absPath, 'utf-8'), absPath)
+}
+
+/**
+ * 解析单篇语料**文本**（v9 新增：无 IO 版本）。
+ *
+ * 为什么需要它：v9 起方法论正文已入库（knowledge 表），运行期不应再读磁盘 md
+ * （I-DB-1）。把「解析」与「读盘」拆开后，同一份解析逻辑既能服务摄入期（读文件），
+ * 也能服务运行期（读库里的 body）——**解析语义只有一份**，不会出现「入库的解析
+ * 与直读的解析不一致」的漂移（这正是 v9 要消除的漂移形态）。
+ *
+ * @param raw 原文（CRLF 会归一）
+ * @param absPath 仅用于取文件名/标题兜底与 path 字段（可为伪路径，如库内 kn_id）
+ */
+export function parseDocText(raw: string, absPath = ''): ParsedDoc {
+  const text = normalizeNewlines(raw)
   const lines = text.split('\n')
 
   // —— 标题与小节切分 ——
@@ -667,6 +682,72 @@ export function buildIndex(rootDir: string, opts: BuildIndexOptions = {}): Huash
 function stripRuntime(index: Huasheng13Index): Huasheng13Index {
   const { source, buildMs, snapshotFile, snapshotWrite, ...rest } = index
   return rest as Huasheng13Index
+}
+
+/**
+ * 从**库内知识节点**构建索引（v9 · 运行期零外源直读）。
+ *
+ * ── 为什么必须走这条路径 ──
+ *   v8 及以前 `/api/huasheng13/*` 直接 buildIndex(语料目录) —— 运行时读 `references/*.md`，
+ *   语料目录一旦缺失（只装了其它题库、或用户把数据根换走）整个方法论视图直接降级。
+ *   v9 起语料经「题库管理」摄入进 knowledge 表（kind='methodology'，kn_id='hs13:<file>'），
+ *   运行期只读库。解析语义仍复用 parseDocText（唯一实现），故「入库正文」与
+ *   「直读文件」的解析结果逐字段一致。
+ *
+ * @param rows   [{ kn_id, title, body, path, meta }]
+ * @returns      与 buildIndex 同形（degraded/errors/missing/dirMismatch 全部如实给出）
+ */
+export function buildIndexFromRows(rows: any[]): Huasheng13Index {
+  const t0 = Date.now()
+  const base: any = {
+    v: HUASHENG13_INDEX_VERSION,
+    builtAt: Date.now(),
+    fixtureHash: '',
+    root: '',
+    degraded: false,
+    missing: [] as string[],
+    errors: [] as Array<{ file: string; reason: string }>,
+    orphans: [],
+    dirMismatch: [],
+    docs: [],
+  }
+  const entryById = new Map<string, CorpusEntry>()
+  for (const e of corpusEntries()) entryById.set(e.id, e)
+
+  const docs: Huasheng13Doc[] = []
+  const seen = new Set<string>()
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const knId = String((row && row.kn_id) || '')
+    if (!knId.startsWith('hs13:')) continue
+    const id = knId.slice(5)
+    const entry = entryById.get(id)
+    if (!entry) continue          // 库里存在但 META 未声明的节点 → 不参与索引（口径以 META 为准）
+    const body = String((row && row.body) || '')
+    if (!body.trim()) { base.errors.push({ file: id, reason: '库内正文为空' }); base.degraded = true; continue }
+    try {
+      // 用库内正文解析；absPath 传库内路径（仅作 label）
+      const parsed = parseDocText(body, 'db://hs13/' + id + '.md')
+      const doc = toIndexDoc({ entry, rel: entry.rel, dir: entry.dir, ok: true } as any, parsed)
+      // 标题以 META 声明为准（与磁盘路径同口径），parsed.title 作兜底
+      doc.title = entry.title || parsed.title
+      doc.path = String((row && row.path) || '')
+      docs.push(doc)
+      seen.add(id)
+    } catch (e: any) {
+      base.errors.push({ file: id, reason: String((e && e.message) || e) })
+      base.degraded = true
+    }
+  }
+  // 缺失判定：META 声明了但库里没有 → 缺失（与磁盘口径同语义：声明 ≡ 运行态）
+  for (const e of corpusEntries()) if (!seen.has(e.id)) base.missing.push(e.id)
+  if (base.missing.length) base.degraded = true
+  base.docs = docs
+  base.fixtureHash = 'db:' + createHash('sha1')
+    .update(docs.map(d => `${d.file}|${d.chars}|${d.tables}|${d.formulas}`).join('\n'))
+    .digest('hex')
+  base.buildMs = Date.now() - t0
+  base.source = 'db'
+  return base as Huasheng13Index
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -1165,7 +1246,16 @@ export function parsePractice(absPath: string): PracticeItem[] {
   if (typeof absPath !== 'string' || !absPath) {
     throw new TypeError('parsePractice(absPath): absPath 必须是非空字符串')
   }
-  const text = normalizeNewlines(readFileSync(absPath, 'utf-8'))
+  return parsePracticeText(readFileSync(absPath, 'utf-8'))
+}
+
+/**
+ * 解析练习**文本**（v9 新增：无 IO 版本）。
+ * 与 parseDocText 同理由：运行期正文来自库（knowledge 表），不读磁盘 md；
+ * 解析语义仍只有这一份实现。
+ */
+export function parsePracticeText(raw: string): PracticeItem[] {
+  const text = normalizeNewlines(raw)
   const lines = text.split('\n')
 
   // 一次扫描：收集所有标题，同时为每个标题记录「最近的上级分类标题」

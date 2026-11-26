@@ -89,8 +89,12 @@ function KgMemBanner(props: KgMemBannerProps) {
      * 窄 props = { api }；五个数据源并行拉齐，任一失败就地降级（extra 卡隐藏，不拖垮首屏）。
      * hook 链恒定：useState×3 + useEffect×1。
      */
-    interface NativeDashboardViewProps { api: any }
-    export function NativeDashboardView({ api }: NativeDashboardViewProps) {
+    interface NativeDashboardViewProps {
+      api: any
+      /** cycle-49：统一跳转出口——仪表盘从「展示柜」变「启动台」（薄弱模块/空态一键开练） */
+      onGo?: (v: string, params?: any) => void
+    }
+    export function NativeDashboardView({ api, onGo }: NativeDashboardViewProps) {
       const [payload, setPayload] = React.useState(null)
       const [err, setErr] = React.useState(null)
       const [loading, setLoading] = React.useState(true)
@@ -130,19 +134,33 @@ function KgMemBanner(props: KgMemBannerProps) {
             <Stat v={`${st.repos.ready}/${st.repos.total}`} l="资源仓库" color="#6366f1" />
             <Stat v={stats.answered} l="累计答题" color="#10b981" />
             <Stat v={rate + '%'} l="总体正确率" color={rc} />
-            <Stat v={'D' + (stats.day || 1)} l="计划进度日" color="#f59e0b" />
+            {/* cycle-49：计划进度日可点直达学习计划（原纯文本展示 → 打通计划链路） */}
+            <button className="kg-navbtn" onClick={() => onGo && onGo('plan')} title="查看 30 天计划"
+              style={{ padding: 0, border: 0, background: 'none' }}>
+              <Stat v={'D' + (stats.day || 1)} l="计划进度日 ↗" color="#f59e0b" />
+            </button>
             {stats.streak > 1 ? <Stat v={'🔥×' + stats.streak} l="连续学习" color="#ef4444" /> : null}
           </div>
           <Card title="🎯 模块掌握度（正确率×置信）">
             {entries(stats.mastery || {}).sort((a, b) => a[1].mastery - b[1].mastery).map(([m, s]) =>
               <div key={m} style={{ marginBottom: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 4 }}>
                   <span>{m}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>{`${s.answered}题 · ${s.rate}% · 掌握${s.mastery}`}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{`${s.answered}题 · ${s.rate}% · 掌握${s.mastery}`}</span>
+                    {/* cycle-49：薄弱模块一键开练（学习主链路核心出口；原数值展示无出口） */}
+                    <button className="kg-navbtn" onClick={() => onGo && onGo('practice', { module: m })}
+                      style={{ fontSize: 10.5, padding: '2px 8px' }}>{'去练 ›'}</button>
+                  </span>
                 </div>
                 <Bar pct={s.mastery} color={s.mastery >= 80 ? 'linear-gradient(135deg,#10b981,#34d399)' : s.mastery < 50 ? 'linear-gradient(135deg,#f59e0b,#fbbf24)' : undefined} />
               </div>)}
-            {!Object.keys(stats.mastery || {}).length && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'暂无数据 — 去「✏️ 刷题」开练'}</div>}
+            {!Object.keys(stats.mastery || {}).length && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {'暂无数据 — '}
+              {onGo
+                ? <button className="kg-navbtn" onClick={() => onGo('practice')} style={{ fontSize: 11, padding: '3px 10px' }}>去「✏️ 刷题」开练 ›</button>
+                : '去「✏️ 刷题」开练'}
+            </div>}
           </Card>
           {/* v1.7 数据总览：题库规模 + 申论/模考战绩 */}
           {extra ? <Card title="📚 资源总览">
@@ -167,11 +185,18 @@ function KgMemBanner(props: KgMemBannerProps) {
      * 修复：v1.6 提交后只 setTick 重挂载，用户看不到对错/解析（「刷题有问题」的根因）。
      * 现流程：选模块 → 抽题 → 作答 → 提交并**就地展示判分+解析** → 下一题。
      */
-    interface NativePracticeViewProps { api: any; onGoWrongbook: any; initialModule?: any }
-    export function NativePracticeView({ api, onGoWrongbook, initialModule = '' }: NativePracticeViewProps) {
+    interface NativePracticeViewProps {
+      api: any; onGoWrongbook: any; initialModule?: any
+      /** cycle-49：SRS 回炉深链——错题本「🔁 SRS 回炉」传入，强制进入错题优先模式 */
+      initialSrs?: boolean
+    }
+    export function NativePracticeView({ api, onGoWrongbook, initialModule = '', initialSrs }: NativePracticeViewProps) {
       const MODULES = ['判断推理', '言语理解与表达', '数量关系', '资料分析', '常识判断', '政治理论']
       const [module, setModule] = React.useState(initialModule || '')
-      const [srs, setSrs] = React.useState(true)
+      // cycle-49：initialSrs 显式传入时以其为准（undefined → 保留默认 true）。
+      // 修复 wrongbook 传 {srs:1} 但此处恒 true 的死参——用户切随机后从错题本跳回，
+      // 现在能强制回到 SRS 回炉态。
+      const [srs, setSrs] = React.useState(initialSrs === undefined ? true : !!initialSrs)
       const [q, setQ] = React.useState(null)
       const [sel, setSel] = React.useState(null)
       const [result, setResult] = React.useState(null)
@@ -668,8 +693,12 @@ function KgMemBanner(props: KgMemBannerProps) {
      * 深度题库视图（GongkaoNaoku）：27506 题五维标注
      * kadian(考什么) / reasoning(怎么推) / fastest(最快解法) / pitfalls(易错) / mother(母题)
      */
-    interface NativeDeepBankViewProps { api: any; initialModule?: any; initialCategory?: any }
-    export function NativeDeepBankView({ api, initialModule = '', initialCategory = '' }: NativeDeepBankViewProps) {
+    interface NativeDeepBankViewProps {
+      api: any; initialModule?: any; initialCategory?: any
+      /** cycle-49：统一题库「练此知识点」深链——挂载即按考点抽题 */
+      initialKadian?: string
+    }
+    export function NativeDeepBankView({ api, initialModule = '', initialCategory = '', initialKadian = '' }: NativeDeepBankViewProps) {
       const [status, setStatus] = React.useState(null)
       const [module, setModule] = React.useState(initialModule || '')
       const [q, setQ] = React.useState(null)
@@ -734,6 +763,16 @@ function KgMemBanner(props: KgMemBannerProps) {
         setKadians([])
         if (dq) memSave({ module: module || '判断推理', question: dq })   // cycle-15：按考点抽题同样记忆
       }
+
+      // cycle-49：统一题库「练此知识点」深链——挂载即抽该考点一题（key 含 params → 每次深链干净重挂载）
+      React.useEffect(() => {
+        if (!initialKadian) return
+        let cancelled = false
+        api('/naoku/practice?kadian=' + encodeURIComponent(initialKadian) + '&count=1')
+          .then((d: any) => { if (!cancelled) { const dq = (d.questions || [])[0] || null; setQ(dq); setSel(null); setRevealed(false) } })
+          .catch(() => {})
+        return () => { cancelled = true }
+      }, [api, initialKadian])
 
       // ── 未就绪 ──
       if (status && !status.ready) {

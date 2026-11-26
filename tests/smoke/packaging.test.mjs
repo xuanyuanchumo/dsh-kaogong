@@ -44,6 +44,18 @@ beforeAll(() => {
   } catch (e) { packNames = null }
 }, 120_000)
 
+test('cycle-58 规范审计：output.render total 防御 + presentCall/Result 纯投影', () => {
+  const host = readSrc('src/host/index.ts')
+  expect(host.includes("schema: { type: 'object', properties: { text: { type: 'string' } }"), 'output.schema 缺失').toBe(true)
+  // render 防御式读取（value 非对象时降级空文本，绝不抛错击穿宿主渲染）
+  expect(host.includes("value && typeof value === 'object'"), 'output.render 无防御式读取').toBe(true)
+  expect(host.includes("String((value as any).text ?? '')"), 'output.render 空值未收敛').toBe(true)
+  // presentCall/presentResult 均 try/catch 收敛 undefined（total）
+  // 两个投影函数各有 try/catch 收敛 undefined——整个 card 工厂里至少 2 处 total 守卫
+  const cardFactory = host.slice(host.indexOf('function kgToolCard'), host.indexOf('/** 尾部状态标记行'))
+  expect((cardFactory.match(/catch \{ return undefined \}/g) || []).length >= 2, 'presentCall/presentResult 非 total').toBe(true)
+})
+
 test('R9 静态守卫：client 无组件函数直调（条件 hook 崩溃防线）', () => {
   const client = readClientBundle('vitest-R9')
   const directCalls = [...client.matchAll(/(?:^|[^.\w$])(Native\w+|KaogongMainPanel|KaogongTabBody|KaogongMainBounded|KaogongTabBounded)\(\s*[A-Za-z${]/gm)]
@@ -83,9 +95,21 @@ test('R28 本地调试 overlay 不得入包（含绝对路径会污染他人环�
   expect(filesList.some(f => /cordis\.local\.yml$/.test(String(f)))).toBe(false)
 })
 
-test('R28 随包模板 data/study-plan.md 在白名单内', () => {
+test('R28 随包模板 data/study-plan.md 在白名单内且实体存在（声明→实体双查）', () => {
   const filesList = Array.isArray(pkg.files) ? pkg.files : []
-  expect(filesList.some(f => String(f).replace(/^\.\//, '') === 'data/study-plan.md')).toBe(true)
+  expect(filesList.some(f => String(f).replace(/^\.\//, '') === 'data/study-plan.md'), '白名单未声明').toBe(true)
+  // cycle-60 R12：只查声明会漏「文件被删但白名单还在」——本次实测 data/study-plan.md 曾被删除而无守卫报警。
+  const p = new URL('../../data/study-plan.md', import.meta.url)
+  expect(fs.existsSync(p), '声明了 data/study-plan.md 但实体不存在（新装用户无学习计划模板）').toBe(true)
+  expect(fs.statSync(p).size, '模板为空文件').toBeGreaterThan(1024)
+})
+
+test('R28b files 白名单中的具体文件条目必须实体存在（目录/通配除外）', () => {
+  const filesList = (Array.isArray(pkg.files) ? pkg.files : []).map(f => String(f).replace(/^\.\//, ''))
+  // 只校验看起来是具体文件的条目（含扩展名、无通配），目录白名单不在此列
+  const concrete = filesList.filter(f => !f.startsWith('!') && /\.[a-z0-9]+$/.test(f) && !/[*?]/.test(f))
+  const missing = concrete.filter(f => !fs.existsSync(new URL('../../' + f, import.meta.url)))
+  expect(missing, '白名单声明但实体缺失').toEqual([])
 })
 
 test('R28 npm pack 实测：含 patch + 不含语料/overlay（声明→实体零断链）', () => {
@@ -130,4 +154,15 @@ test('R11-GUARD-04 当前 dist/client/client.js 为 combo factory 形态', () =>
   const client = readClientBundle('vitest-R11-GUARD-04')
   expect(/^import[ \t]/m.test(client)).toBe(false)
   expect(/window\.__ModuleLoader__\.load\(\{/.test(client)).toBe(true)
+})
+
+test('R11-GUARD-05 assert-combo 能识别中段 export（cycle-60 R13 假绿洞修复）', () => {
+  const guard = readSrc('scripts/assert-combo.mjs')
+  // 只认行首 export 会漏 `/** doc */export function f`（与注释同行）→ 宿主 SyntaxError 而守卫假绿
+  expect(guard.includes('midLineExport'), '缺中段 export 判据').toBe(true)
+  expect(/midLineExport/.test(guard.slice(guard.indexOf('const bad ='))), '中段判据未参与 bad 组合').toBe(true)
+  // 判据必须能命中真实污染形态
+  const re = /^(?!export[ \t]).*\bexport[ \t]+(?:async[ \t]+)?(?:function|const|class|default|let|var)\b/m
+  expect(re.test('/** doc */export function f() {}'), '判据漏检同行注释形态').toBe(true)
+  expect(re.test('export function f() {}'), '合法行首 export 被误判').toBe(false)
 })

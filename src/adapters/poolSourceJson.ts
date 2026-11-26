@@ -165,9 +165,16 @@ export function ingestTuxingSource(ctx: any): any {
   try { items = JSON.parse(m[1].replace(/'/g, '"')) } catch { return { source: 'gk-tuxing', skipped: true, reason: 'QDATA JSON 解析失败' } }
   if (!items.length) return { source: 'gk-tuxing', skipped: true, reason: 'QDATA 为空' }
 
-  const stats = { questions: 0, relations: 0, skipped: false, files: 1 }
+  const stats = { questions: 0, relations: 0, extras: 0, skipped: false, files: 1 }
   const insQ = prepareQuestionUpsert(db)
   const ev = JSON.stringify({ src: 'gk-tuxing', rule: 'QDATA' })
+  // cycle-60 T-038：无损换源——上游每题原始对象（含 cat/fmt/acc/trap/g/n）整包写入通用列。
+  // 独立 UPDATE，不扩 QUESTION_COLS（cycle-40b/55 错位事故纪律）；只填空位（合并语义），
+  // merge 分支写 r.mergedInto（防写空行/洗先到源数据）。
+  const updSourceExtras = db.prepare(
+    `UPDATE question SET source_extras = CASE WHEN LENGTH(source_extras) > 0 THEN source_extras ELSE ? END
+     WHERE canonical_id = ?`,
+  )
 
   withTx(db, () => {
     for (const q of items) {
@@ -197,6 +204,12 @@ export function ingestTuxingSource(ctx: any): any {
         paper: src,
       }, { evidence: ev, relations }, { db, localKey: qid, paper: src })
       if (r.ok) stats.questions++
+      // T-038：完整上游对象 JSON 入 source_extras（无损；cat 代码不再靠中文反查）
+      const targetCanon = String(r.mergedInto || canon)
+      try {
+        updSourceExtras.run(JSON.stringify(q), targetCanon)
+        stats.extras++
+      } catch { /* 单行 UPDATE 失败不阻塞摄入 */ }
       stats.relations += relations.length
     }
   })

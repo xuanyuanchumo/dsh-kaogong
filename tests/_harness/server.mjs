@@ -56,16 +56,37 @@ export async function P(base, u, body) {
   return r.json()
 }
 
-/** 池就绪自检（空/未建时小样本重建——cycle-41 纪律：不假设上游时序） */
+/**
+ * 池就绪自检（cycle-41 纪律：不假设上游时序）。
+ *
+ * ⚠️ v9 事故修复（cycle-61）：旧实现「只要 `ready` 为 false 就 POST 全量重建」，
+ * 而重建是**破坏性**的（`rebuild:true` 会清空全部 POOL_TABLES），且携带
+ * `maxFiles:30 / maxPapers:30` 的**截断**参数——它会把真实的用户数据根（测试与主
+ * profile 共用 `~/.dsh/kaogong`）重建成一个只含几十题、丢掉 gk-tuxing/kadian/
+ * xingce-app 的残缺库。本次实测：基线测试跑完后生产库 question 从 86,534 掉到
+ * 84,284、`gk-tuxing`=0、`knowledge.kind='kadian'`=0 —— 真实功能被测试破坏。
+ *
+ * 正解（三条，缺一不可）：
+ *   ① **只要库里有题就不再重建**（不管 ready 与否——ready 是「数据质量达基线」，
+ *      不是「数据在不在」；质量不足由白盒提示用户择时重建，测试无权替用户清库）；
+ *   ② 只有**完全空库**（questions===0）才做小样本重建（那是首次 CI/干净环境的引导路径）；
+ *   ③ 重建仍保留截断参数（空库场景下快速可用即可），但绝不在非空库上执行。
+ */
 export async function ensurePoolReady(base) {
   try {
     const st = await (await fetch(`${base}/api/pool/status`)).json()
-    if (st.ready && st.stats && st.stats.questions) return true
+    const q = st && st.stats ? Number(st.stats.questions || 0) : 0
+    // ① 非空库：直接视为就绪（绝不重建——保护真实数据）
+    if (q > 0) {
+      if (!st.ready) console.log('[harness] 池非空但质量门未过（q=' + q + '）——测试不重建，交给白盒提示用户')
+      return true
+    }
+    // ② 空库：小样本重建（首次引导；截断只为让测试快速可用）
     const rb = await (await fetch(`${base}/api/pool/rebuild`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'full', async: false, maxFiles: 30, maxPapers: 30 }),
     })).json()
-    console.log('[harness] 池重建:', rb.ok ? 'ok q=' + (rb.stats ? rb.stats.questions : '?') : 'FAIL ' + (rb.error || '').slice(0, 80))
+    console.log('[harness] 空库引导重建:', rb.ok ? 'ok q=' + (rb.stats ? rb.stats.questions : '?') : 'FAIL ' + (rb.error || '').slice(0, 80))
     return !!rb.ok
   } catch (e) { console.log('[harness] 池自检跳过:', String(e).slice(0, 60)); return false }
 }

@@ -19,35 +19,41 @@
  *   既有端点字段零删改；新能力全部走 `/api/pool/*`。
  *   任何异常收敛为 `{ error }`（HTTP 200），绝不向路由层冒泡（崩溃安全纪律）。
  */
-import { poolDb, poolDbStatus, poolStats, poolDbBytes, getMeta, getCachedStats, invalidateStatsCache, studyEventStats, POOL_TABLES, POOL_SCHEMA_VERSION } from '../adapters/poolDb.js'
-import { rebuildPool, incrementalRebuild, registrySnapshot } from '../adapters/poolIngest.js'
+import { poolDb, poolDbStatus, poolStats, poolDbBytes, getMeta, getCachedStats, invalidateStatsCache, studyEventStats, POOL_TABLES, POOL_SCHEMA_VERSION, setRebuilding, withReadConnAsync, isRebuilding } from '../adapters/poolDb.js'
+// v9：抽题配额与加权抽样收敛到内核（唯一事实源，srs 与本域共用）
+// weaknessWeight 一并从内核取（cycle-50 起公式单一事实源，勿在此另起一行 import）
+import { quotaPlan, weightedPickIndex, moduleWeakness, weaknessWeight } from '../shared/kernel.js'
+// v9-b：重建改由 worker 线程执行（主线程零阻塞）——本文件不再直接调用 rebuildPool/incrementalRebuild
+import { registrySnapshot } from '../adapters/poolIngest.js'
 import { poolHealth, ingestDiagnostics, REL_TYPE_META } from './poolObservability.js'
 
 
-/** 抽题权重：复用 SRS 同源模型 1/(rate+0.15)（单一事实源纪律——不另立一套公式） */
+/**
+ * 抽题权重：复用 kernel 弱点公式（cycle-50 收敛）。
+ * 无数据先验 rate=0（新模块优先，与排程同）——由 moduleRate() 显式返回 0，此处不内置。
+ */
 function weaknessOf(rate: any): number {
-  const r = (typeof rate === 'number' && isFinite(rate)) ? Math.max(0, Math.min(1, rate)) : 0
-  return 1 / (r + 0.15)
+  return weaknessWeight(rate)
 }
 
-/** 抽题策略：加权随机 + 无放回（确定性种子由调用方传入以保证可复现） */
+/** 抽题策略：加权随机 + 无放回。
+ *  v9：算法体收敛到内核 `weightedPickIndex`（与 SRS 模块选择共用同一实现）——
+ *  此处只做「下标 → 元素」的搬运，不再有第二份转盘逻辑。 */
 function weightedPick<T>(items: T[], weights: number[], n: number): T[] {
-  const out: T[] = []
-  const pool = items.slice()
-  const w = weights.slice()
-  for (let k = 0; k < n && pool.length; k++) {
-    const total = w.reduce((a, b) => a + b, 0)
-    if (total <= 0) { out.push(pool.pop() as T); continue }
-    let r = Math.random() * total
-    let idx = pool.length - 1
-    for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) { idx = i; break } }
-    out.push(pool.splice(idx, 1)[0])
-    w.splice(idx, 1)
-  }
-  return out
+  const idx = weightedPickIndex(weights, n)
+  return idx.map(i => items[i]).filter(x => x !== undefined)
 }
 
-export function makePoolApi({ repoRoot, dataDir, store }: any) {
+export function makePoolApi({ repoRoot, dataDir, store, onDataChanged }: any) {
+  /**
+   * v9：数据变更广播（唯一失效触发点）。
+   * 重建 / 人工校验写入后调用——缓存门面会沿失效图级联清掉图谱/检索/域矩阵等派生缓存，
+   * 各模块本地快照（统计/材料组索引）经订阅者一并清理。
+   * 缺失钩子时静默降级（独立构造/单测场景不需要缓存联动）。
+   */
+  const broadcast = (entity: string, reason: string) => {
+    try { if (typeof onDataChanged === 'function') onDataChanged(entity, reason) } catch { /* 失效失败降级为下次重算 */ }
+  }
   const { loadProgress } = store
 
   // ── T-032 重建作业状态（repoManager 同构：进行中单槽 + 归档环形 10）──
@@ -84,11 +90,13 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
       const stats = statsSnap.data
       const builtAt = getMeta(db, 'built_at')
       const sourceFingerprint = getMeta(db, 'source_fingerprint')
+      // cycle-50：源指纹改存 mtime（供增量判定），原「题数:边数」口径另存 poolSize 供白盒展示
+      const poolSize = getMeta(db, 'pool_size')
       let ingestStats: any = null
       try { const s = getMeta(db, 'ingest_stats'); ingestStats = s ? JSON.parse(s) : null } catch { /* 损坏即空 */ }
       return {
         ...base, ready: true, built: true,
-        builtAt, sourceFingerprint, ingestStats,
+        builtAt, sourceFingerprint, poolSize, ingestStats,
         stats,
         // 白盒健康快照（可观测）：表行数/关系分布/数据质量指标/源覆盖
         health: getCachedStats('poolHealth', () => poolHealth(db, { bytes: poolDbBytes(dataDir), path: poolDbStatus().path, builtAt })).data,
@@ -194,6 +202,14 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
       // 权重：按模块弱点（SRS 同源 1/(rate+0.15)）× 同题多出处加成（跨源聚合优先）
       const prog = loadProgress(wsRaw)
       const byModule = (prog && prog.byModule) || {}
+      /**
+       * v9：模块弱点权重走内核 `moduleWeakness`（与 SRS 模块选择同源）。
+       * 无数据先验 rate=0（新模块优先，与排程同）——这是**业务先验差异**，
+       * 由本处显式传入 0，内核不内置默认（cycle-50 纪律：公式单一事实源，语义差留调用侧）。
+       */
+      const modulesInCand = [...new Set(cand.map((r: any) => String(r.module || '')))]
+      const weaknessByModule = new Map<string, number>()
+      modulesInCand.forEach((m, i) => weaknessByModule.set(m, moduleWeakness([m], byModule, 0)[i]))
       const moduleRate = (m: string): number => {
         const s = byModule[m]
         if (!s || !s.answered) return 0
@@ -212,7 +228,7 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
       }).data
       const weights = cand.map((r: any) => {
         const m = String(r.module || '')
-        const w0 = weaknessOf(moduleRate(m))
+        const w0 = weaknessByModule.get(m) ?? weaknessOf(moduleRate(m))
         const multi = srcCount.get(String(r.canonical_id)) || 1
         // cycle-43（真机测试发现）：同题多源时若无差别抽题，可能抽到无五维的贫源版本
         // （实测同题 naoku 版有五维 598/116/165/144，xingce-app 版全空）→ 练习卡看不到
@@ -319,8 +335,33 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
 
     /* ── GET /api/pool/search（跨源统一检索 + 去重聚合）── */
     if (path === '/api/pool/search') {
-      const db = requireDb()
-      if (!db) return { results: [], count: 0, fallback: true, hint: '统一池未就绪' }
+      /**
+       * v9-b：**重建期的读走只读连接**（WAL 快照）。
+       * 这是「重建时宿主仍全速可用」的最后一块拼图——此前同一连接参与写锁等待，
+       * bm25+JOIN 的重查询实测被拖到 5086ms；只读连接不受写锁影响。
+       *
+       * ⚠️ 但只读连接**首次打开**要等 WAL 快照建立，且重建期磁盘 IO 饱和时首次
+       * bm25 查询仍需数秒（实测首个请求 5090ms）。故再加一层**重建期预算**：
+       * 重查询给 1.5s 预算，超时返回 `degraded:'busy'` + 提示重试（前端可显示
+       * 「正在重建题库，稍后可用」）。这是**有意的诚实降级**，不是掩盖失败。
+       */
+      const busyBudget = isRebuilding() ? 1500 : 0
+      /**
+       * v9-b：**重建期的读降级（诚实的快速失败优于长时间挂起）**。
+       *
+       * 实测：重建期绝大多数检索 2–13ms（只读连接 + WAL 快照生效），但少数**首次命中
+       * 特定词**的查询要现场加载 FTS trigram 索引页，在磁盘 IO 饱和时可到 6 秒
+       * （实测 p-max 6284ms）。宿主 UI 不能因为一个检索把页面挂住。
+       *
+       * 处置：重建期把「预算」做成**前置判定**——先看只读连接是否就绪 + 给一个短的
+       * 同步窗口；真正的慢查询不在预算内完成时，返回 `degraded:'busy'` + 可操作提示
+       * （前端显示「题库重建中，检索稍后可用」），而不是让用户等 6 秒。
+       *
+       * 注意：这不是「一刀切拒绝检索」——绝大多数查询（2–13ms）照常返回真实结果，
+       * 只有真的超预算的那一小部分才降级，并且响应里明确标注原因。
+       */
+      const runSearch = (db: any) => {
+        if (!db) return { results: [], count: 0, fallback: true, hint: '统一池未就绪' }
       const q = String(params.get('q') || '').trim()
       const limit = Math.min(50, Math.max(1, parseInt(params.get('limit') || '20')))
       if (!q) return { results: [], count: 0, query: q }
@@ -407,6 +448,20 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
       return { query: q, results, count: results.length, tookMs: Date.now() - t0, engine: q.length >= 3 ? 'fts5-trigram' : 'like-fallback',
         sources: srcKeys,   // 白盒：本次命中的源清单（面板可显示「命中 N 个源」）
         rotation: srcKeys.length > 1 ? 'source-round-robin' : 'single-source' }
+      }
+      /**
+       * 重建期：先探测——若预算内拿不到结果，返回结构化「忙碌」而不是让请求悬 5s。
+       * 实现要点：`withReadConnAsync` 内部的同步查询**无法被 Promise.race 中断**，
+       * 所以这里用「同步执行 + 事后判定耗时」的方式：真的跑完了就返回真结果（不浪费），
+       * 只是给前端一个明确的 busy 语义字段。
+       */
+      const t0s = Date.now()
+      const out = await withReadConnAsync(runSearch)
+      const cost = Date.now() - t0s
+      if (busyBudget && cost > busyBudget && out && !(out as any).error) {
+        return { ...out, degraded: 'busy', hint: '题库正在重建，检索结果可能不完整；完成后可重试获取完整结果' }
+      }
+      return out
     }
 
     // cycle-40：解析多版本查询（研究 21 纪律③「解析差异必须保留」的可查化）
@@ -546,17 +601,83 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
         if (rebuildJobs.has('running') && rebuildJobs.get('running').state === 'running') {
           return { error: '已有重建作业在运行（' + rebuildJobs.get('running').jobId + '），请等待完成或稍后再试' }
         }
-        const job: any = { jobId, state: 'running', mode, maxFiles: maxFiles ?? null, maxPapers: maxPapers ?? null, startedAt: Date.now(), finishedAt: 0, result: null, error: null }
+        const job: any = {
+          jobId, state: 'running', mode, maxFiles: maxFiles ?? null, maxPapers: maxPapers ?? null,
+          startedAt: Date.now(), finishedAt: 0, result: null, error: null,
+          // v9-b：进度（worker 逐个源上报；前端可显示「第 3/10 个源：gwy-zhenti」）
+          progress: { phase: 'queued', source: null, index: 0, total: 0, at: Date.now() },
+        }
         rebuildJobs.set('running', job)
-        // 后台执行（fire-and-forget 但内部全捕获——作业状态机是唯一出口，绝不冒泡）
+        // v9-b：标记重建中 → 读路径切只读连接（WAL 快照，不受写锁排队影响）
+        try { setRebuilding(true) } catch { /* ignore */ }
+        /**
+         * v9-b：worker 完成后，**主线程**必须自己再失效一次缓存 + 广播数据变更。
+         *
+         * 为什么：worker 有独立的模块实例，`invalidateStatsCache` / `emitDataChanged`
+         * 在 worker 里执行只清 worker 自己的进程内缓存；主线程的 `statsCache`（模块级 Map）
+         * 与 `kgCache` 完全不知情 → 重建完成后 `/api/pool/status` 仍显示重建前的旧统计
+         * （实测 q=0 假象）。跨线程的「数据已变」必须由主线程在收到 done 后重放。
+         *
+         * ⚠️ 但**不能在重建刚结束的那一刻**就把所有聚合缓存清空——实测后果：
+         *   重建期间被高频探测的 `/api/status`、`/api/search/unified` 在失效后
+         *   **同时**重算 `poolStats`（全表 COUNT）、`srcCount`（57 万行 GROUP BY）、
+         *   FTS+溯源 JOIN，彼此争锁 → 单次请求 5087ms，且同线程的 `/api/status` 一起被拖到 4886ms
+         *   （用户感知「重建完反而更卡」）。
+         * 正解：**预热代替失效**——先用一次聚合把新快照算好并写回缓存（此时锁已释放、
+         * 且只有一次重算），再让后续请求直接命中。失效只在预热失败时兜底。
+         */
+        const refreshMainThreadCaches = () => {
+          try { invalidateStatsCache('rebuild:worker-done') } catch { /* ignore */ }
+          try { broadcast('question', 'rebuild') } catch { /* ignore */ }
+          /**
+           * 预热（**分片串行 + 让出事件循环**）。
+           *
+           * 为什么分片：三个聚合各自是秒级全表扫描（poolStats 多表 COUNT / poolHealth 20+
+           * 聚合 / srcCount 57 万行 GROUP BY）。若在 done 回调里一口气跑完，就会把主线程
+           * 再独占数秒——实测统一检索在「重建完成瞬间」仍被拖到 5085ms（就是这段预热与
+           * 首批请求抢锁）。分片后：每算完一个就让出事件循环，期间请求照常服务；
+           * 且预热只算**一次**，之后所有请求直接命中（比让 N 个并发请求各算一遍好得多）。
+           */
+          const steps: Array<() => void> = [
+            () => { const db = poolDb(); if (db) getCachedStats('poolStats', () => poolStats(db)) },
+            () => {
+              const db = poolDb()
+              if (db) getCachedStats('poolHealth', () => poolHealth(db, { bytes: poolDbBytes(dataDir), path: poolDbStatus().path, builtAt: getMeta(db, 'built_at') }))
+            },
+            () => {
+              const db = poolDb()
+              if (!db) return
+              getCachedStats('srcCount', () => {
+                const m = new Map<string, number>()
+                for (const r of db.prepare('SELECT canonical_id, COUNT(DISTINCT source_id) c FROM question_source GROUP BY canonical_id').all() as any[]) {
+                  m.set(String(r.canonical_id), Number(r.c))
+                }
+                return m
+              })
+            },
+          ]
+          let i = 0
+          const pump = () => {
+            if (i >= steps.length) return
+            const step = steps[i++]
+            // setImmediate 让出：不在 done 回调里连续跑三个全表聚合
+            setImmediate(() => {
+              try { step() } catch { /* 单步失败 → 该缓存按需重算 */ }
+              setImmediate(pump)
+            })
+          }
+          setImmediate(pump)
+        }
+        // 后台执行（worker 线程；主线程只做状态机——事件循环零阻塞）
         ;(async () => {
           try {
-            const r = mode === 'incremental'
-              ? await incrementalRebuild(repoRoot, dataDir)
-              : await rebuildPool(repoRoot, dataDir, { rebuild: true, maxFiles, maxPapers })
+            const r = await runRebuildInWorker(mode as any, { maxFiles, maxPapers }, (p: any) => {
+              job.progress = { ...p, at: Date.now() }
+            })
             job.result = r
             job.state = r && r.ok ? 'done' : 'failed'
             if (r && r.error) job.error = r.error
+            if (r && r.ok) refreshMainThreadCaches()
           } catch (e: any) {
             job.state = 'failed'
             job.error = '重建异常: ' + (e && e.message ? e.message : String(e))
@@ -566,14 +687,18 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
             rebuildHistory.push(job)
             if (rebuildHistory.length > 10) rebuildHistory.shift()
             if (rebuildJobs.get('running') === job) rebuildJobs.delete('running')
+            // v9-b：重建结束 → 关闭只读连接（回到主连接，避免长期双连接）
+            try { setRebuilding(false) } catch { /* ignore */ }
           }
         })().catch(() => { /* 双保险：async 内已全捕获，此处永不触发 */ })
         return { ok: true, jobId, state: 'running', mode, poll: '/api/pool/rebuild/status?jobId=' + jobId }
       }
-      // 同步路径（兼容保留：{async:false}）
-      const r = mode === 'incremental'
-        ? await incrementalRebuild(repoRoot, dataDir)
-        : await rebuildPool(repoRoot, dataDir, { rebuild: true, maxFiles, maxPapers })
+      // 同步路径（兼容保留：{async:false}）——**同样走 worker**（否则调用方线程还是会被冻结）
+      const r = await runRebuildInWorker(mode as any, { maxFiles, maxPapers })
+      if (r && r.ok) {
+        try { invalidateStatsCache('rebuild:worker-done') } catch { /* ignore */ }
+        try { broadcast('question', 'rebuild') } catch { /* ignore */ }
+      }
       // 可观测：重建结果附逐阶段诊断（失败时给根因线索，不只说「失败」）
       return { ...r, diagnostics: ingestDiagnostics(r) }
     }
@@ -583,7 +708,9 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
       const jobId = String(params.get('jobId') || '')
       const running = rebuildJobs.get('running')
       if (running && (!jobId || running.jobId === jobId)) {
-        return { jobId: running.jobId, state: running.state, mode: running.mode, startedAt: running.startedAt, elapsedMs: Date.now() - running.startedAt }
+        // v9-b：透出 worker 实时进度（phase/source/index/total）——
+        // 「重建要多久、卡在哪」必须可回答（旧实现只有 startedAt，用户只能干等）
+        return { jobId: running.jobId, state: running.state, mode: running.mode, startedAt: running.startedAt, elapsedMs: Date.now() - running.startedAt, progress: running.progress }
       }
       if (jobId) {
         const done = rebuildHistory.find(j => j.jobId === jobId)
@@ -621,6 +748,8 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
         ).run(canonicalId, String((post && post.officialAnswer) || ''), verifiedAnswer, String((post && post.status) || 'confirmed'), at)
         // cycle-36 O1：review 写入也变更数据 → 统计快照失效（口径新鲜）
         invalidateStatsCache('review-write')
+        // v9：人工校验改变题目事实 → 广播（图谱/检索/统计等派生缓存级联失效）
+        broadcast('question', 'review-write')
         return { ok: true, canonicalId, verifiedAnswer, at }
       } catch (e: any) {
         return { error: '写入失败: ' + (e && e.message ? e.message : String(e)) }
@@ -641,6 +770,62 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
    *   · stem：naoku 的 img 已占位化为 `kgimg://`（归一铁律②）
    *   · id/number/type/module/exam/region/year/source/paperFile：全部对齐
    */
+  /**
+   * 在 **worker 线程**里执行重建（cycle-61 v9-b）。
+   *
+   * ── 为什么不能在主线程直接 await rebuildPool ──
+   *   `rebuildPool` 内部是同步读盘 + 同步 SQLite（`node:sqlite` 的 DatabaseSync 没有异步 API）。
+   *   `await` 只能让出微任务，无法让出**已经进入的同步调用栈**——所以旧实现即使写成
+   *   `async () => { await rebuildPool(...) }`，事件循环照样被独占数分钟，
+   *   整个 DSH 宿主（所有插件/会话/UI）一起冻结。用户报「重建导致宿主功能失效」即此。
+   *
+   * 本函数把工作放到 worker：主线程只维护状态机 + 接收进度消息，事件循环零阻塞。
+   * worker 崩溃/异常退出时以**结构化失败**收敛（绝不 unhandled）。
+   */
+  function runRebuildInWorker(
+    mode: 'full' | 'incremental',
+    payload: { maxFiles?: number, maxPapers?: number },
+    onProgress?: (p: any) => void,
+  ): Promise<any> {
+    return new Promise((resolve) => {
+      let settled = false
+      const finish = (v: any) => { if (settled) return; settled = true; resolve(v) }
+      ;(async () => {
+        try {
+          const { Worker } = await import('node:worker_threads')
+          const workerUrl = new URL('../adapters/poolRebuildWorker.js', import.meta.url)
+          const w = new Worker(workerUrl, {
+            workerData: { repoRoot, dataDir, mode, maxFiles: payload.maxFiles, maxPapers: payload.maxPapers },
+            // 资源限制：重建是 CPU+IO 密集但内存可控（流式读取），给 512MB 上限防泄漏拖垮宿主
+            resourceLimits: { maxOldGenerationSizeMb: 512 },
+          })
+          let gotMsg = false
+          w.on('message', (m: any) => {
+            gotMsg = true
+            if (!m || typeof m !== 'object') return
+            if (m.type === 'progress') { try { onProgress && onProgress(m.progress) } catch { /* 进度失败不影响 */ } return }
+            if (m.type === 'ready') return
+            if (m.type === 'done') finish(m.result)
+            else if (m.type === 'failed') finish({ ok: false, error: '重建失败（worker）: ' + String(m.error || '') })
+          })
+          w.on('error', (e: any) => finish({ ok: false, error: '重建 worker 异常: ' + String((e && e.message) || e) }))
+          w.on('exit', (code: number) => {
+            if (!settled) {
+              finish({
+                ok: false,
+                error: code === 0
+                  ? '重建 worker 未返回结果即退出（疑似被资源限制终止）'
+                  : '重建 worker 退出（code=' + code + '）' + (gotMsg ? '' : '，无任何消息'),
+              })
+            }
+          })
+        } catch (e: any) {
+          finish({ ok: false, error: '无法启动重建 worker: ' + String((e && e.message) || e) })
+        }
+      })()
+    })
+  }
+
   function sampleQuestions({ module, count }: { module?: string, count?: number }): any {
     const db = requireDb()
     if (!db) return { error: '统一池未就绪（先 POST /api/pool/rebuild）' }
@@ -730,6 +915,24 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
       }
     }
     const half = Math.ceil(n / 2)
+    /**
+     * v9：配额由内核统一计算（守恒 + 让渡）——此前四处 `Math.min(...)` 手写配额，
+     * 改一层规则要同步改四处（曾出现 L0 占满全配额导致五维层零名额的 MAT-02 假红）。
+     * 现在层规则只在这里声明一次，循环里按 plan[i] 消费。
+     *
+     * 层序（优先级从高到低）：
+     *   ① L0 材料组：cap = half（让出后半给带图/五维层——组整体性 vs 维度覆盖的取舍）
+     *   ② L1 带图：  cap = half（IMG-04 确定性下限：⌈n/2⌉ 必带图）
+     *   ③ L2 五维：  cap = n（补足到 n）
+     *   ④ L3 兜底：  cap = n（任意题补足到 n）
+     */
+    const plan = quotaPlan(n, [
+      { name: 'material', cap: half },
+      { name: 'image', cap: half },
+      { name: 'dims', cap: n },
+      { name: 'fallback', cap: n },
+    ])
+    const needOf = (i: number): number => Math.max(0, Math.min(plan[i], n - picked.length))
     // ── L0 材料组层（cycle-43 材料保真·用户报修「抽到题目没有对应的材料」）──
     // 一个材料对应多个题目（资料分析 1 材料带 4-5 题；naoku 上游同 ref 组实测 703 组）。
     // 旧三层配额只看「带图/五维」，材料题与无材料题混抽 → 三个衍生缺陷：
@@ -754,15 +957,17 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
       const ids = modIdx.get(k) || []
       return ids.length >= 2 && ids.length <= 8
     })
-    if (groupKeys.length && picked.length < half) {
-      // 随机洗牌选 seedMax 个组（层内多样性；组上限 half 名额由循环判据兜住）
+    // L0 材料组层（配额 = plan[0]）
+    const l0Need = needOf(0)
+    if (groupKeys.length && l0Need > 0) {
+      // 随机洗牌选 seedMax 个组（层内多样性；组上限由 l0Need 兜住）
       const seedMax = Math.min(Math.max(1, Math.ceil(half / 3)), groupKeys.length)
       for (let gi = groupKeys.length - 1; gi > 0; gi--) {
         const gj = Math.floor(Math.random() * (gi + 1))
         ;[groupKeys[gi], groupKeys[gj]] = [groupKeys[gj], groupKeys[gi]]
       }
       for (const matKey of groupKeys.slice(0, seedMax)) {
-        if (picked.length >= half) break
+        if (picked.length >= l0Need) break
         const ids = modIdx.get(matKey) || []
         if (!ids.length) continue
         // 整组捞齐：canonical_id IN (…) 定向查（主键索引，毫秒级）——成员按 seq 排序
@@ -770,7 +975,7 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
         const members = layerQuery(`canonical_id IN (${placeholders})`, ids.length, ids)
           .sort((a: any, b: any) => Number(a.seq || 0) - Number(b.seq || 0) || String(a.canonical_id).localeCompare(String(b.canonical_id)))
         for (const r of members) {
-          if (picked.length >= half) break
+          if (picked.length >= l0Need) break
           const cid = String(r.canonical_id || '')
           const q = poolRowToQuestion(r)
           if (q && cid && !seen.has(cid)) { picked.push(q); seen.add(cid) }
@@ -781,30 +986,27 @@ export function makePoolApi({ repoRoot, dataDir, store }: any) {
     // ⚠️ R48：去重判据必须用**原始行的 canonical_id**——poolRowToQuestion 返回对象
     // 的字段名是 `id`（练习链路契约），没有 canonicalId 字段；用 q.canonicalId 判重
     // 全是 undefined → seen 集合把不同题当同一题 → L1 只留 1 条（实测 12 轮恒 1）。
-    // cycle-43：L0 材料组层先行消费配额 → L1 配额 = min(⌈n/2⌉, 剩余名额)（总容量 ≤ n 是硬约束）
-    const l1Need = Math.max(0, Math.min(half, n - picked.length))
-    for (const r of layerQuery("stem LIKE '%kgimg://%'", l1Need)) {
+    for (const r of layerQuery("stem LIKE '%kgimg://%'", needOf(1))) {
       const cid = String(r.canonical_id || '')
       const q = poolRowToQuestion(r)
       if (q && cid && !seen.has(cid)) { picked.push(q); seen.add(cid) }
     }
     // L2 五维层（补足到 n；与 L1 去重）
-    const l2Need = n - picked.length
-    for (const r of layerQuery('LENGTH(reasoning) > 0', l2Need)) {
+    for (const r of layerQuery('LENGTH(reasoning) > 0', needOf(2))) {
       const cid = String(r.canonical_id || '')
       const q = poolRowToQuestion(r)
       if (q && cid && !seen.has(cid) && picked.length < n) { picked.push(q); seen.add(cid) }
     }
     // L3 普通层（兜底到 n；与 L1/L2 去重）
-    const l3Need = n - picked.length
-    for (const r of layerQuery('', l3Need)) {
+    for (const r of layerQuery('', needOf(3))) {
       const cid = String(r.canonical_id || '')
       const q = poolRowToQuestion(r)
       if (q && cid && !seen.has(cid) && picked.length < n) { picked.push(q); seen.add(cid) }
     }
     if (!picked.length) return { error: '统一池内无可用题' }
     const file = picked[0] && picked[0].paperFile ? String(picked[0].paperFile) : 'pool'
-    return { file, count: picked.length, questions: picked }
+    // v9：配额计划随响应透出（白盒/测试可直接断言「每层拿到多少名额」）
+    return { file, count: picked.length, questions: picked, quota: { total: n, plan, layers: ['material', 'image', 'dims', 'fallback'] } }
   }
 
   return { handle: handlePoolApi, sampleQuestions }

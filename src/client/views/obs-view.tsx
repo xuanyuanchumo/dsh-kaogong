@@ -783,11 +783,21 @@ export function NativeObsView({ api, onReload }: ObsViewProps) {
           api('/huasheng13/coverage').catch(() => null),
           api('/huasheng13/catalog').catch(() => null),
         ])
+        /**
+         * cycle-61 v9：统一数据层与缓存白盒两源。
+         * 卡片级降级——两者任一不可用不影响既有十源面板（与 hs13 三源同纪律）。
+         */
+        const [domains, cache] = await Promise.all([
+          api('/data-domains').catch(() => null),
+          api('/cache').catch(() => null),
+        ])
         if (cancelled) return
         setData({
           tel: tel || {}, caps: caps || {},
           life: life || (caps && caps.lifecycle) || null,
           workspaces: (wss && wss.workspaces) || [],
+          domains: domains || null,
+          cache: cache || null,
         })
         setIns({ essay: eh, exam: xh })
         setHs({ trace: hs13Trace, coverage: hs13Coverage, catalog: hs13Catalog })
@@ -1137,6 +1147,72 @@ export function NativeObsView({ api, onReload }: ObsViewProps) {
               style: Object.assign({}, G_TAG, { fontFamily: 'monospace', fontSize: 10 }),
             }, String(w.ns || w.label || '?') + ' · D' + (w.day || 1) + ' · ' + (w.answered || 0) + '题')))
         : h('div', { style: { fontSize: 12, color: 'var(--text-faint)' } }, '命名空间端点未就绪（/api/workspaces）—— 服务可用，仅该卡片降级')),
+
+    /* ── H 数据域就绪矩阵（cycle-61 v9：统一数据层的可见面） ── */
+    (() => {
+      const dd: any = (data && data.domains) || null
+      if (!dd || !Array.isArray(dd.domains) || !dd.domains.length) {
+        return h(ObsGlassCard, { title: '🗄 数据域就绪矩阵', accent: '#0ea5e9' },
+          h('div', { style: { fontSize: 12, color: 'var(--text-faint)' } }, '数据域端点未就绪（/api/data-domains）—— 服务可用，仅该卡片降级'))
+      }
+      const readyN = dd.domains.filter((d: any) => d.ready).length
+      return h(ObsGlassCard, { title: '🗄 数据域就绪矩阵 · ' + readyN + '/' + dd.domains.length + ' 就绪（单一 .kaogong.db）', accent: '#0ea5e9' },
+        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 8, marginBottom: 10 } },
+          dd.domains.map((d: any) => h('div', {
+            key: String(d.id),
+            style: {
+              background: 'rgba(148,163,184,.08)', borderRadius: 10, padding: '8px 10px',
+              border: '1px solid ' + (d.ready ? 'rgba(16,185,129,.35)' : (d.ingesting ? 'rgba(245,158,11,.4)' : 'rgba(148,163,184,.2)')),
+            },
+          },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+              h('span', { style: { fontWeight: 700, fontSize: 12 } }, String(d.label || d.id)),
+              h('span', {
+                style: {
+                  marginLeft: 'auto', fontSize: 9.5, fontWeight: 700, padding: '1px 6px', borderRadius: 10,
+                  background: d.ready ? 'rgba(16,185,129,.15)' : (d.ingesting ? 'rgba(245,158,11,.18)' : 'rgba(148,163,184,.18)'),
+                  color: d.ready ? '#047857' : (d.ingesting ? '#b45309' : 'var(--text-muted)'),
+                },
+              }, d.ready ? '就绪' : (d.ingesting ? '入库中' : '未入库'))),
+            h('div', { style: { fontSize: 10, color: 'var(--text-faint)', marginTop: 4, lineHeight: 1.6 } }, String(d.desc || '')),
+            (d.details || []).length
+              ? h('div', { style: { fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3, fontFamily: 'monospace' } },
+                  d.details.map((x: any) => `${x.table}=${x.rows}`).join(' · '))
+              : null))
+        ),
+        dd.pending && dd.pending.length
+          ? h('div', { style: { fontSize: 10.5, color: '#b45309', lineHeight: 1.7 } },
+              '待装/待建：' + dd.pending.map((p: any) => `${p.label}（${(p.sources || []).join('/')}）`).join('；') +
+              ' —— 到「📦 题库管理」安装后在「🗄️ 统一题库」重建即可')
+          : null,
+        dd.quality && dd.quality.hint
+          ? h('div', { style: { fontSize: 10.5, color: 'var(--text-muted)', marginTop: 6 } }, String(dd.quality.hint))
+          : null)
+    })(),
+
+    /* ── I 缓存白盒（cycle-61 v9：命中率/快照/失效图） ── */
+    (() => {
+      const ck: any = (data && data.cache) || null
+      if (!ck || !Array.isArray(ck.domains)) {
+        return h(ObsGlassCard, { title: '⚡ 统一缓存', accent: '#6366f1' },
+          h('div', { style: { fontSize: 12, color: 'var(--text-faint)' } }, '缓存端点未就绪（/api/cache）—— 服务可用，仅该卡片降级'))
+      }
+      const active = ck.domains.filter((d: any) => (d.hits + d.misses) > 0)
+      return h(ObsGlassCard, { title: '⚡ 统一缓存 · ' + active.length + ' 域活跃 / ' + ck.slots + ' 槽', accent: '#6366f1' },
+        active.length
+          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 5 } },
+              active.slice(0, 10).map((d: any) => h('div', { key: String(d.domain), style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 } },
+                h('span', { style: { flex: '0 0 92px', fontFamily: 'monospace', fontSize: 10.5 } }, String(d.domain)),
+                h('div', { style: { flex: 1 } }, h(Bar, { pct: d.hitRate == null ? 0 : d.hitRate })),
+                h('span', { style: { flex: '0 0 128px', textAlign: 'right', color: 'var(--text-muted)', fontSize: 10 } },
+                  (d.hitRate == null ? '—' : d.hitRate + '%') + ' · ' + d.hits + '/' + (d.hits + d.misses) +
+                  (d.snapshot ? ' · 快照' : '') + ' · ' + d.entries + ' 槽'))))
+          : h('div', { style: { fontSize: 11.5, color: 'var(--text-faint)' } }, '尚无缓存访问（未访问过的域不臆造命中率——hits/misses 均为 0）'),
+        h('div', { style: { fontSize: 10, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.7 } },
+          '失效图：' + Object.keys(ck.invalidationGraph || {}).map(k => k + '→' + (ck.invalidationGraph[k] || []).join('/')).join('；')),
+        h('div', { style: { fontSize: 10, color: 'var(--text-faint)', marginTop: 2, lineHeight: 1.7 } },
+          '本地快照订阅者：' + ((ck.subscribers || []).join(' · ') || '无')))
+    })(),
 
     /* ── 白盒口径说明 ── */
     h('div', { style: { fontSize: 10.5, color: 'var(--text-faint)', lineHeight: 1.8, marginTop: 4 } },

@@ -33,6 +33,15 @@ function shape(txt) {
     bareExport: /^export[ \t]/m.test(txt),
     hasLoad: /window\.__ModuleLoader__\.load\(\{/.test(txt),
     hasReturn: /return \{\s*inject: \[[^\]]*\],\s*apply\(ctx\)/.test(txt),
+    /**
+     * cycle-60 R13 加固（真实守卫洞）：上面 bareExport 只认**行首** export，
+     * 但 `export function f` 若与前置注释同行（`/** doc *​/export function f`），
+     * bundler 的 `^[ \t]*export` 正则失配 → export 关键字留在 combo 中段 →
+     * 宿主解析 `SyntaxError: Unexpected token 'export'`，而本守卫当时仍判 OK（假绿）。
+     * 判据：任何非行首的 `export function|const|class|default` 都视为产物污染。
+     * （`__kgM`/注释里的 'export' 字样不会命中原生语法关键字形态。）
+     */
+    midLineExport: /^(?!export[ \t]).*\bexport[ \t]+(?:async[ \t]+)?(?:function|const|class|default|let|var)\b/m.test(txt),
   }
 }
 function check(label) {
@@ -41,15 +50,15 @@ function check(label) {
     return false
   }
   const s = shape(readFileSync(comboPath, 'utf-8'))
-  const bad = s.bareImport || s.bareExport || !s.hasLoad || !s.hasReturn
+  const bad = s.bareImport || s.bareExport || s.midLineExport || !s.hasLoad || !s.hasReturn
   if (bad) {
     console.error(`[assert-combo] ${label}: combo 形态破坏 → ` +
-      `行首import=${s.bareImport} 行首export=${s.bareExport} ` +
+      `行首import=${s.bareImport} 行首export=${s.bareExport} 中段export=${s.midLineExport} ` +
       `load头=${s.hasLoad} return.inject/apply=${s.hasReturn}`)
-    console.error('[assert-combo] 根因：裸 tsc 覆写了 combo；必须跑 `npm run build`（tsc && bundler 全链）')
+    console.error('[assert-combo] 根因：裸 tsc 覆写 combo，或 export 与注释同行致 bundler 漏剥；必须跑 `npm run build`')
     return false
   }
-  console.log(`[assert-combo] ${label}: combo 形态 OK（无行首 import/export · load 头 · return {inject,apply}）`)
+  console.log(`[assert-combo] ${label}: combo 形态 OK（无行首/中段 import·export · load 头 · return {inject,apply}）`)
   return true
 }
 

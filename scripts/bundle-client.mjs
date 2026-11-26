@@ -39,15 +39,38 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const clientDir = join(root, 'dist', 'client')
+const distDir = join(root, 'dist')
 const entryId = 'client'
+
+/**
+ * cycle-60 R5：跨目录值导入白名单。
+ * 只把 shared/kernel（L4 纯算法，零 IO）纳入客户端合并——消除 PageRank 镜像漂移。
+ * 白名单而非全 dist 扫描：blast radius 可控，manifest/types 不进客户端 bundle。
+ * 模块 id 保持 posix 相对 dist 路径（shared/kernel），与 client/* 前缀天然隔离。
+ */
+const EXTRA_MODULES = ['shared/kernel']
 
 const read = (p) => readFileSync(p, 'utf-8')
 const fail = (msg) => { console.error('[bundle-client] ' + msg); process.exit(1) }
 
+/**
+ * 模块名 → 磁盘绝对路径。
+ * 从 dist/client 递归发现的名字（含 entry 与依赖解析出的裸名如 graph-analytics）都在 dist/client；
+ * 只有白名单 EXTRA_MODULES（shared/*）才在 dist 根。用集合判定而非前缀猜测——
+ * cycle-60 R5 实证：按前缀猜会把 client 内的裸名误判到 dist 根（ENOENT）。
+ */
+function modulePath(name) {
+  return EXTRA_MODULES.includes(name) ? join(distDir, name + '.js') : join(clientDir, name + '.js')
+}
+
 /* ── 模块发现与依赖解析 ── */
 
-/** 以 dist/client 为根解析模块相对导入 spec（'./x' | './views/x' | '../graph/x'），
- *  返回 dist/client 相对 posix 路径（不含 .js）。手写解析避免 Windows 分隔符混入。 */
+/** 相对导入 spec 正则（单一事实源）：'./x' | './views/x' | '../graph/x' | '../../shared/kernel'。
+ *  cycle-60 R5：放宽为可重复 '../' 段，支持 client/graph/*.tsx 值导入 shared/kernel。 */
+const IMPORT_RE = /^[ \t]*import \{([^}]*)\} from '((?:\.\.?\/)+[\w-]+(?:\/[\w-]+)*)\.js';?[ \t]*/gm
+
+/** 以模块所在目录为根解析相对导入 spec，返回相对 dist 的 posix 路径（不含 .js）。
+ *  手写解析避免 Windows 分隔符混入。 */
 function resolveSpec(fromName, spec) {
   const parts = fromName.includes('/') ? fromName.slice(0, fromName.lastIndexOf('/')).split('/') : []
   for (const seg of spec.split('/')) {
@@ -59,9 +82,9 @@ function resolveSpec(fromName, spec) {
 }
 
 function parseModule(name) {
-  const src = read(join(clientDir, name + '.js'))
+  const src = read(modulePath(name))
   const deps = []
-  const importRe = /^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*$/gm
+  const importRe = new RegExp(IMPORT_RE.source, IMPORT_RE.flags)
   let m
   while ((m = importRe.exec(src)) !== null) {
     deps.push({ names: m[1].split(',').map(s => s.trim()).filter(Boolean), target: resolveSpec(name, m[2]) })
@@ -104,6 +127,13 @@ for (const rel of readdirSync(clientDir, { recursive: true })) {
   const name = rel.split('\\').join('/').slice(0, -3)
   if (name.endsWith('.tmp-' + String(process.pid)) || name.includes('.tmp-')) continue  // 原子写 tmp 产物不参与合并
   modules.set(name, parseModule(name))
+}
+// cycle-60 R5：追加白名单跨目录模块（shared/kernel），与 client/** 一同参与拓扑排序
+for (const name of EXTRA_MODULES) {
+  if (!modules.has(name)) {
+    try { statSync(modulePath(name)) } catch { fail(`缺少白名单模块 ${modulePath(name)}（先跑 tsc）`) }
+    modules.set(name, parseModule(name))
+  }
 }
 if (!modules.has(entryId)) fail('缺少 dist/client/client.js entry')
 
@@ -154,7 +184,7 @@ const tail = entryMod.src.slice(tailMatch.index)
 
 // entry 头部（factory 之外）的顶层 import：剥离并移入 factory 体内改写
 const entryImports = []
-const headOut = head.replace(/^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*\n?/gm, (_, list, spec) => {
+const headOut = head.replace(new RegExp(IMPORT_RE.source, IMPORT_RE.flags), (_, list, spec) => {
   entryImports.push({ list: list.split(',').map(s => s.trim()).filter(Boolean), target: resolveSpec(entryId, spec) })
   return ''
 })
@@ -172,10 +202,12 @@ for (const name of order) {
 
 /* ── 组装 ── */
 const bound = new Set() // factory 作用域内已落位的绑定名（声明优先，导入按名去重）
+// cycle-60 R5：模块 id 不再硬编码 'client/' 前缀（shared/kernel 走白名单进合并）
+const moduleId = (name) => EXTRA_MODULES.includes(name) ? name : 'client/' + name
 const pick = (list, target) => {
   const need = list.filter(n => !bound.has(n))
   need.forEach(n => bound.add(n))
-  return need.length ? `    const { ${need.join(', ')} } = __kgR('client/${target}')` : null
+  return need.length ? `    const { ${need.join(', ')} } = __kgR('${moduleId(target)}')` : null
 }
 const out = []
 out.push('    /* ═══ 微模块注册表（cycle-13 AD-13.1：tsc 多文件产物 → 单 combo 工厂的桥） ═══')
@@ -193,16 +225,16 @@ for (const name of order) {
   if (!collected.names.length) fail(`模块 ${name} 无导出（异常）`)
   let body = collected.body
   const importLines = []
-  body = body.replace(/^[ \t]*import \{([^}]*)\} from '(\.\.?\/(?:[\w-]+\/)*[\w-]+)\.js';?[ \t]*\n?/gm, (_, list, spec) => {
+  body = body.replace(new RegExp(IMPORT_RE.source, IMPORT_RE.flags), (_, list, spec) => {
     const line = pick(list.split(',').map(s => s.trim()).filter(Boolean), resolveSpec(name, spec))
     if (line) importLines.push(line)
     return ''
   })
   out.push('')
-  out.push(`    /* ════════════ 模块 client/${name}（拓扑序依赖在前） ════════════ */`)
+  out.push(`    /* ════════════ 模块 ${moduleId(name)}（拓扑序依赖在前） ════════════ */`)
   out.push(...importLines)
   out.push(body.replace(/^\n+/, ''))
-  out.push(`    __kgM('client/${name}', { ${collected.names.join(', ')} })`)
+  out.push(`    __kgM('${moduleId(name)}', { ${collected.names.join(', ')} })`)
   // 本模块顶层声明落位 → 后续模块的同名导入按名去重
   for (const n of topLevelDecls(body)) bound.add(n)
 }
@@ -224,6 +256,11 @@ if (!/window\.__ModuleLoader__\.load\(\{/.test(bundle)) fail('产物丢失 windo
 if (!/return \{\s*inject: \[[^\]]*\],\s*apply\(ctx\)/.test(bundle)) fail('产物丢失 return {inject, apply}')
 for (const needle of ["getContext('2d')", 'function relax', 'function step', 'function draw', 'function fit', 'labelBoxes', 'focusNode']) {
   if (!bundle.includes(needle)) fail('产物丢失图谱关键文本: ' + needle)
+}
+// cycle-60 R5：shared/kernel 必须真合并进 combo（防止白名单失效却静默通过）
+if (!bundle.includes("__kgM('shared/kernel'")) fail('shared/kernel 未登记进 combo（跨目录值导入失效）')
+for (const needle of ['function pageRank', 'function percentile', 'function ringPush']) {
+  if (!bundle.includes(needle)) fail('产物丢失内核关键函数: ' + needle)
 }
 
 /* 原子写（cycle-13 教训⑥）：eval-runner 并行预热会同时跑 test∥build，

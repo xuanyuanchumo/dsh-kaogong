@@ -3,7 +3,9 @@
  * 模考 / 真题卷库 / 专题 / 申论评改。
  */
 
-import { React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, KgLoad, KgChips } from '../ui-kit.js'
+// cycle-52：申论草稿 localStorage 收敛到 kgStorage 门面
+// cycle-52 续：手写加载/错误/空态收拢到 ui-kit 三态基建（KgLoad/KgErr/KgEmpty，C44 纪律）
+import { React, entries, Stat, Bar, Card, RichText, KV_TAG, KV_BTN, KgLoad, KgErr, KgEmpty, KgChips, kgStorage } from '../ui-kit.js'
 // cycle-13 专题枢纽：行测刷题 / 图形推理 / 深度题库 三个既有视图嵌入本页分区（R9：h() 挂载）
 import { NativePracticeView, NativeTuxingView, NativeDeepBankView } from './study-view.js'
 // cycle-18：专题枢纽「📖 方法论」分区直接挂花生十三体系（语料由「📦 题库管理」安装到数据根）。
@@ -169,7 +171,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
         <div>
           <Card title="⏱ 行测整卷模考（真实考场计时）">
             <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>{'选一套卷 → 限时作答（行测 120 分钟）→ 交卷得模块得分分布与错题清单'}</div>
-            {!papers ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载卷库…'}</div> : null}
+            {!papers ? <KgLoad label="加载卷库…" /> : null}
             {listRows ? <div style={{ maxHeight: '56vh', overflowY: 'auto' }}>{listRows}</div> : null}
           </Card>
         </div>
@@ -177,8 +179,15 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
     }
 
     /** 真题卷库 */
-    interface NativePapersViewProps { api: any; initialSubject?: any }
-    export function NativePapersView({ api, initialSubject = '' }: NativePapersViewProps) {
+    interface NativePapersViewProps {
+      api: any
+      initialSubject?: any
+      /** cycle-深链融合：exam 别名路由直达答题模式（深链命中卷时自动开考） */
+      initialMode?: 'answer'
+      /** cycle-深链融合：深链指定的试卷 id（命中卷列表才生效，否则保持现状） */
+      initialPaperId?: string
+    }
+    export function NativePapersView({ api, initialSubject = '', initialMode, initialPaperId }: NativePapersViewProps) {
       // cycle-13 省份维度：filters 新增 province（与 subject/year 并列，URL 构建自动透传 ?province=）
       const [filters, setFilters] = React.useState({ subject: initialSubject || '', year: '', province: '' })
       // T-019：按考点看卷
@@ -275,10 +284,17 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       const answerQ = answerExam && Array.isArray(answerExam.questions) ? answerExam.questions[answerIdx] : null
       const answerDetailRow = answerReport && Array.isArray(answerReport.detail) ? answerReport.detail.find((d: any) => d.no === (answerQ && answerQ.no)) : null
           const answerRevealed = !!answerReport   // 交卷后全部揭示（判色 + 解析）
+      // cycle-深链融合：exam 别名路由（papers + initialMode:'answer'）的一次性开考旗标。
+      // 声明置于换卷 effect 之前——换卷 effect 需读 armed 决定重置到 browse 还是直入 answer。
+      const [ppDeepLinkApplied, setPpDeepLinkApplied] = React.useState(false)
+      const [ppDeepLinkArmed, setPpDeepLinkArmed] = React.useState(false)
       // 换卷重置双模式全部状态（browseSel/browseReveal/答题态/学习态）
+      // 深链命中时 armed=true → 本次换卷重置后直接进入 answer（不覆盖深链意图）；
+      // 之后立即解 armed，用户后续手动换卷仍回到 browse（换卷重置语义不变）。
       React.useEffect(() => {
         if (!openId) return
-        setPaperMode('browse')
+        setPaperMode(ppDeepLinkArmed ? 'answer' : 'browse')
+        if (ppDeepLinkArmed) setPpDeepLinkArmed(false)
         setAnswerExam(null); setAnswerReport(null); setAnswerSel({}); setAnswerFlags(new Set()); setAnswerIdx(0)
         setLearnIdx(0); setLearnSel(null); setLearnReveal(false); setLearnCorrectCount(0); setLearnAnsweredCount(0)
       }, [openId])
@@ -295,6 +311,19 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
         api('/papers?_=1' + qs).then((d: any) => { if (!cancelled) setList(d) }).catch(() => { if (!cancelled) setList({ papers: [], total: 0 }) })
         return () => { cancelled = true }
       }, [filters, api])
+
+      // cycle-深链融合：exam 别名路由（papers + initialMode:'answer'）直达答题模式。
+      // 守纪律：仅在卷列表就绪、initialPaperId 命中列表时开考；依赖精确（list/initialMode/initialPaperId），
+      // 一次性 applied 状态防死循环（setOpenId 触发的换卷 effect 不得重跑本 effect）。
+      // 与「换卷重置」语义协同：本 effect 先置开考旗标，换卷 effect 见旗标命中则进入 answer 而非 browse。
+      React.useEffect(() => {
+        if (ppDeepLinkApplied || initialMode !== 'answer' || !initialPaperId || !list) return
+        const hit = Array.isArray(list.papers) && list.papers.some((p: any) => p && p.id === initialPaperId)
+        if (!hit) { setPpDeepLinkApplied(true); return }
+        setPpDeepLinkArmed(true)
+        setOpenId(initialPaperId)
+        setPpDeepLinkApplied(true)
+      }, [ppDeepLinkApplied, initialMode, initialPaperId, list])
 
       React.useEffect(() => {
         if (!openId) return
@@ -322,7 +351,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
               {detail.paperType ? <span style={KV_TAG}>{detail.paperType}</span> : null}
               <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{((detail.materials || []).length) + ' 材料 · ' + ((detail.questions || []).length) + ' 题'}</span>
             </div>
-            {detail.error ? <div style={{ color: '#ef4444' }}>{detail.error}</div> : null}
+            {detail.error ? <KgErr msg={detail.error} label="试卷加载失败" /> : null}
             {/* cycle-14：给定材料逐份折叠——每份材料头部可点击折叠/展开（含字数提示），另有「全部展开/收起」总开关 */}
             {(detail.materials || []).length > 0 ? <Card title="📄 给定材料">
               <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
@@ -393,7 +422,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
               // 与 practice 同构（选中即揭示）；解析/答案来自 /api/paper 已下发数据（纯客户端判分）。
               (() => {
                 const lq = detail && Array.isArray(detail.questions) ? detail.questions[learnIdx] : null
-                if (!lq) return <Card title="🎓 学习模式"><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'本题卷无题目'}</div></Card>
+                if (!lq) return <Card title="🎓 学习模式"><KgEmpty text="本题卷无题目" /></Card>
                 const lCorrect = typeof lq.correctAnswer === 'string' ? lq.correctAnswer.toUpperCase() : (typeof lq.answer === 'string' && /^[A-D]$/.test(lq.answer.toUpperCase()) ? lq.answer.toUpperCase() : null)
                 const lIsCorrect = learnSel != null && lCorrect != null && learnSel === lCorrect
                 const hasOpts = lq.options && Object.keys(lq.options).length > 0
@@ -495,7 +524,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                           onSelect={(letter) => setAnswerSel((m: any) => ({ ...m, [answerQ.no]: letter }))}
                         />}
                       />
-                    ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'题目索引异常'}</div>}
+                    ) : <KgEmpty text="题目索引异常" />}
                   </Card>
                 </div>
               ) : answerExam ? (
@@ -523,7 +552,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                         onToggleFlag={(no) => setAnswerFlags((f: any) => { const n = new Set(f); n.has(no) ? n.delete(no) : n.add(no); return n })}
                       />}
                     />
-                  ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'题目加载异常'}</div>}
+                  ) : <KgEmpty text="题目加载异常" />}
                 </div>
               ) : null
             ) : (
@@ -590,8 +619,8 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                     onClick={() => setCat(cat === c.k ? '' : c.k)}
                   >{c.k + ' ' + c.c}</button>)}
               </div>
-              {!cats.length ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载考点…'}</div> : null}
-              {cat && catPapers === null ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'查询含「' + cat + '」的卷…'}</div> : null}
+              {!cats.length ? <KgLoad label="加载考点…" /> : null}
+              {cat && catPapers === null ? <KgLoad label={'查询含「' + cat + '」的卷…'} /> : null}
               {cat && catPapers ? <div style={{ maxHeight: '46vh', overflowY: 'auto' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{'共 ' + catPapers.length + ' 套卷含该考点（按题量排序）'}</div>
                 {catPapers.map((cp: any, i: number) =>
@@ -637,13 +666,13 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                   onClick={() => setFilters({ ...filters, year: filters.year === y ? '' : y })}
                 >{y}</button>)}
             </div>
-            {!list ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载中…'}</div> : null}
+            {!list ? <KgLoad label="加载中…" /> : null}
             {list ? <div style={{ maxHeight: '52vh', overflowY: 'auto' }}>
               {list.papers.map((p: any) =>
                 <div
                   key={p.id}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, marginBottom: 4, cursor: 'pointer', background: 'rgba(148,163,184,.06)', fontSize: 12.5 }}
-                  onClick={() => { setOpenId(p.id); setDetail(null) }}
+                  onClick={() => { if (initialMode === 'answer') setPpDeepLinkArmed(true); setOpenId(p.id); setDetail(null) }}
                 >
                   <span style={{ width: 46, fontWeight: 700, color: '#6366f1' }}>{p.year || '—'}</span>
                   <span style={{ width: 58, color: 'var(--text-muted)' }}>{p.province || p.exam}</span>
@@ -675,13 +704,20 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       { id: 'method', label: '📖 方法论' },
     ]
 
-    interface NativeTopicsViewProps { api: any; onGo: any; initialModule?: any }
-    export function NativeTopicsView({ api, onGo, initialModule = '' }: NativeTopicsViewProps) {
+    interface NativeTopicsViewProps {
+      api: any; onGo: any; initialModule?: any
+      /** cycle-49：外部深链直达指定枢纽分区（如 method 页「去专题方法论」） */
+      initialTab?: string
+    }
+    export function NativeTopicsView({ api, onGo, initialModule = '', initialTab = '' }: NativeTopicsViewProps) {
       const [tree, setTree] = React.useState(null)
       const [channel, setChannel] = React.useState('xingce')
-      // 深链（setView('topics', { module })）直达刷题分区并预选模块；常规进入默认总览
-      const [sec, setSec] = React.useState(initialModule ? 'practice' : 'overview')
-      const [visited, setVisited] = React.useState(() => (initialModule ? { overview: true, practice: true } : { overview: true }))
+      // 深链优先级：initialTab（显式分区）> initialModule（历史语义→practice）> 总览。
+      // cycle-49：initialTab 让 method/search 等页能一键把用户带到专题枢纽对应分区。
+      const validTab = TOPIC_HUB_TABS.some(t => t.id === initialTab) ? initialTab : ''
+      const seedSec = validTab || (initialModule ? 'practice' : 'overview')
+      const [sec, setSec] = React.useState(seedSec)
+      const [visited, setVisited] = React.useState(() => ({ overview: true, [seedSec]: true }))
 
       React.useEffect(() => { api('/topics').then(setTree).catch(() => setTree(null)) }, [api])
 
@@ -745,7 +781,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
             </div>)}
         </div>
       </Card>
-        : <Card title="🚀 练习入口"><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'专题数据暂不可用 — 可直接使用上方分区练习'}</div></Card>
+        : <Card title="🚀 练习入口"><KgEmpty text="专题数据暂不可用 — 可直接使用上方分区练习" /></Card>
 
       // 专题列表（按 kind 分组）
       const topics = cur ? (cur.topics || []) : []
@@ -843,7 +879,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
 
       // ① 方法论目录卡（网格）
       const methodGrid = topics === null
-        ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载方法论目录…'}</div>
+        ? <KgLoad label="加载方法论目录…" />
         : topics.length === 0
           ? <div style={{ fontSize: 12, color: '#f59e0b' }}>{'⚠️ 方法论目录暂不可用（kaogong-skill 参考文件缺失）'}</div>
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
@@ -867,7 +903,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
 
       // ② 母题思维 / 易错点精选卡
       const pickCards = picks === null
-        ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载母题精选…'}</div>
+        ? <KgLoad label="加载母题精选…" />
         : picks.length === 0
           ? <Card title="🧩 母题思维 / 易错点精选">
               <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.8 }}>
@@ -968,8 +1004,8 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
       const [showMaterials, setShowMaterials] = React.useState(true)
       // cycle-14 体验：申论草稿本地暂存（localStorage，按 paperId:no 键）——误关/切题不丢作答
       const essayDraftKey = (q: any) => 'kg-essay-draft:' + (q && (q.id || (q.paperId + ':' + q.no)) || 'unknown')
-      const readDraft = (q: any) => { try { return localStorage.getItem(essayDraftKey(q)) || '' } catch { return '' } }
-      const writeDraft = (q: any, v: any) => { try { v ? localStorage.setItem(essayDraftKey(q), v) : localStorage.removeItem(essayDraftKey(q)) } catch { /* 隐私模式等场景静默 */ } }
+      const readDraft = (q: any) => kgStorage.get(essayDraftKey(q))
+      const writeDraft = (q: any, v: any) => { v ? kgStorage.set(essayDraftKey(q), v) : kgStorage.remove(essayDraftKey(q)) }
       // cycle-14：材料逐份折叠（用户诉求：全局折叠保留之外，材料 1/2/3/4 可单独折叠展开）
       const [collapsedMats, setCollapsedMats] = React.useState({})
       const toggleMat = (no: any) => setCollapsedMats((m: any) => ({ ...m, [no]: !m[no] }))
@@ -1010,7 +1046,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
           })
           setResult({ ...r, isArticle })
           // cycle-14：提交评分成功 → 清掉该题草稿（评分结果页已留存内容，重答从零开始）
-          if (!r || !r.error) { try { localStorage.removeItem(essayDraftKey(cur)) } catch { /* 隐私模式等场景静默 */ } }
+          if (!r || !r.error) kgStorage.remove(essayDraftKey(cur))
         } finally { setBusy(false) }
       }
 
@@ -1098,7 +1134,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                 })() : null}
                 {paperDetail && paperDetail.materials && paperDetail.materials.length > 0 ? <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{'点击「材料 N」标题可单独折叠 · 阅读材料后在下方作答区作答'}</span> : null}
               </div>
-              {!paperDetail ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载材料…'}</div> : null}
+              {!paperDetail ? <KgLoad label="加载材料…" /> : null}
               {paperDetail && (!paperDetail.materials || paperDetail.materials.length === 0) ? <div style={{ fontSize: 12, color: '#f59e0b' }}>{'该卷未附带材料（部分年份采集稿缺材料）'}</div> : null}
               {showMaterials && paperDetail && (paperDetail.materials || []).map((mm: any) => {
                 const isCollapsed = !!collapsedMats[mm.no]
@@ -1158,7 +1194,7 @@ import { QwQuestionCard, QwZoomHost, QwPaperMode } from '../question/question-ki
                   onClick={() => load(t)}
                 >{t || '全部'}</button>)}
             </div>
-            {!list ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'加载中…'}</div> : null}
+            {!list ? <KgLoad label="加载中…" /> : null}
             {list ? (list.questions || []).map((q: any, i: any) =>
               <div
                 key={i}

@@ -1,26 +1,37 @@
 /**
- * server/historyApi.ts — 纸质刷题记录补录域（cycle-21 · issue #3 第一阶段）
+ * server/historyApi.ts — 纸质刷题记录补录域（cycle-21 · issue #3；v9 统一数据层改造）
  *
  * 用户旅程：纸质资料（粉笔 5000 题等）已做过题 → 在现有题库中**搜索同题** →
  * 核对候选（题干/选项/来源）→ 补录「已做·对/错/结果未知」→ 错题自动进错题本 →
  * 同批次可撤销。
  *
+ * ── v9 改造（消除外源直读）──
+ *   旧实现三通道串联，其中两条直读外源：
+ *     ① `.naoku.db` 直读（adapters/naoku.searchQuestionsByStem）
+ *     ③ 真题卷目录逐卷扫描（buildPaperIndex + loadPaper，最坏 80 卷 × 18ms）
+ *   v9：**唯一检索通道 = 统一池**（FTS5 trigram + LIKE 兜底 + 出处溯源），
+ *   两条外源通道删除。池未就绪时经 dataGate 按需摄入后重试，仍不可用则返回结构化未就绪。
+ *
+ *   补录台账也从「progress JSON 桶」迁到实体表 import_batch / import_item（可 SQL 审计），
+ *   同时**保留** progress 侧的 JSON 台账为读侧权威（双写期语义，见研究 15 C7 阶段 2 口径）——
+ *   切读是独立决策，本轮不偷偷改读路径。
+ *
  * 设计纪律（来自 issue #3 的验收口径）：
- *  - 稳定标识：候选匹配用「内容指纹」（module|stem 前 120 字 sha1，与 srs.questionSig 同源）
- *    ——不依赖抽题随机 id。
+ *  - 稳定标识：候选匹配用「内容指纹」（module|stem 前 120 字 sha1，与 srs.questionSig 同源）。
  *  - 统计隔离：补录记 progress.history 带 `source:'import'`；statsSnapshot/今日新刷
- *    口径排除 import 条目（历史归历史，不污染今日打卡）；原始作答日期未知 → 保留未知
- *    （history 条目 date 仅记导入日且带 historical 标记）。
+ *    口径排除 import 条目（历史归历史，不污染今日打卡）。
  *  - 幂等：同批次内指纹去重；同题已补录过（progress.importedSigs）→ 冲突提示不重复计数。
  *  - 可撤销：批次 id + undo 端点按批次回滚（只动 import 条目，绝不动在线作答）。
- *  - 只有对错没有选项：允许 result=unknown / 无所选答案（纸上只有叉号也能录）。
+ *  - 只有对错没有选项：允许 result=unknown / 无所选答案。
  */
 import { createHash } from 'node:crypto'
-import { naokuReady, searchQuestionsByStem } from '../adapters/naoku.js'
-import { getRandomQuestions, XINGCE_MODULES } from '../adapters/repoData.js'
-import { buildPaperIndex, loadPaper } from '../adapters/paperData.js'
+import { poolDb, putImportBatch, undoSImportBatch } from '../adapters/poolDb.js'
+// v9：统一错题/补录层（库为权威读源，JSON 为兼容镜像）
+import { readImportBatches, upsertWrongEntry, removeWrongEntry } from './reviewStore.js'
+import { poolRowToQuestion } from './poolApi.js'
+import { ensureDomain } from './dataGate.js'
 
-const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
+// v9：批次列表改走 reviewStore（库优先），本地 entries 辅助不再需要
 
 /** 内容指纹（与 srs.questionSig 同算法：module|stem前120字 → sha1 12位）——跨进程稳定 */
 function contentSig(module: string, stem: string): string {
@@ -32,90 +43,91 @@ function normStem(s: string): string {
   return String(s || '').replace(/\s+/g, '').toLowerCase()
 }
 
-/** 本地今日（北京时间语义由宿主机时区决定，与 /api/check 同口径 ISO 日期） */
+/** 本地今日（ISO 日期，与 /api/check 同口径） */
 function today(): string { return new Date().toISOString().slice(0, 10) }
 
-export function makeHistoryApi({ store, repoRoot = '' }: { store: any, repoRoot?: string }) {
+export function makeHistoryApi({ store, repoRoot = '', dataCtx }: { store: any, repoRoot?: string, dataCtx?: { repoRoot: string, dataDir: string } }) {
   const { loadProgress, saveProgress } = store
-  /** 目录题库扫描用的 repoRoot（装配层注入；数据根切换时随 rebuildDomains 重建） */
-  let repoRootRef: string = repoRoot
+  /** 目录题库扫描用的 repoRoot（装配层注入；仅用于 dataGate 摄入上下文，不用于直读） */
+  const repoRootRef: string = repoRoot
 
-  /** 在现有题库中搜索候选题（naoku 深度题库优先，xingcezhenti 目录题库兜底）
-   *  返回条目带 contentSig + 来源标注，UI 直接展示核对。 */
+  /** 注入给 dataGate 的上下文 */
+  const ctx = (): { repoRoot: string, dataDir: string } => dataCtx || { repoRoot: repoRootRef, dataDir: '' }
+
+  /**
+   * 在现有题库中搜索候选题（v9：**唯一通道 = 统一池**）。
+   * 池检索同时具备「全文命中 + 跨源去重 + 出处溯源」，因此三条旧通道可以收敛为一条：
+   * 通道①（naoku 直读）与通道③（真题卷目录扫描）被它完全覆盖且更便宜。
+   */
   function search(q: string, module: string, limit: number) {
     const kw = String(q || '').trim()
-    if (!kw) return { keyword: kw, list: [], hint: '输入题干关键词（≥2 字）' }
-    const wantModule = module && (XINGCE_MODULES as Record<string, any>)[module] ? module : ''
+    if (!kw) return { keyword: kw, list: [], sourceTier: 'pool', hint: '输入题干关键词（≥2 字）' }
+    const pdb = poolDb()
+    if (!pdb) return { keyword: kw, list: [], total: 0, ready: false, fallback: true, hint: '统一题库未就绪（node:sqlite 不可用）' }
+
     const list: any[] = []
     const seen = new Set<string>()
-    // 1) 深度题库（27506 题，五维标注；DB LIKE 全量搜索，非截取；不可用时自动跳过）
-    if (naokuReady()) {
-      for (const r of searchQuestionsByStem(kw, limit * 2, storeRepoRoot())) {
-        const stem = String(r.stem || '').replace(/【图:kgimg:\/\/[^\]】]+】/g, '')
-        if (!normStem(stem).includes(normStem(kw))) continue
-        if (wantModule && r.module !== wantModule) continue
-        const sig = contentSig(r.module, r.stem)
-        if (seen.has(sig)) continue
-        seen.add(sig)
-        list.push({ ...r, contentSig: sig, matchSource: 'naoku' })
-        if (list.length >= limit) break
+    let rows: any[] = []
+    try {
+      if (kw.length >= 3) {
+        rows = pdb.prepare(
+          `SELECT q.* FROM question_fts f JOIN question q ON q.id = f.rowid
+           WHERE question_fts MATCH ? ORDER BY bm25(question_fts) LIMIT ?`,
+        ).all(kw, limit * 3) as any[]
       }
-    }
-    // 2) 目录题库兜底（xingcezhenti 各模块逐文件扫描，限深保响应时间）
-    if (list.length < limit) {
-      for (const mod of Object.keys(XINGCE_MODULES)) {
-        if (wantModule && mod !== wantModule) continue
-        const picked = getRandomQuestions(storeRepoRoot(), mod, 12)
-        for (const r of (picked.questions || [])) {
-          const stem = String(r.stem || '').replace(/【图:kgimg:\/\/[^\]】]+】/g, '')
-          if (!normStem(stem).includes(normStem(kw))) continue
-          const sig = contentSig(r.module, r.stem)
-          if (seen.has(sig)) continue
-          seen.add(sig)
-          list.push({ ...r, contentSig: sig, matchSource: 'xingcezhenti' })
-          if (list.length >= limit) break
-        }
-        if (list.length >= limit) break
+      if (!rows.length) {
+        rows = pdb.prepare(
+          'SELECT * FROM question WHERE stem LIKE ? OR analysis LIKE ? LIMIT ?',
+        ).all('%' + kw + '%', '%' + kw + '%', limit * 3) as any[]
       }
-    }
-    // 3) 真题卷全文扫描（cycle-33 P0：issue#3「好像没实现」的根治通道）——
-    //    根因：①naoku DB 由 GongkaoNaoku 的 Python 合并脚本生成，只装真题库的用户恒缺 → 通道①恒空；
-    //    ②目录兜底用 getRandomQuestions 随机抽 12 题再过滤关键词 → 命中率≈0（兜底形同虚设）。
-    //    本通道复用 buildPaperIndex（磁盘快照 13ms）+ loadPaper（~18ms/卷）逐卷扫描，
-    //    行测卷按年份倒序、找满 limit 早停、maxPapers 上限控响应时间；结果带 paperId/exam/year/no
-    //    溯源元数据（用户可回原卷核对）。守卫 C33-01。
-    if (list.length < limit) {
-      try {
-        const idx = buildPaperIndex(storeRepoRoot())
-        const papers = (idx.papers || [])
-          .filter((p: any) => p.subject === '行测')
-          .sort((a: any, b: any) => (b.year || 0) - (a.year || 0))
-          .slice(0, 80)   // 最坏 ~1.4s（80 × 18ms）；早停常见 <10 卷
-        for (const pp of papers) {
-          if (list.length >= limit) break
-          let detail: any = null
-          try { detail = loadPaper(storeRepoRoot(), pp.id) } catch { continue }
-          for (const q of (detail && detail.questions) || []) {
-            const stem = String(q.stem || '').replace(/【图:kgimg:\/\/[^\]】]+】/g, '')
-            if (!normStem(stem).includes(normStem(kw))) continue
-            if (wantModule && q.module !== wantModule) continue
-            const sig = contentSig(q.module || pp.subject, q.stem)
-            if (seen.has(sig)) continue
-            seen.add(sig)
-            list.push({
-              ...q, contentSig: sig, matchSource: 'papers',
-              paperId: pp.id, exam: pp.exam || detail.exam, year: pp.year || detail.year, paperFile: pp.id.split('/').pop(),
-            })
-            if (list.length >= limit) break
-          }
+    } catch { rows = [] }
+
+    // 出处溯源（question_source 有 paper/region/year/seq/path）——用户可回原卷核对
+    const provenance = new Map<string, any>()
+    try {
+      const ids = rows.map((r: any) => String(r.canonical_id)).filter(Boolean)
+      if (ids.length) {
+        const marks = ids.map(() => '?').join(',')
+        for (const s of pdb.prepare(
+          `SELECT canonical_id, paper, region, year, seq, path FROM question_source
+           WHERE canonical_id IN (${marks}) AND LENGTH(paper) > 0
+           ORDER BY year DESC LIMIT ?`,
+        ).all(...ids, ids.length * 2) as any[]) {
+          if (!provenance.has(s.canonical_id)) provenance.set(s.canonical_id, s)
         }
-      } catch { /* 真题库不可用：静默跳过（前两通道结果仍有效） */ }
+      }
+    } catch { /* 溯源查询失败 → 降级为无出处（不影响主命中） */ }
+
+    for (const row of rows) {
+      if (list.length >= limit) break
+      if (module && module !== 'all' && row.module !== module) continue
+      const item = poolRowToQuestion(row)
+      if (!item) continue
+      const stem = String(item.stem || '').replace(/【图:kgimg:\/\/[^\]】]+】/g, '')
+      if (!normStem(stem).includes(normStem(kw))) continue
+      const sig = contentSig(item.module || row.module, item.stem || row.stem)
+      if (seen.has(sig)) continue
+      seen.add(sig)
+      const src = provenance.get(String(row.canonical_id || ''))
+      list.push({
+        ...item, contentSig: sig, matchSource: 'pool',
+        ...(src ? { paperId: src.path || src.paper, exam: src.paper, year: src.year, paperFile: String(src.path || '').split(/[\\/]/).pop() } : {}),
+      })
     }
-    return { keyword: kw, module: wantModule || null, list, total: list.length }
+    return { keyword: kw, module: module || null, list, total: list.length, sourceTier: 'pool' }
   }
 
-  /** 目录题库扫描用的 repoRoot 引用 */
-  function storeRepoRoot(): string { return repoRootRef }
+  /** 需摄入的重载：池内没有命中时才尝试按需入库一次（首次使用场景） */
+  async function searchAsync(q: string, module: string, limit: number) {
+    let out = search(q, module, limit)
+    if (out.list.length) return out
+    const g = await ensureDomain('pool', ctx())
+    out = search(q, module, limit)
+    if (!out.list.length && g.hint) {
+      return { ...out, ready: false, fallback: true, ingesting: !!g.ingesting, hint: g.hint }
+    }
+    return out
+  }
 
   /**
    * 补录（逐题/批量）。entries: [{ contentSig|question, result: 'right'|'wrong'|'unknown',
@@ -169,20 +181,42 @@ export function makeHistoryApi({ store, repoRoot = '' }: { store: any, repoRoot?
             analysis: q.analysis || '', wrongCount: 1, box: 1, consecutive: 0, mastered: false,
             // cycle-43 材料保真：补录候选带材料时随快照入错题本（回炉可复现作答语境）
             groupMaterial: q.groupMaterial || '', groupMaterialNo: q.groupMaterialNo || 0,
+            // v9：错题实体化字段（可 SQL 诊断）
+            canonicalId: q.id || '', kadian: (q.dims && q.dims.kadian) || '',
             lastAt: Date.now(), historical: true, fromImport: batchId,
           })
         } else { exist.wrongCount++; exist.lastAt = Date.now(); exist.fromImport = exist.fromImport || batchId }
       }
-      accepted.push({ sig, result, stem: String(q.stem).slice(0, 40) })
+      accepted.push({ sig, result, stem: String(q.stem).slice(0, 40), module: q.module || '', correctAnswer: q.correctAnswer || null, userAnswer: entry.userAnswer, isCorrect: entry.isCorrect, happenedAt })
     }
     if (accepted.length) {
-      p.importedSigs[batchId] = undefined // 占位防误用（台账按 sig 记）
       for (const a of accepted) p.importedSigs[a.sig] = batchId
       p.importBatches[batchId] = { at: Date.now(), sigs: accepted.map(a => a.sig), count: accepted.length, source: post.source || null }
       // 台账环形：批次最多留 30（撤销窗口），超限淘汰最旧（其 sigs 台账保留，仅批次索引淘汰）
       const bKeys = Object.keys(p.importBatches)
       if (bKeys.length > 30) for (const k of bKeys.slice(0, bKeys.length - 30)) delete p.importBatches[k]
       saveProgress(wsRaw, p)
+      // v9：镜像到实体表（可 SQL 审计；失败静默——JSON 台账仍是兼容写回）
+      try {
+        const key = store.wsKey ? store.wsKey(wsRaw) : String(wsRaw || 'default')
+        putImportBatch(poolDb(), key, {
+          batchId, at: p.importBatches[batchId].at, source: post.source || '', book: post.book || '',
+          total: list.length, accepted: accepted.length,
+          conflicts: conflicts.length, rejected: rejected.length,
+          importedTotal: accepted.length, status: 'active',
+        }, accepted.map(a => ({
+          sig: a.sig, module: a.module, stem: a.stem, result: a.result,
+          userAnswer: a.userAnswer || '', correctAnswer: a.correctAnswer || '',
+          isCorrect: a.isCorrect === null ? null : !!a.isCorrect,
+          happenedAt: a.happenedAt, source: 'import',
+        })))
+        // v9：补录产生的错题在库侧带 origin_batch（可追溯/可撤销；在线答错的那条不带）
+        for (const w of p.wrongBook) {
+          if (w && w.fromImport === batchId) {
+            upsertWrongEntry(key, { ...w, fromImport: batchId, historical: true })
+          }
+        }
+      } catch { /* 镜像失败不影响补录主链路 */ }
     }
     return { batchId: accepted.length ? batchId : null, accepted: accepted.length, acceptedItems: accepted, conflicts, rejected, total: list.length }
   }
@@ -206,26 +240,41 @@ export function makeHistoryApi({ store, repoRoot = '' }: { store: any, repoRoot?
     for (const s of batch.sigs || []) delete p.importedSigs[s]
     delete p.importBatches[batchId]
     saveProgress(wsRaw, p)
+    // v9：实体表同步软删 + 库侧错题删除
+    // （只软删批次而不删库内错题 → 读路径库优先时「撤销了又回来」，是双写不一致的经典形态）
+    try {
+      const key = store.wsKey ? store.wsKey(wsRaw) : String(wsRaw || 'default')
+      undoSImportBatch(poolDb(), key, batchId)
+      for (const s of batch.sigs || []) removeWrongEntry(key, String(s))
+    } catch { /* 镜像失败不影响撤销主链路 */ }
     return { undone: true, batchId, removedHistory, removedWrong }
   }
 
-  /** 补录台账摘要（UI 批次列表 / 撤销入口） */
+  /** 补录台账摘要（UI 批次列表 / 撤销入口；v9 库优先 + JSON 降级） */
   function batches(wsRaw: any) {
     const p = loadProgress(wsRaw)
-    const list = entries(p.importBatches || {})
-      .sort((a, b) => (b[1].at || 0) - (a[1].at || 0))
-      .map(([id, b]) => ({ batchId: id, at: b.at, count: b.count, source: b.source || null }))
+    const key = store.wsKey ? String(store.wsKey(wsRaw)) : String(wsRaw || 'default')
+    const read = readImportBatches(key, p.importBatches)
     const importedCount = (p.history || []).filter((h: any) => h.source === 'import').length
-    return { batches: list, importedTotal: importedCount, undoWindow: 30 }
+    return {
+      batches: read.list.map((b: any) => ({
+        batchId: b.batchId, at: b.at, count: b.count, source: b.source || null,
+        status: b.status || 'active', items: b.items == null ? b.count : b.items,
+      })),
+      importedTotal: importedCount,
+      undoWindow: 30,
+      // 来源可观测（前端/白盒能看出台账来自库还是 JSON 降级）
+      tier: read.tier,
+    }
   }
 
-  return { handle, search, addEntries, undo, batches }
+  return { handle, search, searchAsync, addEntries, undo, batches }
 
   /** HTTP 域入口（域链分发约定：未接管返回 undefined） */
-  function handle(path: string, params: URLSearchParams, post: any, method: string, wsRaw: any) {
+  async function handle(path: string, params: any, post: any, method: string, wsRaw: any) {
     if (!path.startsWith('/api/history/')) return undefined
     if (path === '/api/history/search' && method === 'GET') {
-      return search(params.get('q') || '', params.get('module') || '', Math.min(30, parseInt(params.get('limit') || '12')))
+      return await searchAsync(params.get('q') || '', params.get('module') || '', Math.min(30, parseInt(params.get('limit') || '12')))
     }
     if (path === '/api/history/entries' && method === 'POST') return addEntries(post, wsRaw)
     if (path === '/api/history/undo' && method === 'POST') return undo(post && post.batchId, wsRaw)

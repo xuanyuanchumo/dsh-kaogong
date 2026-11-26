@@ -16,6 +16,18 @@ beforeAll(async () => {
   G = await import('../../dist/shared/manifest.js')
 })
 
+test('KERNEL-SHARE 服务端/内核 pageRank 同图深相等（真共享，无镜像漂移）', async () => {
+  const K = await import('../../dist/shared/kernel.js')
+  const nodes = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]
+  const edges = [{ source: 'a', target: 'b' }, { source: 'b', target: 'c' }, { source: 'c', target: 'a' }, { source: 'd', target: 'a' }]
+  const fromKernel = K.pageRank(nodes, edges)
+  const fromServer = G.pageRank(nodes, edges)
+  expect(fromServer).toEqual(fromKernel)
+  // 客户端 graphLocalPageRank 现真调用 kernel.pageRank（combo 内），其算法体即此函数——
+  // 组合产物形态由 bundle-client 终检 + render 旅程共同守卫。
+  expect(K.KG_PAGERANK_ITER).toBe(40)
+})
+
 test('NODE_META/EDGE_META 单一事实源覆盖全部节点/边类型', async () => {
   const g = G.buildGraph({})
   const missingNodes = [...new Set(g.nodes.map(n => n.type))].filter(t => !(G.NODE_META[t] && G.NODE_META[t].color))

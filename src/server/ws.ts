@@ -25,6 +25,22 @@ export function makeWsStore(progressDir: any) {
   }
   function saveProgress(raw: any, p: any): void {
     try { mkdirSync(progressDir, { recursive: true }); writeFileSync(progressFile(raw), JSON.stringify(p, null, 2)) } catch {}
+    // cycle-60 管理数据双写：progress.json 仍是读侧权威，本步把错题/进度/补录等管理域
+    // 镜像进 .kaogong.db 的 wrong_book / user_kv（ws 前缀隔离，rebuild 不清）。
+    // 动态 import 避免模块加载期拉起 sqlite（node:sqlite 必须延迟加载——cycle-16 教训）；
+    // 镜像失败静默，绝不拖垮判分/进度主链路。
+    //
+    // cycle-61 v9-b：改为**入队异步写**（enqueueUserWrite）。原因（重建压测实测）：
+    // 重建时 worker 持写锁，主线程的同步镜像 INSERT 会在 busy_timeout 排队，
+    // 把整条请求链（含 /api/status 信标）拖到秒级。镜像是可重放的账本，
+    // 不需要在请求同步栈里完成 —— 入队即返回，写队列分片执行。
+    try {
+      const key = wsKey(raw)
+      const snapshot = p
+      void import('../adapters/poolDb.js')
+        .then(m => { try { m.enqueueUserWrite(() => { try { m.mirrorProgressToDb(m.poolDb(), key, snapshot) } catch { /* 单次镜像失败静默 */ } }) } catch {} })
+        .catch(() => {})
+    } catch {}
   }
   function listWorkspaces() {
     try {

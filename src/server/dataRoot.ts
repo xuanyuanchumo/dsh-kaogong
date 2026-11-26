@@ -130,6 +130,9 @@ export interface MigrationReport {
   pkgResidual: string[]    // 包内仍残留的用户数据条目（迁移失败时非空）
 }
 
+/** 随包模板（package.json `files` 声明）：迁移时只复制不删源（R12 修复包内实体丢失） */
+const TEMPLATE_ENTRIES = new Set(['study-plan.md'])
+
 /** 列出包内 data/ 中「有用户价值、应迁移」的条目。
  *  lifecycle.jsonl 特殊：它是环形审计日志（300 行滚动），**新根侧会被运行时持续改写**，
  *  源/目标字面一致判定永远失败（纯日志非用户数据）。迁移语义=保留新根（已在写）+ 删源。
@@ -194,8 +197,20 @@ export function migratePkgData(): MigrationReport {
             // lifecycle.jsonl 是环形审计日志（新根侧被运行时持续改写，字面永不一致）：
             // 非用户数据，保留新根、删源；其余文件（真用户数据）不一致时**保留源**（宁多勿丢）。
             if (name === 'lifecycle.jsonl') { try { rmSync(src) } catch {} }
+            else if (TEMPLATE_ENTRIES.has(name)) { /* 模板：保留包内副本，绝不删源 */ }
             else { try { if (readFileSync(src).equals(readFileSync(dst))) rmSync(src) } catch {} }
           }          continue
+        }
+        // cycle-60 R12：随包**模板**（package.json files 声明）迁移时只复制、绝不删源——
+        // 模板是包的一部分，新装用户/重新安装都要用到；删掉会造成「包声明了文件但实体缺失」
+        // （实测 data/study-plan.md 被本分支删除，导致 npm pack 断链 + 新装用户无计划模板）。
+        if (TEMPLATE_ENTRIES.has(name)) {
+          const st = statSync(src)
+          if (!st.isDirectory()) {
+            try { writeFileSync(dst, readFileSync(src)) } catch { /* 复制失败保留源 */ }
+            report.movedCount++
+            continue
+          }
         }
         moveEntry(src, dst)
         report.movedCount++

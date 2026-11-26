@@ -53,6 +53,83 @@ export function prepareQuestionUpsert(db: any) {
   )
 }
 
+/**
+ * cycle-55：content_fp 家族统一回填 pass（摄入完成后调用）。
+ *
+ * 为什么需要：naoku 是富源（kadian/五维），注册表排首位先入库；其它源（xingcezhenti 等）
+ * 后到时若因自身 fp/cf 未命中而**另插一条 canonical**（同 content_fp 家族、不同 qid），
+ * naoku 先到的归并回填只打当时存在的行，后到的主行拿不到富字段——
+ * 实测 kadian 含「图形推理」naoku.db 1895 题 / pool 仅 925 题。
+ * 逐源回填无法覆盖「主行后到」时序（在 naoku 分支回填时后到主行还不存在 → no-op）。
+ *
+ * 正解：全源摄入结束后，按 content_fp 家族把富字段**并集**回填到组内每一行（只填空位）。
+ * 幂等：CASE WHEN LENGTH(现有)>0 保旧值，连续两次执行结果完全相同。
+ * 不变量：只改富字段（kadian/五维/fp/materials），绝不改 canonical_id/qid/source_id
+ * （跨源身份不变，question_source/analysis/relation 的引用全部保持有效）。
+ *
+ * @returns 回填影响行数（白盒可观测）
+ */
+export function backfillContentFpFamilies(db: any): number {
+  if (!db) return 0
+  const RICH_COLS = ['fp', 'kadian', 'reasoning', 'fastest', 'pitfalls', 'mother', 'doubt', 'group_material', 'material_ref']
+  const NUM_COLS = ['has_image', 'n_paper']
+  try {
+    // 家族 = 相同 content_fp 且非空；只处理多行家族（单行无补齐对象）
+    const families = db.prepare(
+      `SELECT content_fp FROM question WHERE LENGTH(content_fp) > 0
+       GROUP BY content_fp HAVING COUNT(*) > 1`,
+    ).all() as any[]
+    if (!families.length) return 0
+    let touched = 0
+    const getRow = db.prepare('SELECT * FROM question WHERE content_fp = ?')
+    const upd = db.prepare(
+      `UPDATE question SET
+         fp = CASE WHEN LENGTH(fp) = 0 THEN ? ELSE fp END,
+         kadian = CASE WHEN LENGTH(kadian) = 0 THEN ? ELSE kadian END,
+         reasoning = CASE WHEN LENGTH(reasoning) = 0 THEN ? ELSE reasoning END,
+         fastest = CASE WHEN LENGTH(fastest) = 0 THEN ? ELSE fastest END,
+         pitfalls = CASE WHEN LENGTH(pitfalls) = 0 THEN ? ELSE pitfalls END,
+         mother = CASE WHEN LENGTH(mother) = 0 THEN ? ELSE mother END,
+         doubt = CASE WHEN LENGTH(doubt) = 0 THEN ? ELSE doubt END,
+         group_material = CASE WHEN LENGTH(group_material) = 0 THEN ? ELSE group_material END,
+         material_ref = CASE WHEN LENGTH(material_ref) = 0 THEN ? ELSE material_ref END,
+         has_image = CASE WHEN has_image = 0 THEN ? ELSE has_image END,
+         n_paper = CASE WHEN n_paper = 0 THEN ? ELSE n_paper END
+       WHERE canonical_id = ?`,
+    )
+    for (const fam of families) {
+      const rows = getRow.all(String(fam.content_fp)) as any[]
+      // 家族并集：每个富字段取组内第一个非空值（确定性：按 canonical_id 字典序）
+      const sorted = rows.slice().sort((a, b) => String(a.canonical_id).localeCompare(String(b.canonical_id)))
+      const union: Record<string, any> = {}
+      for (const col of [...RICH_COLS, ...NUM_COLS]) {
+        union[col] = sorted.find(r => {
+          const v = r[col]
+          return NUM_COLS.includes(col) ? Number(v) > 0 : String(v ?? '').length > 0
+        })?.[col] ?? (NUM_COLS.includes(col) ? 0 : '')
+      }
+      for (const row of sorted) {
+        // 幂等计数：只有确实存在「空位且家族有值可补」时才 UPDATE——否则 SQL changes
+        // 会把「值没变但仍执行 UPDATE」也计入，导致连续两次 rebuild 的 enrichedRows
+        // 数字不同（违反同输入两次深相等纪律）。
+        const need = [...RICH_COLS].some(col => String(row[col] ?? '').length === 0 && String(union[col] ?? '').length > 0)
+          || NUM_COLS.some(col => Number(row[col] || 0) === 0 && Number(union[col] || 0) > 0)
+        if (!need) continue
+        const r = upd.run(
+          union.fp, union.kadian, union.reasoning, union.fastest, union.pitfalls,
+          union.mother, union.doubt, union.group_material, union.material_ref,
+          Number(union.has_image) || 0, Number(union.n_paper) || 0,
+          String(row.canonical_id),
+        )
+        touched += Number((r as any)?.changes || 0)
+      }
+    }
+    return touched
+  } catch {
+    return 0   // 回填失败不影响 rebuild 主链路（与 USES_METHOD 同纪律）
+  }
+}
+
 /** 统一题目插入参数行（与 prepareQuestionUpsert 的列顺序严格一致） */
 export function questionRow(q: {
   qid?: any, fp?: any, canonicalId: any, sourceId: any, localKey?: any,

@@ -29,10 +29,19 @@ import { existsSync, statSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CAPABILITIES, HUASHENG13_META } from '../shared/manifest.js'
+// cycle-49 内核收敛：数值/分位纯函数改用 shared/kernel 单一事实源
+//（原本地 num/clamp01/round2/round4/percentile 与 telemetry.ts 逐字重复，现删除）。
 import {
-  buildIndex, search as hs13Search, coverageMatrix, parsePractice, parseDoc,
-  candidateDirs, tokenize, HUASHENG13_CORPUS_COUNT,
+  kgNum as num, kgClamp01 as clamp01, kgRound2 as round2, kgRound4 as round4,
+  percentile, ringPush,
+} from '../shared/kernel.js'
+import {
+  buildIndexFromRows, search as hs13Search, coverageMatrix,
+  parsePracticeText, candidateDirs, tokenize, HUASHENG13_CORPUS_COUNT,
 } from '../adapters/huasheng13.js'
+// cycle-61 v9：运行期正文来自统一库（knowledge 表），不再直读语料目录（I-DB-1）
+import { poolDb } from '../adapters/poolDb.js'
+import { ensureDomain } from './dataGate.js'
 
 // ── 端点路径常量（路由表 + trace 键 + 声明对账，三者共用同一组字面量）──
 const EP_CATALOG = '/api/huasheng13/catalog'
@@ -58,34 +67,7 @@ const WS_SLOT_LIMIT = 24     // ws 分槽上限（LRU 淘汰最久未访问的�
 // 通用小工具（全部纯函数，零依赖）
 // ══════════════════════════════════════════════════════════════
 
-/** 数值归一：任何非法输入收敛为 0（避免 NaN 污染 JSON 响应） */
-function num(v: any): number {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : 0
-}
-
-/** 覆盖率归一：强制落到 [0,1] */
-function clamp01(v: any): number {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return 0
-  return Math.min(1, Math.max(0, n))
-}
-
-function round2(v: any): number {
-  const n = Number(v)
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0
-}
-
-function round4(v: any): number {
-  const n = Number(v)
-  return Number.isFinite(n) ? Math.round(n * 10000) / 10000 : 0
-}
-
-/** 有序样本百分位（p∈[0,100]，最近秩法；与 http.ts percentile 同口径） */
-function percentile(sorted: number[], p: number): number {
-  if (!sorted.length) return 0
-  return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]
-}
+// cycle-49：num/clamp01/round2/round4/percentile 已收敛到 ../shared/kernel.js（本文件顶部 import）
 
 /** 整数参数解析 + 夹紧：[非法 → 默认值]，超界 → 边界（未知参数不抛错，一律 200） */
 function clampInt(raw: any, dft: number, lo: number, hi: number): number {
@@ -194,13 +176,12 @@ function getCounter(wsKey: string): WsCounter {
 
 /** 记一条链路事件（环形 200；detail 强制字符串化，防非字符串污染 JSON） */
 function note(c: WsCounter, kind: string, detail: any, ms: number): void {
-  c.recent.push({
+  ringPush(c.recent, {
     at: Date.now(),
     kind,
     detail: typeof detail === 'string' ? detail : String(detail == null ? '' : detail),
     ms: round2(ms),
-  })
-  if (c.recent.length > RECENT_RING) c.recent.splice(0, c.recent.length - RECENT_RING)
+  }, RECENT_RING)
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -219,13 +200,16 @@ export function makeMethodologyApi(options: any = {}) {
   const pkgRoot = resolve(String(options.pkgRoot || DEFAULT_PKG_ROOT))
   const dataDir = resolve(String(options.dataDir || join(pkgRoot, 'data')))
   // cycle-18：语料与其它题库同等对待——位于**数据根**下（repoRoot/huasheng13），
-  // 由「📦 题库管理」统一下载配置。这里必须吃 repoRoot（随数据根热切换重建），
-  // 绝不能退回包根（包内不再携带任何语料）。
+  // 由「📦 题库管理」统一下载配置。这里必须吃 repoRoot（随数据根热切换重建）。
   const repoRoot = options.repoRoot ? resolve(String(options.repoRoot)) : null
   const corpusDir = options.corpusDir
     ? resolve(String(options.corpusDir))
     : join(repoRoot || pkgRoot, String(META.root || 'huasheng13'))
   const store = options.store
+  /** v9：数据门上下文（未就绪时按需摄入 huasheng13 源） */
+  const dataCtx: { repoRoot: string, dataDir: string } = options.dataCtx || { repoRoot: repoRoot || pkgRoot, dataDir }
+  /** v9：登记本实例的索引清空器（数据变更事件调用；只保留最新一代——R7 防跨代调用） */
+  latestReset = () => { idxSlot = null; catalogCache = null; normTextCache = null }
 
   /** 25 个语料文件的登记表（META 单一事实源派生） */
   const FILES = buildFileRegistry()
@@ -240,33 +224,56 @@ export function makeMethodologyApi(options: any = {}) {
   const IDX_DEGRADED_RETRY_MS = 3_000
   let idxSlot: IndexSlot | any = null
 
+  /**
+   * v9 索引加载：**库优先**（knowledge 表 kind='methodology' 的 hs13:* 节点）。
+   *
+   * 与 v8 的区别：
+   *   v8 = buildIndex(语料目录)  ← 运行期读 md 文件（外源直读）
+   *   v9 = buildIndexFromRows(库内节点) ← 运行期只读库（I-DB-1），解析语义仍走 parseDocText
+   *
+   * 库为空时**返回 degraded 而非回落到目录**：回落会让「外源直读」重新变成正常路径，
+   * 而正确做法是提示用户去题库管理安装/重建（可由调用方经 ensureDomain 主动摄入）。
+   */
   function loadIndex(force = false): IndexSlot {
     const at = Date.now()
-    if (!existsSync(corpusDir)) {
-      return {
-        idx: null, at, degraded: true,
-        error: `方法论语料未安装：${corpusDir} —— 打开「📦 题库管理」安装必选包 huasheng13（约 336KB）`,
-      }
+    const db = poolDb()
+    if (!db) {
+      return { idx: null, at, degraded: true, error: '统一库未就绪（node:sqlite 不可用）——方法论正文无法读取' }
     }
     try {
-      const idx = buildIndex(corpusDir, { dataDir, force })
+      const rows = force
+        ? (db.prepare("SELECT kn_id, title, body, path, meta FROM knowledge WHERE kind='methodology'").all() as any[])
+        : (db.prepare("SELECT kn_id, title, body, path, meta FROM knowledge WHERE kind='methodology'").all() as any[])
+      if (!rows.length) {
+        return {
+          idx: null, at, degraded: true,
+          error: '方法论正文尚未入库——请到「📦 题库管理」安装 huasheng13 后在「🗄️ 统一题库」重建，' +
+            '或直接访问本页触发按需入库',
+        }
+      }
+      const idx = buildIndexFromRows(rows)
       const docs = docsOf(idx)
       if (!idx || !docs.length) {
-        return { idx, at, degraded: true, error: '语料索引为空：数据根/huasheng13 下未解析到任何 .md 文件（请重装 huasheng13）' }
+        return { idx, at, degraded: true, error: '库内方法论正文为空（请重装 huasheng13 并重建统一库）' }
       }
-      // D1 的 degraded 判据 = META 声明文件中读不到的个数 > 0（诚实降级，不伪造完整）
       const degraded = !!idx.degraded
       const error = degraded
-        ? `语料缺失 ${(idx.missing || []).length} 篇：${(idx.missing || []).slice(0, 5).join(', ')}`
+        ? `库内语料缺失 ${(idx.missing || []).length} 篇：${(idx.missing || []).slice(0, 5).join(', ')}`
         : ''
       return { idx, at, degraded, error }
     } catch (e: any) {
       // 绝不抛：IO/解析异常一律降级（服务活着比数据完整更重要）
       return {
         idx: null, at, degraded: true,
-        error: `语料索引构建失败：${e && e.message ? e.message : String(e)}`,
+        error: `方法论索引构建失败：${e && e.message ? e.message : String(e)}`,
       }
     }
+  }
+
+  /** 按需入库（首次访问且库内无语料时触发一次 huasheng13 摄入） */
+  async function ensureCorpus(): Promise<void> {
+    try { await ensureDomain('method', dataCtx) } catch { /* 摄入失败由调用方降级展示 */ }
+    idxSlot = null   // 摄入后强制下次重读库
   }
 
   function ensureIndex(force = false): IndexSlot {
@@ -302,7 +309,7 @@ export function makeMethodologyApi(options: any = {}) {
     return { chars: 0, tables: 0, formulas: 0, sections: 0, present: false }
   }
 
-  /** 声明目录优先、另一目录兜底的磁盘路径解析（与 D1 的 candidateDirs 同口径） */
+  /** 声明目录优先、另一目录兜底的磁盘路径解析（仅用于白盒「语料目录是否存在」诊断） */
   function resolveCorpusPath(fm: FileMeta): string | null {
     for (const dir of candidateDirs(fm.dir)) {
       const p = join(corpusDir, dir, fm.file + '.md')
@@ -310,6 +317,8 @@ export function makeMethodologyApi(options: any = {}) {
     }
     return null
   }
+  // 白盒用：磁盘侧残留探测（v9 起运行期读路径不再依赖它，仅作诊断透出）
+  void resolveCorpusPath
 
   /** 章节瘦身：只回标题树（全文在 markdown / index 里，避免响应体翻倍） */
   function slimSections(raw: any): any[] {
@@ -410,34 +419,19 @@ export function makeMethodologyApi(options: any = {}) {
     const fm = FILES.get(id)
     if (!fm) return { error: `未知语料文件: ${raw}`, file: id, known: DECLARED_IDS }
 
-    // 优先用索引里的解析产物（含 text/sections/weight），避免重复读盘
+    // v9：正文来自库内索引（buildIndexFromRows）——不再从磁盘解析（I-DB-1）。
+    // 索引里的 parsed.text / sections 与磁盘解析同源同语义（同一 parseDocText）。
     const slot = ensureIndex()
     const idxDoc = docMapOf(slot).get(id)
-    let parsed: any = idxDoc || null
-    let absPath = idxDoc && idxDoc.path ? String(idxDoc.path) : ''
-
-    if (!parsed) {
-      // 索引降级/未收录 → 走磁盘兜底解析（目录偏差由 candidateDirs 处理）
-      const p = resolveCorpusPath(fm)
-      if (!p) {
-        note(c, 'doc', `${fm.file} (语料缺失)`, 0)
-        return {
-          error: `语料文件缺失：${fm.dir}/${fm.file}.md（请到「📦 题库管理」重装 huasheng13）`,
-          file: fm.file, title: fm.title, moduleId: fm.moduleId, degraded: true,
-        }
-      }
-      absPath = p
-      try {
-        parsed = parseDoc(p)
-      } catch (e: any) {
-        note(c, 'doc', `${fm.file} (解析失败)`, 0)
-        return { error: `语料解析失败：${e && e.message ? e.message : String(e)}`, file: fm.file, degraded: true }
-      }
-      if (!parsed) {
-        note(c, 'doc', `${fm.file} (解析为空)`, 0)
-        return { error: `语料解析为空：${fm.dir}/${fm.file}.md`, file: fm.file, degraded: true }
+    if (!idxDoc) {
+      note(c, 'doc', `${fm.file} (未入库)`, 0)
+      return {
+        error: `语料未入库：${fm.file}（请到「📦 题库管理」安装 huasheng13 后在「🗄️ 统一题库」重建）`,
+        file: fm.file, title: fm.title, moduleId: fm.moduleId, degraded: true,
       }
     }
+    const parsed: any = idxDoc
+    const absPath = String(idxDoc.path || '')
 
     c.docs[fm.file] = (c.docs[fm.file] || 0) + 1
     note(c, 'doc', fm.file, 0)
@@ -755,18 +749,20 @@ export function makeMethodologyApi(options: any = {}) {
     if (!fm) return { error: `未知语料文件: ${raw}`, file: id, known: DECLARED_IDS }
 
     const n = clampInt(qget(params, 'n'), 5, 1, 50)
-    const abs = resolveCorpusPath(fm)
-    if (!abs) {
-      note(c, 'practice', `${fm.file} (语料缺失)`, 0)
+    // v9：练习正文来自库内索引（不再读磁盘 md）
+    const slot = ensureIndex()
+    const idxDoc = docMapOf(slot).get(id)
+    if (!idxDoc) {
+      note(c, 'practice', `${fm.file} (未入库)`, 0)
       return {
-        error: `语料文件缺失：${fm.dir}/${fm.file}.md`, file: fm.file,
+        error: `语料未入库：${fm.file}（请到「📦 题库管理」安装 huasheng13 后在「🗄️ 统一题库」重建）`, file: fm.file,
         title: fm.title, total: 0, n, returned: 0, hasMore: false, items: [], degraded: true,
       }
     }
     let all: any[] = []
     let err = ''
     try {
-      const r = parsePractice(abs)
+      const r = parsePracticeText(String(idxDoc.text || ''))
       all = Array.isArray(r) ? r : []
     } catch (e: any) {
       err = e && e.message ? e.message : String(e)
@@ -879,6 +875,23 @@ export function makeMethodologyApi(options: any = {}) {
     return apiTrace(c, wsKey)
   }
 
+  /**
+   * 异步路由（v9）：库内无方法论正文时**先按需入库一次**再重试，
+   * 仍为空则原样返回降级结果（含可操作提示）。
+   *
+   * 为什么放在这里而不是各 apiXxx 内部：六个端点共享同一前置条件（「库里有语料吗」），
+   * 前置条件只能写一次——否则每加一个端点就要记得补一次（正是 v8 分散回落分支的病根）。
+   */
+  async function routeAsync(path: string, params: any, c: WsCounter, wsKey: string): Promise<any> {
+    let out = route(path, params, c, wsKey)
+    // 只在「降级 + 明确没语料」时触发写入式摄入；已有语料绝不重复摄入
+    if (out && out.degraded && /尚未入库|未入库/.test(String(out.error || ''))) {
+      await ensureCorpus()
+      out = route(path, params, c, wsKey)
+    }
+    return out
+  }
+
   /** ws 归一：优先用 ws.ts 的 store.wsKey（slug-hash8），缺失时退化为原串 */
   function wsKeyOf(raw: any): string {
     try {
@@ -921,10 +934,55 @@ export function makeMethodologyApi(options: any = {}) {
     }
 
     const ms = round2(Number(process.hrtime.bigint() - t0) / 1e6)
-    ep.lat.push(ms)
-    if (ep.lat.length > LAT_RING) ep.lat.splice(0, ep.lat.length - LAT_RING)
+    ringPush(ep.lat, ms, LAT_RING)
     return out
   }
 
-  return { handle, endpoints: HS13_ENDPOINTS, corpusDir }
+  /**
+   * 异步域入口（v9）：与 handle 同契约，但支持「库内无语料 → 按需入库 → 重试」。
+   * 路由层必须 await 本函数（异步域改造检查单：所有调用点同步改——cycle-16 教训⑯）。
+   */
+  async function handleAsync(path: any, params: any, post: any, method: any, wsRaw?: any): Promise<any> {
+    const p = typeof path === 'string' ? path : ''
+    if (p !== EP_CATALOG && p !== EP_DOC && p !== EP_SEARCH && p !== EP_COVERAGE && p !== EP_PRACTICE && p !== EP_TRACE) {
+      return undefined
+    }
+    const wsKey = wsKeyOf(wsRaw)
+    const c = getCounter(wsKey)
+    const t0 = process.hrtime.bigint()
+    const startedAt = Date.now()
+    const ep = (c.endpoints[p] = c.endpoints[p] || { hits: 0, lat: [], lastAt: 0 })
+    ep.hits++
+    ep.lastAt = startedAt
+    let out: any
+    try {
+      const m = String(method || 'GET').toUpperCase()
+      out = m !== 'GET'
+        ? { error: `方法论端点仅支持 GET（收到 ${m}）`, path: p }
+        : await routeAsync(p, params, c, wsKey)
+    } catch (e: any) {
+      const msg = e && e.message ? e.message : String(e)
+      out = { error: `方法论域内部错误：${msg}`, path: p, degraded: true }
+      note(c, 'error', `${p} ${msg}`, 0)
+    }
+    const ms = round2(Number(process.hrtime.bigint() - t0) / 1e6)
+    ringPush(ep.lat, ms, LAT_RING)
+    return out
+  }
+
+  return { handle, handleAsync, endpoints: HS13_ENDPOINTS, corpusDir, resetIndex: () => { idxSlot = null; catalogCache = null; normTextCache = null } }
+}
+
+/**
+ * 模块级索引缓存清理（v9：供数据变更事件总线订阅——知识正文重摄后必须重读库）。
+ *
+ * 为什么需要模块级入口：`idxSlot` 是 makeMethodologyApi 闭包内的局部状态，
+ * 而事件订阅发生在装配期（早于/独立于实例创建）。用一个模块级「登记最近实例的清空器」
+ * 打通：实例创建时登记，事件到来时调用最近实例的 resetIndex。
+ * 实例随 buildDomains 重建（换根），登记表只保留最新一代——避免旧代实例被调用（R7 纪律）。
+ */
+let latestReset: (() => void) | null = null
+/** 清空方法论索引缓存（数据变更事件触发；无实例时静默） */
+export function resetMethodologyIndex(): void {
+  try { if (latestReset) latestReset() } catch { /* 清理失败降级为 TTL 重算 */ }
 }

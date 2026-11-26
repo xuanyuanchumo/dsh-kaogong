@@ -107,14 +107,24 @@ test('SMOKE-RP-05 静态守卫：数据根四级解析 + spawn 崩溃安全 + cl
   expect(rmSrc.includes("const hasGit = existsSync(join(target, '.git'))") && rmSrc.includes("const action = hasGit ? 'pull' : 'clone'") && rmSrc.includes('拒绝覆盖')).toBe(true)
 })
 
-test('SMOKE-RP-05 静态守卫：数据根变更重建域并失效缓存（paperIndex/naoku/graphCache）', () => {
+test('SMOKE-RP-05 静态守卫：数据根变更重建域并失效缓存（paperIndex/naoku/graph/tuxing）', () => {
   const httpSrc16 = readSrc('src/server/http.ts')
-  expect(httpSrc16.includes('resetPaperIndex()') && httpSrc16.includes('resetNaoku()') && httpSrc16.includes('graphCache.clear()')).toBe(true)
+  // cycle-60 统一缓存层：graph 走 kgCache.invalidate 域失效；tuxing 旧全局缓存纳入失效链（cycle-16 ⑬ 缺口）
+  // v9：运行期不再持有 .naoku.db 连接（resetNaoku 已从换根链移除），改为重置数据门状态
+  expect(httpSrc16.includes('resetPaperIndex()') && httpSrc16.includes('resetPoolDb()')).toBe(true)
+  expect(httpSrc16.includes('resetGateState()'), '换根未重置数据门（旧根冷却会阻塞新根摄入）').toBe(true)
+  expect(httpSrc16.includes("kgCache.invalidate({ domain: 'graph' })")).toBe(true)
+  expect(httpSrc16.includes('resetTuxing()')).toBe(true)
 })
 
-test('SMOKE-RP-06 图谱缓存按 wsKey 分槽（跨项目隔离 · cycle-17）', () => {
+test('SMOKE-RP-06 图谱缓存按 wsKey 分槽（跨项目隔离 · cycle-17 / 统一缓存层 cycle-60）', () => {
+  const cacheSrc = readSrc('src/server/cache.ts')
   const httpSrc16 = readSrc('src/server/http.ts')
-  expect(httpSrc16.includes('const graphCache = new Map') && /wsKey/.test(httpSrc16)).toBe(true)
+  // 键派生单一事实源必须含 domain|ws|root 三维度；graphSnapshot 调用传 wsKey+root
+  expect(cacheSrc.includes('`${d.domain}|${ws}|${root}|${stableParams(d.params)}`')).toBe(true)
+  expect(/domain: 'graph', ws: domains\.store\.wsKey\(wsRaw\), root: domains\.root/.test(httpSrc16)).toBe(true)
+  // 防裸 Map 缓存复辟（跨租户污染 R20）
+  expect(/const graphCache = new Map/.test(httpSrc16)).toBe(false)
 })
 
 test('SMOKE-RP-05 manifest 声明 /api/repos* 端点 + client 接线 + combo 前缀纪律', () => {

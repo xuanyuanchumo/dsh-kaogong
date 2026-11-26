@@ -15,13 +15,14 @@
  * 崩溃安全：输入形状不符一律返回 { error }（HTTP 200），绝不向路由层冒泡。
  */
 
-const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
+import { weaknessWeight } from '../shared/kernel.js'
 
-/** 模块弱度：1/(rate+0.15)（SRS 同源；无数据模块给最高弱度 1/0.15≈6.67——新模块优先接触） */
-function weaknessOf(rate: any): number {
-  const r = (typeof rate === 'number' && isFinite(rate)) ? Math.max(0, Math.min(1, rate)) : 0
-  return 1 / (r + 0.15)
-}
+const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
+/**
+ * 模块弱度：复用 kernel 弱点公式（cycle-50 收敛）——无数据模块给 rate=0 →
+ * 最高弱度 1/0.15≈6.67（新模块优先接触；此先验是排程业务语义，显式保留在调用侧）。
+ */
+const weaknessOf = (rate: any): number => weaknessWeight(rate == null ? 0 : rate)
 
 /**
  * 智能排程：输入 plan 结构（parsePlanStructure 输出：phases/days）+ 画像

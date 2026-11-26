@@ -14,20 +14,24 @@ build:
   build_cmd: "npm run build"
   typecheck_cmd: "npm run typecheck"
   lint_cmd: "npm run lint"
-  test_cmd: "node smoke.test.mjs"
-  coverage_cmd: "node --check src/server/http.js"
-  e2e_cmd: "node smoke.test.mjs"
-  hygiene_cmd: "node -e \"const fs=require('fs');const t=fs.readFileSync('smoke.test.mjs','utf8');process.exit(t.includes('PROJ_A')&&t.length>500?0:1)\""
+  # cycle-47 分域收官：根目录 smoke.test.mjs / render.test.mjs 已退役为 legacy-*.bak，
+  # 断言全部迁入 tests/** 由 vitest 聚合。所有命令必须与 package.json npm scripts 同源
+  # （cycle-20 P0 教训：配置里复制裸/陈旧命令 = 门禁形同虚设）。
+  test_cmd: "npm run test:vitest"
+  coverage_cmd: "npm run typecheck"
+  e2e_cmd: "node tests/e2e/loader.test.mjs"
+  hygiene_cmd: "npm run hooks:check"
 
+# cycle-47 分域收官：test_pattern 指向真实分域文件（旧 smoke.test.mjs 已退役）。
 layers:
   - name: "Server"
-    test_pattern: "smoke.test.mjs"
+    test_pattern: "tests/smoke/core.test.mjs"
     coverage_target: 80
   - name: "Manifest"
-    test_pattern: "smoke.test.mjs"
+    test_pattern: "tests/smoke/guards.test.mjs"
     coverage_target: 90
   - name: "Contract"
-    test_pattern: "smoke.test.mjs"
+    test_pattern: "tests/smoke/client-arch.test.mjs"
     coverage_target: 100
 
 # 评估维度（与全生命周期评审体系映射）
@@ -44,7 +48,7 @@ evaluation:
     checklist_ref: ""   # sidebar-right 契约：tabs.register + keyed slot + guide 函数式字段；ToolDefinition.output
   E3:
     name: "测试覆盖"
-    checklist_ref: ""   # smoke.test.mjs 24 项断言（信标/adopt/隔离/图谱/遥测/崩溃安全）
+    checklist_ref: ""   # tests/** 分域 276 断言（vitest）+ loader 17 断言（信标/adopt/隔离/图谱/遥测/崩溃安全）
   E4:
     name: "代码质量"
     checklist_ref: ""   # 零依赖 · 中文注释 · 模块化（manifest 单一事实源） · 无 TODO/FIXME
@@ -56,27 +60,29 @@ evaluation:
     checklist_ref: ""   # 仅绑定 127.0.0.1 · 无 eval · 路径穿越由 slug 过滤 · 崩溃隔离(catch 全路径)
   E7:
     name: "文档同步"
-    checklist_ref: ""   # README 与 v1.1 双端架构一致
+    checklist_ref: ""   # README 与 v1.32 双端架构一致 + docs/facts.json 事实源新鲜度门
   E8:
     name: "回归完整性"
     checklist_ref: ""   # adopt 复用 · 端口降级 · 命名空间不互染 · 信标兼容
 
 journeys:
+  # cycle-47 分域收官：journey 断言迁入 tests/**，test_files 必须指向真实存在的
+  # 分域文件（G2 journey_coverage 会校验文件存在；旧 smoke.test.mjs 已退役）。
   J1:
     name: "刷题主链路"
     forward: "发现端口 → 选模块 → 抽题 → 作答 → 判分 → 进度入库(按ws)"
     reverse: "模块无题、重复提交、跨命名空间不污染"
-    test_files: ["smoke.test.mjs"]
+    test_files: ["tests/smoke/core.test.mjs", "tests/smoke/srs.test.mjs", "tests/smoke/history.test.mjs"]
   J2:
     name: "Sidebar 入口链路"
     forward: "client.js 注册 tab → guide 入口 → iframe 挂载"
     reverse: "服务未起时的降级提示、CSP 兜底"
-    test_files: ["smoke.test.mjs"]
+    test_files: ["tests/smoke/client-arch.test.mjs", "tests/render/smoke-journey.test.mjs"]
   J3:
     name: "崩溃安全链路"
     forward: "startServer async → 错误捕获 → 端口降级/adopt"
     reverse: "外部占用 8400 时不裸抛 EADDRINUSE"
-    test_files: ["smoke.test.mjs"]
+    test_files: ["tests/smoke/client-arch.test.mjs", "tests/e2e/loader.test.mjs"]
 
 gates:
   G0:

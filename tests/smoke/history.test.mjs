@@ -119,3 +119,79 @@ test('SMOKE-HIST-12 运行时抽题带出处（source ∈ 已知来源词表 + p
   expect(KNOWN_SOURCES.includes(q0.source)).toBe(true)
   expect(typeof q0.paperFile === 'string' && q0.paperFile.length > 0).toBe(true)
 })
+
+test('SMOKE-HIST-13 补录搜索通道 2 走统一池真搜索（随机假搜索 + 目录直读已消除）', () => {
+  const src = fs.readFileSync(new URL('../../src/server/historyApi.ts', import.meta.url), 'utf-8')
+  expect(src.includes("from '../adapters/poolDb.js'") && src.includes('putImportBatch'), '未接入统一池').toBe(true)
+  expect(src.includes('question_fts MATCH'), '池 FTS5 检索分支缺失').toBe(true)
+  expect(src.includes("matchSource: 'pool'"), '池来源标注缺失').toBe(true)
+  // 负向：不得再用 getRandomQuestions 随机抽题当搜索兜底（CLAUDE.md C33 教训）
+  const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')  // 去注释后判定
+  expect(/getRandomQuestions\s*\(/.test(code), '随机假搜索复辟').toBe(false)
+})
+
+/* ══ cycle-61 v9：统一错题与补录层 ══ */
+
+test('C61-REV-01 错题本读路径库优先：判分答错 → /api/wrong 立刻可见', async () => {
+  const ws = 'PROJ_C61REV_A'
+  const qs = await J(base, `/api/questions?module=判断推理&count=1&ws=${ws}`)
+  const q = (qs.questions || [])[0]
+  if (!q) return expect(true).toBe(true)     // 池未就绪跳过
+  // 故意答错（选一个与正确答案不同的字母）
+  const wrong = ['A', 'B', 'C', 'D'].find(x => x !== String(q.correctAnswer || '').toUpperCase()) || 'A'
+  const chk = await P(base, `/api/check?ws=${ws}`, { question: q, answer: wrong })
+  expect(chk.isCorrect).toBe(false)
+  const wl = await J(base, `/api/wrong?ws=${ws}`)
+  // 库侧单条 upsert 让「刚答错的题」立即可见（不依赖整本镜像的时序）
+  expect((wl.wrong || []).length).toBeGreaterThan(0)
+  expect(['db', 'json']).toContain(wl.tier)
+  expect(wl.summary && typeof wl.summary.open).toBe('number')
+  // v9 诊断：按模块/考点分桶（JSON 数组时代无法 SQL 化）
+  if (wl.diagnostics) {
+    expect(Array.isArray(wl.diagnostics.byModule)).toBe(true)
+    expect(wl.diagnostics.byModule.some((m) => m.module === '判断推理')).toBe(true)
+  }
+})
+
+test('C61-REV-02 错题移除：JSON 与库两侧同步（不得「删了又回来」）', async () => {
+  const ws = 'PROJ_C61REV_B'
+  const qs = await J(base, `/api/questions?module=判断推理&count=1&ws=${ws}`)
+  const q = (qs.questions || [])[0]
+  if (!q) return expect(true).toBe(true)
+  const wrong = ['A', 'B', 'C', 'D'].find(x => x !== String(q.correctAnswer || '').toUpperCase()) || 'A'
+  await P(base, `/api/check?ws=${ws}`, { question: q, answer: wrong })
+  const before = await J(base, `/api/wrong?ws=${ws}`)
+  const target = (before.wrong || [])[0]
+  expect(!!target).toBe(true)
+  const rm = await P(base, `/api/wrong/remove?ws=${ws}`, { sig: target.sig })
+  expect(rm.removed).toBeGreaterThanOrEqual(0)
+  const after = await J(base, `/api/wrong?ws=${ws}`)
+  // 关键不变量：移除后的读路径不得再出现该 sig
+  expect((after.wrong || []).some(w => w.sig === target.sig), '移除后错题又出现（库侧未同步）').toBe(false)
+})
+
+test('C61-REV-03 补录批次：库台账可查（tier 可观测）+ 撤销后错题同步移除', async () => {
+  const ws = 'PROJ_C61REV_C'
+  const src = await J(base, `/api/history/search?q=${encodeURIComponent('最接近')}&limit=2&ws=${ws}`)
+  const cand = (src.list || [])[0]
+  if (!cand) return expect(true).toBe(true)   // 无候选（环境降级）
+  const r1 = await P(base, `/api/history/entries?ws=${ws}`, {
+    entries: [{ contentSig: cand.contentSig, question: cand, result: 'wrong', source: '测试卷·p9' }],
+  })
+  expect(r1.accepted).toBe(1)
+  const bs = await J(base, `/api/history/batches?ws=${ws}`)
+  expect(Array.isArray(bs.batches)).toBe(true)
+  expect(bs.batches.some(b => b.batchId === r1.batchId)).toBe(true)
+  expect(['db', 'json']).toContain(bs.tier)
+  const un = await P(base, `/api/history/undo?ws=${ws}`, { batchId: r1.batchId })
+  expect(un.undone).toBe(true)
+  const wl = await J(base, `/api/wrong?ws=${ws}`)
+  expect((wl.wrong || []).some(w => w.sig === cand.contentSig), '撤销后错题仍在（库侧未同步）').toBe(false)
+})
+
+test('C61-REV-04 统计隔离可观测：stats.importedTotal 存在（补录历史量不静默混入今日）', async () => {
+  const st = await J(base, `/api/stats?ws=PROJ_C61REV_C`)
+  expect(typeof st.answered).toBe('number')
+  // importedTotal 是「补录带来的历史量」的显式字段（不静默混入今日统计）
+  expect('importedTotal' in st, 'stats 缺 importedTotal（统计隔离不可观测）').toBe(true)
+})

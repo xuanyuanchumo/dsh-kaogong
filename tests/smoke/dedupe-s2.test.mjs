@@ -38,11 +38,12 @@ test('SMOKE-DEDUPE-02/03 归并保留出处 + 解析多版本（表 + putAnalysi
     implD.includes('putAnalysis(db, canon,') && implD.includes('putAnalysis(db, mergeTarget,')).toBe(true)
 })
 
-test('SMOKE-DEDUPE-04 schema ≥v4 语义版本门（运行时：question_analysis 表在列 + ≥4）', async () => {
-  const pdbD = readSrc('src/adapters/poolDb.ts')
+test('SMOKE-DEDUPE-04 schema 语义版本门（运行时：question_analysis 表在列 + ≥4）', async () => {
+  const shapeD = readSrc('src/shared/storage.ts')
   const psD = await h.J('/api/pool/status?ws=PROJ_VTEST_DD')
   expect(Array.isArray(psD.tables) && psD.tables.includes('question_analysis')).toBe(true)
-  expect(/POOL_SCHEMA_VERSION = (4|5)/.test(pdbD) && (psD.schemaVersion || 0) >= 4).toBe(true)
+  // v9：版本常量收敛到 shared/storage（单一事实源），运行态值必须 ≥ 声明基线
+  expect(/POOL_SCHEMA_VERSION = (9|1\d)/.test(shapeD) && (psD.schemaVersion || 0) >= 9).toBe(true)
 })
 
 test('SMOKE-DEDUPE-05 解析多版本端点（analysis-versions 声明 + 运行时可达 + 聚合展示）', () => {

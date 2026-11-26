@@ -17,6 +17,10 @@
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
+// cycle-49 内核收敛：分位函数改用 shared/kernel 单一事实源
+//（原本地 percentile 与 methodologyApi.ts 逐字重复，现删除）。
+import { percentile, ringPush } from '../shared/kernel.js'
+
 /** 单端点统计（环形延迟样本 + 计数） */
 export interface EpStat { count: number; errors: number; lat: number[]; lastTs?: number }
 
@@ -56,18 +60,16 @@ export function recordRequest(telemetry: TelemetryState, path: any, ms: any, isE
   const t = (telemetry.endpoints[key] = telemetry.endpoints[key] || { count: 0, errors: 0, lat: [] })
   t.count++
   if (isError) t.errors++
-  t.lat.push(Math.round(ms))
-  if (t.lat.length > LAT_RING) t.lat.shift()
+  ringPush(t.lat, Math.round(ms), LAT_RING)
   t.lastTs = Date.now()
-  telemetry.requests.push(t.lastTs)
-  if (telemetry.requests.length > 1000) telemetry.requests.shift()
+  ringPush(telemetry.requests, t.lastTs, 1000)
 }
 
-/** 有序统计分位（输入须已排序） */
-export function percentile(sorted: number[], p: number): number {
-  if (!sorted.length) return 0
-  return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]
-}
+/**
+ * percentile 由 shared/kernel.ts 导出；此处保留 re-export 以维持既有 import 兼容
+ *（tests 与其它模块可能从 telemetry 直接引用，verbatimModuleSyntax 保证纯类型/重导出擦除可控）。
+ */
+export { percentile } from '../shared/kernel.js'
 
 /**
  * 遥测快照（端点表 + 全局直方图 + 慢端点排行 + 告警）。
