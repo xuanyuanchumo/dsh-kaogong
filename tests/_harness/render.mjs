@@ -11,9 +11,30 @@
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { resolve } = require('node:path')
-const devModules = resolve(process.cwd(), '..', '_kgtest', 'node_modules')
-const React = require(resolve(devModules, 'react'))
-const TestRenderer = require(resolve(devModules, 'react-test-renderer'))
+// React 解析顺序：**本仓 node_modules 优先** → 回退开发机 ../_kgtest/node_modules。
+//
+// 背景（cycle-62 CI 修复）：原实现硬编码开发机路径 '../_kgtest/node_modules'，
+// CI runner 上不存在 → 7 个 render 旅程文件整体失败（CI 自 2026-11-21 起持续红）。
+// 修法 = React/react-test-renderer 进 devDependencies（**不进运行时依赖面**：
+// package.json dependencies 仍为空，零 npm 运行时依赖特征不变），
+// harness 改为「本仓优先 · 开发机回退」——CI 用本仓，本地零安装也能用回退路径。
+const devCandidates = [
+  resolve(process.cwd(), 'node_modules'),
+  resolve(process.cwd(), '..', '_kgtest', 'node_modules'),
+]
+function requireDev(name) {
+  let lastErr = null
+  for (const base of devCandidates) {
+    try { return require(resolve(base, name)) } catch (e) { lastErr = e }
+  }
+  throw new Error(
+    `[render-harness] 无法加载 ${name}：已尝试 ${devCandidates.join(' / ')}。` +
+    '请执行 npm install（React/react-test-renderer 为 devDependencies）。原始错误：' +
+    String((lastErr && lastErr.message) || lastErr),
+  )
+}
+const React = requireDev('react')
+const TestRenderer = requireDev('react-test-renderer')
 const { act } = TestRenderer
 
 let pass = 0, fail = 0
