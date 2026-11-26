@@ -28,7 +28,7 @@ icon: https://raw.githubusercontent.com/xuanyuanchumo/dsh-kaogong/main/assets/ic
 
 ## 2. category 取值决策
 
-**上游实际取 `tools`**（维护者决定）——与「提供工具面板与 API」的定位一致；本插件 6 个宿主工具 + 78 个 HTTP 端点
+**上游实际取 `tools`**（维护者决定）——与「提供工具面板与 API」的定位一致；本插件 6 个宿主工具 + 82 个 HTTP 端点
 属工具类。`usage`/`skill`/`docs` 的取舍已由上游定案，无需再争。
 
 > contributing.md 明确「分类选得不够准的，维护者会直接改，不会打回」——此处取最贴近者即可。
@@ -39,7 +39,7 @@ icon: https://raw.githubusercontent.com/xuanyuanchumo/dsh-kaogong/main/assets/ic
 |---|---|---|
 | `package.json` 声明 `dsh.bundle`（非仅 `dsh.client`） | ✅ | `dsh.bundle.patch = ./cordis.patch.yml` |
 | 仓库根有 `cordis.patch.yml` | ✅ | `insert: [{id: kaogong, name: dsh-kaogong}]` |
-| 仓库有真实可用代码 | ✅ | 174 源文件 / 78 端点 / 6 工具 / 16 视图 |
+| 仓库有真实可用代码 | ✅ | 72 源文件（`src/**/*.ts(x)`）· 82 端点 · 6 工具 · 16 视图 |
 | 仓库创建满 1 天 | ✅ | 2026-11 前创建（CI 自动查） |
 | 添加 `dsh-plugin` topic | ✅ | topics: `dsh-plugin` / `civil-service` / `deepseek-harness` / `exam` / `kaogong` |
 | 描述属实（数字可对代码核对） | ✅ | 16 仓库（REPOS）· 1,683 卷（paperIndex）· 25 篇（HUASHENG13_META）· 6 工具 · 16 视图 |

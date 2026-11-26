@@ -1,11 +1,11 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.32.0
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.34.0
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-listed-6366f1)](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
 [![offline-first](https://img.shields.io/badge/offline-100%25-10b981)](#-快速开始3-步)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
-[![tests](https://img.shields.io/badge/tests-vitest%20276%20%C3%97%2035%20files-10b981)](#-开发与验证)
+[![tests](https://img.shields.io/badge/tests-vitest%20411%20%C3%97%2050%20files-10b981)](#-开发与验证)
 
 > **一句话**：把 **16 个**优秀开源考公仓库整合为 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）宿主内的**原生**学习平台 ——
 > 刷题 / SRS 错题本 / 真题卷 / 整卷模考 / 申论评改 / **花生十三体系方法论** / 可交互知识图谱 / 白盒可观测，**完全离线可用**。
@@ -156,7 +156,7 @@ plugin_manager remove_bundle dsh-kaogong     # 仅移除插件
 git --version                     # 题库管理前置
 # 插件侧：确认版本与能力注册
 curl -s http://127.0.0.1:51093/kaogong/api/capabilities | head -c 300
-# 预期含 "version":"1.31.0"、6 个工具、78 个端点
+# 预期含 "version":"1.34.0"、6 个工具、82 个端点
 ```
 
 界面自检：左栏出现「📚 考公学习」图标 → 点击进入 → 「📦 题库管理」显示仓库清单（16 项）即正常。
@@ -166,7 +166,7 @@ curl -s http://127.0.0.1:51093/kaogong/api/capabilities | head -c 300
 | | |
 |---|---|
 | 🏠 **宿主原生** | DSH Web GUI 双入口：左栏「考公学习」全屏沉浸面板 + 右侧 Sidebar 并排标签；同源路由零 CORS，**非 iframe** |
-| 🗄️ **统一题目池** | **`.kaogong.db` 项目自有知识库**（v1.30）：27,506 题 + **222,894 条关系边** + 59,093 处出处 · **跨源去重聚合**（同一道题多源出现 → 合并为 1 条 + 列出 N 处出处）· **FTS5 中文全文检索**（19–38ms）· **分层抽题**（复用 SRS 弱点权重）· 白盒健康快照（8 项质量指标，判据来自 SQL）· **可重建**（上游只读，全量重建 41s） |
+| 🗄️ **统一题目池** | **`.kaogong.db` 项目自有知识库**（v1.31 起）：**86,454 题**（跨源内容级去重，140,465 → 86,454，−38.4%）+ **570,187 条关系边** + **229,732 处出处** + **141,121 行解析多版本**（保留差异并溯源到 source_id）· **跨源聚合**（34,204 题跨源出现 → 合并为 1 条 + 列出 N 处出处）· **FTS5 中文全文检索**（19–38ms）· **分层抽题**（复用 SRS 弱点权重）· 白盒健康快照（8 项质量指标，判据来自 SQL）· **可重建**（上游只读；v1.34 起重建跑 **worker 线程**，全量重建期间宿主零阻塞、读请求走只读连接照常服务） |
 | 📦 **一键式题库管理** | 必选/推荐/可选三级分装 · `git` 浅克隆/更新/删除 · 目录浏览 · 自定义数据根 · 镜像代理 · 作业实时日志与取消 · **「关于本项目」卡**（GitHub/Release/Issue/npm 一键跳转） |
 | 🔒 **跨项目隔离** | 进度 / 专项记忆 / 图谱缓存 / 方法论链路计数全部按工作区命名空间分槽——不同项目互不污染；Windows 子进程静默（`windowsHide`，无控制台闪现） |
 | ✏️ **智能刷题** | 58,890 题行测真题 · 五箱 SRS 错题本（答错收集 → 回炉升箱 → 掌握）· 弱点加权抽题 · 键盘流 |
@@ -352,11 +352,11 @@ src/
 ## 🧪 开发与验证
 
 ```bash
-npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 17 模块为宿主单 combo → assert-combo 终检
-npm run test:all     # 单命令全链：build → 真实 Cordis Loader e2e（17 断言，三层隔离）→ vitest 分域 276 断言
-                     # tests/ 分域体系：unit（纯函数直测）/ smoke（27 域端点契约+静态守卫）/ render（7 旅程真实 React）/ e2e（loader）
+npm run build        # tsc 类型门 → scripts/bundle-client.mjs 合并 25 模块为宿主单 combo → assert-combo 终检
+npm run test:all     # 单命令全链：build → 真实 Cordis Loader e2e（17 断言，三层隔离）→ vitest 分域 411 断言
+                     # tests/ 分域体系：unit（纯函数直测）/ smoke（多域端点契约+静态守卫）/ render（多旅程真实 React）/ e2e（loader）
                      # 覆盖：SRS 闭环/图谱算法确定性/题库管理/方法论 HS13/工具展示契约/打包卫生 R28/
-                     # 真题卷三模式/白盒面板/记忆横幅/数据外置/补录旅程/幽灵视图——旧 4173 行双单文件已分域退役
+                     # 真题卷三模式/白盒面板/记忆横幅/数据外置/补录旅程/重建安全 C61——旧 4173 行双单文件已分域退役
 ```
 
 **沙箱验证（禁主力直测）**：`node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`
@@ -382,9 +382,9 @@ ANIC 质量流程：`.cycles/`（intent → spec → plan → G0–G3 门禁 →
 | **GitHub** | [xuanyuanchumo/dsh-kaogong](https://github.com/xuanyuanchumo/dsh-kaogong)（topic `dsh-plugin`） | 源码安装 / issue 反馈 |
 | **市场卡片** | `icon-180.png`（GitHub 托管位图）+ `screenshots.json`（4 图） | 符合市场图标与截图规范 |
 
-**能力事实（维护者可对代码核对）**：**78** 个 HTTP 端点 · **6** 个宿主工具 · **16** 个视图 ·
+**能力事实（维护者可对代码核对）**：**82** 个 HTTP 端点 · **6** 个宿主工具 · **16** 个视图 ·
 **16** 个上游仓库（按需安装）· 统一题库池 **86,454** 题 / **229,732** 出处行 / **141,121** 解析版本 ·
-测试 **vitest 276 断言 × 35 分域文件**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
+测试 **vitest 411 断言 × 50 分域文件**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
 与 `docs/facts.json`（文档事实源，`node scripts/docs/gen-facts.mjs` 自动生成）实测得出，不随文案改动。
 
 ## ⚖️ 许可与免责

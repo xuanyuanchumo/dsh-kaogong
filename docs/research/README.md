@@ -22,6 +22,9 @@
 | 题库和关系怎么统一入库 | [13-kaogong-db统一知识库.md](13-kaogong-db统一知识库.md) | 统一边表关系 + 可重建派生库 | `adapters/naoku.ts` `server/http.ts` |
 | 什么算本项目内核/边界在哪 | [14-内核边界契约.md](14-内核边界契约.md) | 四层依赖 + 六条不变量 | `adapters/repoData.ts` `server/http.ts` |
 | **四篇怎么合起来做** | [15-全局整合分析.md](15-全局整合分析.md) | 统一口径 + 单条主线 + 一致性核对 | 全部 `src/**` |
+| **统一架构的数学模型总纲** | [25-统一架构的数学模型与数据结构.md](25-统一架构的数学模型与数据结构.md) | canonical 身份 + 统一边图 + 租户分区 + 新鲜度单调闸门 + 四维缓存键 | `poolDb.ts` `kernel.ts` `cache.ts` `poolObservability.ts` |
+| **v9 统一架构（六层收敛）** | [26-统一架构数学模型v9.md](26-统一架构数学模型v9.md) | 域五元组 + 检索信封 + 键空间·失效图 + 配额函数 + 权威库·镜像 + 视图注册表 | `shared/domains.ts` `server/dataGate.ts` `server/cache.ts` `server/dataEvents.ts` `shared/kernel.ts` `server/reviewStore.ts` `client/view-registry.ts` |
+| **v9 数据层库表设计** | [27-数据层库表设计v9.md](27-数据层库表设计v9.md) | 派生/用户/控制三分组 + 26 表设计依据 + 7 条迁移纪律 + 3 条扩展路径 | `shared/storage.ts` `adapters/poolDb.ts` `server/reviewStore.ts` |
 
 ## 🏗 架构升级总纲（cycle-35 · 11~15 五篇合读）
 

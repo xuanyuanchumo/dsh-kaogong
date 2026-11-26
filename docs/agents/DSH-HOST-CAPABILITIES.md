@@ -52,3 +52,18 @@
 3. 需要跨会话状态吗？→ `?ws=` 命名空间 + `data/progress/`
 4. 需要长期数据吗？→ 适配器只读 + 磁盘快照
 5. 会崩溃宿主吗？→ 先沙箱（`sb-kaogong`）验证，再动主力
+
+## 五、cycle-58 DSH 规范符合度审计（对照 dsh-plugin-dev-kb）
+
+依据知识库 `site/reference/subsystems/tools.md` + `client-modules.md` 对本轮全部改动逐条核对：
+
+| 规范条目（KB 原文口径） | 本项目状态 | 证据 |
+|---|---|---|
+| `ToolDefinition.output` 必需 `{schema, render}`，`render` 是纯投影、绝不泄漏到模型请求 | ✅ 6 工具全量 `output: textOutput`；render 防御式读取（cycle-58 加固：value 非对象时降级空文本，不抛错） | `src/host/index.ts:37-42` |
+| `presentCall/presentResult` 必须是 total 纯函数（live streaming + session-log replay 反复调用，只依赖入参） | ✅ 双 try/catch 收敛 undefined = 保留宿主兜底 | `src/host/index.ts:52-73` |
+| client combo factory（`window.__ModuleLoader__.load` + `return {inject,apply}`），禁裸 ESM | ✅ 22 模块拓扑序合并 + assert-combo 硬守卫；行首 import/export = 0 | `scripts/bundle-client.mjs` / `scripts/assert-combo.mjs` |
+| `ctx.inject(['webServer'], cb)` 处理懒到达服务 | ✅ 同源路由经 inject；R10 已根治首启 404 | `src/host/index.ts:100` |
+| sidebar 双注册 + guide 函数式字段 | ✅ 左栏 panellist/main + 右栏 tabs/keyed slot，guide 字段函数式 | `src/client/client.tsx` |
+| 全组合唯一 `require('react')` 在 ui-kit | ✅ 其余模块 import {React,h} from ui-kit；jsx:"react" classic runtime | `tsconfig.json` / `ui-kit.tsx:11` |
+
+**结论**：本轮改动未引入规范漂移；`output.render` 的 total 防御为本次审计新增加固点。KB 版本感知横幅提示镜像与宿主可能有差异——最终结论仍以 loader 真机 17/17 + combo 守卫为准。

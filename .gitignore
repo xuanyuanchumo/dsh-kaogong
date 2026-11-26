@@ -38,3 +38,14 @@ pnpm-lock.yaml
 smoke.test.mjs
 render.test.mjs
 legacy-*.test.mjs.bak
+
+# 本地 ANIC 技能 overlay（宿主侧安装物，非发布内容）
+.dsh/
+.codegraph-visualizer/
+
+# 一次性诊断/探针脚本（本地排查用，含开发机绝对路径，禁止入库）
+av-verify.mjs
+diag-db*.mjs
+dup-probe*.mjs
+dup-final.mjs
+img0*-*.mjs

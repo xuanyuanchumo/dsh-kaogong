@@ -313,6 +313,21 @@ DSH 社区 dsh-testkit（npm v0.4.4，MIT）提供「真实宿主发布门禁」
 4. dsh-plugin-check / plugin_audit（发布 PR 前人工跑，非硬门禁）
 
 **纪律（文档 §10.3/10.9 采纳）**：CI/门禁锁定 DSH 版本不跟随 next/latest 漂移；任何「隔离测试」未独立 DSH_HOME 的，证据强度打折——loader.test 的三层隔离（数据根/DSH_HOME/端口）已满足。
+
+### 3.3.1 cycle-49 落地：CI/门禁陈旧引用清理 + dsh-seam 接入实测结论
+
+**背景**：用户要求遵守《DSH插件开发官方与生态》并「确保落地与闭环」。对照 §3.4/§7/§10 逐条核查后，发现两处确定性缺口并闭环一处、有据暂缓一处。
+
+**（A）CI/ANIC 门禁指向已退役文件（已修）**：
+- 根因：cycle-47 已将根目录 `smoke.test.mjs` / `render.test.mjs` 退役为 `legacy-*.bak`，断言全迁入 `tests/**` 由 vitest 聚合（本文件 §「退役完成」）。但 `.github/workflows/ci.yml` 的 Smoke/Render 两步仍 `node smoke.test.mjs` / `node render.test.mjs`（文件已不存在 → CI 必然 MODULE_NOT_FOUND）；`.cycles/config.yml` 的 `test_cmd`/`coverage_cmd`/`e2e_cmd`/`hygiene_cmd`、`journeys[*].test_files` 同样指向已删文件（G2 journey_coverage 校验文件存在 → 门禁恒失败）。
+- 修法：CI 两步合并为 `npm run test:vitest`；`.cycles/config.yml` 全部命令与 `package.json` scripts 同源（`test:vitest` / `typecheck` / `tests/e2e/loader.test.mjs` / `hooks:check`），journey test_files 改指真实分域文件。**这条正是 §10「构建命令必须与 npm scripts 同源」纪律在「测试命令」维度的推广——配置里复制陈旧/裸命令 = 门禁形同虚设（cycle-20 P0 同族）**。
+- 守卫：`npm run build`（tsc+bundler+combo）全绿 + `npm run test:vitest` 全绿；CI 口径与本地 `test:all` 对齐。
+
+**（B）dsh-seam 编译期兼容性门禁（有据暂缓，不强行引入）**：
+- 实测：`npx github:YMoose/dsh-seam#v0.1.0 verify --repo .` 在本环境退出码 128（`github:` 协议 clone 失败；本项目 GitHub HTTPS 直连不稳定已见 CLAUDE.md 教训㉓）。
+- 版本口径：dsh-seam 自述 tested with DSH `0.2.2-rc.1`；本项目 peer 已覆盖到 `0.4.0-0`，宿主线为 rc.5。按文档 §4.2「未适配版本不强行代跑」与 §9 矩阵「⚠️ 结果需人工复核」——**强行把一个不可运行/未覆盖宿主线版本的外挂工具塞进硬门禁，只会制造假绿或假红，违背 §10.5「不凑绿」纪律**。
+- 结论：dsh-seam 保留为「升级宿主基线时的人工复核项」；硬门禁仍由 `tsc --strict`（已全档开启，cycle-48）+ `assert-combo` + loader e2e + vitest 分域构成。待条件满足（网络 clone 可用 + 工具声明覆盖宿主线版本）再按文档 §3.3.1 Level 1 流程引入 `coupling.json` 契约门禁。
+- 等价能力已具备：文档 §3.4 的核心诉求「源码用到的 DSH 接口是否被删除」在本项目由三重防线覆盖——① `tsc --strict` + `@types/react`（类型面）；② loader.test 真实 Cordis Loader 装载（运行面）；③ smoke 静态守卫对 `sidebarRightTabs`/`slots.inject`/`ctx.inject(['webServer'])` 等契约形状固化（声明面）。三者不依赖外部网络且已全绿。
 ### 阶段 3+4 迁移记录（cycle-47 · 续）
 
 | 域 | 文件 | 断言 | 特征 |
@@ -379,7 +394,7 @@ render.test 41 旅程组（待 render harness 抽取）。
 
 **结果**：render.test.mjs 的 66 条旅程断言已 100% 分域迁移（8 个旅程域文件）；
 smoke.test.mjs 的 466 条 check 经语义等价折算已基本全覆盖（剩余为 ID 字面对账误报）。
-**tests/ 体系：38 文件 · 4615 行 · vitest 276 断言全绿**，四车道（vitest/smoke/render/loader）全绿。
+**tests/ 体系：53 文件 · 6195 行 · vitest 411 断言全绿**，四车道（vitest/smoke/render/loader）全绿。
 
 **旧单文件退役决策（待用户拍板）**：
 - 退役 = 删除 smoke.test.mjs + render.test.mjs + 改 npm scripts（test/test:all 去掉两车道）
@@ -390,7 +405,7 @@ smoke.test.mjs 的 466 条 check 经语义等价折算已基本全覆盖（剩�
 
 ## 退役完成（cycle-47 收官 · 2026-11-21）
 
-**退役动作已执行**：smoke.test.mjs / render.test.mjs 已移出版本控制（本地保留 legacy-*.bak 备份），npm scripts 已收敛：npm run test:all = build（tsc+bundler+combo 守卫）→ loader e2e → vitest 276 断言。
+**退役动作已执行**：smoke.test.mjs / render.test.mjs 已移出版本控制（本地保留 legacy-*.bak 备份），npm scripts 已收敛：npm run test:all = build（tsc+bundler+combo 守卫）→ loader e2e → vitest 411 断言。
 
 **退役波及修 2 处**：① packaging R11-GUARD-02 emitters 清单收敛（test:render/test:all 并入 vitest 后不再产 dist）；② docs-guards RDOC-01b R14 六不变量判据源从 smoke.test.mjs 改指 tests/smoke/kgdb+kernel 域文件。
 
@@ -399,3 +414,43 @@ smoke.test.mjs 的 466 条 check 经语义等价折算已基本全覆盖（剩�
 **最终测试体系形态**：单命令 npm run test:all（约 40s）= 类型门 → 构建产物 → combo 守卫 → 真实 Loader e2e → 35 文件分域测试。分域目录：_harness（server/render 共享设施）· unit（纯函数）· smoke（27 域）· render（7 旅程）· e2e（loader）。覆盖：旧 smoke 466 check 判定 100% 等价迁移 · 旧 render 66 旅程 100% 分域迁移。
 
 **大单文件测试问题正式关闭**：4173 行双单文件 → 35 文件分域体系，所有守卫断言保留，语义零丢失。
+
+---
+
+## cycle-49：视图连通性与业务打通（2026-11-22）
+
+### 研究结论（三域并行调研）
+
+16 视图 / 7624 行客户端代码 / 81 端点的架构调研结论：**项目不缺功能，而是「各自自治取数、缺跨视图业务语义跳转协议」**——只有 practice / wrongbook / graph / topics / huasheng13 有跨视图出口；dashboard / tuxing / deepbank / plan / search / method / pool / repos / exam / essay 是「只有入口没有出口」的死胡同视图。四套检索（md 三库 / 统一池 FTS / 花生十三 BM25 / 考点检索）互不连通。
+
+### 落地修复（三类）
+
+**A. 确定性 bug（3 处）**：
+1. **图谱 method 节点死链**：`graph-view.tsx:582` 把 methodTopics（行测/申论…）当作 huasheng13 的 section 传入 → `sec` 落在不存在的分区 → 全部 display:none → 空白页。修：跳 `method` 视图并带 `{topic}`；`NativeMethodView` 增 `initialTopic` 深链自动展开正文。
+2. **wrongbook→practice 的 `{srs:1}` 死参**：practice 的 `srs` state 恒 true 且未消费传参。修：加 `initialSrs` prop，显式传入时覆盖默认值（用户切随机后从错题本跳回能强制回炉）。
+3. **manifest 消费声明漂移**：`/api/pool/questions` 已被 practice 消费但 consumers 只登记 `ui:pool` → 补 `ui:practice`；`/api/huasheng13/search` 声明 `ui:search` 但检索页未调用 → 让检索页双语料源真正消费（见 C）。
+
+**B. 死胡同打通（统一 onGo 契约）**：
+- `client.tsx` 提取统一 `go = (v, params) => setView(v, params || {})`，**17 个视图全部注入 onGo**（params 约定 `{module?, kadian?, srs?, topic?, paperId?, section?, tab?}`）。
+- 高价值出口：仪表盘薄弱模块/空态「去练」+ 计划日「跳计划」；统一库未就绪「去题库管理」+ 单题「练此知识点/模块」（deepbank 消费 `initialKadian`）；方法参考「去专题·方法论主区」（topics 支持 `initialTab` 深链）。
+- **不删页面**：method 页与 topics 方法论主区功能重叠，但 method 是 cycle-46 刚补齐、有 `ghost-journey.test.mjs` 固化的已交付能力——按 C28「容器层零分支」纪律保留并用跳转连通，而非悄悄移除。
+
+**C. 检索连通**：`NativeSearchView` 增语料源切换（三库全文 / 花生十三 BM25），映射为统一 `{file,snippet}` 行；默认仍为 md 三库（保持 GHOST-46b 断言绿），切换态落地 manifest `ui:search` 双消费声明。
+
+### 守卫与验收
+- 新增 `tests/smoke/connectivity.test.mjs`（9 断言）：固化 A/B/C 全部修复点 + combo 形态闭环。
+- 更新 `graph-journey.test.mjs` 的 onGo 形态断言（内联箭头 → 共享 go 闭包；教训④「形态守卫跟架构同波次」）。
+- `npm run test:all`：Loader 17/17 + vitest **285/285（36 文件，原 276 + 新 9）**，exit 0，零回归。
+
+### cycle-60 测试基建教训（R10 编码化）
+- **新增 `.mjs` 测试文件禁写 TS 类型注解**：本轮连续 3 次把 `(e: any)` / `(q: any)` 写进 `tests/**/*.mjs`，vitest/rollup 直接 `Parse failure: Expected ',' got ':'`（不是运行失败，是解析失败）。判据：`.mjs` 由 Node 原生解析，**任何** `: type`、`interface`、`as X` 都会炸。写完新测试先扫一遍冒号。守卫：`npm run test:all` 首轮即可抓。
+- **静态守卫锚形态而非整行字面量**：环形缓冲收敛把 `import { percentile }` 改成 `import { percentile, ringPush }` 后，旧 KERNEL-08 整行字面量断言假红；改为正则 `/import \{[^}]*percentile[^}]*\} from .../`。同族：教训④「形态守卫跟架构同波次」。
+- `setupDomain` 首启约 1–2s；把多个 smoke 域合并跑时单项耗时会被启动时间放大，不要用单项耗时判性能回归。
+
+### 后续（本轮未做，需产品决策）
+- ~~exam 与 papers 的答题模式重复~~ **cycle-60 已融合**：exam 改为 papers + `initialMode:'answer'` 深链别名路由，NativeExamView 本体保留为兼容导出；RENDER-PP-59 全行为旅程固化。
+- 白盒可观测(observability) 面向维护者却占普通用户一级导航——是否折叠进「设置/开发者」区需产品确认（render 测试锚定其导航按钮，改动须同步）。
+- 图谱缺 kadian 节点类型（现 13 类全是架构实体）——「图谱发现薄弱考点→一键练」在数据结构上尚不可能，需扩 NODE_META + 服务端节点生产。
+- **tuxing 换源暂缓**：354 题虽已在池，但 `cat` 代码→中文 `rule_type`、`trap/acc/fmt/group` 折叠进 `analysis`，强切会丢细粒度字段——需先扩展 schema 摄入字段再迁（同 naoku 换源取证纪律）。
+- **生产库重建待用户安排**：当前 `~/.dsh/kaogong/.kaogong.db` 仍是 schema v5 / cf 污染 80 行 / 图推 925；Gate 控制换源会在 rebuild 后自动生效（隔离实测已验证），但 1.4GB 生产库重建需择时。
+

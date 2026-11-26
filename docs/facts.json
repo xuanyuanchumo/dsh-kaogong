@@ -1,10 +1,10 @@
 {
   "_comment": "文档事实源（自动生成，勿手改）。生成：node scripts/docs/gen-facts.mjs",
   "_source": "dist/shared/manifest.js（运行时真值）+ package.json",
-  "_generatedAt": "2026-11-21 01:56:44",
-  "version": "1.31.0",
+  "_generatedAt": "2026-11-26 08:55:20",
+  "version": "1.34.0",
   "capabilities": {
-    "endpoints": 78,
+    "endpoints": 82,
     "tools": 6,
     "views": 16,
     "repos": 16

@@ -4,7 +4,7 @@
 
 ## Commands
 - Build/类型门: `npm run build`（**tsc + scripts/bundle-client.mjs**：类型错误阻断 + 多文件产物拓扑序合并为宿主要求的单 combo）。**改完 .ts 必须 build（宿主编织的是 dist），改完任何 src/client/*.ts 也必须 build（client 产物是 bundler 合并的，裸 tsc 会把 dist/client/client.js 重写回裸 ESM → 宿主拒绝加载）**
-- Test 全量: `npm run test:all` = build（tsc+bundler+combo 守卫）→ `tests/e2e/loader.test.mjs`（**17 断言**真实 Cordis Loader，三层隔离）→ `npx vitest run`（**276 断言 × 35 分域文件**：unit 纯函数直测 / smoke 27 域端点契约+静态守卫 / render 7 旅程真实 React——覆盖旧 smoke+render 全部语义，旧双单文件已退役为 legacy-*.bak）
+- Test 全量: `npm run test:all` = build（tsc+bundler+combo 守卫）→ `tests/e2e/loader.test.mjs`（**17 断言**真实 Cordis Loader，三层隔离）→ `npx vitest run`（**411 断言 × 50 分域文件**：unit 纯函数直测 / smoke 端点契约+静态守卫 / render 真实 React 旅程——覆盖旧 smoke+render 全部语义，旧双单文件已退役为 legacy-*.bak；tests/ 实存 53 文件 · 6195 行，e2e 与 harness 不计入 vitest）
 - **沙箱验证（禁主力直测）**: `node ../_dshcli/node_modules/@deepseek-ai/dsh/lib/bin.js --profile sb-kaogong --port 3181 --no-open`（token 行取 URL；插件崩只崩沙箱）
 - 热更新重载: `plugin_manager set_plugin include:kaogong enabled=false → true`（fiber 重挂载）
 - 安装/重装: `plugin_manager remove_bundle dsh-kaogong → install_bundle <绝对路径>`
@@ -282,3 +282,30 @@
 - **（部分索引的三条纪律）**：① 查询 WHERE 必须蕴含索引 WHERE（`LENGTH(x)>0` 不等价 `x!=''` → SQLite 不认，索引静默失效）；② **索引列必须包含查询所需全部列**（为省页宽漏取组键列 → L0 整层静默失效，MAT-02 假红实证）；③ ORDER BY 若与索引键序不一致，去 SQL 排序改内存（20ms 内），否则排序抵消索引收益（417→281ms）。
 - **（过度工程收口判定）**：L1 带图层 31.5ms（stem LIKE 前缀通配固有成本）曾试探四种方案（has_image 预筛/COUNT+OFFSET/候选快照/rich 部分索引），收益均 ≤30ms/请求且引入首建/一致性复杂度 → **保留现状**。**规矩：稳态 <100ms 的端点不再加缓存层；「研究实测 → 方案对比 → 收益/复杂度比 → 显式收口」四步走完才允许停手。**
 - **（性能研究基线·2026-11-21 实测）**：练习抽题稳态 88ms（L0 0.09 + L1 31.5 + L3 5 + 映射）/ 统一检索 18ms / 深度题库 12ms / 真题卷单卷 15ms / 方法论检索 4ms / 知识搜索 138ms（DFS 直读，低频可接受）/ 错题本·统计 1ms / 排程 2.5ms / 能力对账 6ms。全端点在 <150ms 预算内。
+
+## cycle-61 统一架构收敛（v1.33.0 · 六层收口）
+
+- **（v9 六层与不变量）**：数据层/数据门/检索/缓存/取题/错题补录/前端视图七件套全部收敛，模型与判据见 `docs/research/26-统一架构数学模型v9.md`，逐表设计见 `27-数据层库表设计v9.md`。七条不变量（I-DB-1/I-SEARCH-1·2/I-CACHE-1·2/配额守恒/ I-REVIEW-1/I-VIEW-1）**每条都有机器守卫**——凡新增同类能力，先问「它属于哪个模型、违反哪条不变量」。
+- **（㉟ 外源直读必须物理删除，不是门控）**：v8 用 `isPoolFresh()` 门控「换源」，回落分支照样留在运行期——于是「池未就绪」成为**静默正常路径**，功能时好时坏（用户报「装了题库功能不全」）。v9 正解 = 删掉回落，改 `dataGate.ensureDomain`：就绪→读库；未就绪→按域摄入→重读；仍不行→**结构化未就绪 + 可操作提示**。**教训：只要回落分支还在源码里，它迟早会被当成正常路径走上；「消除」必须是删除而非跳过。**
+- **（㊱ 新列索引不得写进建表脚本）**：`wrong_book` 的 `canonical_id/kadian/srs_due_at` 索引写进 `SCHEMA_SQL` → 旧库 `exec` 抛 `no such column` → `openPoolDb` 整库降级（`poolDbStatus.ready=false`，**所有域都读不到数据**，而 tsc/单测全绿）。修法：索引一律放 `applyPoolMigrations`。这是 cycle-60 R6 的**第二次踩**，现已有守卫（C60-06 对 `ix_q_paper` 与 `ix_wb_canon` 双断言）。
+- **（㊲ 重域摄入必须后台）**：实测 gwy-zhenti 首次摄入 **149s**（1683 卷 md 逐卷解析），naoku 数十秒；而 question/tuxing/method 均 <1s。把这种量级挂在 HTTP 请求上必然超时，用户只看到「请求失败」而不知道后台在装。正解 = `DomainSpec.ingestMode` 声明式区分：`sync`（秒级，请求内完成）/ `background`（立即返 `ingesting:true`，前端轮询 `/api/data-domains`）。**教训：等待策略是域的固有属性，不是全局配置——一刀切必然对一端错。**
+- **（㊳ 失效必须是单一触发点）**：失效钩子曾散在三处（statsCache / rebuildDomains / ensureDomain），每加一个缓存域都要在三处补一行。v9 = `server/dataEvents.ts` 的 `emitDataChanged(entity)`，门面沿 `INVALIDATION_GRAPH` 级联清，各模块本地快照经订阅者清。**守卫 `EVENT-05` 的覆盖性断言当场抓出两个真实缺口（`paperIndex`/`tuxing` 无人清）——说明不变量守卫不是形式主义。**
+- **（㊴ 同一数据两条路必须同形）**：`/api/pool/search` 直连正常，但 `/api/search/unified?provider=pool` **恒空**——根因是 registry 取 `ctx.pool` 而装配对象键名是 `poolApi`，异常被 catch 静默收敛成空信封。**教训：① 跨层取句柄用显式解析函数（`poolOf()`）并在取不到时响亮失败；② 单查与聚合必须同形（都带 `provider` 标注），否则消费方要写两套渲染，新源必漏（`C61-RT-01` 固化）。**
+- **（㊵ 空结果不缓存）**：检索信封进缓存后，「数据未入库导致的空」也被缓存 30s → 用户装好题库仍搜不到。**教训：缓存的前提必须是「结果与真相一致」；空结果有两种成因（真无命中 / 数据没来），后者不是可缓存的事实。**
+- **（㊶ 权威方向反转要同波次改所有写侧）**：错题本从「JSON 权威 + 库影子」反转为「库权威 + JSON 镜像」后，`/api/wrong/remove` 与 `/api/history/undo` 若只改 JSON，读路径会「删了又回来」。且 `mirrorProgressToDb` 的 INSERT 列清单没跟上 v9 新列 → 整本替换把 `origin_batch`/`historical` 洗成 NULL（补录来源消失）。**这是 cycle-43「整本替换会丢字段」的同族第 N 次验证：任何整本替换的列清单必须与 schema 同源对账。**
+- **（㊷ 配置与版本常量也要单一事实源）**：`POOL_SCHEMA_VERSION`/`POOL_DB_NAME`/表分组原本写在 `adapters/poolDb.ts`，但 client 侧也要用（白盒文案）——若从 poolDb import 会把 `node:fs` 拉进 combo。v9 外提到 `shared/storage.ts`（零依赖纯常量），poolDb re-export 保持既有 import 点零改动。**教训：跨半共享的常量放 shared，别让「方便」把 Node 内置模块拖进浏览器产物。**
+- **（㊸ 视图元数据三处漂移）**：导航数组、`VIEW_ROUTES`、manifest `CAPABILITIES.views` 三份清单靠人肉同步（幽灵视图/同名异键两族事故的总根源）。v9 = `client/view-registry.ts` 单一事实源，导航 `buildNavGroups()` 派生，守卫 `C61-VIEW-02` 做**双向对账**（元数据↔路由，缺任一方向都响）。**教训：元数据与运行时引用分离——组件引用留在路由表，展示属性全部进注册表。**
+- **（㊹ 测试锚点会随架构形态失效，必须同波次改）**：本轮重构导致 45 条断言假红，其中 **9 条是锚定已删除的回落分支**（KERNEL-05、C60-05/06/08~11、C33、FRESH-03/04、HIST-13）。修法 = 把断言从「旧形态」改写成「新契约」（如「目录回落保留」→「目录回落已物理删除」）。但**必须先去注释再断言**：源码注释里会引用已删除的旧通道作为历史说明，直接 grep 会把注释当复辟证据（本轮实测 `C60-FRESH-04` 因此假红）。**这是教训④（改架构同波次改测试锚点）在 v9 的第二次大规模应用。**
+
+## cycle-61b 重建与宿主隔离（v1.34.0 · 用户报「重建导致宿主功能失效」）
+
+- **（㊺ 同步调用栈无法被 await 让出）**：重建把「清库 + 1683 卷 + 27574 题」放在宿主 async 函数里，内部全是同步 `readFileSync`/`DatabaseSync` —— **`await` 只让出微任务，让不出已经进入的同步调用栈**。于是 `async () => { await rebuildPool() }` 照样冻结整个宿主（所有插件/会话/UI）。**正解 = worker 线程**（`poolRebuildWorker.ts`）。压测实证：全量 145s 期间 1208 次探针零失败、主线程事件循环最大阻塞 3ms。**教训：「异步函数」不等于「非阻塞」——判据是调用栈里有没有长同步段，不是有没有 async 关键字。**
+- **（㊻ 清库与重灌必须同事务）**：旧实现 `DELETE` 后立即 COMMIT，再逐源各自 COMMIT → 任一源失败留下残缺库。**故障注入实测**：源抛错后重建仍 `ok:true`，question 11649→11295（gk-tuxing 354 题被静默删除）。**教训：凡「先清空再重建」的流程，清空与重建必须同一事务；任何「部分成功」语义都要先问「失败时用户的数据还在吗」。**
+- **（㊼ 嵌套事务会提交外层）**：`withTx` 用 `try{BEGIN}catch{已在事务中}` 判断嵌套，末尾无条件 COMMIT → 内层 COMMIT 把**外层提前提交**，「整库原子」根本不可能成立。修法 = 按连接记录深度，只有 depth 0 才 BEGIN/COMMIT/ROLLBACK。**教训：事务门面的嵌套语义必须显式建模（深度计数），不能靠「BEGIN 会不会抛错」猜。**
+- **（㊽ 「没安装」≠「出故障」）**：`ingestAll` 把源实现的异常与「源不可用」都收敛成 `skipped` → 全量重建时异常源的数据被删且不恢复。修法 = `IngestFailure{kind:'exception'|'unavailable'}` + 故障闸：全量模式遇 exception 整体回滚。**教训：错误分类不是为了日志好看，是为了让「该不该继续」有确定答案。**
+- **（㊾ 名为增量实为全量）**：旧增量只看单值 `.naoku.db mtime`，上游任何其它源变化都检测不到 → 每次「增量」等于全量重灌。修法 = `SourceSpec.fingerprint` 逐源指纹（注册表拥有，编排器只比对）。实测无变化时 9/11 源跳过。**教训：增量判据必须覆盖全部可变输入——单值指纹在多源系统里必然漏判。**
+- **（㊿ 跨线程缓存失效不传播）**：worker 有独立模块实例，`invalidateStatsCache` 在 worker 里只清 worker 自己的 Map → 主线程仍显示重建前旧统计（实测 `q=0` 假象）。修法 = 主线程收到 done 后**重放失效**，并用**分片预热**代替「清空后让 N 个请求各算一遍」。**教训：任何「进程内缓存」在多线程/worker 架构里都要回答「谁负责清」——答案只能是持有它的那个线程。**
+- **（· 订阅者必须按实体过滤）**：`methodology.idxSlot` 不看实体，任何广播都清空 25 篇方法论索引（秒级成本）→ 重建后首次检索现场重建索引。修法 = 订阅者声明关心实体。**教训：过度失效与漏失效同样有害——前者把成本从「偶尔慢」变成「周期性尖峰」。**
+- **（· 请求路径同步 I/O 全清）**：生命周期日志每次请求 `appendFileSync` + 读整文件 + 可能重写，重建期把 `/api/status` 卡到 2316ms。修法 = 内存环形 + 2s 节流刷盘（读路径零文件 IO），实测 8ms。用户态写入（错题/进度镜像/流水）→ 写队列。**教训：审计日志属于「可延迟」数据，不该占据请求的同步栈。**
+- **（· 测试 harness 会毁用户数据）**：`ensurePoolReady` 只要 `ready=false` 就 POST **截断全量重建**，而测试与主 profile 共用 `~/.dsh/kaogong` → 实测跑完测试生产库 86534→84284、gk-tuxing=0、kadian=0。修法 = 「库里有题就绝不重建」。**教训：测试夹具对「共享外部状态」的任何写操作都必须先判「这个状态属于用户吗」——`ready=false` 是质量信号，不是重建许可。**
+- **（· 读锁竞争用只读连接解决）**：同一连接读会参与写锁等待（bm25+JOIN 实测 5086ms）。修法 = 重建期另开 `readOnly:true` 连接（WAL 快照），结束后关闭。**教训：WAL 的价值只有「读写分连接」才能兑现——单连接共享时 WAL 帮不上忙。**
