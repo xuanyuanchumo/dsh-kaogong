@@ -199,3 +199,57 @@ test('SEC-BRANCH-01 钩子的分支类型必须覆盖 CONTRIBUTING 的分支模�
   // 长驻分支走白名单
   expect(hook.includes("['main', 'develop', 'master', 'dev-history']"), '长驻分支白名单缺失').toBe(true)
 })
+
+test('SEC-DIST-01 发布前必须清空 dist（防止源已删的孤儿产物混入发布的包）', () => {
+  /**
+   * cycle-68 事故：删掉 src/server/topicTree.ts 后，tsc 只覆盖同名产物、不删旧文件，
+   * 于是 dist/server/topicTree.js 作为**孤儿**留在 dist 里，并随 v1.34.4 的 npm 包发出
+   * （实测 tarball 里有它）。包里带一个源码里已不存在的模块，属于长期潜伏的脏数据。
+   * 守则：产出脚本的前置必须清空 dist。
+   */
+  const pkg = JSON.parse(readSrc('./package.json'))
+  expect(!!pkg.scripts['clean:dist'], '缺 clean:dist 脚本').toBe(true)
+  // 决定**包内容**的是 prepack（npm publish 前跑）——它必须清空；
+  // prepare 也在 `npm install` 时跑，清空会拖慢安装，故不强制（包内容不由它决定）。
+  expect(String(pkg.scripts.prepack || '').includes('clean-dist'), 'prepack 未清空 dist（孤儿产物会进包）').toBe(true)
+  const clean = readSrc('./scripts/clean-dist.mjs')
+  // 安全闸：只允许删 <仓库根>/dist
+  expect(clean.includes("resolve(repoRoot, '..', 'dist')"), 'clean-dist 缺目标路径安全闸').toBe(true)
+})
+
+test('C70-CONS-01 能力对账 consumer 不得使用未注册的 ui:obs 词表（杜绝假漂移）', () => {
+  /**
+   * 架构漂移治理（v1.35）：manifest.ts 曾把 /api/repos/jobs 的 consumer 写成 'ui:obs'，
+   * 而全仓视图 id 是 'observability'（view-registry.ts:66 / client.tsx VIEW_ROUTES）。
+   * 该端点因此在能力对账里恒被判「消费方不存在」——与 v1.8 遥测口径、cycle-18
+   * 影子端点同族的「声明 vs 运行态」假阳性。守卫锁定真实词表，防复辟。
+   *
+   * 注意：ui:header / client:discovery 是 shell 层合法 consumer（不在 VIEW_META），
+   * 故不做「所有 ui:* 必在视图表」的一刀切断言——只针对已退役的 ui:obs。
+   */
+  const mf = readSrc('./src/shared/manifest.ts')
+  expect(/['"]ui:obs['"]/.test(mf), "manifest 仍有退役词表 'ui:obs'（应为 ui:observability）").toBe(false)
+  expect(mf.includes("path: '/api/repos/jobs'") && /consumers:\s*\[[^\]]*['"]ui:observability['"]/.test(mf.slice(mf.indexOf("path: '/api/repos/jobs'"), mf.indexOf("path: '/api/repos/jobs'") + 200)), '/api/repos/jobs 未声明真实消费方 ui:observability').toBe(true)
+})
+
+test('C70-MIME-01 图片 MIME 白名单单一事实源（四端点不得各写一份）', () => {
+  /**
+   * 架构漂移治理（v1.35）：扩展名→MIME 映射曾在 http/paperApi/naokuApi/tuxing 四处
+   * 逐字重复，新增类型只改一处会让同一张图在不同端点出现 200/415 分裂（假漂移）。
+   * 守卫锁定：唯一映射在 shared/media.ts，四个端点一律 import imageMime。
+   */
+  const media = readSrc('./src/shared/media.ts')
+  expect(media.includes('export const IMAGE_MIME') && media.includes('export function imageMime'), 'shared/media.ts 缺单一 MIME 事实源').toBe(true)
+  const consumers = [
+    './src/server/http.ts',
+    './src/server/paperApi.ts',
+    './src/server/naokuApi.ts',
+    './src/adapters/tuxing.ts',
+  ]
+  for (const p of consumers) {
+    const src = readSrc(p)
+    expect(src.includes('imageMime'), p + ' 未走 shared/media 的 imageMime').toBe(true)
+    // 不得再留本地 MIME 字面量表（'.png': 'image/png' 形态）
+    expect(/['"]\.png['"]\s*:\s*['"]image\/png['"]/.test(src), p + ' 仍有本地 MIME 字面量（漂移源）').toBe(false)
+  }
+})

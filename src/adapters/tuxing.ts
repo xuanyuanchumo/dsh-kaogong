@@ -12,6 +12,7 @@
  */
 import { readFileSync, existsSync, statSync, createReadStream } from 'node:fs'
 import { join, resolve, extname, sep } from 'node:path'
+import { imageMime } from '../shared/media.js'
 
 const REPO = 'gk-tuxing'
 const DATA_FILE = 'assets/data.js'
@@ -134,11 +135,6 @@ export function tuxingQuestion(repoRoot: string, id: string) {
   return { ...q, source: 'gk-tuxing', imgUrl: '/kaogong/api/tuxing-img?p=' + encodeURIComponent(q.img) }
 }
 
-const MIME: Record<string, string> = {
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml',
-}
-
 /** 图片服务：路径必须落在 gk-tuxing 内 */
 export function serveTuxingImage(repoRoot: string, relPath: string, res: any): void {
   const root = resolve(repoRoot, REPO)
@@ -146,12 +142,13 @@ export function serveTuxingImage(repoRoot: string, relPath: string, res: any): v
   const prefix = root + sep
   if (!(target === root || target.startsWith(prefix))) { res.writeHead(403); res.end('forbidden'); return }
   const ext = extname(target).toLowerCase()
-  if (!MIME[ext]) { res.writeHead(415); res.end('unsupported'); return }
+  const mime = imageMime(ext)
+  if (!mime) { res.writeHead(415); res.end('unsupported'); return }
   let st: any = null
   try { st = existsSync(target) ? statSync(target) : null } catch { st = null }
   if (!st || !st.isFile()) { res.writeHead(404); res.end('not found'); return }
   try {
-    res.writeHead(200, { 'Content-Type': MIME[ext], 'Content-Length': st.size, 'Cache-Control': 'public, max-age=86400' })
+    res.writeHead(200, { 'Content-Type': mime, 'Content-Length': st.size, 'Cache-Control': 'public, max-age=86400' })
   } catch { try { res.destroy() } catch {} ; return }
   const stream = createReadStream(target)
   stream.on('error', () => { try { res.destroy() } catch {} })

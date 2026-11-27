@@ -22,8 +22,8 @@ const LONG_LIVED = ['main', 'develop', 'master', 'dev-history']
  *
  * ⚠️ cycle-68 修复：原类型表漏了 `release` 与 `hotfix`——而 CONTRIBUTING §一
  * 的 gitflow 模型明确写了 `release/*`（main 接收其合并）与 `hotfix/*`（线上急修）。
- * 结果是**按规范建的分支被钩子拒推**，逼人用逃生门绕过检查（那等于让守卫失效）。
- * 钩子与规范必须同源：规范里出现的分支类型，这里必须都认。
+ * 结果是**按规范建的分支被钩子拒推**，逼人用 SKIP_PREPUSH_CHECK=1 逃生门绕过检查
+ * （那等于让守卫失效）。钩子与规范必须同源：规范里出现的分支类型，这里必须都认。
  */
 const BRANCH_RE = /^(feat|fix|docs|refactor|perf|test|chore|ci|release|hotfix)\/[a-z0-9]+([-./][a-z0-9]+)*$/
 
@@ -38,6 +38,48 @@ function git(args) {
 if (process.env.SKIP_PREPUSH_CHECK === '1') {
   console.log('[pre-push] 已跳过（SKIP_PREPUSH_CHECK=1）——请在 PR 描述说明理由')
   process.exit(0)
+}
+
+/**
+ * ── tag 推送识别（cycle-68 修复）──
+ *
+ * pre-push 钩子从 stdin 收到的每一行是 `<local ref> <local sha> <remote ref> <remote sha>`。
+ * 原实现完全不看 stdin，把所有推送都当「分支推送」检查——于是**推 tag 时**：
+ *   · backlog 检查去读 `git log -1`（拿到的是 GitHub 生成的合并提交，消息里没 BL 编号）→ 拒推
+ *   · 而 tag 本身不承载 backlog 编号，这个检查对它根本不成立
+ * 结果 = 发布流程（develop → main → **tag**）必然卡在最后一步，只能靠逃生门。
+ * 正解 = 识别出「纯 tag 推送」后走 tag 自己的判据（见下），不再套用分支规则。
+ */
+const stdinRaw = await (async () => {
+  try {
+    const chunks = []
+    for await (const c of process.stdin) chunks.push(c)
+    return Buffer.concat(chunks).toString('utf8')
+  } catch { return '' }
+})()
+const pushedRefs = stdinRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  .map(l => { const [localRef, localSha, remoteRef] = l.split(/\s+/); return { localRef, localSha, remoteRef } })
+const onlyTags = pushedRefs.length > 0 && pushedRefs.every(r => r.localRef.startsWith('refs/tags/'))
+if (onlyTags) {
+  // tag 推送的判据：必须在 main 上、且 tag 名与 package.json 版本一致（发布锚点不可漂移）
+  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'])
+  const pkgVer = (() => { try { return JSON.parse(git(['show', 'HEAD:package.json'])) .version } catch { return '' } })()
+  const tags = pushedRefs.map(r => r.localRef.replace('refs/tags/', ''))
+  let bad = 0
+  console.log(`[tag] 推送 ${tags.length} 个 tag：${tags.join(', ')}（分支 ${branch}）`)
+  if (['main', 'master'].indexOf(branch) < 0) {
+    console.error(`[tag] ❌ tag 只应在发布线（main）打，当前分支：${branch}`)
+    bad = 1
+  }
+  for (const t of tags) {
+    const name = t.replace(/^v/, '')
+    if (pkgVer && name !== pkgVer) {
+      console.error(`[tag] ❌ tag ${t} 与 package.json 版本 ${pkgVer} 不一致（发布锚点必须同源）`)
+      bad = 1
+    }
+  }
+  if (!bad) console.log('[tag] ✅ tag 推送合规（发布线 + 版本锚点一致）')
+  process.exit(bad)
 }
 
 let fail = 0

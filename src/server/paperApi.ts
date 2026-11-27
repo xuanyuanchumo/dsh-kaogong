@@ -26,12 +26,12 @@ import { resolve, extname, dirname, sep } from 'node:path'
 import { poolListPapers, poolLoadPaper } from './poolPaper.js'
 import { poolBuildTopicTree, poolEssayList, buildTopicsFromPool } from './poolTopics.js'
 import { ensureDomain } from './dataGate.js'
+import { imageMime } from '../shared/media.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
 
 const PAPER_REPO = 'gwy-zhenti'
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }
 
 /**
  * 图片服务：把试卷内相对引用 assets-xxx/hash.png 映射到磁盘真实文件。
@@ -48,7 +48,8 @@ function servePaperImage(repoRoot: any, paperId: any, relPath: any, res: any) {
     res.writeHead(403); res.end('forbidden'); return
   }
   const ext = extname(target).toLowerCase()
-  if (!(MIME as Record<string, any>)[ext]) { res.writeHead(415); res.end('unsupported'); return }
+  const mime = imageMime(ext)
+  if (!mime) { res.writeHead(415); res.end('unsupported'); return }
   let stat
   try {
     stat = existsSync(target) ? statSync(target) : null
@@ -56,7 +57,7 @@ function servePaperImage(repoRoot: any, paperId: any, relPath: any, res: any) {
   if (!stat || !stat.isFile()) { res.writeHead(404); res.end('not found'); return }
   // 头一旦发出，后续任何异常都不能再 writeHead（会二次写头破坏响应）
   try {
-    res.writeHead(200, { 'Content-Type': (MIME as Record<string, any>)[ext], 'Content-Length': stat.size, 'Cache-Control': 'public, max-age=86400' })
+    res.writeHead(200, { 'Content-Type': mime, 'Content-Length': stat.size, 'Cache-Control': 'public, max-age=86400' })
   } catch {
     try { res.destroy() } catch {}
     return

@@ -51,12 +51,12 @@ updated: 2026-11-26
 
 ## 1. 数据层（只维护 .kaogong.db）
 
-### 1.1 现状（实测）
+### 1.1 现状（实测 · 数字为 cycle-49 快照，当前题量以 `/api/pool/health` 为准）
 | DB | 位置 | 内容 | 状态 |
 |---|---|---|---|
-| `.kaogong.db` | `~/.dsh/kaogong/` | 86534 题 / 230083 出处 / 571394 边 / 9721 知识 / schema v5 | **统一池（目标事实源）** |
-| `.naoku.db` | 包内 + 用户根各一份 | 27506 题 / 58890 appearances | 上游投影，运行期仍被 `/api/naoku/*` 直查 |
-| `.paper-index.json` / `.huasheng13-index.json` | 包内 `data/` | 卷索引 / 语料索引快照 | 构建期产物，运行期读 |
+| `.kaogong.db` | `~/.dsh/kaogong/` | cycle-49 快照 86534 题；当前以 `/api/pool/health` 实测为准（市场条目镜像记 87,434+） | **统一池（唯一事实源）** |
+| `.naoku.db` | 用户数据根 | 27506 题 / 58890 appearances | 上游投影；**6 个 `/api/naoku/*` 端点已于 cycle-62 退役**，运行期仅剩 `/api/naoku-img` 媒体流（非题目事实直读） |
+| `.paper-index.json` / `.huasheng13-index.json` | 构建期产物 | 卷索引 / 语料索引快照 | 构建期产物，运行期读 |
 
 ### 1.2b 管理数据入池（cycle-60 · schema v6）
 - `wrong_book` 表（ws+sig 主键）：错题管理全字段（SRS 五箱/掌握态/出处快照/材料），索引 `(ws,mastered,last_at)` 支撑 SRS 回炉。
@@ -71,11 +71,15 @@ updated: 2026-11-26
 - 已入池 10/16 源；未入池：AdministrativeAptitudeTest（PDF，决策只做 L1 登记）、kaogongzhentizhengliu（疑被 naoku 覆盖）、sakib/developer2gwy 等纯文档仓（只登记 asset）。
 - 潜在 bug：`incrementalRebuild`（`poolIngest.ts:99-114`）指纹用 `.naoku.db` mtime，meta 指纹却是「题数:关系数」（`:82-83`）→ 增量几乎永不命中。
 
-### 1.3 运行期直读外源残留（收敛优先级）
-**P0 题目消费只走 .kaogong.db**
-- `repoData.ts:189-218 getRandomQuestions`：池优先 + 目录回落（`/api/questions` 与 SRS 仍走此）→ 直接调 `poolApi.sampleQuestions`，删目录回落。
-- `historyApi.ts:68`：故意不传 pool → 必定直读目录；`:81-113` 真题卷逐卷扫描。
-- `naokuApi.ts:45-92`：6 端点直查 `.naoku.db` → 改查池。**⚠️ cycle-54 实测阻塞：换源不等价，见下「naoku 换源取证」。**
+### 1.3 运行期直读外源残留（**历史收敛清单 · 已全部完成，勿按此段现状动手**）
+> ⚠️ 以下「待收敛项」是 cycle-49 的**起点快照**，全部已在 cycle-50~62 完成，保留仅为决策轨迹。
+> 当前事实：运行期题目事实**零外源直读**（I-DB-1 恒真不变量），图片走媒体引用不进库（L3 决策）。
+>
+> | 历史待办 | 当前状态 |
+> |---|---|
+> | `getRandomQuestions` 池优先 + 目录回落 | ✅ 回落已物理删除：`repoData.ts:188-200` 只走池，未就绪返结构化 error 经 dataGate 按需摄入 |
+> | `historyApi` 直读目录 / 逐卷扫描 | ✅ 走统一池；卷级元数据摄入见 §1「P1 真题卷换源」 |
+> | `naokuApi` 6 端点直查 `.naoku.db` | ✅ cycle-62 六端点退役 + 3 语义下沉池端点；仅 `/api/naoku-img` 媒体流保留 |
 
 ### naoku 换源取证（cycle-54/55 · 两轮实测修正，勿再凭直觉迁移）
 实测两库（用户数据根 `.naoku.db` / `.kaogong.db`，2026-11-23）：
@@ -167,18 +171,18 @@ updated: 2026-11-26
 
 ## 3. 内核层
 
-### 3.1 现状：散落且漂移
-- 无 `src/shared/kernel/` 目录；算法散在 `manifest.ts:424-910`（图族）、`srs.ts`、`planSchedule.ts`、`telemetry.ts`。
-- **真实漂移**：客户端 `graph-analytics.ts:80-102 graphLocalPageRank` iter=**24**，服务端 `manifest.ts:424 pageRank` iter=**40**——同一图两侧中心性不同。
-- **重复代码**：`percentile` 在 `telemetry.ts:67-70` 与 `methodologyApi.ts:84-88` 逐字重复（注释自称「同口径」）。
-- **守卫盲区**：`tests/smoke/kernel.test.mjs:33-35 KERNEL_FILES` 硬编码 6 文件，**持有全部图算法的 manifest.ts 不在清单内**；R9 正则只匹配 Native/Kaogong 前缀，`Obs13HeatBar`（obs-view.tsx:659 直调纯函数）不受覆盖。
+### 3.1 收敛起点（cycle-49 快照 · **已全部完成，勿按此段动手**）
+> 以下漂移均为 cycle-49 的**起点**，已在 cycle-49/50/60 全部根治（见 §3.2 ✅ 清单）。保留仅作问题发现轨迹。
+- ~~无 `src/shared/kernel/` 目录；算法散在 manifest/srs/planSchedule/telemetry~~ → 已建 `shared/kernel.ts`。
+- ~~客户端 PageRank iter=24 vs 服务端 iter=40 漂移~~ → 已统一 40 且客户端真 import 同一实现。
+- ~~`percentile` 在 telemetry/methodologyApi 逐字重复~~ → 已去重走 kernel re-export。
+- ~~守卫清单硬编码 6 文件漏 manifest / R9 正则漏 Obs13HeatBar~~ → 已外提清单 + 扩展前缀覆盖。
 
 ### 3.2 收敛策略与进度
 - ✅ `src/shared/kernel.ts` 已建（cycle-49）：统一 percentile / PageRank / 弱点模型 `1/(rate+0.15)` / kgNum/kgClamp01/round2/round4，零 IO。
 - ✅ manifest.pageRank 改为 kernel re-export；telemetry/methodologyApi 的 percentile 去重（telemetry 保留 re-export 兼容）。
-- ✅ 客户端 PageRank 迭代数 24→40 对齐（`KG_LOCAL_PAGERANK_ITER` 常量镜像 + 守卫 07 断言一致）。
-  - ⚠️ 物理共享未完成：combo bundler 只扫 `dist/client/**`（cycle-24），客户端无法值导入 shared/kernel；
-    **后续 cycle 若扩展 bundler 支持跨目录值导入，须把客户端镜像常量改为真 import**（守卫 07 会随之调整）。
+- ✅ 客户端 PageRank 迭代数 24→40 对齐（守卫 07 断言一致）。
+  - ~~物理共享未完成~~ → **cycle-60 R5 已完成客户端真共享**（见下条），此条历史状态已作废。
 - ✅ 内核文件清单外提（KERNEL_FS_FREE_FILES/I2 分层，manifest 因含仓库名字面量只进 I1），新增守卫 07/08。
 - ✅ cycle-50（第二轮）：弱点公式三处（srs.ts / planSchedule.ts / poolApi.ts）统一走 `weaknessWeight()`；
   **业务先验差异保留在调用侧**（srs 抽题无数据 rate=0.5 中性；排程与池抽题 rate=0 新模块优先）
@@ -193,10 +197,10 @@ updated: 2026-11-26
 ## 4. 前端组件化
 
 ### 4.1 现状
-- 路由：`VIEW_ROUTES`（client.tsx:136-165）+ setView tick 重入修复 + 统一 onGo（cycle-49）；符合规范。
+- 路由：`VIEW_ROUTES`（client.tsx）+ setView tick 重入修复 + 统一 onGo（cycle-49）；符合规范。
 - DSH 合规：combo factory / inject+apply / sidebar 双注册 / onClick 驼峰 / ErrorBoundary / 子视图组件化**全部合规**。
-- 组件基建：`ui-kit.tsx`（298 行）Stat/Bar/Card/RichText/OptionRow/KgLoad/KgErr/KgEmpty 齐备；`hooks/useApiData`（**0 调用**）+ `useApiMany`（仅 1 处）。
-- 架构债：13 处手写 `cancelled` effect；20+ 处手写加载/错误/空态未复用基建；5 个视图 >800 行（papers 1188 / obs 1154 / study 1090 / hs13 1012 / graph 954）。
+- 组件基建：`ui-kit.tsx` 的 Stat/Bar/Card/RichText/OptionRow/KgLoad/KgErr/KgEmpty 齐备；`hooks/useApiData` + `useApiMany` 就位。
+- 架构债（**cycle-49 快照，仅作趋势参考，当前数量以源码实测为准**）：13 处手写 `cancelled` effect；20+ 处手写加载/错误/空态未复用基建；5 个视图 >800 行（papers 1188 / obs 1154 / study 1090 / hs13 1012 / graph 954）。其中 papers 三态已由 cycle-52 收敛（见下），故上述数字是**收敛前**的上界。
 - ✅ cycle-52：localStorage 6 处直读（3 文件）已收敛到 `ui-kit.tsx` 的 `kgStorage` 门面（唯一事实源，3 操作全带 try/catch）；守卫 C52-01 断言客户端零直读（门面除外）。
 
 ### 4.2 页面冗余评估
