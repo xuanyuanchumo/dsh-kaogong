@@ -95,7 +95,11 @@ async function callApi(path: any, ws?: any): Promise<any> {
 }
 
 export const name = CAPABILITIES.plugin.name
-export const inject = ['tools']
+// 阶段 4（issue #4 图片搜题）前置缺口 C5：声明 llm 注入，供后续「读图→结构化抽取」使用。
+// R11b 风险：inject 声明 boot 图不存在的服务会让整个条目永不激活——本分支先用
+// loader.test 的 llm 桩 + 沙箱实测确认激活正常，再在函数实现里真正调用 ctx.get('llm')。
+// 本 PR 只验证声明安全性，不改变任何现有行为（无工具/端点/视图变化）。
+export const inject = ['tools', 'llm']
 
 export function apply(ctx: any) {
   // ── 主通道：宿主同源路由 ──
