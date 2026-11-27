@@ -108,6 +108,7 @@ BL-<域>-<两位序号>
 | **BL-PROC-08** | `_tmp/` 卫生 | 工作区堆积 100+ 一次性调试脚本 | 含历史取证价值，需甄别 | `.gitignore` 覆盖；保留白名单说明 | ⬜ |
 | **BL-REL-01** | release workflow 自动化 | 无 tag 触发 workflow；notes 手工操作 | npm 发布建议保持手动（凭据安全） | 可选：tag 触发 GitHub Release workflow；npm 保持 vault_run | ⬜ |
 | **BL-PROC-09** | hotfix 流程演练 | `CONTRIBUTING.md:13` 有规定，git 历史无 hotfix 痕迹 | 无真实紧急场景 | 桌面演练记录（双 PR 顺序、bump 时机） | ⬜ |
+| **BL-PROC-11** | 阶段 4 inject 扩展 llm 的前置论证（C5/R11b） | `src/host/index.ts` 原 `inject=['tools']`，扩 llm 有「声明 boot 图不存在服务→条目永不激活」风险（R11b） | — | 三重证据：① 沙箱 `--dump-config` 确认 boot 图含 `@deepseek-ai/dsh-llm`；② loader.test 18/18（声明 llm 后 entry 仍激活）；③ 独立 DSH_HOME 沙箱实测插件激活 + API 可用、无 did not activate | ✅ |
 | **BL-SEC-01** | 验证环境隔离（沙箱/真机是否污染目录） | 实测发现：数据根 `~/.dsh/kaogong` 按用户而非按 profile 隔离，未设 `KG_DATA_DIR` 的探针 adopt 到主力 8400 实例并读到主力进度；端口 8400 硬编码导致假阳性 | — | `docs/agents/ISOLATION.md` 三层隔离；`KG_PORT` 可配置；`loader.test.mjs` 断言 pid/port/数据根隔离；负向验证可观察污染 | ✅ |
 | **BL-REL-02** | v1.34.0 发布收口（文档事实校准 + GitHub/npm 发布 + 市场条目更新） | 文档端点数/断言数/题库口径三处漂移（78 端点 → 实为 82；276 断言 × 35 文件 → 实为 411 × 50；统一池仍写 v1.30 的 27,506 题 → 实为 86,454）；发布线 `main` 落后 `origin/main` 5 个提交；`.dsh/` overlay 70 个文件曾被 git 跟踪 | — | ① `npm run facts:check` 全绿；② `npm run test:all` 全绿（50 文件 / 411 断言 + Loader 17/17）；③ `.dsh/` 出库且 gitignore 覆盖；④ `develop` → `main` 合并 + tag `v1.34.0` + GitHub Release；⑤ npm `dsh-kaogong@1.34.0` 认证通道复验；⑥ 上游市场条目描述数字与 manifest 核对一致（本地镜像已更新 + smoke 守卫 6 断言）；⑦ v1.34.1 补丁版 npm 发布（latest=1.34.1 + tag + Release）；⑧ 市场条目更新 PR 已提（awesome-dsh-plugin #19069，只改本条 +2/-2） | ✅ |
 | **BL-API-01** | 深度题库双端点冗余（`/api/naoku/*` 与 `/api/pool/*` 同源） | v9 统一数据层改造后，`/api/naoku/*` 六端点的数据层已完全是统一池（`poolNaoku` 读层，源码级「只有一条读路径，绝不直读 `.naoku.db`」）→ 同一能力两套端点：能力对账要维护两份声明、消费方无从判断该走哪套、白盒面板有双源假漂移风险 | — | ① 池新增 3 个补齐缺失语义的端点（`kadians` / `by-kadian` / `papers-by-kadian`）+ `?has=` 过滤；② 6 个 `/api/naoku/*` 端点**物理删除**（仅保留 `naoku-img` 图片服务——媒体引用非题目事实）；③ 客户端 8 处消费点改池端点；④ 端点 82 → **79**；⑤ 守卫同步 7 处（含 `C60-FRESH-03` 重写为收敛后形态）；⑥ 全量 54 文件 / 435 断言绿 + 对账零漂移 | ✅ |
@@ -143,6 +144,7 @@ BL-<域>-<两位序号>
 | **BL-PROC-10** | 2026-11-27 | c733b87(develop 回灌 v1.34.4) | `merge-base --is-ancestor origin/main develop`=0；tag 识别 + SEC-DIST-01 保留 |
 | **BL-API-02** | 2026-11-27 | 本轮 refactor/consistency-drift-v1.35 | smoke C70-CONS-01 + 对账零漂移 |
 | **BL-DOC-05** | 2026-11-27 | 本轮 refactor/consistency-drift-v1.35 | `check-docs` 六检 + `check-facts` 绿；三处快照标注 |
+| **BL-PROC-11** | 2026-11-27 | feat/llm-inject-gate-v1.36 | dump-config + loader 18/18 + 沙箱实测三重证据 |
 
 ---
 
