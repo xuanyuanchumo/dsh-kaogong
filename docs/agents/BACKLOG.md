@@ -101,7 +101,10 @@ BL-<域>-<两位序号>
 
 | 编号 | 事项 | 现状 | 为何暂缓 | 验收标准 | 状态 |
 |---|---|---|---|---|---|
-| **BL-PROC-07** | `lint` 名不副实 | `package.json:72` `"lint": "tsc --noEmit"`，实为类型检查 | 引入风格工具会增加依赖，违背零依赖定位 | 改名 `typecheck` 或明确注释其等价性 | ⬜ |
+| **BL-PROC-07** | `lint` 名不副实 | `package.json:82` `"lint": "tsc --noEmit"`（`:69 typecheck` 同款），实为类型检查 | 引入风格工具会增加依赖，违背零依赖定位 | 改名 `typecheck` 或明确注释其等价性 | ⬜ |
+| **BL-DOC-05** | 架构基线/路线图数字漂移 | `ARCH-CONVERGENCE-BASELINE.md` cycle-49 的「现状」段与同文件 cycle-50~62 的 ✅ 完成记录自相矛盾；`ROADMAP.md` 表头仍标 v1.30.0 当前状态；README 自检示例写死 `1.34.0` | — | 三处均标注「历史快照 + 当前事实源指针」；`check-docs.mjs` 六检绿；版本号不再写死 | ✅ |
+| **BL-API-02** | 能力对账 consumer 词表漂移 | `manifest.ts:117` `/api/repos/jobs` 的 consumer 写 `ui:obs`，全仓真实视图 id 为 `observability` → 对账恒判「消费方不存在」假漂移（v1.8 遥测事故同族） | — | 改为 `ui:observability` + smoke C70-CONS-01 守卫（禁 `ui:obs` 复辟）；负向注入应变红 | ✅ |
+| **BL-PROC-10** | develop 血缘漂移 | `develop` 落后 `origin/main` 4 个提交（v1.34.4 发布 bump 未回灌），违反 BRANCHING-STRATEGY §6.3「发布后必须回灌」→ 下次 release PR 再断裂 | — | `git merge-base --is-ancestor origin/main develop` = 0；冲突取 develop 功能超集（tag 识别 + SEC-DIST-01 保留） | ✅ |
 | **BL-PROC-08** | `_tmp/` 卫生 | 工作区堆积 100+ 一次性调试脚本 | 含历史取证价值，需甄别 | `.gitignore` 覆盖；保留白名单说明 | ⬜ |
 | **BL-REL-01** | release workflow 自动化 | 无 tag 触发 workflow；notes 手工操作 | npm 发布建议保持手动（凭据安全） | 可选：tag 触发 GitHub Release workflow；npm 保持 vault_run | ⬜ |
 | **BL-PROC-09** | hotfix 流程演练 | `CONTRIBUTING.md:13` 有规定，git 历史无 hotfix 痕迹 | 无真实紧急场景 | 桌面演练记录（双 PR 顺序、bump 时机） | ⬜ |
@@ -137,6 +140,9 @@ BL-<域>-<两位序号>
 ---
 
 | BL-TEST-04 | 2026-11-20 | 892c174(feature/workflow-governance-v1.31) | 端口边界单测通过（负数/小数/70000→8400） |
+| **BL-PROC-10** | 2026-11-27 | c733b87(develop 回灌 v1.34.4) | `merge-base --is-ancestor origin/main develop`=0；tag 识别 + SEC-DIST-01 保留 |
+| **BL-API-02** | 2026-11-27 | 本轮 refactor/consistency-drift-v1.35 | smoke C70-CONS-01 + 对账零漂移 |
+| **BL-DOC-05** | 2026-11-27 | 本轮 refactor/consistency-drift-v1.35 | `check-docs` 六检 + `check-facts` 绿；三处快照标注 |
 
 ---
 

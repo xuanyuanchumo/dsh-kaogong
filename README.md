@@ -1,4 +1,4 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.34.3
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.35.0
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
@@ -156,7 +156,7 @@ plugin_manager remove_bundle dsh-kaogong     # 仅移除插件
 git --version                     # 题库管理前置
 # 插件侧：确认版本与能力注册
 curl -s http://127.0.0.1:51093/kaogong/api/capabilities | head -c 300
-# 预期含 "version":"1.34.0"、6 个工具、79 个端点
+# 预期含 "version":"<当前版本>"、6 个工具、79 个端点（精确数字见 docs/facts.json，勿在本文写死版本号）
 ```
 
 界面自检：左栏出现「📚 考公学习」图标 → 点击进入 → 「📦 题库管理」显示仓库清单（16 项）即正常。

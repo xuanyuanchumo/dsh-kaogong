@@ -16,6 +16,8 @@ import { writeFileSync, appendFileSync, mkdirSync, createReadStream, statSync } 
 import { join, resolve, dirname, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { safeImagePath, resolveNaokuImage } from '../adapters/naokuImage.js'
+// 图片 MIME 白名单统一走 shared/media（四个出图端点同口径，杜绝 415 判据漂移）
+import { imageMime } from '../shared/media.js'
 import {
   CAPABILITIES, NODE_META, EDGE_META, buildGraph, graphMetrics, healthScore,
   degreeAnalysis, labelPropagation, clusteringCoefficient, brandesBetweenness,
@@ -254,7 +256,6 @@ function logLifecycle(event: any, data = {}) {
 // 练习链路（/api/questions）的题干图片在 parseQuestions 时被剥成中立占位 `kgimg://相对路径`，
 // 前端 RichText 把占位改写为 `${MOUNT_PATH}/api/kg-img?p=` 请求本端点。
 // 安全模型与 naokuImage.safeImagePath 同族：resolve 归一后必须仍在 xingcezhenti 内 + 扩展名白名单。
-const KG_IMG_MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }
 function serveKgImage(params: any, res: any) {
   const dec = (v: any) => { try { return decodeURIComponent(v || '') } catch { return v || '' } }
   const rel = dec(params.get('p'))
@@ -269,7 +270,7 @@ function serveKgImage(params: any, res: any) {
     if (alt) target = safeImagePath(getRepoRoot(), alt)
   }
   if (!target) { try { res.writeHead(404); res.end('not found') } catch {} ; return }
-  const mime = KG_IMG_MIME[extname(target).toLowerCase()]
+  const mime = imageMime(extname(target))
   if (!mime) { try { res.writeHead(415); res.end('unsupported') } catch {} ; return }
   let size = 0
   try { size = statSync(target).size } catch { try { res.writeHead(500); res.end('stat error') } catch {} ; return }

@@ -24,7 +24,7 @@ export const pageRank: typeof kernelPageRank = kernelPageRank
 
 // ── 能力清单（与 index.js / client.js / ui 实际注册保持同步）──
 export const CAPABILITIES = {
-  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.34.3', mode: 'offline-first' },
+  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.35.0', mode: 'offline-first' },
 
   // 宿主 UI 双入口（client 半注册；图谱与可观测面板消费此声明）
   entries: [
@@ -114,7 +114,7 @@ export const CAPABILITIES = {
     // cycle-20 题库管理流程优化：批量安装/批次进度/作业归档（声明→生产→消费闭环）
     { path: '/api/repos/install-batch', label: '必选仓库一键批量安装', consumers: ['ui:repos'] },
     { path: '/api/repos/batch', label: '批量安装批次进度', consumers: ['ui:repos'] },
-    { path: '/api/repos/jobs', label: '题库作业历史', consumers: ['ui:repos', 'ui:obs'] },
+    { path: '/api/repos/jobs', label: '题库作业历史', consumers: ['ui:repos', 'ui:observability'] },
     // ── cycle-18 花生十三体系方法论适配库 ──
     // 语料与其它题库同等对待：**不随包分发**，由「📦 题库管理」统一下载到数据根
     // （数据根/huasheng13，20 references + 5 examples ≈ 336KB，上游 huasheng13-skill）。

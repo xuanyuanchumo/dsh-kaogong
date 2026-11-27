@@ -23,8 +23,7 @@
 import { safeImagePath } from '../adapters/naokuImage.js'
 import { createReadStream, statSync } from 'node:fs'
 import { extname } from 'node:path'
-
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }
+import { imageMime } from '../shared/media.js'
 
 /**
  * @param repoRoot 题库数据根（图片按 rel_path 从此读取）
@@ -38,7 +37,7 @@ export function makeNaokuApi({ repoRoot }: any) {
     const target = safeImagePath(repoRoot, rel)
     if (!target) { try { res.writeHead(404); res.end('not found') } catch { /* 响应已断开 */ } ; return }
     const ext = extname(target).toLowerCase()
-    const mime = (MIME as Record<string, any>)[ext]
+    const mime = imageMime(ext)
     if (!mime) { try { res.writeHead(415); res.end('unsupported') } catch { /* 响应已断开 */ } ; return }
     let size = 0
     try { size = statSync(target).size; res.writeHead(200, { 'Content-Type': mime, 'Content-Length': size, 'Cache-Control': 'public, max-age=86400' }) }

@@ -2,6 +2,92 @@
 
 本文件记录 dsh-kaogong 的版本级变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.35.0] - 2026-11-27
+
+**架构漂移治理（低耦合高内聚）** —— 消灭「声明 vs 运行态」不一致的三类漂移面，并修复 develop 血缘断裂。
+
+### 重构（单一事实源）
+- **图片 MIME 白名单收敛**：新增 `src/shared/media.ts`（`IMAGE_MIME` / `imageMime`，冻结常量 + 幂等归一），
+  四处逐字重复的本地表（`server/http.ts` `KG_IMG_MIME`、`server/paperApi.ts`、`server/naokuApi.ts`、
+  `adapters/tuxing.ts` 的 `MIME`）全部删除改为 import。杜绝「同一张图这个端点 200、那个端点 415」的分裂。
+  行为等价：六键映射逐字一致、`toLowerCase` 幂等、403/404/415/500 判据与 Content-Type 值均未变。
+- **能力对账 consumer 词表**：`manifest.ts` `/api/repos/jobs` 的 consumer `ui:obs` → `ui:observability`
+  （全仓真实视图 id），消除对账恒判「消费方不存在」的假漂移（v1.8 遥测事故同族）。
+
+### 修复（流程与文档）
+- **develop 血缘回灌**：develop 曾落后 origin/main 4 个提交（v1.34.4 发布 bump 未回灌），违反
+  `BRANCHING-STRATEGY §6.3`「发布后必须回灌」→ 下次 release PR 会再断裂。回灌冲突取 develop 功能超集，
+  保留 tag 推送识别与 SEC-DIST-01 守卫。
+- **文档历史快照标注**：`ARCH-CONVERGENCE-BASELINE.md` 的 cycle-49「现状」段与同文件 ✅ 完成记录自相矛盾，
+  `ROADMAP.md` 表头仍写 v1.30.0 当前状态，README 自检示例写死 `1.34.0` → 均标注「历史快照 + 当前事实源指针」，
+  版本号不再写死。
+
+### 守卫与验证
+- 新增 smoke `C70-CONS-01`（禁 `ui:obs` 复辟）/ `C70-MIME-01`（MIME 单一事实源，四端点必走 imageMime）；
+  两者均做负向验证（注入违规 → 准确变红 → 恢复绿）。
+- `typecheck` / `build`（25 模块 combo）/ `test:all`（55 文件 / 447 断言 + Loader 17/17）全绿。
+- 四员评审 PASS（无 blocker/major），报告见 `docs/agents/reviews/2026-11-27-架构漂移治理.md`。
+
+### 关联
+- `BL-DOC-05` / `BL-API-02` / `BL-PROC-10`；issue #4（仅进度同步，未改 inject）/ issue #5（事实更正，待关闭）。
+
+## [1.34.4] - 2026-11-27
+
+**深度题库视图退役收尾 + 市场评审指出的安全缺陷修复。**
+
+### 安全（市场评审反馈 · 真实缺陷）
+
+上游 awesome-dsh-plugin 条目维护者追加评语：
+
+> Its HTTP routes have no DSH access check, so a web page open in your browser could call them.
+
+核实属实：独立端口（宿主 `webServer` 缺席时的兜底通道）无条件使用
+`Access-Control-Allow-Origin: *` —— 配合「只绑 127.0.0.1」，看似仅本机可访问，
+实际**用户浏览器里打开的任意网页**都能 `fetch('http://127.0.0.1:8400/api/…')`
+读到本地题库数据、甚至 `POST /api/check` 写学习进度。
+
+修法：
+
+- **CORS 改为回环来源白名单**（`127.0.0.1` / `localhost` / `[::1]`），
+  回显具体 Origin 而非 `*`（`*` 会让任何站点都能读响应）。
+- **变更类请求（非 GET/HEAD/OPTIONS）来源非法直接 403** ——
+  CORS 只防「读响应」，防不住「写副作用」，必须服务端拒绝。
+- 宿主同源通道（主通道）不受影响：它本就继承宿主认证、无 CORS。
+
+实测：跨站 GET 无 `Access-Control-Allow-Origin` 头（浏览器读不到）；跨站 POST 403；
+同源读写正常。守卫 `SEC-CORS-01` 固化。
+
+### 修复（深度题库视图退役后的残留）
+
+- **细分题型落点改回刷题页**（用户报「点击没有跳转到对应细分题型的刷题页面」）：
+  上一版落点误设为 `pool`（统一题库的检索/查看页）——用户点「片段阅读」被丢进数据浏览器。
+  现落点 = `practice` + `category`，挂载即开一张该题型的卷；
+  并补 `CAT_MODULE` 映射回填 module（否则会停在「选择练习模块」页）。
+- **细分题型出题准确性**（用户报「细分题型有问题」）：
+  ① 曾用 `pool/search?q=题型名` 全文检索 → 实测「定义判断」5 条仅 1 条真属该题型；
+  ② 改按 `category` 等值后又漏 `qtype`（5.9 万题 `category` 为空）→ 题量腰斩；
+  ③ 带图补足未 honour 题型过滤 → 插队杂题。
+  现按 **`category` ∪ `qtype`** 精确过滤，带图补足谓词同步，实测 10/10 准确、
+  题量回到真实值（逻辑判断 2478→5220、片段阅读 3319→6396）。
+- **删除死代码** `src/server/topicTree.ts`（v9 迁池后零引用）。
+- **manifest**：补登记 `pool` 视图（一级导航有它但声明缺失 → 能力对账假漂移）；
+  清理 15 处指向已删视图的 `ui:deepbank` 消费者声明与 `deepbank` 视图登记。
+- **README 文案校准**：5 处仍把深度题库当独立功能 → 改为「五维标注刷题（已并入统一题库）」。
+
+### 变更（答题卷）
+
+- **SRS 与随机抽题统一为「每次固定 10 题一张卷」**（用户要求）：
+  进度显示 `第 x/N 题`；答完最后一题 → 「✅ 本卷已答完 · 再来一张」+ 完成横幅
+  （`🎉 本卷（10 题）已完成：答对 7/10 题`）。不再答完一题自动续抽
+  ——否则用户永远不知道这一轮有多少题、何时结束。
+
+### 测试
+
+- **55 文件 / 443 断言全绿**；`facts:check` + `docs:check` 绿。
+- 新增守卫：`SEC-CORS-01`（禁通配 CORS + 写请求拦截）、
+  `TC-01..03`（细分题型渲染与跳转刷题页）、`v1.34.4`（题型出题准确性）、
+  `v1.34.4b`（落点静态守卫 —— render 用 mock 测不到服务端落点变化）。
+
 ## [1.34.3] - 2026-11-26
 
 **深度题库收敛进统一池（端点 82 → 79）** —— 消除「同一能力两套端点」的漂移面。

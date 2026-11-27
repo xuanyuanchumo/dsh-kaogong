@@ -216,3 +216,40 @@ test('SEC-DIST-01 发布前必须清空 dist（防止源已删的孤儿产物混
   // 安全闸：只允许删 <仓库根>/dist
   expect(clean.includes("resolve(repoRoot, '..', 'dist')"), 'clean-dist 缺目标路径安全闸').toBe(true)
 })
+
+test('C70-CONS-01 能力对账 consumer 不得使用未注册的 ui:obs 词表（杜绝假漂移）', () => {
+  /**
+   * 架构漂移治理（v1.35）：manifest.ts 曾把 /api/repos/jobs 的 consumer 写成 'ui:obs'，
+   * 而全仓视图 id 是 'observability'（view-registry.ts:66 / client.tsx VIEW_ROUTES）。
+   * 该端点因此在能力对账里恒被判「消费方不存在」——与 v1.8 遥测口径、cycle-18
+   * 影子端点同族的「声明 vs 运行态」假阳性。守卫锁定真实词表，防复辟。
+   *
+   * 注意：ui:header / client:discovery 是 shell 层合法 consumer（不在 VIEW_META），
+   * 故不做「所有 ui:* 必在视图表」的一刀切断言——只针对已退役的 ui:obs。
+   */
+  const mf = readSrc('./src/shared/manifest.ts')
+  expect(/['"]ui:obs['"]/.test(mf), "manifest 仍有退役词表 'ui:obs'（应为 ui:observability）").toBe(false)
+  expect(mf.includes("path: '/api/repos/jobs'") && /consumers:\s*\[[^\]]*['"]ui:observability['"]/.test(mf.slice(mf.indexOf("path: '/api/repos/jobs'"), mf.indexOf("path: '/api/repos/jobs'") + 200)), '/api/repos/jobs 未声明真实消费方 ui:observability').toBe(true)
+})
+
+test('C70-MIME-01 图片 MIME 白名单单一事实源（四端点不得各写一份）', () => {
+  /**
+   * 架构漂移治理（v1.35）：扩展名→MIME 映射曾在 http/paperApi/naokuApi/tuxing 四处
+   * 逐字重复，新增类型只改一处会让同一张图在不同端点出现 200/415 分裂（假漂移）。
+   * 守卫锁定：唯一映射在 shared/media.ts，四个端点一律 import imageMime。
+   */
+  const media = readSrc('./src/shared/media.ts')
+  expect(media.includes('export const IMAGE_MIME') && media.includes('export function imageMime'), 'shared/media.ts 缺单一 MIME 事实源').toBe(true)
+  const consumers = [
+    './src/server/http.ts',
+    './src/server/paperApi.ts',
+    './src/server/naokuApi.ts',
+    './src/adapters/tuxing.ts',
+  ]
+  for (const p of consumers) {
+    const src = readSrc(p)
+    expect(src.includes('imageMime'), p + ' 未走 shared/media 的 imageMime').toBe(true)
+    // 不得再留本地 MIME 字面量表（'.png': 'image/png' 形态）
+    expect(/['"]\.png['"]\s*:\s*['"]image\/png['"]/.test(src), p + ' 仍有本地 MIME 字面量（漂移源）').toBe(false)
+  }
+})
