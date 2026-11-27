@@ -25,3 +25,4 @@ updated: 2026-11-20
 | 报告 | 主题 | 结论 | blocker 数 |
 |---|---|---|---|
 | [2026-11-20-workflow-governance.md](./2026-11-20-workflow-governance.md) | 工作流治理落地（四员独立评审） | CHANGES-REQUESTED → 11 项已修，2 项待用户决策 | 2（B1 分支迁移 / B2 版本不采纳） |
+| [2026-11-27-架构漂移治理.md](./2026-11-27-架构漂移治理.md) | 架构漂移治理（MIME/consumer/血缘/文档） | PASS（无 blocker/major，3 minor 已处理） | 0 |

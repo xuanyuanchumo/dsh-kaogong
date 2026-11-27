@@ -2,6 +2,35 @@
 
 本文件记录 dsh-kaogong 的版本级变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.35.0] - 2026-11-27
+
+**架构漂移治理（低耦合高内聚）** —— 消灭「声明 vs 运行态」不一致的三类漂移面，并修复 develop 血缘断裂。
+
+### 重构（单一事实源）
+- **图片 MIME 白名单收敛**：新增 `src/shared/media.ts`（`IMAGE_MIME` / `imageMime`，冻结常量 + 幂等归一），
+  四处逐字重复的本地表（`server/http.ts` `KG_IMG_MIME`、`server/paperApi.ts`、`server/naokuApi.ts`、
+  `adapters/tuxing.ts` 的 `MIME`）全部删除改为 import。杜绝「同一张图这个端点 200、那个端点 415」的分裂。
+  行为等价：六键映射逐字一致、`toLowerCase` 幂等、403/404/415/500 判据与 Content-Type 值均未变。
+- **能力对账 consumer 词表**：`manifest.ts` `/api/repos/jobs` 的 consumer `ui:obs` → `ui:observability`
+  （全仓真实视图 id），消除对账恒判「消费方不存在」的假漂移（v1.8 遥测事故同族）。
+
+### 修复（流程与文档）
+- **develop 血缘回灌**：develop 曾落后 origin/main 4 个提交（v1.34.4 发布 bump 未回灌），违反
+  `BRANCHING-STRATEGY §6.3`「发布后必须回灌」→ 下次 release PR 会再断裂。回灌冲突取 develop 功能超集，
+  保留 tag 推送识别与 SEC-DIST-01 守卫。
+- **文档历史快照标注**：`ARCH-CONVERGENCE-BASELINE.md` 的 cycle-49「现状」段与同文件 ✅ 完成记录自相矛盾，
+  `ROADMAP.md` 表头仍写 v1.30.0 当前状态，README 自检示例写死 `1.34.0` → 均标注「历史快照 + 当前事实源指针」，
+  版本号不再写死。
+
+### 守卫与验证
+- 新增 smoke `C70-CONS-01`（禁 `ui:obs` 复辟）/ `C70-MIME-01`（MIME 单一事实源，四端点必走 imageMime）；
+  两者均做负向验证（注入违规 → 准确变红 → 恢复绿）。
+- `typecheck` / `build`（25 模块 combo）/ `test:all`（55 文件 / 447 断言 + Loader 17/17）全绿。
+- 四员评审 PASS（无 blocker/major），报告见 `docs/agents/reviews/2026-11-27-架构漂移治理.md`。
+
+### 关联
+- `BL-DOC-05` / `BL-API-02` / `BL-PROC-10`；issue #4（仅进度同步，未改 inject）/ issue #5（事实更正，待关闭）。
+
 ## [1.34.4] - 2026-11-27
 
 **深度题库视图退役收尾 + 市场评审指出的安全缺陷修复。**
