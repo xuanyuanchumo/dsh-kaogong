@@ -24,7 +24,7 @@ export const pageRank: typeof kernelPageRank = kernelPageRank
 
 // ── 能力清单（与 index.js / client.js / ui 实际注册保持同步）──
 export const CAPABILITIES = {
-  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.35.0', mode: 'offline-first' },
+  plugin: { id: 'kaogong', name: 'dsh-kaogong', version: '1.36.0', mode: 'offline-first' },
 
   // 宿主 UI 双入口（client 半注册；图谱与可观测面板消费此声明）
   entries: [
@@ -96,6 +96,10 @@ export const CAPABILITIES = {
     // cycle-60 统一检索层：provider 注册表单一入口（统一信封，旧五端点零删改）+ 白盒
     { path: '/api/search/unified', label: '统一检索(provider注册表)', consumers: ['ui:search'], desc: '?provider=pool|huasheng13|docs|kadian|history&q=&limit= → {query,results,total,took?,confidence?}；旧端点保留兼容' },
     { path: '/api/search/providers', label: '检索provider白盒', consumers: ['ui:observability'], desc: '运行时 provider id 清单（与 manifest 检索端点声明对账）' },
+    // 阶段 4（issue #4 图片搜题）：上传题目图片 → 宿主 LLM 结构化抽取 → 统一检索匹配原题
+    { method: 'GET', path: '/api/img-search/models', label: '图像搜题·provider清单', consumers: ['ui:imgsearch'], desc: '?method=POST {provider} → 模型清单；返回宿主已注册 provider（无模型则诚实降级）' },
+    { method: 'POST', path: '/api/img-search/analyze', label: '图像搜题·结构化抽取', consumers: ['ui:imgsearch'], desc: '{image(base64),mediaType,kind,provider,model} → attachments 持久化 + llm 抽取题干/图表数据/图形特征' },
+    { method: 'POST', path: '/api/img-search/match', label: '图像搜题·原题匹配', consumers: ['ui:imgsearch'], desc: '{extraction,limit,provider} → 复用统一检索层跨源匹配 → {hits,groups}' },
     // cycle-13：专题枢纽方法论分区消费（ui:topics）——声明口径与实际消费方一致
     { path: '/api/method', label: '方法论', consumers: ['ui:method', 'ui:topics', 'tool:kaogong_ai_tutor', 'tool:kaogong_ai_shenlun'] },
     { path: '/api/methods', label: '方法论目录', consumers: ['ui:method', 'ui:topics'] },
@@ -196,6 +200,8 @@ export const CAPABILITIES = {
     { id: 'graph', label: '知识图谱' },
     { id: 'repos', label: '题库管理' },
     { id: 'observability', label: '可观测' },
+    // 阶段 4（issue #4）：图片搜题（专题枢纽入口，viaHub，非一级导航——纪律㉛）
+    { id: 'imgsearch', label: '图片搜题' },
   ],
 
   // 数据域（16 仓库 × 模块；cycle-18 起含 huasheng13 方法论语料）
