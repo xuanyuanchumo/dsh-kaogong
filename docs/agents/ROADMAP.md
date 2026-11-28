@@ -22,7 +22,7 @@ updated: 2026-11-26
 | **内核边界** | 六不变量**已机器化**：`SMOKE-KERNEL-01..06b`（客户端/内核禁 fs 读 · 内核禁第三方字面量 · 媒体走 media_ref · 上游零写） |
 | **可扩展性** | **源注册表**（`poolSources.ts`）：新增源 = 写一个 ingest + 注册表加一条 → 主流程/面板/守卫零改动（`SMOKE-KGDB-08/08b`） |
 | **可观测性** | 白盒健康快照（`/api/pool/health`）：表行数 / 关系分布 / **8 项质量指标（每项附判据 SQL）** / 源覆盖 / Top 知识点 |
-| 端点/工具/视图 | **79 端点**（含 12 个 `/api/pool/*`）/ 6 工具（**全部接入 presentCall/presentResult**）/ **16 视图**（+「🗄️ 统一题库」） |
+| 端点/工具/视图 | cycle-34 快照 82 端点（含 12 个 `/api/pool/*`）/ 6 工具（**全部接入 presentCall/presentResult**）/ 16 视图（+「🗄️ 统一题库」）；**当前值见 docs/facts.json**（v1.36：82 端点 / 6 工具 / 17 视图，+3 图片搜题端点 +1 imgsearch 视图） |
 | 测试 | smoke **437**（+29）/ render **66**（+3 RENDER-POOL 旅程）；band-detector WARNING（零超预算文件） |
 | 真题卷 | 1683 套（申论 944 / 行测 739，2008–2026）；**v1.29 三模式**（📝答题 / 🎓学习 / 📖全卷） |
 | 深度题库 | 27506 题（知识点覆盖 100%，含图 3548；五维标注 11282 题） |
@@ -79,7 +79,7 @@ updated: 2026-11-26
 
 ### T-030 · awesome-dsh-plugin 收录 PR（**用户指示暂缓**——2026-11-19「暂不T30，继续其他开发完善」）
 - 现状：合规项已全部就绪；条目 YAML 草案已写入 `docs/agents/MARKETPLACE-ENTRY.md`（category `tools`，无 `npm:` 键）。
-- 目标：向 awesome-dsh-plugin 提 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（一个 PR 一个文件；描述数字与 79 端点/6 工具/16 视图/16 仓库核对一致）。
+- 目标：向 awesome-dsh-plugin 提 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（一个 PR 一个文件；描述数字以 `docs/facts.json` 为准——当前 82 端点/6 工具/17 视图/16 仓库）。
 - 前置：仓库创建满 1 天（CI 自动查）、GitHub topic `dsh-plugin`、按 PR 当日复核。
 
 ### T-026 · 图谱「学习画像」叠加层
@@ -108,8 +108,8 @@ updated: 2026-11-26
 | 阶段 | 内容 | 状态 | 前置 |
 |---|---|---|---|
 | **阶段 2 · 取题层升级** | ① 多源分层抽题 · ② 五维标注贯通练习卡片 · ③ study_event 双写 | ✅ **cycle-38/39 完成**（dims 注入零客户端改动 + rich 优选 + 双写显式口径 S2 守卫 + 按源轮转；配额策略留后续微调） | 阶段 1 ✅ |
-| **阶段 3 · 检索层升级** | ① 统一检索 + **跨源内容级去重** · ② 图推桥接（服务 issue #4 P0/P1） | ✅ **cycle-39/40 完成**（源多样性轮转「和谐」4 源 + 内容指纹合并 140465→86454 行 + 来源全标记 231719 + 解析多版本 141121——研究 20/21；**图推桥接未做**：模型读图 → 规律类型+特征描述 → 匹配解析列，不需要图像 embedding——依赖阶段 4） | 阶段 2 ✅ |
-| **阶段 4 · 模型接入** | ① `ctx.llm` 直连 + ImageBlock · ② 模型自选 UI（provider/model 下拉） · ③ 图推桥接（阶段 3 ②） | ⏳ 未做 | ⚠️ **前置缺口 C5**：`src/host/index.ts` 的 `export const inject = ['tools']` **必须扩为 `['tools','llm']`**，否则 `ctx.llm` 在 `ctx.get` 中取不到（DSH `ctx.inject` 语义：未声明的服务不可取）。**不修则第一行代码就失败** |
+| **阶段 3 · 检索层升级** | ① 统一检索 + **跨源内容级去重** · ② 图推桥接（服务 issue #4 P0/P1） | ✅ **cycle-39/40 完成**（源多样性轮转「和谐」4 源 + 内容指纹合并 140465→86454 行 + 来源全标记 231719 + 解析多版本 141121——研究 20/21；图推桥接已在阶段 4（v1.36）完成：模型读图 → 规律类型+特征描述 → 匹配解析列，无需图像 embedding） | 阶段 2 ✅ |
+| **阶段 4 · 模型接入** | ① `ctx.llm` 直连 + ImageBlock · ② 模型自选 UI（provider/model 下拉） · ③ 图推桥接（阶段 3 ②） | ✅ **v1.36 完成**（issue #4）：C5 inject 扩 `['tools','llm']`（PR #15，R11b 三重验证）→ `ai-bridge` 桥接 `ctx.attachments.admitPromptContent` + `ctx.llm.stream`（duck typing 零宿主包依赖）→ 三端点 `/api/img-search/{models,analyze,match}` → `imgsearch` 视图（上传/识别/匹配/加入错题本）。provider/model 下拉走宿主路由（零自建凭据），图推规律特征进 `extractionQuery`。**验证边界**：链路端到端已测（沙箱 models 返回真实 provider、analyze 走 attachments 校验）；真实识别准确率依赖用户模型配置，诚实登记为待用户验收 | 阶段 3 ✅ |
 
 **阶段 2 的具体缺口（可立即开工）**：
 - `/api/questions` 虽已走存储层，但返回对象**未带五维标注**（`dims`）→ 练习卡片看不到「解题思路/最快解法/易错陷阱」。

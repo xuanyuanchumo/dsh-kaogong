@@ -3,8 +3,8 @@
  * check-facts.mjs —— 文档事实同源校验（BL-DOC-01）
  *
  * 只校验**能从 manifest 运行时真值机器派生**的计数：
- *   - 端点数（CAPABILITIES.endpoints.length = 78）
- *   - 工具数（CAPABILITIES.tools.length = 6）
+ *   - 端点数（CAPABILITIES.endpoints.length，机器派生，勿写死具体数字）
+ *   - 工具数（CAPABILITIES.tools.length）
  *
  * ★ 2026-11-20 反模式清理（用户决策）：
  *   不再校验「测试断言数」。旧实现把 smoke/render/loader 通过数塞进事实源并做「只增不减」门禁，

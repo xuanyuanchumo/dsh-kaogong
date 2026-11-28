@@ -69,10 +69,11 @@ test('MKT-05 category 取值合法（tools 等上游既定词表）', () => {
 
 test('MKT-06 描述数字与服务端事实源一致（题量从池实测派生，不写死）', async () => {
   const { CAPABILITIES } = await import('../../dist/shared/manifest.js')
-  // cycle-62 端点收敛：/api/naoku/* 六端点退役 + 3 语义下沉到池 → 82 − 6 + 3 = 79
-  expect(CAPABILITIES.endpoints.length).toBe(79)
+  // cycle-62 端点收敛后 79；阶段 4（issue #4 图片搜题）新增 3 端点（models/analyze/match）→ 82
+  expect(CAPABILITIES.endpoints.length).toBe(82)
   expect(CAPABILITIES.tools.length).toBe(6)
-  expect(CAPABILITIES.views.length).toBe(16)
+  // 阶段 4 新增 imgsearch 视图（viaHub）→ 17
+  expect(CAPABILITIES.views.length).toBe(17)
   /**
    * ⚠️ cycle-68 修复（两轮才修对）：
    * ① 原守卫把「86,454 题」**写死在测试里**——池一增长（本地 87,434）守卫就红，

@@ -33,6 +33,8 @@ import { NativeObsView } from './views/obs-view.js'
 import { NativeReposView } from './views/repos-view.js'
 // cycle-34 阶段 1：统一题库视图（`.kaogong.db` 存储层的可见面）
 import { NativePoolView } from './views/pool-view.js'
+// issue #4 阶段 4：图片搜题视图（上传题目图→模型结构化抽取→统一检索匹配原题）
+import { NativeImgSearchView } from './views/imgsearch-view.js'
 // cycle-18 花生十三体系方法论（消费 /api/huasheng13/*，自管数据视图）
 import { NativeHuasheng13View } from './views/huasheng13-view.js'
 import { NativePlanView, NativeSearchView, NativeMethodView } from './views/plan-view.js'
@@ -166,6 +168,8 @@ import { buildNavGroups, viewMeta } from './view-registry.js'
         search: { comp: NativeSearchView, key: t => 'se' + t, props: () => ({ api, onGo: go }) },
         // cycle-49：initialTopic 深链——图谱 method 节点「读方法论」直达对应主题正文
         method: { comp: NativeMethodView, key: t => 'me' + t + String(viewParams.topic || ''), props: () => ({ api, onGo: go, initialTopic: viewParams.topic || '' }) },
+        // issue #4 阶段 4：图片搜题（viaHub，经专题枢纽/深链进入，不占一级导航——纪律㉛）
+        imgsearch: { comp: NativeImgSearchView, key: t => 'im' + t, props: () => ({ api, onGo: go }) },
       }
       const route = VIEW_ROUTES[view] || VIEW_ROUTES[(view === 'obs' ? 'observability' : view)]
       const routeEl = route ? h(route.comp, { key: route.key(tick), ...route.props() }) : null
