@@ -1,4 +1,4 @@
-# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.36.0
+# dsh-kaogong — 考公备考整合插件（DSH 宿主原生面板）· v1.37.0
 
 [![npm](https://img.shields.io/npm/v/dsh-kaogong.svg?label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-kaogong)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
@@ -384,7 +384,7 @@ ANIC 质量流程：`.cycles/`（intent → spec → plan → G0–G3 门禁 →
 
 **能力事实（维护者可对代码核对）**：**82** 个 HTTP 端点 · **6** 个宿主工具 · **17** 个视图 ·
 **16** 个上游仓库（按需安装）· 统一题库池 **86,454** 题 / **229,732** 出处行 / **141,121** 解析版本 ·
-测试 **vitest 464 断言 × 58 分域文件**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
+测试 **vitest 473 断言 × 60 分域文件**（`npm run test:all`）。以上数字由 `src/shared/manifest.ts`（单一事实源）
 与 `docs/facts.json`（文档事实源，`node scripts/docs/gen-facts.mjs` 自动生成）实测得出，不随文案改动。
 
 ## ⚖️ 许可与免责

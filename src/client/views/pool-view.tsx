@@ -17,7 +17,7 @@
  *   · props 窄口径：`{ api, initialModule? }`
  *   · 所有接口字段缺失即降级，绝不抛错进 ErrorBoundary
  */
-import { h, React, Stat, Card, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
+import { h, React, Stat, Card, RichText, KV_TAG, KV_BTN, KgLoad } from '../ui-kit.js'
 
 /** props（窄口径——父层只给 api 与可选初始模块） */
 interface NativePoolViewProps {
@@ -179,40 +179,269 @@ function PoolSearchRow({ r, onPick }: any) {
   )
 }
 
-/** 单题聚合详情（一份题干 + N 处出处 + 关系邻居 + 五维标注） */
-function PoolDetail({ d, onClose, onGo }: any) {
+/**
+ * 🖼 图片搜题子区（并入「跨源统一检索」卡，不设独立视图——用户 2026-11-28 反馈）。
+ *
+ * 一等控件：**是否使用模型开关** + **provider/model 切换入口**。
+ * · 未启用模型 / 未选模型 → 不假装用了 AI：给出明确提示，检索按钮不可用；
+ * · 启用并选好模型 → 上传图片 → analyze（结构化抽取）→ match → onHits 回调喂给统一检索结果区。
+ * 全部字段视为可选、失败结构化降级（卡片级，绝不 role="alert"）。
+ */
+function PoolImageSearch({ api, onHits }: any) {
+  const [useModel, setUseModel] = React.useState(false)      // 是否使用模型（默认关，纯离线优先）
+  const [providers, setProviders] = React.useState([])
+  const [provider, setProvider] = React.useState('')
+  const [models, setModels] = React.useState([])
+  const [model, setModel] = React.useState('')
+  const [kind, setKind] = React.useState('auto')             // ziliao | tuxing | auto
+  const [image, setImage] = React.useState('')               // base64（仅内存态）
+  const [mediaType, setMediaType] = React.useState('')
+  const [extraction, setExtraction] = React.useState(null)
+  const [busy, setBusy] = React.useState(false)
+  const [msg, setMsg] = React.useState('')
+  const alive = React.useRef(true)
+
+  React.useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
+
+  // provider 清单（挂载即取；无模型服务时诚实降级）
+  React.useEffect(() => {
+    ;(async () => {
+      try {
+        const d = await api('/img-search/models')
+        if (!alive.current) return
+        setProviders(Array.isArray(d && d.providers) ? d.providers : [])
+        if (d && d.ok === false) setMsg(String(d.hint || '宿主未配置模型服务'))
+      } catch (e: any) { if (alive.current) setMsg(String((e && e.message) || e)) }
+    })()
+  }, [api])
+
+  // 选 provider 后拉该 provider 的模型（优先自动选一个 vision 模型）
+  const pickProvider = React.useCallback(async (p: string) => {
+    setProvider(p); setModel(''); setModels([])
+    if (!p) return
+    try {
+      const d = await api('/img-search/models', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: p }) })
+      if (!alive.current) return
+      const ms = Array.isArray(d && d.models) ? d.models : []
+      setModels(ms)
+      const vision = ms.find((m: any) => m.vision) || ms[0]
+      if (vision) setModel(String(vision.id))
+    } catch (e: any) { if (alive.current) setMsg(String((e && e.message) || e)) }
+  }, [api])
+
+  const onFile = React.useCallback((e: any) => {
+    const f = e && e.target && e.target.files && e.target.files[0]
+    if (!f) return
+    setMsg('')
+    const reader = new FileReader()
+    reader.onload = () => {
+      const full = String(reader.result || '')
+      const comma = full.indexOf(',')
+      setMediaType((f.type && /^image\/(png|jpe?g|webp|gif)$/.test(f.type)) ? f.type : 'image/png')
+      setImage(comma >= 0 ? full.slice(comma + 1) : full)
+      setExtraction(null)
+    }
+    reader.onerror = () => setMsg('图片读取失败，请重试')
+    reader.readAsDataURL(f)
+  }, [])
+
+  const run = React.useCallback(async () => {
+    if (!useModel) { setMsg('请先打开「使用模型」开关'); return }
+    if (!provider || !model) { setMsg('请先选择 provider 与模型'); return }
+    if (!image) { setMsg('请先上传题目图片'); return }
+    setBusy(true); setMsg(''); setExtraction(null)
+    try {
+      const a = await api('/img-search/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image, mediaType, kind, provider, model }),
+      })
+      if (!alive.current) return
+      if (!a || !a.ok) { setMsg(String((a && a.error) || '识别失败')); return }
+      setExtraction(a.extraction)
+      const m = await api('/img-search/match', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extraction: a.extraction, limit: 10 }),
+      })
+      if (!alive.current) return
+      if (!m || !m.ok) { setMsg(String((m && m.error) || '匹配失败')); return }
+      // 命中映射成统一检索结果形状（canonicalId 优先，复用 PoolSearchRow + PoolDetail）
+      const rows = Array.isArray(m.hits) ? m.hits : []
+      const mapped = rows.map((h: any) => ({
+        canonicalId: h.canonicalId || h.id,
+        stem: h.title || h.snippet || String(h.stem || ''),
+        module: h.module || '', kadian: h.kadian || '',
+        sources: Array.isArray(h.sources) ? h.sources : [{ source: h.provider || h.source || 'pool' }],
+      })).filter((r: any) => !!r.canonicalId)
+      if (!mapped.length) { setMsg('未匹配到原题——换一张更清晰的题面试试，或用文字检索'); return }
+      onHits && onHits({ results: mapped, query: String(m.query || '图片搜题'), engine: '模型读图 · ' + model, tookMs: a.tookMs })
+    } catch (e: any) { if (alive.current) setMsg(String((e && e.message) || e)) }
+    finally { if (alive.current) setBusy(false) }
+  }, [api, useModel, provider, model, image, mediaType, kind, onHits])
+
+  return (
+    <div style={{ marginTop: 10, padding: '9px 10px', border: '1px dashed rgba(99,102,241,.35)', borderRadius: 8, background: 'rgba(99,102,241,.03)' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 7 }}>
+        {/* ★ 是否使用模型开关（一等控件，默认关，离线优先） */}
+        <label style={{ fontSize: 11, display: 'flex', gap: 5, alignItems: 'center', cursor: 'pointer' }}>
+          <input type="checkbox" checked={useModel} onChange={(e: any) => setUseModel(!!e.target.checked)} />
+          使用模型（图片读题）
+        </label>
+        {/* ★ provider / model 切换入口（仅在开关打开时可用） */}
+        <select value={provider} disabled={!useModel} onChange={(e: any) => pickProvider(String(e.target.value))}
+          style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, opacity: useModel ? 1 : .5 }}>
+          <option value="">选择 provider…</option>
+          {providers.map((p: any) => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
+        </select>
+        <select value={model} disabled={!useModel || !provider} onChange={(e: any) => setModel(String(e.target.value))}
+          style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, opacity: (useModel && provider) ? 1 : .5 }}>
+          <option value="">选择模型…</option>
+          {models.map((m: any) => <option key={m.id} value={m.id}>{m.name || m.id}{m.vision ? ' (视觉)' : ''}</option>)}
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={onFile} disabled={!useModel}
+          style={{ fontSize: 11, maxWidth: 260 }} />
+        {image ? <img src={'data:' + (mediaType || 'image/png') + ';base64,' + image} alt="题图预览"
+          style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(148,163,184,.3)' }} /> : null}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['auto', 'ziliao', 'tuxing'].map((k: string) => (
+            <button key={k} style={{ ...KV_TAG, cursor: 'pointer', opacity: kind === k ? 1 : .6 }}
+              onClick={() => setKind(k)}>{k === 'auto' ? '自动判断' : k === 'ziliao' ? '资料分析' : '图形推理'}</button>
+          ))}
+        </div>
+        <button style={KV_BTN} disabled={busy || !useModel} onClick={run}>{busy ? '⏳ 识别中…' : '🖼 识别并搜图'}</button>
+      </div>
+      {extraction ? (
+        <div style={{ marginTop: 7, fontSize: 10.5, lineHeight: 1.7, background: 'rgba(16,185,129,.07)', borderRadius: 6, padding: '6px 8px' }}>
+          <div>📝 题干：{String(extraction.stem || '—').slice(0, 160)}</div>
+          {extraction.chartData ? <div>📊 图表数据：{String(extraction.chartData).slice(0, 160)}</div> : null}
+          {extraction.figureFeatures ? <div>🔷 图形特征：{String(extraction.figureFeatures).slice(0, 160)}</div> : null}
+          <div>🏷 判断：{extraction.module || '—'} · {extraction.kind || '—'}</div>
+        </div>
+      ) : null}
+      {msg ? <div style={{ marginTop: 6, fontSize: 10.5, color: '#b45309' }}>⚠ {msg}</div> : null}
+      {!useModel ? <div style={{ marginTop: 6, fontSize: 9.5, color: 'var(--text-faint,#94a3b8)' }}>默认关闭模型：纯离线检索不受影响；开启后可上传题目图片，由宿主模型读图并在统一题库中匹配原题。</div> : null}
+    </div>
+  )
+}
+
+/** 选项防御式归一：d.options 可能是对象 / JSON 字符串 / 数组，统一成 {A:文本,...} */
+function poolOptionsOf(raw: any): Record<string, string> {
+  if (!raw) return {}
+  let o = raw
+  if (typeof raw === 'string') { try { o = JSON.parse(raw) } catch { return { raw: String(raw).slice(0, 600) } } }
+  if (Array.isArray(o)) {
+    const out: Record<string, string> = {}
+    o.forEach((x: any, i: number) => {
+      const k = String((x && (x.key || x.label)) || String.fromCharCode(65 + i))
+      out[k] = String((x && (x.text || x.label || x.html)) || '')
+    })
+    return out
+  }
+  if (typeof o === 'object') {
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(o)) out[k] = String(v ?? '')
+    return out
+  }
+  return {}
+}
+
+/** 加入错题本按钮（真组件化：hook 在本组件内，走 /api/history/entries 真实补录契约） */
+function PoolAddWrongBtn({ d, api }: any) {
+  const [state, setState] = React.useState('idle')
+  const [msg, setMsg] = React.useState('')
+  const add = React.useCallback(async () => {
+    if (!d || !d.stem) { setState('err'); setMsg('缺少题干，无法加入错题本'); return }
+    setState('busy')
+    try {
+      const question: any = {
+        stem: d.stem, module: d.module || '', type: d.type || d.qtype || '',
+        options: poolOptionsOf(d.options), correctAnswer: d.answer || d.correctAnswer || '',
+        analysis: d.analysis || '', kadian: d.kadian || '', canonicalId: d.canonicalId || '',
+        groupMaterial: d.groupMaterial || '', no: d.no || d.number || 0,
+      }
+      const out = await api('/history/entries', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: [{ question, result: 'wrong', source: '统一检索' }], source: '统一检索' }),
+      })
+      // 幂等冲突也算已加入；accepted 兼容数字（ historyApi 实际形状）与数组两种口径
+      const acceptedN = out && (typeof out.accepted === 'number' ? out.accepted : (Array.isArray(out.accepted) ? out.accepted.length : 0))
+      const conflictsN = out && (typeof out.conflicts === 'number' ? out.conflicts : (Array.isArray(out.conflicts) ? out.conflicts.length : 0))
+      if (out && (acceptedN > 0 || conflictsN > 0)) { setState('done'); setMsg('已加入错题本') }
+      else { setState('err'); setMsg(String((out && (out.error || out.rejected?.[0]?.reason)) || '加入失败')) }
+    } catch (e: any) { setState('err'); setMsg(String((e && e.message) || e)) }
+  }, [api, d])
+  if (state === 'done') return <span style={{ ...KV_TAG, background: 'rgba(16,185,129,.12)', color: '#059669' }}>📕 {msg}</span>
+  return (
+    <span>
+      <button style={KV_BTN} disabled={state === 'busy'} onClick={add}>📕 {state === 'busy' ? '加入中…' : '加入错题本'}</button>
+      {state === 'err' ? <span style={{ fontSize: 9.5, color: '#b45309', marginLeft: 6 }}>{msg}</span> : null}
+    </span>
+  )
+}
+
+/** 单题聚合详情（七段渲染：来源/题型/题号 → 材料 → 题干 → 选项 → 答案 → 解析 → 五维/出处/关系） */
+function PoolDetail({ d, onClose, onGo, api }: any) {
   if (!d) return null
   const dims = d.dims || {}
   const dimRows: any[] = [
     ['解题思路', dims.reasoning], ['最快解法', dims.fastest], ['易错陷阱', dims.pitfalls],
     ['母题规律', dims.mother], ['模型提示', dims.askModel], ['疑点', dims.doubt],
   ].filter((x: any) => x[1])
+  const optEntries = Object.entries(poolOptionsOf(d.options))
+  const answer = String(d.answer || d.correctAnswer || '').trim()
+  const no = d.no || d.number || ''
   return (
     <Card title="🔎 单题聚合视图">
-      <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+      <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6, display: 'flex', justifyContent: 'flex-end', gap: 6, flexWrap: 'wrap' }}>
         {/* cycle-49：单题聚合视图不再是死胡同——按知识点/模块一键开练 */}
         {onGo && d.kadian ? <button style={KV_BTN} onClick={() => onGo('practice', { kadian: d.kadian })}>✏️ 练此知识点 ›</button> : null}
         {onGo && d.module ? <button style={KV_BTN} onClick={() => onGo('practice', { module: d.module })}>🎯 练此模块 ›</button> : null}
+        {api ? <PoolAddWrongBtn d={d} api={api} /> : null}
         <button style={KV_BTN} onClick={onClose}>关闭</button>
       </div>
+      {/* ① 来源/题型/题号 */}
       <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 4 }}>
-        {d.module || '未分类'} · {d.category || '—'} · {d.qtype || '—'} · {d.sourceCount} 处出处
+        {d.module || '未分类'} · {d.category || '—'} · {d.qtype || '—'} · {no ? '第 ' + no + ' 题 · ' : ''}{d.sourceCount} 处出处 · {d.year || ''}{d.region || ''}
       </div>
       {d.kadian ? <div style={{ fontSize: 10, color: '#6366f1', marginBottom: 6 }}>知识点：{d.kadian}</div> : null}
-      <div style={{ fontSize: 11.5, lineHeight: 1.75, marginBottom: 8 }}>{String(d.stem || '').slice(0, 500)}</div>
+      {/* ② 材料（整段不截断） */}
+      {d.groupMaterial ? (
+        <details style={{ marginBottom: 8 }}>
+          <summary style={{ fontSize: 10.5, color: '#7c3aed', cursor: 'pointer' }}>给定材料{d.groupMaterialNo ? ' ' + d.groupMaterialNo : ''}</summary>
+          <div style={{ fontSize: 11, lineHeight: 1.8, marginTop: 5, maxHeight: 300, overflowY: 'auto' }}><RichText text={String(d.groupMaterial)} /></div>
+        </details>
+      ) : null}
+      {/* ③ 题干（RichText 支持 kgimg:// 题图，不截断） */}
+      <div style={{ fontSize: 11.5, lineHeight: 1.75, marginBottom: 8 }}><RichText text={String(d.stem || '')} /></div>
+      {/* ④ 选项（RichText 支持选项图） */}
+      {optEntries.length ? (
+        <div style={{ marginBottom: 8 }}>
+          {optEntries.map(([k, v]) => (
+            <div key={k} style={{ fontSize: 11, lineHeight: 1.7, marginBottom: 3, display: 'flex', gap: 8 }}>
+              <span style={{ ...KV_TAG, flexShrink: 0, background: 'rgba(99,102,241,.1)', color: '#4f46e5' }}>{k}</span>
+              <span style={{ flex: 1 }}><RichText text={v} /></span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {/* ⑤ 答案 */}
+      {answer ? <div style={{ fontSize: 11, marginBottom: 8, padding: '5px 9px', background: 'rgba(16,185,129,.09)', borderRadius: 8, color: '#047857' }}>✅ 正确答案：{answer}</div> : null}
+      {/* ⑥ 解析（放宽到 3000 字） */}
       {d.analysis ? (
         <details style={{ marginBottom: 8 }}>
           <summary style={{ fontSize: 10.5, color: '#4f46e5', cursor: 'pointer' }}>官方解析</summary>
-          <div style={{ fontSize: 11, lineHeight: 1.7, marginTop: 5, whiteSpace: 'pre-wrap' }}>{String(d.analysis).slice(0, 1200)}</div>
+          <div style={{ fontSize: 11, lineHeight: 1.7, marginTop: 5 }}><RichText text={String(d.analysis).slice(0, 3000)} /></div>
         </details>
       ) : null}
+      {/* ⑦ 五维标注 */}
       {dimRows.length ? (
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 10, color: 'var(--text-muted,#64748b)', marginBottom: 3 }}>五维标注</div>
           {dimRows.map((r: any, i: number) => (
             <details key={i} style={{ marginBottom: 3 }}>
               <summary style={{ fontSize: 10.5, color: '#059669', cursor: 'pointer' }}>{r[0]}</summary>
-              <div style={{ fontSize: 10.5, lineHeight: 1.7, marginTop: 3, whiteSpace: 'pre-wrap', color: 'var(--text-secondary,#475569)' }}>{String(r[1]).slice(0, 800)}</div>
+              <div style={{ fontSize: 10.5, lineHeight: 1.7, marginTop: 3, whiteSpace: 'pre-wrap', color: 'var(--text-secondary,#475569)' }}>{String(r[1]).slice(0, 1500)}</div>
             </details>
           ))}
         </div>
@@ -261,6 +490,7 @@ export function NativePoolView({ api, initialModule, initialCategory = '', initi
   const [module, setModule] = React.useState(initialModule || '')
   const [busy, setBusy] = React.useState(false)       // 重建中
   const [err, setErr] = React.useState('')
+  const [imgOpen, setImgOpen] = React.useState(false) // 🖼 图片搜题子区展开态（并入跨源统一检索区）
   const aliveRef = React.useRef(true)
 
   const load = React.useCallback(async () => {
@@ -423,7 +653,12 @@ export function NativePoolView({ api, initialModule, initialCategory = '', initi
           />
           <button style={KV_BTN} disabled={searching} onClick={doSearch}>{searching ? '⏳ 检索中…' : '检索'}</button>
           <button style={KV_BTN} disabled={busy} onClick={doSample}>🎲 分层抽题</button>
+          {/* 图片搜题并入统一检索区（用户反馈：不设独立视图）——与文本检索共用下方结果渲染 */}
+          <button style={{ ...KV_BTN, opacity: imgOpen ? 1 : .75 }} onClick={() => setImgOpen((v: any) => !v)}>
+            🖼 图片搜题{imgOpen ? ' ▲' : ' ▼'}
+          </button>
         </div>
+        {imgOpen ? <PoolImageSearch api={api} onHits={(r: any) => { if (aliveRef.current) setResults(r) }} /> : null}
         {modules.length ? (
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
             <button style={{ ...KV_TAG, cursor: 'pointer', opacity: module ? 1 : 0.6 }} onClick={() => setModule('')}>全部模块</button>
@@ -464,7 +699,7 @@ export function NativePoolView({ api, initialModule, initialCategory = '', initi
         </Card>
       ) : null}
 
-      {detail ? <PoolDetail d={detail} onClose={() => setDetail(null)} onGo={onGo} /> : null}
+      {detail ? <PoolDetail d={detail} onClose={() => setDetail(null)} onGo={onGo} api={api} /> : null}
 
       <div style={{ fontSize: 9.5, color: 'var(--text-faint,#94a3b8)', lineHeight: 1.7 }}>
         统一题库是**派生层**：全部内容可从上游重建（上游仓库只读，永不修改）。

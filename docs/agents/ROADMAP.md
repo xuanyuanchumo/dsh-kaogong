@@ -22,7 +22,7 @@ updated: 2026-11-26
 | **内核边界** | 六不变量**已机器化**：`SMOKE-KERNEL-01..06b`（客户端/内核禁 fs 读 · 内核禁第三方字面量 · 媒体走 media_ref · 上游零写） |
 | **可扩展性** | **源注册表**（`poolSources.ts`）：新增源 = 写一个 ingest + 注册表加一条 → 主流程/面板/守卫零改动（`SMOKE-KGDB-08/08b`） |
 | **可观测性** | 白盒健康快照（`/api/pool/health`）：表行数 / 关系分布 / **8 项质量指标（每项附判据 SQL）** / 源覆盖 / Top 知识点 |
-| 端点/工具/视图 | cycle-34 快照 82 端点（含 12 个 `/api/pool/*`）/ 6 工具（**全部接入 presentCall/presentResult**）/ 16 视图（+「🗄️ 统一题库」）；**当前值见 docs/facts.json**（v1.36：82 端点 / 6 工具 / 17 视图，+3 图片搜题端点 +1 imgsearch 视图） |
+| 端点/工具/视图 | cycle-34 快照 82 端点（含 12 个 `/api/pool/*`）/ 6 工具（**全部接入 presentCall/presentResult**）/ 16 视图（+「🗄️ 统一题库」）；**当前值见 docs/facts.json**（v1.37：82 端点 / 6 工具 / 16 视图（图片搜题能力并入统一检索区，删除独立 imgsearch 视图）） |
 | 测试 | smoke **437**（+29）/ render **66**（+3 RENDER-POOL 旅程）；band-detector WARNING（零超预算文件） |
 | 真题卷 | 1683 套（申论 944 / 行测 739，2008–2026）；**v1.29 三模式**（📝答题 / 🎓学习 / 📖全卷） |
 | 深度题库 | 27506 题（知识点覆盖 100%，含图 3548；五维标注 11282 题） |
@@ -79,7 +79,7 @@ updated: 2026-11-26
 
 ### T-030 · awesome-dsh-plugin 收录 PR（**用户指示暂缓**——2026-11-19「暂不T30，继续其他开发完善」）
 - 现状：合规项已全部就绪；条目 YAML 草案已写入 `docs/agents/MARKETPLACE-ENTRY.md`（category `tools`，无 `npm:` 键）。
-- 目标：向 awesome-dsh-plugin 提 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（一个 PR 一个文件；描述数字以 `docs/facts.json` 为准——当前 82 端点/6 工具/17 视图/16 仓库）。
+- 目标：向 awesome-dsh-plugin 提 `data/plugins/xuanyuanchumo__dsh-kaogong.yml`（一个 PR 一个文件；描述数字以 `docs/facts.json` 为准——当前 82 端点/6 工具/16 视图/16 仓库）。
 - 前置：仓库创建满 1 天（CI 自动查）、GitHub topic `dsh-plugin`、按 PR 当日复核。
 
 ### T-026 · 图谱「学习画像」叠加层

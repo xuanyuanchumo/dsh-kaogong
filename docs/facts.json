@@ -1,12 +1,12 @@
 {
   "_comment": "文档事实源（自动生成，勿手改）。生成：node scripts/docs/gen-facts.mjs",
   "_source": "dist/shared/manifest.js（运行时真值）+ package.json",
-  "_generatedAt": "2026-11-28 04:03:33",
-  "version": "1.36.0",
+  "_generatedAt": "2026-11-28 05:30:36",
+  "version": "1.37.0",
   "capabilities": {
     "endpoints": 82,
     "tools": 6,
-    "views": 17,
+    "views": 16,
     "repos": 16
   },
   "_note": "测试质量不由本文件保证——唯一质量门是 npm run test:all 的退出码。"
