@@ -14,7 +14,7 @@ updated: 2026-11-26
 |---|---|---|---|
 | **#6** | Windows 题库管理安装/删除/浏览全报「路径越界」 | ✅ **仍复现**（本地 6 组边界实测 4/6，子路径与混合分隔符失败） | **已修**（isInside → path.relative）+ SMOKE-ISSUE6 守卫 + issue 留说明，随 PR #7 |
 | **#5** | 练习链路单源锁死 + 分布偏斜 | ⚠️ **部分解决**：①②（可达集/脱钩）在**池就绪时**消除；③五维贯通本轮才补练习卡透传；守卫 POOL-03/04 本轮新增 | issue 已留**更正**评论（撤回「大部分落地」等失实表述） |
-| **#4** | 上传图片搜题（资料分析/图形推理） | ✅ **v1.36 已实现**（阶段 4）：inject 扩 llm（PR #15，R11b 三重验证）→ ai-bridge 接 `ctx.attachments.admitPromptContent` + `ctx.llm.stream` → 三端点 `/api/img-search/*` → imgsearch 视图（上传/识别/匹配/加入错题本）。真实识别准确率待用户用截图验收 | 本表为 2026-11-20 快照；当前状态以 `ROADMAP.md` 阶段 4 行与 issue #4 评论为准 |
+| **#4** | 上传图片搜题（资料分析/图形推理） | ✅ **v1.36 已实现**（阶段 4）：inject 扩 llm（PR #15，R11b 三重验证）→ ai-bridge 接 `ctx.attachments.admitPromptContent` + `ctx.llm.stream` → 三端点 `/api/img-search/*` → 图片搜题能力并入「统一题库 → 跨源统一检索」区（v1.37，用户反馈：上传/识别/匹配/加入错题本 + 模型开关/切换入口）。真实识别准确率待用户用截图验收 | 本表为 2026-11-20 快照；当前状态以 `ROADMAP.md` 阶段 4 行与 issue #4 评论为准 |
 
 ## 2. issue #6 修复要点
 

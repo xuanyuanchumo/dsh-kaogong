@@ -153,11 +153,29 @@ globalThis.fetch = async (url) => {
     }
   } }
   if (u.includes('/api/pool/question')) return { json: async () => ({
-    canonicalId: 'q:10204454', module: '判断推理', category: '图形推理', kadian: '图形推理 / 数量规律',
-    stem: '从所给的四个选项中，选择最合适的一个填入问号处', analysis: '元素组成相同，考虑数量规律。',
+    canonicalId: 'q:10204454', module: '判断推理', category: '图形推理', qtype: '单选题', kadian: '图形推理 / 数量规律',
+    no: 44, number: 44, sourceCount: 2, year: '2024', region: '甘肃',
+    groupMaterial: '【材料】下图为某图形的规律变化。',
+    stem: '从所给的四个选项中，选择最合适的一个填入问号处',
+    options: { A: '选项甲', B: '选项乙', C: '选项丙', D: '选项丁' },
+    answer: 'C', analysis: '元素组成相同，考虑数量规律。',
     dims: { reasoning: '第1步：元素组成不同', fastest: '⚡ 做和法', pitfalls: '- ⚠ 只看黑球', mother: '🧩 母题', askModel: '', doubt: '' },
     sources: [{ source_id: 'naoku', paper: '2024年甘肃卷', region: '甘肃', year: '2024' }, { source_id: 'xingcezhenti', paper: '甘肃卷', region: '甘肃', year: '2024' }],
-    sourceCount: 2, relations: [{ rel_type: 'BELONGS_TO', src_id: 'q:10204454', dst_id: '图形推理' }, { rel_type: 'APPEARS_IN', dst_id: '2024年甘肃卷' }],
+    relations: [{ rel_type: 'BELONGS_TO', src_id: 'q:10204454', dst_id: '图形推理' }, { rel_type: 'APPEARS_IN', dst_id: '2024年甘肃卷' }],
+  }) }
+  // 阶段 4 图片搜题（并入统一检索区）：provider/model 清单 + 结构化抽取 + 命中（canonicalId 供 PoolDetail 复用）
+  if (u.includes('/api/img-search/models')) return { json: async () => (
+    /\/api\/img-search\/models/.test(u) && u.includes('POST')
+      ? { ok: true, models: [{ id: 'vision-pro', name: 'Vision Pro', vision: true }] }
+      : { ok: true, providers: [{ id: 'deepseek-official', name: 'DeepSeek' }] }
+  ) }
+  if (u.includes('/api/img-search/analyze')) return { json: async () => ({
+    ok: true, tookMs: 120,
+    extraction: { stem: '从所给的四个选项中，选择最合适的一个填入问号处', chartData: '', figureFeatures: '元素组成相同，位置规律-平移', module: '判断推理', kind: 'tuxing' },
+  }) }
+  if (u.includes('/api/img-search/match')) return { json: async () => ({
+    ok: true, query: '位置规律-平移', total: 1,
+    hits: [{ id: 'q:10204454', canonicalId: 'q:10204454', provider: 'pool', title: '从所给的四个选项中，选择最合适的一个填入问号处', snippet: '图形推理题', score: 0.9 }],
   }) }
   // R12：以下三类端点的真实形状必须 mock 到，否则 prop 形状缺陷测不出
   // v1.8.0：图谱 mock 必须带 nodes/edges（否则 canvas 分支不执行，新图谱逻辑测不到），

@@ -2,6 +2,24 @@
 
 本文件记录 dsh-kaogong 的版本级变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.37.0] - 2026-11-28
+
+**图片搜题入口整合 + 统一检索结果完整渲染**（用户反馈的三缺陷修复）。
+
+### 变更
+- **图片搜题并入「统一题库 → 跨源统一检索」**：删除独立 `imgsearch` 视图与路由，检索区新增「🖼 图片搜题」展开子区——与文本检索共用下方结果渲染。端点 consumers 从 `ui:imgsearch` 改为 `ui:pool`（视图 17→16）。
+- **新增一等控件**：「是否使用模型」开关（默认关，离线优先）+ provider/model 切换入口（从 `ctx.llm` 清单派生）；未启用/未选模型时明确提示，不假装有 AI。
+- **修复统一检索结果渲染不全**：`PoolDetail` 补齐七段——来源/题型/题号 → 材料 → 题干(RichText 支持题图) → 选项(RichText 支持选项图) → 答案 → 解析(3000 字) → 五维/出处/关系；选项对象/JSON 字符串/数组三种形状防御式归一。
+- **修复无「加入错题本」**：`PoolAddWrongBtn` 走 `/api/history/entries` 真实补录契约（`result:'wrong'`），兼容 accepted 数字/数组两种口径，幂等冲突视为已加入。
+- **命中形状对齐**：`/api/img-search/match` 命中补 `canonicalId`，前端映射后直接复用 `PoolSearchRow` + `PoolDetail` 完整详情，杜绝两套渲染漂移。
+
+### 守卫与验证
+- 新增 `SEARCHINT-01..05`（smoke）+ `ISINT-01..04`（render 真实 UI 旅程：入口/开关/七段渲染/加入错题本）+ render harness mock 对齐七段字段；负向验证（破坏答案渲染后 SEARCHINT-03 准确变红）通过。
+- `npm run build` + `npm run test:all` 全绿（**60 文件 / 473 断言** + Loader 18/18）；`docs:check` / `facts:check` 绿。
+
+### 关联
+`BL-API-04` · 用户 2026-11-28 反馈 · 回滚锚点 v1.36.0
+
 ## [1.36.0] - 2026-11-28
 
 **图片搜题（issue #4 阶段 4）** —— 从「手打关键词搜」升级为「上传题目图片 → 模型读图 → 匹配原题」。
