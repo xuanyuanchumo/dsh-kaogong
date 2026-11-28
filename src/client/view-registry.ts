@@ -73,7 +73,6 @@ export const VIEW_META: ViewMeta[] = [
   { id: 'tuxing', label: '图形推理', icon: '🔷', group: null, order: 30, domain: 'tuxing', desc: '354 题图形推理专项（13 类规律 + 配图 + 原创思路）', viaHub: true },
   { id: 'essay', label: '申论', icon: '✍️', group: null, order: 40, domain: 'paper', desc: '申论小题采分点评分 + 大作文分档评估', viaHub: true },
   { id: 'huasheng13', label: '方法论', icon: '📐', group: null, order: 50, domain: 'method', desc: '花生十三六模块体系（目录/检索/练习/覆盖/链路五分区）', viaHub: true },
-  { id: 'imgsearch', label: '图片搜题', icon: '🖼', group: null, order: 25, domain: 'paper', desc: '上传题目图片→模型读图抽取→统一检索匹配原题（资料分析图表/图形推理）', viaHub: true },
 ]
 
 /** 视图 id → 元数据（O(1) 查询；构建一次） */

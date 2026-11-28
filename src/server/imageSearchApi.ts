@@ -183,7 +183,12 @@ export function makeImageSearchApi(bridge: AiBridge | null, deps: {
       try {
         const env = await deps.search(q, { limit, provider: (post && post.provider) || undefined, ws: wsRaw })
         const rows = (env && env.results) || []
-        const hits = Array.isArray(rows) ? rows.slice(0, limit) : []
+        // 命中统一池 provider 时 hit.id 即 canonicalId（searchRegistry pool provider 映射）；
+        // 补出 canonicalId 字段让前端能直接复用 PoolDetail 完整详情渲染 + 加入错题本。
+        const hits = (Array.isArray(rows) ? rows.slice(0, limit) : []).map((h: any) => ({
+          ...h,
+          canonicalId: h.canonicalId || (h.provider === 'pool' ? h.id : undefined),
+        }))
         return { ok: true, query: q, hits, total: (env && env.total) || hits.length, groups: (env && env.groups) || [] }
       } catch (e) {
         return { ok: false, hits: [], error: (e as Error).message }

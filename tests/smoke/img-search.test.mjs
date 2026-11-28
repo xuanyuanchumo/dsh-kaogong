@@ -16,12 +16,14 @@ const CX = 'PROJ_VTEST_IMGSEARCH'
 beforeAll(async () => { h = await setupDomain({ ws: CX }) }, 60_000)
 afterAll(async () => { if (h) await h.close() })
 
-test('IMGSEARCH-01 manifest 声明三端点 + imgsearch 视图（四步纪律第一步）', () => {
+test('IMGSEARCH-01 manifest 三端点归 ui:pool，无独立 imgsearch 视图（并入统一检索区）', () => {
   const mf = readSrc('src/shared/manifest.ts')
   for (const p of ['/api/img-search/models', '/api/img-search/analyze', '/api/img-search/match']) {
     expect(mf.includes("path: '" + p + "'"), 'manifest 缺端点 ' + p).toBe(true)
   }
-  expect(mf.includes("id: 'imgsearch'"), 'manifest 缺 imgsearch 视图').toBe(true)
+  // 用户反馈：图片搜题并入「统一题库 → 跨源统一检索」，不设独立视图
+  expect(mf.includes("id: 'imgsearch'"), '仍残留独立 imgsearch 视图').toBe(false)
+  expect(/path: '\/api\/img-search\/models'[^}]*consumers: \['ui:pool'\]/.test(mf), '端点消费方应为 ui:pool').toBe(true)
 })
 
 test('IMGSEARCH-02 Host 注入 AI bridge，server 层零宿主包 import（依赖反转）', () => {
