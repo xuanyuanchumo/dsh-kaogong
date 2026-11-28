@@ -84,10 +84,20 @@ class WebServer extends Service {
   constructor(ctx) { super(ctx, 'webServer', true) }
   register() { throw new Error('loader-test: webServer 是最小桩，插件应降级独立端口') }
 }
+// 阶段 4（issue #4）C5 前置：插件 inject 扩为 ['tools','llm']。
+// 若 boot 图缺 llm，Loader 会让 entry 永不激活（R11b 事故）——本桩模拟宿主恒有的 llm 服务，
+// 断言 entry 仍激活 + inject 含 llm，证明「声明 llm 不破坏激活」。
+class Llm extends Service {
+  static name = 'llm'
+  calls = []
+  constructor(ctx) { super(ctx, 'llm', true) }
+  async stream() { throw new Error('loader-test: llm 是最小桩，本 PR 不调用模型') }
+}
 
 const root = new Context()
 root.plugin(Tools)
 root.plugin(WebServer)
+root.plugin(Llm)
 await root.plugin(Loader, {
   baseUrl: pathToFileURL(DSH_CLI_ROOT + path.sep).href,
 })
@@ -111,6 +121,11 @@ try {
   ok('无 export default（default export 会让 Loader 丢弃 inject，见事故 0001）',
     !('default' in ns), `'default' in moduleNamespace = ${'default' in ns}`)
   ok('inject 声明了 tools', ns.inject?.includes('tools'), `inject=${JSON.stringify(ns.inject)}`)
+  // C5/R11b 守卫：声明 llm 后 entry 必须仍激活（上面已断言 fiber.uid 存在），
+  // 否则说明 inject 声明了 boot 图不存在的服务 → 插件永不激活，必须回退。
+  ok('inject 声明了 llm 且 entry 仍激活（R11b 不激活回归守卫）',
+    ns.inject?.includes('llm') && !!entry.fiber?.uid,
+    `inject=${JSON.stringify(ns.inject)} state=${entry.fiber?.state}`)
 
   // ── 3. unwrapExports 负向验证：证明测试真的会抓住 default export 事故 ──
   const fakeNs = { ...ns, default: ns.apply }

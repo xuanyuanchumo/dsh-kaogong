@@ -2,6 +2,29 @@
 
 本文件记录 dsh-kaogong 的版本级变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.36.0] - 2026-11-28
+
+**图片搜题（issue #4 阶段 4）** —— 从「手打关键词搜」升级为「上传题目图片 → 模型读图 → 匹配原题」。
+
+### 新增（功能四件套）
+- **上传图片 → 结构化抽取**：`POST /api/img-search/analyze` 把 base64 图片经 `ctx.attachments.admitPromptContent()` 持久化为不可变引用，构造 ImageBlock 交 `ctx.llm.stream()` 做结构化抽取（题干 / 图表数据 / 图形规律特征 / 模块 / 题型），JSON-only 提示词 + 容错解析（教训㉜ 只裁尾不臆造）。
+- **统一检索匹配原题**：`POST /api/img-search/match` 把抽取结果拼成检索词（资料分析优先图表数据、图推优先规律特征），复用 `/api/search/unified` 的 `searchMany` 跨源 round-robin，零算法复制。
+- **模型自选 UI**：`GET/POST /api/img-search/models` 从 `ctx.llm.listProviders()/listModels()` 派生 provider/model 下拉，走宿主路由零自建凭据；`imgsearch` 视图（专题枢纽入口，viaHub）提供上传/预览/识别/命中列表/加入错题本全流程，四态诚实降级（无模型/识别失败/无匹配/题库未装）。
+- **加入错题本非假按钮**：命中题经 `/api/history/search` 定位完整题对象（含 contentSig）→ `POST /api/history/entries` 按补录形状入库；定位不到给「查看原题」出口，绝不造半题。
+- **前置门（PR #15）**：`inject` 扩 `['tools','llm']`，R11b 三重验证（boot 图 dump + Loader 18/18 + 独立沙箱实测）。
+
+### 架构（低耦合高内聚）
+- 新增 `src/host/ai-bridge.ts`（唯一触碰宿主 AI 服务处，duck typing 零宿主包 import）+ `src/server/imageSearchApi.ts`（独立域，AI 能力经 options 注入，依赖反转）——server 层不 import 任何宿主包，保持零 npm 运行时依赖。
+- provider/model 白名单校验（兑现安全契约）；finish 错误兼容 `reason` 权威形状 + 旧 `kind` 形态（不吞错）；不回显 OCR 原文防泄露。
+
+### 守卫与验证
+- 新增 `IMGSEARCH-01..05`（smoke）+ `IMGAPI-01..07`（单测）+ `BRIDGE-01..05`（单测）；combo 26 模块 assert-combo OK。
+- `npm run build` + `npm run test:all` 全绿（**57 文件 / 459 断言** + Loader 18/18）；`docs:check` / `facts:check` 绿。
+- **验证边界（诚实登记）**：链路端到端已测（沙箱 models 返回真实 provider `deepseek-official`/`deepseek-account`、analyze 走 attachments 真实校验），但**真实模型图片识别准确率未测**（沙箱无用户模型凭据）——需用户用真实截图验收。
+
+### 关联
+`BL-API-03` / `BL-PROC-11` · Closes #4
+
 ## [1.35.0] - 2026-11-27
 
 **架构漂移治理（低耦合高内聚）** —— 消灭「声明 vs 运行态」不一致的三类漂移面，并修复 develop 血缘断裂。

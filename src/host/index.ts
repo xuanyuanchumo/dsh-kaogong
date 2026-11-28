@@ -14,6 +14,8 @@ import { startServer, attachWebRoute } from '../server/http.js'
 import { resetPoolDb } from '../adapters/poolDb.js'
 import { resetNaoku } from '../adapters/naoku.js'
 import { CAPABILITIES } from '../shared/manifest.js'
+// 阶段 4（issue #4 图片搜题）：宿主 AI 能力桥，经 options 注入 server 层（依赖反转，server 零宿主包依赖）
+import { createAiBridge } from './ai-bridge.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
@@ -95,9 +97,17 @@ async function callApi(path: any, ws?: any): Promise<any> {
 }
 
 export const name = CAPABILITIES.plugin.name
-export const inject = ['tools']
+// 阶段 4（issue #4 图片搜题）前置缺口 C5：声明 llm 注入，供后续「读图→结构化抽取」使用。
+// R11b 风险：inject 声明 boot 图不存在的服务会让整个条目永不激活——本分支先用
+// loader.test 的 llm 桩 + 沙箱实测确认激活正常，再在函数实现里真正调用 ctx.get('llm')。
+// 本 PR 只验证声明安全性，不改变任何现有行为（无工具/端点/视图变化）。
+export const inject = ['tools', 'llm']
 
 export function apply(ctx: any) {
+  // 阶段 4（issue #4）：宿主 AI 能力桥（llm 已 inject，attachments 延迟取）——
+  // 本代闭包持有；服务缺失时 bridge=null，server 层诚实降级，绝不拖垮插件加载。
+  const aiBridge = createAiBridge(ctx)
+
   // ── 主通道：宿主同源路由 ──
   // R10 修复（沙箱首启取证）：webServer 晚于本 fiber 激活 —— ctx.get 首启拿不到、
   // ctx.on('webServer') 不是事件永不触发 → 路由静默 404。
@@ -107,7 +117,7 @@ export function apply(ctx: any) {
     const ws = injected.get('webServer')
     if (!ws?.register) return
     try {
-      const unmount = attachWebRoute(ws, MOUNT_PATH)
+      const unmount = attachWebRoute(ws, MOUNT_PATH, { aiBridge })
       runtime.mounted = true
       console.log(`[dsh-kaogong] 🏠 宿主同源路由已挂载: ${MOUNT_PATH}/*`)
       return () => {
@@ -123,7 +133,7 @@ export function apply(ctx: any) {
   // ── 兜底通道：独立端口（Electron 无 webServer / 测试 / 降级）──
   // cycle-48 strictNullChecks：null 初始化显式类型（赋值后为 Server/boolean/number）
   let myServer: any = null, myAdopted: any = false
-  startServer(PREFERRED_PORT)
+  startServer(PREFERRED_PORT, { aiBridge })
     .then(({ server, port, adopted }) => {
       myServer = server; myAdopted = adopted
       runtime.server = server

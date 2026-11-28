@@ -57,6 +57,8 @@ import { bindCache, emitDataChanged, subscribeDataEvents, dataEventSubscribers }
 import { upsertWrongEntry } from './reviewStore.js'
 // cycle-60 统一检索层：SearchProvider 运行时注册表（provider id/label 从 manifest 端点声明派生）
 import { createSearchRegistry } from './searchRegistry.js'
+// 阶段 4（issue #4 图片搜题）：图片识别域（AI 能力经 options.aiBridge 注入，零宿主包依赖）
+import { makeImageSearchApi } from './imageSearchApi.js'
 
 /** T-022：Object.entries 在动态对象上会退化为 unknown，统一走此辅助保持 any 语义 */
 const entries = (o: any): Array<[string, any]> => Object.entries(o || {})
@@ -82,6 +84,13 @@ const MIGRATION = migratePkgData()
 // > 开发态上级目录（含任一登记仓库）> 托管默认 data/repos/。
 // 数据根变更（换根/安装/删除）→ rebuildDomains()：域工厂重建 + 缓存失效，各域文件零改动。
 let domains: any = null
+/**
+ * 阶段 4（issue #4）：宿主 AI 能力桥。由 startServer/attachWebRoute 的 options 注入，
+ * 本模块闭包持有（本代 fiber 一致）；server 层不 import 任何宿主包（依赖反转）。
+ */
+let aiBridge: any = null
+// 允许 bridge=null：热重载新代无 AI 能力时必须清空，否则残留旧代闭包（R7 同族）
+function setAiBridge(bridge: any) { aiBridge = bridge || null }
 /** 统一缓存实例（进程内；换根时按域失效，不跨 fiber 共享可变状态——R7） */
 const kgCache = createCache()
 function buildDomains(root: string) {
@@ -491,6 +500,16 @@ function registerApiDomains() {
     // cycle-62：naoku 域 handler 已移除（6 端点退役，语义下沉到 pool 域）
     { name: 'paper', handle: (p, q, b, m, ws) => domains.paperApi.handle(p, q, b, m, ws) },
     { name: 'data', handle: (p, q, b, m) => domains.dataApi(p, q, b, m) },
+    // 阶段 4（issue #4）：图片搜题域——AI 能力经 aiBridge 注入；检索复用统一检索层
+    {
+      name: 'imgsearch',
+      handle: (p, q, b, m, ws) => makeImageSearchApi(aiBridge, {
+        search: (query, opts) => domains.searchRegistry.searchMany(
+          opts.provider ? [opts.provider] : [], query,
+          { limit: opts.limit, ws: opts.ws || ws },
+        ),
+      }).handle(p, q, b, m, ws),
+    },
   )
 }
 
@@ -799,6 +818,7 @@ function writeRuntime(info: any) {
  * 否则逐端口受控绑定。返回 {server, port, adopted}；失败走 Promise reject。
  */
 export async function startServer(preferredPort = 8400, options: any = {}) {
+  setAiBridge(options.aiBridge)
   const publishRuntime = options.publishRuntime !== false
   const prewarm = options.prewarm !== false
   const ports = Array.from({ length: 5 }, (_, i) => preferredPort + i)
@@ -829,7 +849,8 @@ export async function startServer(preferredPort = 8400, options: any = {}) {
  * @param webServer - ctx.webServer（register 返回 disposer）
  * @param mountPath - 挂载前缀，绝对 pathname 无尾斜杠
  */
-export function attachWebRoute(webServer: any, mountPath = '/kaogong') {
+export function attachWebRoute(webServer: any, mountPath = '/kaogong', options: any = {}) {
+  setAiBridge(options.aiBridge)
   const handler = (req: any, res: any) => {
     const t0 = Date.now()
     const url = new URL(req.url, 'http://host-root')
